@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { PomodoroProvider } from './context/PomodoroContext'
 import Landing    from './pages/Landing'
 import Login      from './pages/Login'
 import Signup     from './pages/Signup'
@@ -33,7 +34,7 @@ export default function App() {
           <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
           <Route path="/login"  element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
-          <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+          <Route path="/" element={<ProtectedRoute><PomodoroProvider><Layout /></PomodoroProvider></ProtectedRoute>}>
             <Route path="dashboard"  element={<Dashboard />} />
             <Route path="curriculum" element={<Curriculum />} />
             <Route path="anki"       element={<Anki />} />
