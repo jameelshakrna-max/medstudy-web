@@ -21,11 +21,9 @@ export default function Curriculum() {
   }
 
   async function updateTopicStatus(id, status) {
-    const sp = status==='In Progress'?1:status==='Reviewing'?2:status==='Not Started'?3:4
-    await supabase.from('curriculum_topics').update({ status, sort_priority: sp }).eq('id', id)
-    setTopics(prev => prev.map(t => t.id===id ? {...t, status, sort_priority: sp} : t)
-      .sort((a,b) => a.sort_priority - b.sort_priority))
-  }
+  await supabase.from('curriculum_topics').update({ status, completion_pct: status === 'Complete' ? 100 : 0 }).eq('id', id)
+  setTopics(prev => prev.map(t => t.id === id ? {...t, status, completion_pct: status === 'Complete' ? 100 : 0} : t))
+}
 
   const statusColor = s => s==='In Progress'?'var(--teal)':s==='Complete'?'var(--sage)':s==='Reviewing'?'var(--violet)':'var(--mist)'
 
