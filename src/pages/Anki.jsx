@@ -307,7 +307,18 @@ export default function Anki() {
     }
     if (!dbBuf) throw new Error('No Anki database found in .apkg file')
 
-    const SQL = await initSqlJs({ locateFile: f => `/${f}` })
+    // Load WASM binary manually to avoid Vercel SPA rewrite issues
+    const wasmUrl = '/sql-wasm.wasm'
+    let wasmResponse
+    try {
+      wasmResponse = await fetch(wasmUrl)
+      if (!wasmResponse.ok) throw new Error(`HTTP ${wasmResponse.status}`)
+    } catch (err) {
+      throw new Error('Failed to download SQL engine. Please refresh and try again.')
+    }
+    const wasmBinary = await wasmResponse.arrayBuffer()
+    const SQL = await initSqlJs({ wasmBinary: new Uint8Array(wasmBinary) })
+
     const db = new SQL.Database(dbBuf)
     try {
       const result = db.exec('SELECT flds FROM notes')
