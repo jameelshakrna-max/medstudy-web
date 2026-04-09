@@ -1,6 +1,7 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useState } from 'react'
+import MiniTimer from './MiniTimer'
 import styles from './Layout.module.css'
 
 const NAV = [
@@ -68,6 +69,9 @@ export default function Layout() {
           <Outlet />
         </div>
       </main>
+
+      {/* Floating Mini Timer — visible on all pages except /pomodoro */}
+      <MiniTimer />
     </div>
   )
 }
