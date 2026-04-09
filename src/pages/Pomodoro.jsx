@@ -112,11 +112,9 @@ export default function Pomodoro() {
 
   return (
     <div className={styles.page}>
-      {/* Ambient Background */}
       <div className={`${styles.ambient} ${styles['ambient' + mode.charAt(0).toUpperCase() + mode.slice(1)]}`} />
 
       <div className={styles.content}>
-        {/* Header */}
         <div className={styles.header}>
           <h1 className={styles.title}>🍅 Pomodoro</h1>
           <p className={styles.sub}>Deep focus. Every session tracked.</p>
@@ -148,8 +146,8 @@ export default function Pomodoro() {
               <circle className={styles.ringTrack} cx="140" cy="140" r="130" />
               <circle className={styles.ringFg} cx="140" cy="140" r="130"
                 style={{
-                  stroke: mode === 'study' ? 'var(--teal)' : mode === 'break' ? 'var(--sage)' : 'var(--violet)',
-                  '--ring-color': mode === 'study' ? 'rgba(0,181,163,0.5)' : mode === 'break' ? 'rgba(61,190,122,0.5)' : 'rgba(108,99,255,0.5)',
+                  stroke: mode === 'study' ? '#00B5A3' : mode === 'break' ? '#3DBE7A' : '#6C63FF',
+                  '--ring-color': mode === 'study' ? 'rgba(0,181,163,0.6)' : mode === 'break' ? 'rgba(61,190,122,0.6)' : 'rgba(108,99,255,0.6)',
                   strokeDashoffset: offset,
                 }} />
             </svg>
@@ -179,19 +177,19 @@ export default function Pomodoro() {
         {/* Stats */}
         <div className={styles.statsGrid}>
           <div className={styles.statCard}>
-            <div className={styles.statIcon}>🍅</div>
-            <div className={styles.statNum}>{done}</div>
-            <div className={styles.statLabel}>Completed</div>
+            <span className={styles.statIcon}>🍅</span>
+            <span className={styles.statNum}>{done}</span>
+            <span className={styles.statLabel}>Completed</span>
           </div>
           <div className={styles.statCard}>
-            <div className={styles.statIcon}>⏱</div>
-            <div className={styles.statNum}>{focusMins}</div>
-            <div className={styles.statLabel}>Minutes</div>
+            <span className={styles.statIcon}>⏱</span>
+            <span className={styles.statNum}>{focusMins}</span>
+            <span className={styles.statLabel}>Minutes</span>
           </div>
           <div className={styles.statCard}>
-            <div className={styles.statIcon}>🔥</div>
-            <div className={styles.statNum}>{Math.floor(focusMins / 60 * 10) / 10}</div>
-            <div className={styles.statLabel}>Hours</div>
+            <span className={styles.statIcon}>🔥</span>
+            <span className={styles.statNum}>{focusMins > 0 ? (focusMins / 60).toFixed(1) : '0.0'}</span>
+            <span className={styles.statLabel}>Hours</span>
           </div>
         </div>
 
@@ -218,18 +216,10 @@ export default function Pomodoro() {
           </div>
         </div>
 
-        {/* Session Details (collapsible) */}
-        <button
-          onClick={() => setShowDetails(!showDetails)}
-          style={{
-            width: '100%', padding: '14px', borderRadius: '14px', background: 'rgba(255,255,255,0.03)',
-            border: '1px solid var(--border)', color: 'var(--mist)', fontSize: '13px',
-            fontWeight: 600, cursor: 'pointer', marginBottom: '16px', transition: 'all 0.2s',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}
-        >
+        {/* Session Details Toggle */}
+        <button className={styles.toggleBtn} onClick={() => setShowDetails(!showDetails)}>
           <span>📝 Session Details</span>
-          <span style={{ transform: showDetails ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▼</span>
+          <span className={`${styles.toggleArrow} ${showDetails ? styles.toggleArrowOpen : ''}`}>▼</span>
         </button>
 
         {showDetails && (
