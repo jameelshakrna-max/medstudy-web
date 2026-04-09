@@ -1,0 +1,473 @@
+/* ===================== ANKI PAGE ===================== */
+
+.page {
+  position: relative;
+  min-height: 100vh;
+}
+
+/* Header */
+.header {
+  margin-bottom: 28px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.headerLeft {}
+.title {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(24px, 4vw, 36px);
+  color: #fff;
+  margin-bottom: 6px;
+}
+.sub {
+  font-size: 14px;
+  color: var(--mist);
+}
+
+/* Stats Row */
+.statsRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.statPill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--mist);
+}
+.statPillNum {
+  font-family: 'DM Mono', monospace;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.tab {
+  padding: 7px 18px;
+  border-radius: 100px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  color: var(--mist);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.tab:hover { color: #E0E8F0; background: rgba(255,255,255,0.05); }
+.tabActive { background: var(--tealL); border-color: rgba(0,181,163,0.3); color: var(--teal); }
+.tabAdd {
+  margin-left: auto;
+  background: var(--tealL);
+  border: 1px solid rgba(0,181,163,0.3);
+  color: var(--teal);
+}
+
+/* Deck Grid */
+.deckGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 8px;
+}
+.deckCard {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+.deckCard:hover { border-color: rgba(0,181,163,0.3); transform: translateY(-2px); }
+.deckCardActive { border-color: rgba(0,181,163,0.5); background: rgba(0,181,163,0.05); }
+.deckTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.deckName {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+.deckMeta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--mist);
+  margin-bottom: 10px;
+}
+.deckStat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.deckStatNum {
+  font-family: 'DM Mono', monospace;
+  color: #E0E8F0;
+  font-weight: 600;
+}
+.deckDel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  padding: 4px;
+}
+.deckCard:hover .deckDel { opacity: 0.3; }
+.deckDel:hover { opacity: 1 !important; }
+
+/* Progress bar */
+.progBar {
+  height: 4px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.progFill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s;
+  background: var(--teal);
+}
+
+/* Empty */
+.empty {
+  color: var(--mist);
+  font-size: 14px;
+  padding: 40px;
+  text-align: center;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+/* Card List */
+.cardList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Anki Card */
+.ankiCard {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  transition: border-color 0.2s;
+}
+.ankiCard:hover { border-color: rgba(255,255,255,0.12); }
+.ankiMeta {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.dueStatus { font-size: 12px; font-weight: 700; }
+.maturity {
+  font-size: 11px;
+  color: var(--mist);
+  background: rgba(255,255,255,0.06);
+  padding: 2px 8px;
+  border-radius: 100px;
+}
+.hyBadge {
+  font-size: 10px;
+  background: var(--goldL);
+  color: var(--gold);
+  padding: 2px 7px;
+  border-radius: 100px;
+}
+.deckBadge {
+  font-size: 11px;
+  color: var(--violet);
+  background: var(--violetL);
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-weight: 500;
+}
+.ankiFront {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 8px;
+}
+.ankiBack {
+  font-size: 14px;
+  color: var(--mist);
+  margin-bottom: 14px;
+  line-height: 1.6;
+}
+.ankiStats {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--mist);
+  margin-bottom: 14px;
+  font-family: 'DM Mono', monospace;
+  flex-wrap: wrap;
+}
+.ankiStat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.nextReview {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-family: 'DM Mono', monospace;
+}
+.nextReview.due { background: var(--coralL); color: var(--coral); }
+.nextReview.today { background: var(--goldL); color: var(--gold); }
+.nextReview.soon { background: var(--violetL); color: var(--violet); }
+.nextReview.later { background: rgba(255,255,255,0.04); color: var(--mist); }
+
+.reviewBtns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.reviewBtn {
+  padding: 8px 18px;
+  border-radius: 100px;
+  border: none;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.reviewBtn:hover { opacity: 0.85; transform: translateY(-1px); }
+.rAgain { background: var(--coralL); color: var(--coral); }
+.rHard { background: var(--goldL); color: var(--gold); }
+.rGood { background: var(--tealL); color: var(--teal); }
+.rEasy { background: var(--sageL); color: var(--sage); }
+
+/* Delete card btn */
+.cardDel {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  padding: 4px;
+}
+.ankiCard { position: relative; }
+.ankiCard:hover .cardDel { opacity: 0.3; }
+.cardDel:hover { opacity: 1 !important; }
+
+/* FORM */
+.formCard {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 28px;
+  max-width: 600px;
+}
+.formTitle {
+  font-family: 'DM Serif Display', serif;
+  font-size: 20px;
+  color: #fff;
+  margin-bottom: 20px;
+}
+.field { margin-bottom: 14px; }
+.field label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mist);
+  margin-bottom: 6px;
+}
+.field input, .field textarea, .field select {
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: #E0E8F0;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color 0.2s;
+  resize: none;
+}
+.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--teal); }
+.field input::placeholder, .field textarea::placeholder { color: rgba(255,255,255,0.2); }
+.field select option { background: var(--navy2); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.checkRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--mist);
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+.primaryBtn {
+  width: 100%;
+  padding: 13px;
+  background: var(--teal);
+  color: var(--navy);
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 8px;
+}
+.primaryBtn:hover:not(:disabled) { background: var(--teal2); transform: translateY(-1px); }
+.primaryBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* File Upload */
+.uploadSection {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+.uploadTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 6px;
+}
+.uploadSub {
+  font-size: 13px;
+  color: var(--mist);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+.uploadDrop {
+  border: 2px dashed rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 32px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.uploadDrop:hover { border-color: rgba(0,181,163,0.4); background: rgba(0,181,163,0.03); }
+.uploadDrop.dragging { border-color: var(--teal); background: rgba(0,181,163,0.06); }
+.uploadDrop input { display: none; }
+.uploadIcon { font-size: 32px; margin-bottom: 8px; }
+.uploadText { font-size: 14px; color: var(--mist); margin-bottom: 4px; }
+.uploadFormats { font-size: 11px; color: rgba(255,255,255,0.3); }
+
+.uploadPreview {
+  margin-top: 16px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.uploadPreviewTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mist);
+  margin-bottom: 10px;
+  letter-spacing: 0.06em;
+}
+.uploadRow {
+  display: flex;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 12px;
+}
+.uploadRow:last-child { border-bottom: none; }
+.uploadFront { flex: 1; color: #E0E8F0; font-weight: 500; }
+.uploadBack { flex: 1; color: var(--mist); }
+
+.uploadActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+.uploadCancel {
+  padding: 10px 20px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--mist);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.uploadCancel:hover { border-color: var(--coral); color: var(--coral); }
+
+/* Inline deck add form */
+.addDeckRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.addDeckInput {
+  flex: 1;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: #E0E8F0;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.addDeckInput:focus { border-color: var(--teal); }
+.addDeckInput::placeholder { color: rgba(255,255,255,0.2); }
+.addDeckBtn {
+  padding: 10px 18px;
+  background: var(--teal);
+  color: var(--navy);
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.addDeckBtn:hover { background: var(--teal2); }
+
+/* Responsive */
+@media (max-width: 480px) {
+  .row2 { grid-template-columns: 1fr; }
+  .statsRow { gap: 6px; }
+  .deckGrid { grid-template-columns: 1fr; }
+  .uploadActions { flex-direction: column; }
+}
