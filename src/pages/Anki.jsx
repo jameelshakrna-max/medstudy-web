@@ -18,6 +18,7 @@ export default function Anki() {
   const [parsedCards, setParsedCards] = useState([])
   const [uploadDeckId, setUploadDeckId] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [parsingFile, setParsingFile] = useState(false)
   const [dragging, setDragging] = useState(false)
   const fileRef = useRef(null)
 
@@ -110,7 +111,7 @@ export default function Anki() {
         user_id: user.id,
         front: form.front,
         back: form.back,
-        deck_id: form.deck_id || null,
+        deck_id: toDeckId(form.deck_id),
         high_yield: form.high_yield,
         ease_factor: 2.5,
         interval_days: 0,
@@ -157,7 +158,73 @@ export default function Anki() {
 
   // ─── File Upload / Parse ───
 
-  function parseFile(file) {
+  function toDeckId(val) {
+    if (!val || val === 'none' || val === '') return null
+    return val
+  }
+
+  async function parseApkgFile(file) {
+    const JSZip = (await import('jszip')).default
+    const initSqlJs = (await import('sql.js')).default
+
+    const zip = await JSZip.loadAsync(file)
+
+    let dbFile = null
+    for (const name of ['collection.anki21b', 'collection.anki21', 'collection.anki2']) {
+      const f = zip.file(name)
+      if (f) { dbFile = await f.async('uint8array'); break }
+    }
+
+    if (!dbFile) throw new Error('Could not find Anki database in the .apkg file')
+
+    const SQL = await initSqlJs({
+      locateFile: (file) => `/${file}`
+    })
+
+    const db = new SQL.Database(dbFile)
+    try {
+      const notesResult = db.exec('SELECT flds FROM notes')
+      if (!notesResult.length || !notesResult[0].values.length) {
+        throw new Error('No notes found in the .apkg file')
+      }
+
+      const parsed = []
+      for (const row of notesResult[0].values) {
+        const flds = row[0]
+        const fields = flds.split('\x1f').map(f => f.trim())
+        if (fields.length >= 2 && fields[0] && fields[1]) {
+          parsed.push({ front: fields[0], back: fields[1] })
+        }
+      }
+      return parsed
+    } finally {
+      db.close()
+    }
+  }
+
+  async function parseFile(file) {
+    // Handle .apkg files
+    if (file.name.toLowerCase().endsWith('.apkg')) {
+      setParsingFile(true)
+      try {
+        const parsed = await parseApkgFile(file)
+        if (parsed.length === 0) {
+          alert('No flashcards found in this .apkg file.')
+          setParsingFile(false)
+          return
+        }
+        setParsedCards(parsed)
+        setUploadDeckId(selectedDeck || '')
+        setView('upload')
+      } catch (err) {
+        console.error('APKG parse error:', err)
+        alert('Failed to parse .apkg file: ' + (err.message || 'Unknown error'))
+      }
+      setParsingFile(false)
+      return
+    }
+
+    // CSV / TSV / TXT parsing
     const reader = new FileReader()
     reader.onload = (e) => {
       const text = e.target.result
@@ -254,6 +321,7 @@ export default function Anki() {
   function handleFileSelect(e) {
     const file = e.target.files?.[0]
     if (file) parseFile(file)
+    e.target.value = ''
   }
 
   function handleDrop(e) {
@@ -278,7 +346,7 @@ export default function Anki() {
         user_id: user.id,
         front: c.front,
         back: c.back,
-        deck_id: uploadDeckId || null,
+        deck_id: toDeckId(uploadDeckId),
         high_yield: false,
         ease_factor: 2.5,
         interval_days: 0,
@@ -508,8 +576,9 @@ export default function Anki() {
             <div className={styles.uploadSection}>
               <div className={styles.uploadTitle}>📂 Or Import from File</div>
               <div className={styles.uploadSub}>
-                Upload a CSV or text file with flashcard pairs. Supports formats:<br />
-                <strong>CSV/TSV:</strong> front,back &nbsp;·&nbsp; <strong>TXT:</strong> one pair per line separated by tab, dash, colon, or blank lines
+                Upload a file to bulk-import flashcards. Supported formats:<br />
+                <strong>.apkg</strong> — Anki deck package (auto-parses cards)<br />
+                <strong>CSV/TSV:</strong> front,back &nbsp;·&nbsp; <strong>TXT:</strong> tab, dash, colon, or blank-line separated
               </div>
               <div
                 className={`${styles.uploadDrop} ${dragging ? styles.dragging : ''}`}
@@ -518,10 +587,10 @@ export default function Anki() {
                 onDragLeave={() => setDragging(false)}
                 onDrop={handleDrop}
               >
-                <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,.text" onChange={handleFileSelect} />
+                <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,.text,.apkg" onChange={handleFileSelect} />
                 <div className={styles.uploadIcon}>📁</div>
-                <div className={styles.uploadText}>{dragging ? 'Drop your file here!' : 'Click to browse or drag & drop'}</div>
-                <div className={styles.uploadFormats}>.csv, .tsv, .txt</div>
+                <div className={styles.uploadText}>{parsingFile ? 'Parsing file...' : (dragging ? 'Drop your file here!' : 'Click to browse or drag & drop')}</div>
+                <div className={styles.uploadFormats}>.apkg, .csv, .tsv, .txt</div>
               </div>
             </div>
           </div>
