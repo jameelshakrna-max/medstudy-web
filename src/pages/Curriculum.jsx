@@ -12,8 +12,7 @@ export default function Curriculum() {
 
   async function loadData() {
     const [s, t] = await Promise.all([
-      supabase.from('curriculum_systems').select('*').order('name'),
-      supabase.from('curriculum_topics').select('*').order('sort_priority').order('name').limit(100),
+    supabase.from('curriculum_topics').select('*').order('name').limit(100),
     ])
     setSystems(s.data || [])
     setTopics(t.data || [])
