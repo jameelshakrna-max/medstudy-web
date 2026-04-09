@@ -1,82 +1,21 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { usePomodoro } from '../context/PomodoroContext'
 import { supabase } from '../lib/supabase'
 import styles from './Pomodoro.module.css'
 
 export default function Pomodoro() {
   const { user } = useAuth()
-  const [mode, setMode] = useState('study')
-  const [running, setRunning] = useState(false)
-  const [remaining, setRemaining] = useState(25 * 60)
-  const [total, setTotal] = useState(25 * 60)
-  const [done, setDone] = useState(0)
-  const [focusMins, setFocusMins] = useState(0)
-  const [studyMin, setStudyMin] = useState(25)
-  const [breakMin, setBreakMin] = useState(5)
-  const [longMin, setLongMin] = useState(15)
-  const [form, setForm] = useState({ label: '', topic: '', notes: '' })
+  const {
+    mode, running, displayRemaining, total,
+    done, focusMins,
+    studyMin, breakMin, longMin,
+    log, form, setForm, setLog,
+    switchMode, togglePlay, resetTimer, skipTimer, setTimerSettings,
+  } = usePomodoro()
+
   const [saving, setSaving] = useState(false)
-  const [log, setLog] = useState([])
   const [showDetails, setShowDetails] = useState(false)
-  const workerRef = useRef(null)
-
-  useEffect(() => {
-    const code = `
-      let iv=null,st=null,sr=0;
-      self.onmessage=function(e){
-        if(e.data.type==='START'){st=Date.now();sr=e.data.remaining;clearInterval(iv);
-          iv=setInterval(()=>{const l=Math.max(0,sr-Math.floor((Date.now()-st)/1000));
-          self.postMessage({type:'TICK',remaining:l});
-          if(l<=0){clearInterval(iv);self.postMessage({type:'DONE'});}},500);}
-        if(e.data.type==='PAUSE'){clearInterval(iv);self.postMessage({type:'PAUSED',remaining:Math.max(0,sr-Math.floor((Date.now()-st)/1000))});}
-        if(e.data.type==='STOP')clearInterval(iv);
-      };`
-    const blob = new Blob([code], { type: 'application/javascript' })
-    workerRef.current = new Worker(URL.createObjectURL(blob))
-    workerRef.current.onmessage = e => {
-      if (e.data.type === 'TICK') setRemaining(e.data.remaining)
-      if (e.data.type === 'PAUSED') { setRemaining(e.data.remaining); setRunning(false) }
-      if (e.data.type === 'DONE') { setRemaining(0); setRunning(false); onDone() }
-    }
-    return () => workerRef.current.terminate()
-  }, [])
-
-  function getTotal(m) {
-    return (m === 'study' ? studyMin : m === 'break' ? breakMin : longMin) * 60
-  }
-
-  function switchMode(m) {
-    workerRef.current.postMessage({ type: 'STOP' })
-    setMode(m); setRunning(false)
-    const t = getTotal(m); setTotal(t); setRemaining(t)
-  }
-
-  function togglePlay() {
-    if (running) { workerRef.current.postMessage({ type: 'PAUSE' }); setRunning(false) }
-    else { workerRef.current.postMessage({ type: 'START', remaining }); setRunning(true) }
-  }
-
-  function reset() { workerRef.current.postMessage({ type: 'STOP' }); setRunning(false); setRemaining(total) }
-
-  function onDone() {
-    if (mode === 'study') {
-      setDone(d => d + 1); setFocusMins(m => m + studyMin)
-      if (!form.label) setForm(f => ({ ...f, label: `Pomodoro ${done + 1}${f.topic ? ' — ' + f.topic : ''}` }))
-      playChime()
-    } else { switchMode('study') }
-  }
-
-  function playChime() {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)()
-      ;[[523, 0], [659, .15], [784, .3]].forEach(([f, t]) => {
-        const o = ctx.createOscillator(), g = ctx.createGain()
-        o.connect(g); g.connect(ctx.destination); o.frequency.value = f; o.type = 'sine'
-        g.gain.setValueAtTime(.28, ctx.currentTime + t); g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + t + .35)
-        o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + .4)
-      })
-    } catch (e) { }
-  }
 
   async function saveSession() {
     if (!form.label) return
@@ -103,12 +42,12 @@ export default function Pomodoro() {
     setSaving(false)
   }
 
-  const mm = String(Math.floor(remaining / 60)).padStart(2, '0')
-  const ss = String(remaining % 60).padStart(2, '0')
-  const pct = total > 0 ? remaining / total : 1
+  const mm = String(Math.floor(displayRemaining / 60)).padStart(2, '0')
+  const ss = String(displayRemaining % 60).padStart(2, '0')
+  const pct = total > 0 ? displayRemaining / total : 1
   const circ = 816.814
   const offset = circ * (1 - pct)
-  const isFinished = remaining === 0 && !running
+  const isFinished = displayRemaining === 0 && !running
 
   return (
     <div className={styles.page}>
@@ -153,7 +92,7 @@ export default function Pomodoro() {
             </svg>
             <div className={styles.ringInner}>
               <div className={styles.ringLabel}>
-                {isFinished ? '✅ COMPLETE' : mode === 'study' ? 'FOCUS TIME' : mode === 'break' ? 'SHORT BREAK' : 'LONG BREAK'}
+                {isFinished ? '✅ COMPLETE' : running ? 'COUNTING...' : mode === 'study' ? 'FOCUS TIME' : mode === 'break' ? 'SHORT BREAK' : 'LONG BREAK'}
               </div>
               <div className={`${styles.ringTime} ${styles[mode]}`}>{mm}:{ss}</div>
               <div className={styles.ringDots}>
@@ -167,11 +106,11 @@ export default function Pomodoro() {
 
         {/* Controls */}
         <div className={styles.controls}>
-          <button className={styles.ctrlBtn} onClick={reset} title="Reset">↺</button>
+          <button className={styles.ctrlBtn} onClick={resetTimer} title="Reset">↺</button>
           <button className={`${styles.playBtn} ${styles[mode]}`} onClick={togglePlay}>
             {running ? '⏸' : '▶'}
           </button>
-          <button className={styles.ctrlBtn} onClick={onDone} title="Skip">⏭</button>
+          <button className={styles.ctrlBtn} onClick={skipTimer} title="Skip">⏭</button>
         </div>
 
         {/* Stats */}
@@ -198,16 +137,23 @@ export default function Pomodoro() {
           <div className={styles.settingsTitle}>⚙ Timer Settings</div>
           <div className={styles.settingsGrid}>
             {[
-              { label: 'Focus (min)', value: studyMin, set: setStudyMin },
-              { label: 'Break (min)', value: breakMin, set: setBreakMin },
-              { label: 'Long (min)', value: longMin, set: setLongMin },
-            ].map(({ label, value, set }) => (
+              { label: 'Focus (min)', value: studyMin },
+              { label: 'Break (min)', value: breakMin },
+              { label: 'Long (min)', value: longMin },
+            ].map(({ label, value }) => (
               <div key={label} className={styles.setItem}>
                 <label>{label}</label>
                 <input
                   type="number"
                   value={value}
-                  onChange={e => { set(+e.target.value); if (!running) switchMode(mode) }}
+                  onChange={e => {
+                    const v = +e.target.value
+                    setTimerSettings(
+                      label.includes('Focus') ? v : studyMin,
+                      label.includes('Break') ? v : breakMin,
+                      label.includes('Long') ? v : longMin
+                    )
+                  }}
                   min="1"
                   max="90"
                 />
