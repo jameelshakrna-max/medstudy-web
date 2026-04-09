@@ -25,7 +25,7 @@ export default function Curriculum() {
   setTopics(prev => prev.map(t => t.id === id ? {...t, status, completion_pct: status === 'Complete' ? 100 : 0} : t))
 }
 
-  const statusColor = s => s==='In Progress'?'var(--teal)':s==='Complete'?'var(--sage)':s==='Reviewing'?'var(--violet)':'var(--mist)'
+const statusColor = s => s==='In Progress'?'var(--teal)':s==='Complete'?'var(--sage)':s==='Reviewing'?'var(--violet)':'var(--mist)'
 
   if (loading) return <div className={styles.loading}>Loading curriculum...</div>
 
