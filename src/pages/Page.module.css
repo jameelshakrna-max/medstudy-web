@@ -127,3 +127,64 @@
   .ringTime { font-size: 46px; }
   .pomoSettings { grid-template-columns: 1fr 1fr; }
 }
+
+@media (max-width: 1024px) {
+  .grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+}
+
+@media (max-width: 768px) {
+  .header { margin-bottom: 20px; }
+  .title { font-size: clamp(22px, 5vw, 30px); }
+  .tabs { gap: 6px; }
+  .tab { padding: 6px 14px; font-size: 12px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .card { padding: 14px; }
+  .cardName { font-size: 13px; }
+  .formCard { padding: 20px; border-radius: 16px; }
+  .formTitle { font-size: 18px; }
+  .uwScore { font-size: 26px; }
+  .uwCard { padding: 14px; }
+  .sessionCard { padding: 14px; }
+  .sessTop { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .pomoCentred { max-width: 100%; }
+  .pomoStats { gap: 20px; }
+  .ps strong { font-size: 22px; }
+  .table { font-size: 12px; }
+  .table th, .table td { padding: 8px 10px; }
+  .topicName { max-width: 160px; }
+}
+
+@media (max-width: 480px) {
+  .grid { grid-template-columns: 1fr; }
+  .row2 { grid-template-columns: 1fr; }
+  .reviewBtns { flex-direction: column; }
+  .reviewBtn { width: 100%; text-align: center; }
+  .uploadActions { flex-direction: column; }
+  .cancelBtn { width: 100%; text-align: center; }
+  .formCard { padding: 16px; }
+  .logItem { flex-direction: column; gap: 4px; }
+  .logTime { margin-left: 0; }
+  .ankiStats { flex-direction: column; gap: 6px; }
+}
+
+@media (max-width: 380px) {
+  .header { margin-bottom: 16px; }
+  .tabs { flex-direction: column; }
+  .tab { width: 100%; text-align: center; }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .tab { min-height: 40px; }
+  .card { min-height: 60px; }
+  .reviewBtn { min-height: 40px; }
+  .primaryBtn { min-height: 48px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card, .statCard, .routineCard { transition: none; }
+}
+
+@media print {
+  .tabs, .reviewBtns, .uploadActions { display: none !important; }
+  .cardList { page-break-inside: avoid; }
+}

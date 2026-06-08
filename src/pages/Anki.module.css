@@ -707,3 +707,31 @@
   .formCard { padding: 20px; }
   .reviewCard { padding: 24px; }
 }
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .deckGrid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  .reviewCard { max-width: 500px; padding: 28px; }
+}
+
+@media (max-width: 640px) and (orientation: landscape) {
+  .reviewCard { padding: 20px; }
+  .reviewContent { font-size: 14px; }
+  .header { flex-direction: column; align-items: flex-start; }
+  .pills { width: 100%; }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .deckCard { min-height: 80px; }
+  .ankiCard { min-height: 60px; }
+  .revBtn { min-height: 40px; }
+  .createDeckBtn { min-height: 44px; }
+  .showAnswerBtn { min-height: 48px; }
+  .primaryBtn { min-height: 48px; }
+  .tabAdd, .tabReview, .tab, .tabOn { min-height: 38px; }
+  .delBtn, .deckDelBtn { min-width: 36px; min-height: 36px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deckCard, .ankiCard, .formCard, .reviewCard { transition: none; }
+  .revBtn:hover, .createDeckBtn:hover, .tabAdd:hover { transform: none; }
+}

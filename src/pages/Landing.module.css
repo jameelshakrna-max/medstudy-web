@@ -80,3 +80,57 @@
   .nav { padding: 16px 20px; }
   .hero { padding: 60px 20px 60px; }
 }
+
+@media (max-width: 1024px) {
+  .features { padding: 60px 20px; }
+  .featureGrid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .planGrid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .planPrice { font-size: 40px; }
+}
+
+@media (max-width: 640px) {
+  .nav { padding: 14px 16px; flex-wrap: wrap; gap: 10px; }
+  .navLinks { flex-wrap: wrap; justify-content: center; }
+  .navBtn { padding: 6px 14px; font-size: 13px; }
+  .hero { padding: 48px 16px 48px; }
+  .heroTag { font-size: 11px; padding: 4px 12px; }
+  .heroCta { flex-direction: column; align-items: center; }
+  .ctaPrimary, .ctaSecondary { width: 100%; max-width: 280px; text-align: center; }
+  .heroStats { gap: 16px; }
+  .statN { font-size: 22px; }
+  .statDiv { height: 24px; }
+  .features, .howItWorks, .pricing, .finalCta { padding: 48px 16px; }
+  .featureGrid { grid-template-columns: 1fr; gap: 14px; }
+  .featureCard { padding: 22px 20px; }
+  .step { padding: 16px; gap: 14px; }
+  .stepNum { width: 30px; height: 30px; font-size: 12px; }
+  .planGrid { grid-template-columns: 1fr; gap: 16px; }
+  .planCard { padding: 24px 20px; }
+  .planPrice { font-size: 36px; }
+  .popularBadge { font-size: 10px; padding: 3px 10px; }
+}
+
+@media (max-width: 380px) {
+  .heroTitle { font-size: 28px; }
+  .heroSub { font-size: 14px; }
+  .navBtn { font-size: 12px; padding: 5px 12px; }
+  .sectionTitle { font-size: 22px; }
+  .planPrice { font-size: 30px; }
+}
+
+@media (max-width: 640px) and (orientation: landscape) {
+  .hero { padding: 32px 16px; }
+  .heroTitle { font-size: 32px; }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .navBtn { min-height: 40px; }
+  .ctaPrimary { min-height: 48px; }
+  .ctaSecondary { min-height: 48px; }
+  .step { min-height: 60px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .featureCard, .planCard, .step { transition: none; }
+  .ctaPrimary:hover, .ctaSecondary:hover, .navBtn:hover { transform: none; }
+}

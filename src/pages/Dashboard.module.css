@@ -23,3 +23,36 @@
 .tip { background: var(--goldL); border: 1px solid rgba(232,168,56,0.2); border-radius: 14px; padding: 16px 20px; display: flex; gap: 12px; align-items: flex-start; font-size: 14px; color: var(--mist); line-height: 1.6; }
 .tipIcon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
 .tip strong { color: var(--gold); }
+
+@media (max-width: 1024px) {
+  .statsGrid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .routineGrid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .header { margin-bottom: 20px; }
+  .statsGrid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .statCard { padding: 16px 12px; }
+  .statNum { font-size: 28px; }
+  .statIcon { font-size: 20px; }
+  .sectionTitle { font-size: 18px; }
+  .routineGrid { grid-template-columns: 1fr; }
+  .routineCard { padding: 16px; }
+  .tip { flex-direction: column; padding: 14px 16px; }
+}
+
+@media (max-width: 380px) {
+  .statsGrid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .statCard { padding: 12px 8px; border-radius: 12px; }
+  .statNum { font-size: 24px; }
+  .statLabel { font-size: 10px; }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .statCard { min-height: 80px; }
+  .routineCard { min-height: 60px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statCard, .routineCard { transition: none; }
+}

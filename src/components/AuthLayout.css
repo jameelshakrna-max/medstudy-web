@@ -25,3 +25,25 @@
 .auth-links a { color: var(--teal); }
 .auth-note { font-size: 11px; color: var(--mist); text-align: center; margin-top: 16px; line-height: 1.6; }
 @media (max-width: 480px) { .auth-card { padding: 32px 24px; } }
+
+@media (max-width: 480px) and (orientation: landscape) {
+  .auth-page { padding: 16px; align-items: flex-start; padding-top: 48px; }
+  .auth-card { padding: 28px 24px; max-width: 360px; }
+}
+
+@media (max-width: 360px) {
+  .auth-card { padding: 24px 18px; border-radius: 20px; }
+  .auth-title { font-size: 22px; }
+  .auth-btn { padding: 12px; font-size: 14px; }
+  .auth-icon { font-size: 32px; }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .auth-btn { min-height: 48px; }
+  .auth-back { min-height: 36px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-btn:hover { transform: none; }
+  .auth-back:hover { color: var(--mist); }
+}
