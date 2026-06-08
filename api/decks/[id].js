@@ -1,31 +1,36 @@
-﻿import { createClient } from '@libsql/client'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-
+﻿const { createClient } = require("@libsql/client")
 const turso = createClient({
   url: process.env.TURSO_DATABASE_URL,
-  authToken: process.env.TURSO_AUTH_TOKEN,
+  authToken: process.env.TURSO_AUTH_TOKEN
 })
 
-const supabase = createSupabaseClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.VITE_SUPABASE_ANON_KEY
-)
-
 async function getUser(req) {
-  const auth = req.headers.get('authorization')
-  if (!auth || !auth.startsWith('Bearer ')) return null
-  const token = auth.replace('Bearer ', '')
-  const { data: { user } } = await supabase.auth.getUser(token)
-  return user
+  const auth = req.headers["authorization"] || ""
+  const token = auth.replace("Bearer ", "")
+  if (!token) return null
+  try {
+    const url = process.env.VITE_SUPABASE_URL
+    const key = process.env.VITE_SUPABASE_ANON_KEY
+    const res = await fetch(url + "/auth/v1/user", {
+      headers: { Authorization: "Bearer " + token, apikey: key }
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch { return null }
 }
 
-export async function DELETE(req, { params }) {
+module.exports = async function handler(req, res) {
   const user = await getUser(req)
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  const { id } = await params
-  try {
-    await turso.execute({ sql: 'DELETE FROM anki_cards WHERE deck_id = ? AND user_id = ?', args: [id, user.id] })
-    await turso.execute({ sql: 'DELETE FROM anki_decks WHERE id = ? AND user_id = ?', args: [id, user.id] })
-    return Response.json({ success: true })
-  } catch (e) { return Response.json({ error: e.message }, { status: 500 }) }
+  if (!user) return res.status(401).json({ error: "Unauthorized" })
+  const uid = user.id
+  const id = req.query.id
+
+  if (req.method === "DELETE") {
+    try {
+      await turso.execute({ sql: "DELETE FROM anki_cards WHERE deck_id = ?", args: [id] })
+      await turso.execute({ sql: "DELETE FROM anki_decks WHERE id = ? AND user_id = ?", args: [id, uid] })
+      return res.json({ success: true })
+    } catch (e) { return res.status(500).json({ error: e.message }) }
+  }
+  return res.status(405).json({ error: "Method not allowed" })
 }
