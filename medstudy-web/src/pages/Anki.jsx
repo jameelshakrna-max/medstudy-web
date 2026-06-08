@@ -107,7 +107,7 @@ export default function Anki() {
   async function deleteDeck(id) {
     if (!confirm('Delete deck and all its cards?')) return
     try {
-      const res = await apiDel(/api/decks/)
+      const res = await apiDel(`/api/decks/${id}`)
       if (res.error) throw new Error(res.error)
       if (activeDeckId === id) { setActiveDeckId(null); setView('decks') }
       load()
@@ -132,7 +132,7 @@ export default function Anki() {
   async function deleteCard(id) {
     if (!confirm('Delete this card?')) return
     try {
-      const res = await apiDel(/api/flashcards/)
+      const res = await apiDel(`/api/flashcards/${cardId}`))
       if (res.error) throw new Error(res.error)
       load()
     } catch (e) { alert(e.message) }
@@ -145,7 +145,7 @@ export default function Anki() {
     if (!c) return
     try {
       const update = sm2(o, c)
-      const res = await apiPut(/api/flashcards/, update)
+      const res = await apiPut(`/api/flashcards/${cardId}`, updatedFields), update)
       if (res.error) throw new Error(res.error)
       if (qIdx + 1 < queue.length) { setQIdx(qIdx + 1); setShowAns(false) }
       else { setView(activeDeckId ? 'browse' : 'decks'); load() }
