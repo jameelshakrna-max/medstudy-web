@@ -1,0 +1,46 @@
+.layout { display: flex; min-height: 100vh; }
+
+/* SIDEBAR */
+.sidebar {
+  width: 240px; flex-shrink: 0;
+  background: rgba(255,255,255,0.02);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  position: fixed; left: 0; top: 0; bottom: 0; z-index: 50;
+  transition: transform 0.3s;
+}
+.sidebarTop { padding: 24px 20px 16px; border-bottom: 1px solid var(--border); }
+.logo { font-family: 'DM Serif Display', serif; font-size: 16px; color: #fff; margin-bottom: 12px; }
+.userChip { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--mist); }
+.userDot { width: 8px; height: 8px; border-radius: 50%; background: var(--sage); flex-shrink: 0; }
+
+/* NAV */
+.nav { flex: 1; padding: 12px 12px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.navItem { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; font-size: 14px; font-weight: 500; color: var(--mist); transition: all 0.2s; }
+.navItem:hover { background: var(--card); color: #E0E8F0; }
+.navActive { background: var(--tealL) !important; color: var(--teal) !important; }
+.navIcon { font-size: 18px; flex-shrink: 0; width: 24px; text-align: center; }
+.navLabel { flex: 1; }
+
+/* SIDEBAR BOTTOM */
+.sidebarBottom { padding: 16px 20px; border-top: 1px solid var(--border); }
+.planBadge { font-size: 12px; font-weight: 700; color: var(--teal); margin-bottom: 10px; }
+.signOutBtn { width: 100%; padding: 8px; background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--mist); font-size: 13px; cursor: pointer; transition: all 0.2s; }
+.signOutBtn:hover { border-color: var(--coral); color: var(--coral); }
+
+/* MAIN */
+.main { flex: 1; margin-left: 240px; min-height: 100vh; }
+.mobileHeader { display: none; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--navy); position: sticky; top: 0; z-index: 40; }
+.menuBtn { background: none; border: none; color: #E0E8F0; font-size: 20px; cursor: pointer; padding: 4px; }
+.mobileLogo { font-family: 'DM Serif Display', serif; font-size: 16px; color: #fff; }
+.content { padding: 32px; max-width: 1200px; }
+.overlay { display: none; }
+
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebarOpen { transform: translateX(0); }
+  .main { margin-left: 0; }
+  .mobileHeader { display: flex; }
+  .content { padding: 20px 16px; }
+  .overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; }
+}
