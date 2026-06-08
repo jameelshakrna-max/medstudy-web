@@ -52,10 +52,19 @@ function sm2(quality, card) {
   let interval = Number(card.interval) || 0
   let repetitions = Number(card.repetitions) || 0
   if (quality >= 3) {
-    if (repetitions === 0) interval = 1
-    else if (repetitions === 1) interval = 6
-    else interval = Math.round(interval * ease_factor)
-    repetitions += 1
+    if (quality === 5 && repetitions === 0) {
+      interval = 6
+      repetitions = 2
+    } else if (repetitions === 0) {
+      interval = 1
+      repetitions = 1
+    } else if (repetitions === 1) {
+      interval = 6
+      repetitions = 2
+    } else {
+      interval = Math.round(interval * ease_factor)
+      repetitions += 1
+    }
   } else {
     repetitions = 0
     interval = 1
