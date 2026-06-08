@@ -1,4 +1,4 @@
-﻿import { createClient } from "@libsql/client"
+import { createClient } from "@libsql/client"
 
 const turso = createClient({
   url: process.env.TURSO_DATABASE_URL,
@@ -21,24 +21,41 @@ async function getUser(req) {
 }
 
 export default async function handler(req, res) {
-  const user = await getUser(req)
-  if (!user) return res.status(401).json({ error: "Unauthorized" })
-  const uid = user.id
-  const id = req.query.id
-  if (req.method === "PUT") {
-    const body = req.body
-    try {
-      const fields = Object.keys(body).map(k => k + " = ?").join(", ")
-      const values = Object.values(body)
-      await turso.execute({ sql: "UPDATE anki_cards SET " + fields + " WHERE id = ? AND user_id = ?", args: [...values, id, uid] })
-      return res.json({ id, ...body })
-    } catch (e) { return res.status(500).json({ error: e.message }) }
+  try {
+    const user = await getUser(req)
+    if (!user) return res.status(401).json({ error: "Unauthorized" })
+    const uid = user.id
+    const id = req.query.id
+
+    if (req.method === "PUT") {
+      const body = req.body
+      try {
+        const sets = []
+        const vals = []
+        for (const [key, val] of Object.entries(body)) {
+          sets.push(key + " = ?")
+          vals.push(val)
+        }
+        const sql = "UPDATE anki_cards SET " + sets.join(", ") + " WHERE id = ? AND user_id = ?"
+        vals.push(id, uid)
+        await turso.execute({ sql: sql, args: vals })
+        return res.json({ id, ...body })
+      } catch (e) {
+        return res.status(500).json({ error: "Turso PUT error: " + e.message })
+      }
+    }
+
+    if (req.method === "DELETE") {
+      try {
+        await turso.execute({ sql: "DELETE FROM anki_cards WHERE id = ? AND user_id = ?", args: [id, uid] })
+        return res.json({ success: true })
+      } catch (e) {
+        return res.status(500).json({ error: "Turso DELETE error: " + e.message })
+      }
+    }
+
+    return res.status(405).json({ error: "Method not allowed" })
+  } catch (e) {
+    return res.status(500).json({ error: "Handler error: " + e.message })
   }
-  if (req.method === "DELETE") {
-    try {
-      await turso.execute({ sql: "DELETE FROM anki_cards WHERE id = ? AND user_id = ?", args: [id, uid] })
-      return res.json({ success: true })
-    } catch (e) { return res.status(500).json({ error: e.message }) }
-  }
-  return res.status(405).json({ error: "Method not allowed" })
 }
