@@ -1,327 +1,319 @@
-﻿import { useEffect, useState, useRef, useCallback } from 'react'
-import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
-import styles from './Page.module.css'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { supabase } from '../supabaseClient'
 
-async function getHeaders() {
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.access_token) return null
-  return { Authorization: Bearer , 'Content-Type': 'application/json' }
-}
+const API = '/api'
 
 async function apiGet(path) {
-  const h = await getHeaders()
-  if (!h) throw new Error('Not logged in')
-  const r = await fetch(path, { headers: h })
-  return r.json()
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch(`${API}${path}`, {
+    headers: { Authorization: `Bearer ${session.access_token}` }
+  })
+  return res.json()
 }
 
 async function apiPost(path, body) {
-  const h = await getHeaders()
-  if (!h) throw new Error('Not logged in')
-  const r = await fetch(path, { method: 'POST', headers: h, body: JSON.stringify(body) })
-  return r.json()
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch(`${API}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify(body)
+  })
+  return res.json()
 }
 
 async function apiPut(path, body) {
-  const h = await getHeaders()
-  if (!h) throw new Error('Not logged in')
-  const r = await fetch(path, { method: 'PUT', headers: h, body: JSON.stringify(body) })
-  return r.json()
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch(`${API}${path}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify(body)
+  })
+  return res.json()
 }
 
 async function apiDel(path) {
-  const h = await getHeaders()
-  if (!h) throw new Error('Not logged in')
-  const r = await fetch(path, { method: 'DELETE', headers: h })
-  return r.json()
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch(`${API}${path}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${session.access_token}` }
+  })
+  return res.json()
 }
 
-const cl = v => (!v || v === 'none' || v === '') ? null : v
-const td = () => new Date().toISOString().split('T')[0]
-const dm = (dks, id) => { if (!id) return 'Unassigned'; const d = dks.find(x => x.id === id); return d ? d.name : 'Unknown' }
-function ds(c) { const t = td(); if (!c.last_reviewed) return { l: 'New', c: 'var(--teal)' }; if (!c.next_review_date || c.next_review_date <= t) return { l: 'Due', c: 'var(--coral)' }; return { l: 'Later', c: 'var(--sage)' } }
-function nr(c) { if (!c.last_reviewed) return { t: 'Not scheduled' }; const t = new Date(td() + 'T00:00:00'), n = new Date((c.next_review_date || td()) + 'T00:00:00'), d = Math.ceil((n - t) / 864e5); if (d <= 0) return { t: 'Due now' }; if (d === 1) return { t: 'Tomorrow' }; if (d <= 7) return { t: 'In ' + d + 'd' }; if (d <= 30) return { t: 'In ' + Math.ceil(d / 7) + 'w' }; return { t: 'In ' + Math.ceil(d / 30) + 'mo' } }
-function ml(c) { if (!c.last_reviewed) return 'New'; return (c.times_reviewed || 0) >= 5 ? 'Mature' : 'Learning' }
-function sm2(o, c) { const e = Number(c.ease_factor || 2.5), i = Number(c.interval_days || 0), f = i === 0; let ne, ni; if (o === 'again') { ne = Math.max(1.3, e - 0.2); ni = 1 } else if (o === 'hard') { ne = Math.max(1.3, e - 0.15); ni = f ? 3 : Math.max(2, Math.ceil(i * 1.2)) } else if (o === 'good') { ne = e; ni = f ? 6 : Math.max(2, Math.ceil(i * e)) } else { ne = e + 0.15; ni = f ? 10 : Math.max(2, Math.ceil(i * e * 1.3)) } const d = new Date(); d.setDate(d.getDate() + ni); return { ease_factor: ne, interval_days: ni, times_reviewed: (c.times_reviewed || 0) + 1, last_reviewed: td(), next_review_date: d.toISOString().split('T')[0] } }
-async function pApkg(file) { const JZ = (await import('jszip')).default, SQ = (await import('sql.js')).default, zip = await JZ.loadAsync(file); let db = null; for (const n of ['collection.anki21b', 'collection.anki21', 'collection.anki2']) { const f = zip.file(n); if (f) { db = await f.async('uint8array'); break } } if (!db) throw new Error('No Anki database'); const SQL = await SQ({ locateFile: () => 'https://sql.js.org/dist/sql-wasm.wasm' }), d = new SQL.Database(db); try { const r = d.exec('SELECT flds FROM notes'); if (!r.length || !r[0].values.length) throw new Error('No notes'); const o = []; for (const row of r[0].values) { const fs = String(row[0]).split('\x1f').map(f => f.trim()); if (fs.length >= 2 && fs[0] && fs[1]) o.push({ front: fs[0], back: fs[1] }) } return o } finally { d.close() } }
-function pCsv(text, fn) { const s = fn.endsWith('.tsv') ? '\t' : ',', ls = text.split(/\r?\n/).filter(l => l.trim()), o = []; for (let i = 0; i < ls.length; i++) { const p = ls[i].split(s).map(x => x.trim().replace(/^["']|["']$/g, '')); if (p.length >= 2 && p[0] && p[1]) { const f = p[0].toLowerCase(); if (i === 0 && (f === 'front' || f === 'question' || f === 'term')) continue; o.push({ front: p[0], back: p[1] }) } } return o }
-function pTxt(text) { const ls = text.split(/\r?\n/).filter(l => l.trim()), o = []; let cf = null, cb = null; for (const l of ls) { if (l.includes('\t')) { const [f, ...r] = l.split('\t'); if (f.trim() && r.join('\t').trim()) { o.push({ front: f.trim(), back: r.join('\t').trim() }); cf = cb = null; continue } } const di = l.indexOf(' - '); if (di > 0) { const f = l.substring(0, di).trim(), b = l.substring(di + 3).trim(); if (f && b) { o.push({ front: f, back: b }); cf = cb = null; continue } } const ci = l.indexOf(': '); if (ci > 0) { const f = l.substring(0, ci).trim(), b = l.substring(ci + 2).trim(); if (f && b) { o.push({ front: f, back: b }); cf = cb = null; continue } } if (!l.trim()) { if (cf && cb) o.push({ front: cf, back: cb }); cf = cb = null; continue } if (!cf) cf = l.trim(); else if (!cb) cb = l.trim() } if (cf && cb) o.push({ front: cf, back: cb }); return o }
+function sm2(quality, card) {
+  let { ease_factor, interval, repetitions } = card
+  if (quality >= 3) {
+    if (repetitions === 0) interval = 1
+    else if (repetitions === 1) interval = 6
+    else interval = Math.round(interval * ease_factor)
+    repetitions += 1
+  } else {
+    repetitions = 0
+    interval = 1
+  }
+  ease_factor = Math.max(1.3, ease_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))
+  const next_review = new Date()
+  next_review.setDate(next_review.getDate() + interval)
+  return { ...card, ease_factor, interval, repetitions, next_review: next_review.toISOString(), last_review: new Date().toISOString() }
+}
 
 export default function Anki() {
-  const { user } = useAuth()
-  const [cards, setCards] = useState([])
   const [decks, setDecks] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [view, setView] = useState('decks')
+  const [cards, setCards] = useState([])
   const [activeDeckId, setActiveDeckId] = useState(null)
-  const [filter, setFilter] = useState('all')
-  const [front, setFront] = useState('')
-  const [back, setBack] = useState('')
-  const [formDeckId, setFormDeckId] = useState('')
-  const [highYield, setHighYield] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [deckName, setDeckName] = useState('')
-  const [savingDeck, setSavingDeck] = useState(false)
-  const [parsed, setParsed] = useState([])
-  const [uploadDeck, setUploadDeck] = useState('')
-  const [importing, setImporting] = useState(false)
-  const [parseErr, setParseErr] = useState('')
-  const [parsing, setParsing] = useState(false)
-  const fileRef = useRef(null)
-  const [queue, setQueue] = useState([])
-  const [qIdx, setQIdx] = useState(0)
-  const [showAns, setShowAns] = useState(false)
+  const [view, setView] = useState('decks')
+  const [reviewCards, setReviewCards] = useState([])
+  const [reviewIdx, setReviewIdx] = useState(0)
+  const [showAnswer, setShowAnswer] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ front: '', back: '', deck_id: '' })
+  const [newDeckName, setNewDeckName] = useState('')
+  const [bulkMode, setBulkMode] = useState(false)
+  const [bulkText, setBulkText] = useState('')
+  const hasFetched = useRef(false)
 
-  const load = useCallback(async () => {
-    setLoading(true); setError('')
+  const fetchDecks = useCallback(async () => {
     try {
-      const [c, d] = await Promise.all([apiGet('/api/flashcards'), apiGet('/api/decks')])
-      if (c.error) throw new Error(c.error)
-      if (d.error) throw new Error(d.error)
-      setCards(c.cards || [])
-      setDecks(d.decks || [])
-    } catch (e) { setError(e.message) }
-    setLoading(false)
+      const data = await apiGet('/decks')
+      if (!data.error) setDecks(data)
+    } catch (e) { console.error(e) }
   }, [])
-  useEffect(() => { load() }, [load])
 
-  const today = td(), all = activeDeckId ? cards.filter(c => c.deck_id === activeDeckId) : cards
-  const due = all.filter(c => !c.last_reviewed || !c.next_review_date || c.next_review_date <= today)
-  const nw = all.filter(c => !c.last_reviewed)
-  const vis = filter === 'due' ? due : filter === 'new' ? nw : all
-  const dn = id => dm(decks, id)
-
-  async function createDeck() {
-    if (!deckName.trim()) return
-    setSavingDeck(true)
+  const fetchCards = useCallback(async (deckId) => {
     try {
-      const res = await apiPost('/api/decks', { name: deckName.trim(), description: '' })
+      const data = await apiGet(`/flashcards?deck_id=${deckId}`)
+      if (!data.error) setCards(data)
+    } catch (e) { console.error(e) }
+  }, [])
+
+  useEffect(() => {
+    if (!hasFetched.current) { fetchDecks(); hasFetched.current = true }
+  }, [fetchDecks])
+
+  useEffect(() => {
+    if (activeDeckId) fetchCards(activeDeckId)
+  }, [activeDeckId, fetchCards])
+
+  async function createDeck(e) {
+    e.preventDefault()
+    if (!newDeckName.trim()) return
+    try {
+      const res = await apiPost('/decks', { name: newDeckName.trim() })
       if (res.error) throw new Error(res.error)
-      setDeckName(''); load()
+      setDecks(prev => [...prev, res])
+      setNewDeckName('')
     } catch (e) { alert(e.message) }
-    setSavingDeck(false)
   }
 
   async function deleteDeck(id) {
     if (!confirm('Delete deck and all its cards?')) return
     try {
-      const res = await apiDel(`/api/decks/${id}`)
+      const res = await apiDel(`/decks/${id}`)
       if (res.error) throw new Error(res.error)
       if (activeDeckId === id) { setActiveDeckId(null); setView('decks') }
-      load()
+      setDecks(prev => prev.filter(d => d.id !== id))
     } catch (e) { alert(e.message) }
   }
 
-  async function addCard() {
-    if (!front.trim() || !back.trim()) return
-    setSaving(true)
+  function openDeck(id) {
+    setActiveDeckId(id)
+    setView('cards')
+  }
+
+  async function createCard(e) {
+    e.preventDefault()
+    if (!form.front.trim() || !form.back.trim() || !form.deck_id) return
     try {
-      const res = await apiPost('/api/flashcards', {
-        front: front.trim(), back: back.trim(), deck_id: cl(formDeckId),
-        high_yield: highYield, ease_factor: 2.5, interval_days: 0,
-        times_reviewed: 0, last_reviewed: null, next_review_date: today
+      const res = await apiPost('/flashcards', {
+        deck_id: form.deck_id,
+        front: form.front.trim(),
+        back: form.back.trim()
       })
       if (res.error) throw new Error(res.error)
-      setFront(''); setBack(''); setHighYield(false); load()
+      setCards(prev => [...prev, res])
+      setForm({ front: '', back: '', deck_id: form.deck_id })
+      setShowForm(false)
     } catch (e) { alert(e.message) }
-    setSaving(false)
   }
 
-  async function deleteCard(id) {
+  async function createBulkCards(e) {
+    e.preventDefault()
+    if (!bulkText.trim() || !form.deck_id) return
+    const lines = bulkText.trim().split('\n')
+    const parsed = []
+    for (let i = 0; i < lines.length; i += 2) {
+      if (lines[i] && lines[i + 1]) {
+        parsed.push({ deck_id: form.deck_id, front: lines[i].trim(), back: lines[i + 1].trim() })
+      }
+    }
+    if (!parsed.length) return alert('No valid card pairs found')
+    try {
+      const res = await apiPost('/flashcards', { cards: parsed })
+      if (res.error) throw new Error(res.error)
+      setCards(prev => [...prev, ...res])
+      setBulkText('')
+      setBulkMode(false)
+      setShowForm(false)
+    } catch (e) { alert(e.message) }
+  }
+
+  async function deleteCard(cardId) {
     if (!confirm('Delete this card?')) return
     try {
-      const res = await apiDel(`/api/flashcards/${cardId}`))
+      const res = await apiDel(`/flashcards/${cardId}`)
       if (res.error) throw new Error(res.error)
-      load()
+      setCards(prev => prev.filter(c => c.id !== cardId))
     } catch (e) { alert(e.message) }
   }
 
-  function startReview() { if (due.length) { setQueue(due); setQIdx(0); setShowAns(false); setView('review') } }
+  function startReview() {
+    const now = new Date()
+    const due = cards.filter(c => {
+      if (!c.next_review) return true
+      return new Date(c.next_review) <= now
+    })
+    if (!due.length) return alert('No cards due for review!')
+    setReviewCards(due)
+    setReviewIdx(0)
+    setShowAnswer(false)
+    setView('review')
+  }
 
-  async function submitReview(o) {
-    const c = queue[qIdx]
-    if (!c) return
+  async function rateCard(quality) {
+    const card = reviewCards[reviewIdx]
+    const updated = sm2(quality, card)
     try {
-      const update = sm2(o, c)
-      const res = await apiPut(`/api/flashcards/${cardId}`, updatedFields), update)
+      const res = await apiPut(`/flashcards/${card.id}`, {
+        ease_factor: updated.ease_factor,
+        interval: updated.interval,
+        repetitions: updated.repetitions,
+        next_review: updated.next_review,
+        last_review: updated.last_review
+      })
       if (res.error) throw new Error(res.error)
-      if (qIdx + 1 < queue.length) { setQIdx(qIdx + 1); setShowAns(false) }
-      else { setView(activeDeckId ? 'browse' : 'decks'); load() }
-    } catch (e) { alert(e.message) }
-  }
-
-  function exitReview() { setQueue([]); setQIdx(0); setShowAns(false); setView(activeDeckId ? 'browse' : 'decks'); load() }
-
-  async function handleFile(file) {
-    if (!file) return
-    setParsing(true); setParseErr('')
-    try {
-      let r = []
-      if (file.name.toLowerCase().endsWith('.apkg')) r = await pApkg(file)
-      else { const t = await file.text(); r = file.name.endsWith('.csv') || file.name.endsWith('.tsv') ? pCsv(t, file.name) : pTxt(t) }
-      if (!r.length) { setParseErr('No cards found.'); setParsing(false); return }
-      setParsed(r); setUploadDeck(activeDeckId || ''); setView('upload')
-    } catch (e) { setParseErr(e.message) }
-    setParsing(false)
-  }
-
-  async function importCards() {
-    if (!parsed.length) return
-    setImporting(true)
-    try {
-      const rows = parsed.map(c => ({
-        front: c.front, back: c.back, deck_id: cl(uploadDeck),
-        high_yield: false, ease_factor: 2.5, interval_days: 0,
-        times_reviewed: 0, last_reviewed: null, next_review_date: today
-      }))
-      for (let i = 0; i < rows.length; i += 100) {
-        const res = await apiPost('/api/flashcards', rows.slice(i, i + 100))
-        if (res.error) throw new Error(res.error)
+      setCards(prev => prev.map(c => c.id === card.id ? { ...c, ...res } : c))
+      if (reviewIdx + 1 < reviewCards.length) {
+        setReviewIdx(prev => prev + 1)
+        setShowAnswer(false)
+      } else {
+        setView('cards')
       }
-      setParsed([]); setUploadDeck(''); load(); setView(activeDeckId ? 'browse' : 'decks')
     } catch (e) { alert(e.message) }
-    setImporting(false)
   }
 
-  if (loading) return <div className={styles.loading}>Loading Anki...</div>
-  if (error && !cards.length && !decks.length) return (<div className={styles.page}><div className={styles.empty}><h3>⚠️ Setup Required</h3><p>Run anki-migration.sql in Supabase SQL Editor first.</p><p style={{color:'var(--coral)',fontSize:12,marginTop:8}}>{error}</p></div></div>)
-  const cur = queue[qIdx]
+  if (view === 'decks') {
+    return (
+      <div className="p-6 max-w-2xl mx-auto">
+        <h1 className="text-2xl font-bold mb-6">Flashcard Decks</h1>
+        <form onSubmit={createDeck} className="flex gap-2 mb-6">
+          <input value={newDeckName} onChange={e => setNewDeckName(e.target.value)} placeholder="Deck name..." className="flex-1 px-4 py-2 rounded-lg border dark:bg-gray-700 dark:border-gray-600" required />
+          <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Create</button>
+        </form>
+        {decks.length === 0 && <p className="text-gray-500">No decks yet. Create one above.</p>}
+        <div className="space-y-2">
+          {decks.map(deck => (
+            <div key={deck.id} className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
+              <button onClick={() => openDeck(deck.id)} className="text-left font-medium hover:text-blue-600">{deck.name}</button>
+              <button onClick={() => deleteDeck(deck.id)} className="text-red-500 hover:text-red-700 text-sm">Delete</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
-  const si = { display:'inline-block', fontSize:12, padding:'2px 8px', borderRadius:100, fontWeight:600 }
-  const siDue = {...si, background:'var(--coralL)', color:'var(--coral)'}
-  const siNew = {...si, background:'var(--tealL)', color:'var(--teal)'}
-  const siLater = {...si, background:'var(--sageL)', color:'var(--sage)'}
-  const siDeck = {...si, background:'var(--violetL)', color:'var(--violet)', fontSize:11}
+  if (view === 'review') {
+    const card = reviewCards[reviewIdx]
+    if (!card) return null
+    return (
+      <div className="p-6 max-w-2xl mx-auto text-center">
+        <p className="text-sm text-gray-500 mb-4">Card {reviewIdx + 1} of {reviewCards.length}</p>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 mb-6 min-h-[200px] flex flex-col justify-center">
+          <p className="text-xl mb-2 text-gray-500 text-sm">Question</p>
+          <p className="text-lg">{card.front}</p>
+          {showAnswer && (
+            <>
+              <hr className="my-4" />
+              <p className="text-xl mb-2 text-gray-500 text-sm">Answer</p>
+              <p className="text-lg">{card.back}</p>
+            </>
+          )}
+        </div>
+        {!showAnswer ? (
+          <button onClick={() => setShowAnswer(true)} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-lg">Show Answer</button>
+        ) : (
+          <div className="flex justify-center gap-3 flex-wrap">
+            <button onClick={() => rateCard(1)} className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">Again</button>
+            <button onClick={() => rateCard(3)} className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600">Hard</button>
+            <button onClick={() => rateCard(4)} className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">Good</button>
+            <button onClick={() => rateCard(5)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Easy</button>
+          </div>
+        )}
+        <button onClick={() => setView('cards')} className="mt-4 text-gray-500 hover:text-gray-700 text-sm">Back to cards</button>
+      </div>
+    )
+  }
 
-  return (<div className={styles.page}>
-    <div className={styles.header}>
-      <div><h1 className={styles.title}>🃏 Anki</h1><p className={styles.sub}>Spaced repetition — SM-2</p></div>
-      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-        {[decks.length+' decks', cards.length+' cards', due.length+' due', nw.length+' new'].map(t => (
-          <span key={t} style={{fontSize:12,color:'var(--mist)',background:'rgba(255,255,255,0.04)',border:'1px solid var(--border)',borderRadius:100,padding:'5px 14px'}}>{t}</span>
+  // cards view
+  return (
+    <div className="p-6 max-w-2xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <button onClick={() => setView('decks')} className="text-blue-600 hover:text-blue-800">Back to Decks</button>
+        <button onClick={startReview} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">Review Due Cards</button>
+      </div>
+      <h1 className="text-2xl font-bold mb-4">{decks.find(d => d.id === activeDeckId)?.name || 'Cards'}</h1>
+      {!showForm ? (
+        <button onClick={() => { setShowForm(true); setForm({ ...form, deck_id: activeDeckId }); setBulkMode(false) }} className="mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Add Card</button>
+      ) : (
+        <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
+          <div className="flex gap-2 mb-3">
+            <button onClick={() => setBulkMode(false)} className={`px-3 py-1 rounded text-sm ${!bulkMode ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-600'}`}>Single</button>
+            <button onClick={() => setBulkMode(true)} className={`px-3 py-1 rounded text-sm ${bulkMode ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-600'}`}>Bulk</button>
+          </div>
+          {!bulkMode ? (
+            <form onSubmit={createCard}>
+              <input value={form.front} onChange={e => setForm({ ...form, front: e.target.value })} placeholder="Front (question)..." className="w-full px-4 py-2 mb-2 rounded-lg border dark:bg-gray-700 dark:border-gray-600" required />
+              <input value={form.back} onChange={e => setForm({ ...form, back: e.target.value })} placeholder="Back (answer)..." className="w-full px-4 py-2 mb-2 rounded-lg border dark:bg-gray-700 dark:border-gray-600" required />
+              <div className="flex gap-2">
+                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save</button>
+                <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-300 dark:bg-gray-600 rounded-lg">Cancel</button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={createBulkCards}>
+              <p className="text-sm text-gray-500 mb-2">Enter pairs: question on one line, answer on next line</p>
+              <textarea value={bulkText} onChange={e => setBulkText(e.target.value)} rows={6} className="w-full px-4 py-2 mb-2 rounded-lg border dark:bg-gray-700 dark:border-gray-600 font-mono text-sm" placeholder={"Question 1\nAnswer 1\nQuestion 2\nAnswer 2"} required />
+              <div className="flex gap-2">
+                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Import Cards</button>
+                <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-300 dark:bg-gray-600 rounded-lg">Cancel</button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+      {cards.length === 0 && <p className="text-gray-500">No cards in this deck yet.</p>}
+      <div className="space-y-2">
+        {cards.map(card => (
+          <div key={card.id} className="flex items-start justify-between p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
+            <div>
+              <p className="font-medium">{card.front}</p>
+              <p className="text-gray-500 text-sm">{card.back}</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {card.next_review ? `Next: ${new Date(card.next_review).toLocaleDateString()}` : 'New card'}
+                {' | Ease: '}{card.ease_factor?.toFixed(2) || '2.50'}
+                {' | Interval: '}{card.interval || 0}d
+              </p>
+            </div>
+            <button onClick={() => deleteCard(card.id)} className="text-red-500 hover:text-red-700 text-sm ml-4">Delete</button>
+          </div>
         ))}
       </div>
     </div>
-
-    {view === 'decks' && (<>
-      <div style={{display:'flex',gap:8,marginBottom:18}}>
-        <input value={deckName} onChange={e => setDeckName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createDeck()} placeholder="New deck name..." maxLength={80} style={{flex:1,background:'rgba(255,255,255,0.06)',border:'1px solid var(--border)',borderRadius:10,color:'#E0E8F0',padding:'10px 14px',outline:'none',fontSize:14}} />
-        <button onClick={createDeck} disabled={savingDeck || !deckName.trim()} style={{padding:'10px 18px',background:'var(--teal)',color:'var(--navy)',border:'none',borderRadius:10,fontWeight:700,fontSize:14,cursor:'pointer',whiteSpace:'nowrap'}}>{savingDeck ? '...' : '+ Deck'}</button>
-      </div>
-      {due.length > 0 && <button onClick={startReview} style={{width:'100%',padding:14,background:'linear-gradient(135deg,rgba(242,92,92,0.12),rgba(232,168,56,0.12))',border:'1px solid rgba(242,92,92,0.2)',borderRadius:12,color:'#E0E8F0',fontSize:15,fontWeight:700,cursor:'pointer',marginBottom:18}}>⏰ Review {due.length} Due Card{due.length > 1 ? 's' : ''}</button>}
-      <div className={styles.grid}>
-        <div className={styles.card} style={{'--c':'var(--teal)'}} onClick={() => { setActiveDeckId(null); setFilter('all'); setView('browse') }}>
-          <div className={styles.cardTop}><span className={styles.cardName}>📚 All Cards</span></div>
-          <div style={{display:'flex',gap:14,fontSize:12,color:'var(--mist)',marginBottom:10}}><span>{cards.length} total</span><span>{due.length} due</span><span>{nw.length} new</span></div>
-          {cards.length > 0 && <div className={styles.progBar}><div className={styles.progFill} style={{width:Math.round(due.length/cards.length*100)+'%',background:'var(--teal)'}} /></div>}
-        </div>
-        {!decks.length && <div className={styles.empty}>No decks yet.</div>}
-        {decks.map(d => { const dc = cards.filter(c => c.deck_id === d.id), dd = dc.filter(c => !c.last_reviewed || !c.next_review_date || c.next_review_date <= today); return (
-          <div key={d.id} className={styles.card} style={{'--c':'var(--violet)',position:'relative'}} onClick={() => { setActiveDeckId(d.id); setFilter('all'); setView('browse') }}>
-            <div className={styles.cardTop}><span className={styles.cardName}>🗂️ {d.name}</span></div>
-            <div style={{display:'flex',gap:14,fontSize:12,color:'var(--mist)',marginBottom:10}}><span>{dc.length} total</span><span>{dd.length} due</span></div>
-            {dc.length > 0 && <div className={styles.progBar}><div className={styles.progFill} style={{width:Math.round(dd.length/dc.length*100)+'%',background:'var(--violet)'}} /></div>}
-            <button onClick={e => { e.stopPropagation(); deleteDeck(d.id) }} style={{position:'absolute',top:12,right:12,background:'none',border:'none',color:'var(--coral)',fontSize:14,cursor:'pointer',opacity:0.5}} title="Delete">✕</button>
-          </div>
-        )})}
-      </div>
-    </>)}
-
-    {view === 'browse' && (<>
-      <div style={{marginBottom:18}}><button onClick={() => { setActiveDeckId(null); setView('decks') }} style={{background:'none',border:'none',color:'var(--mist)',cursor:'pointer',fontSize:13}}>← Decks</button>{activeDeckId && <span style={{margin:'0 8px',color:'rgba(255,255,255,0.15)'}}>/</span>}{activeDeckId && <span style={{color:'#E0E8F0',fontWeight:600,fontSize:13}}>{dn(activeDeckId)}</span>}</div>
-      <div className={styles.tabs}>
-        <button className={${styles.tab} } onClick={() => setFilter('all')}>All ({all.length})</button>
-        <button className={${styles.tab} } onClick={() => setFilter('due')}>⏰ Due ({due.length})</button>
-        <button className={${styles.tab} } onClick={() => setFilter('new')}>🆕 New ({nw.length})</button>
-        {due.length > 0 && <button className={styles.tab} style={{background:'var(--tealL)',borderColor:'var(--teal)',color:'var(--teal)'}} onClick={startReview}>Review</button>}
-        <div style={{flex:1}} />
-        <button className={styles.tab} style={{background:'var(--teal)',borderColor:'var(--teal)',color:'var(--navy)'}} onClick={() => setView('add')}>+ Add</button>
-      </div>
-      <div className={styles.cardList}>
-        {!vis.length && <div className={styles.empty}>{filter === 'due' ? '🎉 No cards due!' : 'No cards.'}</div>}
-        {vis.map(card => {
-          const s = ds(card), r = nr(card)
-          return (<div key={card.id} className={styles.ankiCard} style={{position:'relative'}}>
-            <div className={styles.ankiMeta}>
-              <span className={styles.dueStatus} style={{color:s.c}}>{s.l === 'Due' ? '⏰ Due' : s.l === 'New' ? '🆕 New' : '✅ Later'}</span>
-              <span className={styles.maturity}>{ml(card)}</span>
-              {card.high_yield && <span className={styles.hyBadge}>⭐ HY</span>}
-              {card.deck_id && <span style={siDeck}>{dn(card.deck_id)}</span>}
-              <span style={s.l === 'Due' ? siDue : s.l === 'New' ? siNew : siLater}>{r.t}</span>
-              <button onClick={() => deleteCard(card.id)} style={{position:'absolute',right:14,top:14,background:'none',border:'none',fontSize:14,cursor:'pointer',opacity:0}} onMouseEnter={e => e.target.style.opacity=1} onMouseLeave={e => e.target.style.opacity=0}>🗑️</button>
-            </div>
-            <div className={styles.ankiFront}>{card.front}</div>
-            <div className={styles.ankiBack}>{card.back}</div>
-            <div className={styles.ankiStats}><span>EF: {Number(card.ease_factor || 2.5).toFixed(2)}</span><span>Interval: {card.interval_days || 0}d</span><span>Reviews: {card.times_reviewed || 0}</span><span>Next: {card.next_review_date || '—'}</span></div>
-            <div className={styles.reviewBtns}>{['Again', 'Hard', 'Good', 'Easy'].map(o => (<button key={o} className={${styles.reviewBtn} } onClick={() => submitReview(o)}>{o}</button>))}</div>
-          </div>)
-        })}
-      </div>
-    </>)}
-
-    {view === 'add' && (<>
-      <div style={{marginBottom:18}}><button onClick={() => setView(activeDeckId ? 'browse' : 'decks')} style={{background:'none',border:'none',color:'var(--mist)',cursor:'pointer',fontSize:13}}>← Back</button></div>
-      <div className={styles.formCard}>
-        <h3 className={styles.formTitle}>➕ Add Flashcard</h3>
-        <div className={styles.field}><label>Front</label><textarea rows={3} value={front} onChange={e => setFront(e.target.value)} placeholder="Question..." /></div>
-        <div className={styles.field}><label>Back</label><textarea rows={3} value={back} onChange={e => setBack(e.target.value)} placeholder="Answer..." /></div>
-        <div className={styles.field}><label>Deck</label><select value={formDeckId} onChange={e => setFormDeckId(e.target.value)}><option value="">No deck</option>{decks.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
-        <label className={styles.checkRow}><input type="checkbox" checked={highYield} onChange={e => setHighYield(e.target.checked)} /> ⭐ High Yield</label>
-        <button className={styles.primaryBtn} onClick={addCard} disabled={saving || !front.trim() || !back.trim()}>{saving ? 'Saving...' : 'Add Card'}</button>
-        <div style={{marginTop:24,paddingTop:24,borderTop:'1px solid var(--border)'}}>
-          <h4 style={{fontSize:16,fontWeight:700,color:'#fff',marginBottom:6}}>📂 Import File</h4>
-          <p style={{fontSize:13,color:'var(--mist)',marginBottom:14}}>.apkg .csv .tsv .txt</p>
-          {parseErr && <div style={{background:'rgba(242,92,92,0.08)',border:'1px solid rgba(242,92,92,0.2)',borderRadius:10,padding:10,color:'var(--coral)',fontSize:13,marginBottom:12}}>{parseErr}</div>}
-          <div onClick={() => fileRef.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f) }} style={{border:'2px dashed rgba(255,255,255,0.1)',borderRadius:16,padding:32,textAlign:'center',cursor:'pointer'}}>
-            <input ref={fileRef} type="file" accept=".apkg,.csv,.tsv,.txt" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }} style={{display:'none'}} />
-            <div style={{fontSize:32,marginBottom:8}}>{parsing ? '⏳' : '📁'}</div>
-            <div style={{fontSize:14,color:'var(--mist)',marginBottom:4}}>{parsing ? 'Parsing...' : 'Click or drop file'}</div>
-          </div>
-        </div>
-      </div>
-    </>)}
-
-    {view === 'upload' && parsed.length > 0 && (<>
-      <div style={{marginBottom:18}}><button onClick={() => { setParsed([]); setView('add') }} style={{background:'none',border:'none',color:'var(--mist)',cursor:'pointer',fontSize:13}}>← Back</button></div>
-      <div className={styles.formCard}>
-        <h3 className={styles.formTitle}>📂 Import {parsed.length} Cards</h3>
-        <div className={styles.field}><label>Deck</label><select value={uploadDeck} onChange={e => setUploadDeck(e.target.value)}><option value="">No deck</option>{decks.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
-        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:12,padding:16,maxHeight:220,overflow:'auto',marginTop:14}}>
-          <div style={{fontSize:11,fontWeight:700,color:'var(--mist)',marginBottom:10}}>{Math.min(parsed.length,30)} of {parsed.length}</div>
-          {parsed.slice(0,30).map((c, i) => (<div key={i} style={{display:'flex',gap:10,padding:'6px 0',borderBottom:'1px solid rgba(255,255,255,0.04)',fontSize:12}}><span style={{flex:1,color:'#E0E8F0',fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.front}</span><span style={{color:'rgba(255,255,255,0.2)'}}>→</span><span style={{flex:1,color:'var(--mist)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.back}</span></div>))}
-          {parsed.length > 30 && <div style={{fontSize:12,color:'var(--mist)',padding:'8px 0 2px',textAlign:'center'}}>+{parsed.length - 30} more</div>}
-        </div>
-        <div style={{display:'flex',gap:10,marginTop:16}}>
-          <button onClick={() => { setParsed([]); setView('add') }} style={{padding:12,background:'none',border:'1px solid var(--border)',borderRadius:10,color:'var(--mist)',fontSize:14,cursor:'pointer'}}>Cancel</button>
-          <button className={styles.primaryBtn} onClick={importCards} disabled={importing} style={{marginTop:0}}>{importing ? '...' : '🚀 Import ' + parsed.length}</button>
-        </div>
-      </div>
-    </>)}
-
-    {view === 'review' && cur && (<>
-      <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:24}}>
-        <button onClick={exitReview} style={{background:'none',border:'none',color:'var(--mist)',fontSize:18,cursor:'pointer'}}>✕</button>
-        <span style={{fontSize:13,color:'var(--mist)'}}>{qIdx+1} / {queue.length}</span>
-        <div style={{flex:1,height:4,background:'rgba(255,255,255,0.06)',borderRadius:2,overflow:'hidden'}}><div style={{height:'100%',background:'var(--teal)',width:((qIdx+1)/queue.length*100)+'%',borderRadius:2,transition:'width 0.3s'}} /></div>
-      </div>
-      <div style={{maxWidth:600,background:'var(--card)',border:'1px solid var(--border)',borderRadius:20,padding:32}}>
-        <span style={{fontSize:12,color:'var(--violet)',background:'var(--violetL)',padding:'3px 10px',borderRadius:100,fontWeight:500}}>{dn(cur.deck_id)}</span>
-        <div style={{marginTop:20}}><div style={{fontSize:10,fontWeight:700,letterSpacing:0.1,textTransform:'uppercase',color:'var(--mist)',marginBottom:8}}>Question</div><div style={{fontSize:16,color:'#fff',lineHeight:1.6}}>{cur.front}</div></div>
-        {!showAns ? (
-          <button onClick={() => setShowAns(true)} style={{width:'100%',padding:14,background:'var(--teal)',color:'var(--navy)',fontSize:16,fontWeight:700,border:'none',borderRadius:12,cursor:'pointer',marginTop:12}}>Show Answer</button>
-        ) : (<>
-          <div style={{paddingTop:16,borderTop:'1px solid var(--border)',marginTop:20}}><div style={{fontSize:10,fontWeight:700,letterSpacing:0.1,textTransform:'uppercase',color:'var(--mist)',marginBottom:8}}>Answer</div><div style={{fontSize:16,color:'#fff',lineHeight:1.6}}>{cur.back}</div></div>
-          <div style={{display:'flex',gap:16,fontSize:11,color:'var(--mist)',fontFamily:"'DM Mono',monospace",marginTop:12}}><span>EF: {Number(cur.ease_factor||2.5).toFixed(2)}</span><span>Interval: {cur.interval_days||0}d</span><span>Reviews: {cur.times_reviewed||0}</span></div>
-          <div className={styles.reviewBtns} style={{marginTop:20}}>
-            <button className={${styles.reviewBtn} } onClick={() => submitReview('again')}>😕 Again</button>
-            <button className={${styles.reviewBtn} } onClick={() => submitReview('hard')}>🤔 Hard</button>
-            <button className={${styles.reviewBtn} } onClick={() => submitReview('good')}>😊 Good</button>
-            <button className={${styles.reviewBtn} } onClick={() => submitReview('easy')}>🤩 Easy</button>
-          </div>
-        </>)}
-      </div>
-    </>)}
-  </div>)
+  )
 }
