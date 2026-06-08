@@ -1,4 +1,5 @@
-﻿const { createClient } = require("@libsql/client")
+﻿import { createClient } from "@libsql/client"
+
 const turso = createClient({
   url: process.env.TURSO_DATABASE_URL,
   authToken: process.env.TURSO_AUTH_TOKEN
@@ -19,12 +20,11 @@ async function getUser(req) {
   } catch { return null }
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const user = await getUser(req)
   if (!user) return res.status(401).json({ error: "Unauthorized" })
   const uid = user.id
   const id = req.query.id
-
   if (req.method === "PUT") {
     const body = req.body
     try {
@@ -34,7 +34,6 @@ module.exports = async function handler(req, res) {
       return res.json({ id, ...body })
     } catch (e) { return res.status(500).json({ error: e.message }) }
   }
-
   if (req.method === "DELETE") {
     try {
       await turso.execute({ sql: "DELETE FROM anki_cards WHERE id = ? AND user_id = ?", args: [id, uid] })

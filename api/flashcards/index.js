@@ -1,4 +1,5 @@
-﻿const { createClient } = require("@libsql/client")
+﻿import { createClient } from "@libsql/client"
+
 const turso = createClient({
   url: process.env.TURSO_DATABASE_URL,
   authToken: process.env.TURSO_AUTH_TOKEN
@@ -19,11 +20,10 @@ async function getUser(req) {
   } catch { return null }
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const user = await getUser(req)
   if (!user) return res.status(401).json({ error: "Unauthorized" })
   const uid = user.id
-
   if (req.method === "GET") {
     const deck_id = req.query.deck_id
     try {
@@ -31,7 +31,6 @@ module.exports = async function handler(req, res) {
       return res.json(r.rows)
     } catch (e) { return res.status(500).json({ error: e.message }) }
   }
-
   if (req.method === "POST") {
     const body = req.body
     if (body.cards && Array.isArray(body.cards)) {
