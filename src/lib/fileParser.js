@@ -104,7 +104,7 @@ async function parseApkg(file, onProgress) {
   if (!dbBuffer) throw new Error("Invalid APKG: no database found inside")
 
   if (onProgress) onProgress("Loading database engine...")
-  var SQL = await initSqlJs({ locateFile: function(f) { return "https://sql.js.org/dist/" + f } })
+  var SQL = await initSqlJs({ locateFile: function(f) { if (f.indexOf("sql-wasm") === 0) return "/sql-wasm.wasm"; return f } })
 
   if (onProgress) onProgress("Reading flashcards...")
   var db = new SQL.Database(dbBuffer)
