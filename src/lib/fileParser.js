@@ -87,39 +87,85 @@ async function parseApkg(file, onProgress) {
   try {
     zip = fflate.unzipSync(uint8)
   } catch (e) {
-    throw new Error("Invalid APKG file: cannot extract ZIP")
+    throw new Error("Invalid APKG file: cannot extract ZIP archive. Make sure the file is a valid .apkg file downloaded from Anki.")
   }
 
-  var dbKeys = ["collection.anki21", "collection.anki21b", "collection.anki20", "collection.anki2"]
+  if (onProgress) onProgress("Looking for database inside APKG...")
+  var dbKeys = ["collection.anki21", "collection.anki21b", "collection.anki20", "collection.anki2", "collection.anki"]
   var dbBuffer = null
+  var foundKey = null
   for (var k = 0; k < dbKeys.length; k++) {
-    if (zip[dbKeys[k]]) { dbBuffer = zip[dbKeys[k]]; break }
+    if (zip[dbKeys[k]]) { dbBuffer = zip[dbKeys[k]]; foundKey = dbKeys[k]; break }
   }
   if (!dbBuffer) {
     var zipKeys = Object.keys(zip)
     for (var z = 0; z < zipKeys.length; z++) {
-      if (zipKeys[z].startsWith("collection")) { dbBuffer = zip[zipKeys[z]]; break }
+      if (zipKeys[z].indexOf("collection") === 0) { dbBuffer = zip[zipKeys[z]]; foundKey = zipKeys[z]; break }
     }
   }
-  if (!dbBuffer) throw new Error("Invalid APKG: no database found inside")
+  if (!dbBuffer) {
+    throw new Error("Invalid APKG: no database found inside. Found these files: " + Object.keys(zip).join(", "))
+  }
 
   if (onProgress) onProgress("Loading database engine...")
   var SQL = await initSqlJs({ locateFile: function(f) { if (f.indexOf("sql-wasm") === 0) return "/sql-wasm.wasm"; return f } })
 
-  if (onProgress) onProgress("Reading flashcards...")
-  var db = new SQL.Database(dbBuffer)
+  if (onProgress) onProgress("Opening database: " + foundKey + " (" + Math.round(dbBuffer.length / 1024) + "KB)...")
+  var db
+  try {
+    db = new SQL.Database(dbBuffer)
+  } catch (openErr) {
+    var allKeys = Object.keys(zip)
+    for (var a = 0; a < allKeys.length; a++) {
+      if (allKeys[a] !== foundKey && (allKeys[a].indexOf("collection") === 0 || allKeys[a].indexOf(".db") !== -1)) {
+        try {
+          db = new SQL.Database(zip[allKeys[a]])
+          foundKey = allKeys[a]
+          break
+        } catch (tryErr) { continue }
+      }
+    }
+    if (!db) throw new Error("Cannot open database. The APKG file may use a newer Anki format not yet supported. Try exporting your Anki deck as CSV/TXT instead: Anki > Click deck > Export > choose 'Notes in plain text' or 'Tab-separated values'.")
+  }
 
   try {
+    if (onProgress) onProgress("Reading notes...")
     var noteResult
-    try { noteResult = db.exec("SELECT flds FROM notes") }
-    catch (e2) { throw new Error("Cannot read notes: " + e2.message) }
-
-    if (!noteResult.length) throw new Error("APKG has no notes")
+    var tryQueries = [
+      "SELECT flds FROM notes",
+      "SELECT sfld, flds FROM cards LEFT JOIN notes ON cards.nid = notes.id",
+      "SELECT * FROM notes"
+    ]
+    for (var qi = 0; qi < tryQueries.length; qi++) {
+      try { noteResult = db.exec(tryQueries[qi]); if (noteResult.length) break } catch(qErr) { noteResult = null; continue }
+    }
+    if (!noteResult || !noteResult.length) throw new Error("APKG has no notes")
 
     var rows = noteResult[0].values
+    var colNames = noteResult[0].columns
     var notes = []
+
     for (var i = 0; i < rows.length; i++) {
-      var fieldsStr = rows[i][0]
+      var row = rows[i]
+      var fieldsStr = null
+
+      if (colNames.indexOf("sfld") >= 0 && colNames.indexOf("flds") >= 0) {
+        fieldsStr = row[colNames.indexOf("flds")]
+        var sfld = row[colNames.indexOf("sfld")]
+        if (sfld && !fieldsStr) {
+          var back = sfld
+          notes.push({ front: stripHtml(String(sfld)).trim(), back: stripHtml(String(back)).trim() })
+          continue
+        }
+      } else if (colNames.indexOf("flds") >= 0) {
+        fieldsStr = row[colNames.indexOf("flds")]
+      } else {
+        for (var ci = 0; ci < row.length; ci++) {
+          var val = String(row[ci])
+          if (val.indexOf("\x1f") >= 0) { fieldsStr = val; break }
+        }
+      }
+
       if (!fieldsStr) continue
       var fields = String(fieldsStr).split("\x1f")
       if (fields.length >= 2) {
@@ -129,8 +175,8 @@ async function parseApkg(file, onProgress) {
       }
     }
 
-    if (notes.length === 0) throw new Error("APKG has notes but no valid pairs")
-    if (onProgress) onProgress("Found " + notes.length + " cards")
+    if (notes.length === 0) throw new Error("APKG has notes but no valid question/answer pairs found")
+    if (onProgress) onProgress("Found " + notes.length + " cards from " + foundKey)
     return notes
   } finally {
     db.close()
