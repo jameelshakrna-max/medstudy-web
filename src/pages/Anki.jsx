@@ -48,7 +48,9 @@ async function apiDel(path) {
 }
 
 function sm2(quality, card) {
-  let { ease_factor, interval, repetitions } = card
+  let ease_factor = Number(card.ease_factor) || 2.5
+  let interval = Number(card.interval) || 0
+  let repetitions = Number(card.repetitions) || 0
   if (quality >= 3) {
     if (repetitions === 0) interval = 1
     else if (repetitions === 1) interval = 6
@@ -65,15 +67,18 @@ function sm2(quality, card) {
 }
 
 function maturityLabel(card) {
-  if (!card.repetitions || card.repetitions === 0) return "New"
-  if (card.repetitions === 1) return "Learning"
-  if (card.interval <= 21) return "Young"
+  const reps = Number(card.repetitions) || 0
+  const intv = Number(card.interval) || 0
+  if (reps === 0) return "New"
+  if (reps === 1) return "Learning"
+  if (intv <= 21) return "Young"
   return "Mature"
 }
 
 function reviewClass(card) {
   if (!card.next_review) return "nr_due"
   const diff = (new Date(card.next_review) - new Date()) / 86400000
+  if (isNaN(diff)) return "nr_due"
   if (diff <= 0) return "nr_due"
   if (diff <= 3) return "nr_soon"
   if (diff <= 7) return "nr_mid"
@@ -83,7 +88,7 @@ function reviewClass(card) {
 function reviewLabel(card) {
   if (!card.next_review) return "Due now"
   const diff = (new Date(card.next_review) - new Date()) / 86400000
-  if (diff <= 0) return "Due now"
+  if (isNaN(diff) || diff <= 0) return "Due now"
   return "in " + Math.ceil(diff) + "d"
 }
 
@@ -329,9 +334,9 @@ export default function Anki() {
                 <div className={s.ankiFront}>{card.front}</div>
                 <div className={s.ankiBack}>{card.back}</div>
                 <div className={s.ankiStats}>
-                  <span>EF: {card.ease_factor?.toFixed(2) || "2.50"}</span>
-                  <span>Interval: {card.interval || 0}d</span>
-                  <span>Reps: {card.repetitions || 0}</span>
+                  <span>EF: {Number(card.ease_factor).toFixed(2)}</span>
+                  <span>Interval: {Number(card.interval) || 0}d</span>
+                  <span>Reps: {Number(card.repetitions) || 0}</span>
                 </div>
               </div>
             ))}
