@@ -1,377 +1,233 @@
-import { useState, useEffect, useRef, useCallback } from "react"
-import { supabase } from "../lib/supabase"
-import { parseFile } from "../lib/fileParser"
-import s from "./Anki.module.css"
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
+import s from './Anki.module.css'
 
-const API = "/api"
-
-async function apiGet(path) {
-  const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(API + path, { headers: { Authorization: "Bearer " + session.access_token } })
-  return res.json()
-}
-
-async function apiPost(path, body) {
-  const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(API + path, {
-    method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
-    body: JSON.stringify(body)
-  })
-  return res.json()
-}
-
-async function apiPut(path, body) {
-  const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(API + path, {
-    method: "PUT", headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
-    body: JSON.stringify(body)
-  })
-  return res.json()
-}
-
-async function apiDel(path) {
-  const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(API + path, { method: "DELETE", headers: { Authorization: "Bearer " + session.access_token } })
-  return res.json()
-}
-
-function sm2(quality, card) {
-  let ease_factor = Number(card.ease_factor) || 2.5
-  let interval = Number(card.interval) || 0
-  let repetitions = Number(card.repetitions) || 0
-  if (quality >= 3) {
-    if (quality === 5 && repetitions === 0) { interval = 6; repetitions = 2 }
-    else if (repetitions === 0) { interval = 1; repetitions = 1 }
-    else if (repetitions === 1) { interval = 6; repetitions = 2 }
-    else { interval = Math.round(interval * ease_factor); repetitions += 1 }
-  } else { repetitions = 0; interval = 1 }
-  ease_factor = Math.max(1.3, ease_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))
-  const nr = new Date()
-  nr.setDate(nr.getDate() + interval)
-  return { ease_factor, interval, repetitions, next_review: nr.toISOString(), last_review: new Date().toISOString() }
-}
-
-function matLabel(card) {
-  const r = Number(card.repetitions) || 0, iv = Number(card.interval) || 0
-  if (r === 0) return "New"
-  if (r === 1) return "Learning"
-  if (iv <= 21) return "Young"
-  return "Mature"
-}
-
-function revClass(card) {
-  if (!card.next_review) return "nr_due"
-  const d = (new Date(card.next_review) - new Date()) / 86400000
-  if (isNaN(d) || d <= 0) return "nr_due"
-  if (d <= 3) return "nr_soon"
-  if (d <= 7) return "nr_mid"
-  return "nr_later"
-}
-
-function revLabel(card) {
-  if (!card.next_review) return "Due now"
-  const d = (new Date(card.next_review) - new Date()) / 86400000
-  if (isNaN(d) || d <= 0) return "Due now"
-  return "in " + Math.ceil(d) + "d"
-}
+const cl = v => (!v || v === 'none' || v === '') ? null : v
+const td = () => new Date().toISOString().split('T')[0]
+const dm = (dks, id) => { if (!id) return 'Unassigned'; const d = dks.find(x => x.id === id); return d ? d.name : 'Unknown' }
+function ds(c) { const t = td(); if (!c.last_reviewed) return { l: 'New', c: 'var(--teal)' }; if (!c.next_review_date || c.next_review_date <= t) return { l: 'Due', c: 'var(--coral)' }; return { l: 'Later', c: 'var(--sage)' } }
+function nr(c) { if (!c.last_reviewed) return { t: 'Not scheduled' }; const t = new Date(td() + 'T00:00:00'), n = new Date((c.next_review_date || td()) + 'T00:00:00'), d = Math.ceil((n - t) / 864e5); if (d <= 0) return { t: 'Due now' }; if (d === 1) return { t: 'Tomorrow' }; if (d <= 7) return { t: 'In ' + d + 'd' }; if (d <= 30) return { t: 'In ' + Math.ceil(d / 7) + 'w' }; return { t: 'In ' + Math.ceil(d / 30) + 'mo' } }
+function ml(c) { if (!c.last_reviewed) return 'New'; return (c.times_reviewed || 0) >= 5 ? 'Mature' : 'Learning' }
+function sm2(o, c) { const e = Number(c.ease_factor || 2.5), i = Number(c.interval_days || 0), f = i === 0; let ne, ni; if (o === 'again') { ne = Math.max(1.3, e - 0.2); ni = 1 } else if (o === 'hard') { ne = Math.max(1.3, e - 0.15); ni = f ? 3 : Math.max(2, Math.ceil(i * 1.2)) } else if (o === 'good') { ne = e; ni = f ? 6 : Math.max(2, Math.ceil(i * e)) } else { ne = e + 0.15; ni = f ? 10 : Math.max(2, Math.ceil(i * e * 1.3)) } const d = new Date(); d.setDate(d.getDate() + ni); return { ease_factor: ne, interval_days: ni, times_reviewed: (c.times_reviewed || 0) + 1, last_reviewed: td(), next_review_date: d.toISOString().split('T')[0] } }
+async function pApkg(file) { const JZ = (await import('jszip')).default, SQ = (await import('sql.js')).default, zip = await JZ.loadAsync(file); let db = null; for (const n of ['collection.anki21b', 'collection.anki21', 'collection.anki2']) { const f = zip.file(n); if (f) { db = await f.async('uint8array'); break } } if (!db) throw new Error('No Anki database'); const SQL = await SQ({ locateFile: () => 'https://sql.js.org/dist/sql-wasm.wasm' }), d = new SQL.Database(db); try { const r = d.exec('SELECT flds FROM notes'); if (!r.length || !r[0].values.length) throw new Error('No notes'); const o = []; for (const row of r[0].values) { const fs = String(row[0]).split('\x1f').map(f => f.trim()); if (fs.length >= 2 && fs[0] && fs[1]) o.push({ front: fs[0], back: fs[1] }) } return o } finally { d.close() } }
+function pCsv(text, fn) { const s = fn.endsWith('.tsv') ? '\t' : ',', ls = text.split(/\r?\n/).filter(l => l.trim()), o = []; for (let i = 0; i < ls.length; i++) { const p = ls[i].split(s).map(x => x.trim().replace(/^["']|["']$/g, '')); if (p.length >= 2 && p[0] && p[1]) { const f = p[0].toLowerCase(); if (i === 0 && (f === 'front' || f === 'question' || f === 'term')) continue; o.push({ front: p[0], back: p[1] }) } } return o }
+function pTxt(text) { const ls = text.split(/\r?\n/).filter(l => l.trim()), o = []; let cf = null, cb = null; for (const l of ls) { if (l.includes('\t')) { const [f, ...r] = l.split('\t'); if (f.trim() && r.join('\t').trim()) { o.push({ front: f.trim(), back: r.join('\t').trim() }); cf = cb = null; continue } } const di = l.indexOf(' - '); if (di > 0) { const f = l.substring(0, di).trim(), b = l.substring(di + 3).trim(); if (f && b) { o.push({ front: f, back: b }); cf = cb = null; continue } } const ci = l.indexOf(': '); if (ci > 0) { const f = l.substring(0, ci).trim(), b = l.substring(ci + 2).trim(); if (f && b) { o.push({ front: f, back: b }); cf = cb = null; continue } } if (!l.trim()) { if (cf && cb) o.push({ front: cf, back: cb }); cf = cb = null; continue } if (!cf) cf = l.trim(); else if (!cb) cb = l.trim() } if (cf && cb) o.push({ front: cf, back: cb }); return o }
 
 export default function Anki() {
-  const [decks, setDecks] = useState([])
+  const { user } = useAuth()
   const [cards, setCards] = useState([])
+  const [decks, setDecks] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [view, setView] = useState('decks')
   const [activeDeckId, setActiveDeckId] = useState(null)
-  const [view, setView] = useState("decks")
-  const [showForm, setShowForm] = useState(false)
-  const [formMode, setFormMode] = useState("manual")
-  const [form, setForm] = useState({ front: "", back: "", deck_id: "" })
-  const [newDeckName, setNewDeckName] = useState("")
-  const [reviewCards, setReviewCards] = useState([])
-  const [reviewIdx, setReviewIdx] = useState(0)
-  const [showAnswer, setShowAnswer] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [uploadFile, setUploadFile] = useState(null)
-  const [parsedCards, setParsedCards] = useState([])
-  const [uploadLoading, setUploadLoading] = useState(false)
-  const [uploadError, setUploadError] = useState("")
-  const [uploadProgress, setUploadProgress] = useState("")
-  const [dragOver, setDragOver] = useState(false)
-  const hasFetched = useRef(false)
+  const [filter, setFilter] = useState('all')
+  const [front, setFront] = useState('')
+  const [back, setBack] = useState('')
+  const [formDeckId, setFormDeckId] = useState('')
+  const [highYield, setHighYield] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [deckName, setDeckName] = useState('')
+  const [savingDeck, setSavingDeck] = useState(false)
+  const [parsed, setParsed] = useState([])
+  const [uploadDeck, setUploadDeck] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [parseErr, setParseErr] = useState('')
+  const [parsing, setParsing] = useState(false)
+  const fileRef = useRef(null)
+  const [queue, setQueue] = useState([])
+  const [qIdx, setQIdx] = useState(0)
+  const [showAns, setShowAns] = useState(false)
 
-  const fetchDecks = useCallback(async () => {
-    setLoading(true)
-    try { const d = await apiGet("/decks"); if (!d.error) setDecks(d) } catch (e) { console.error(e) }
+  const load = useCallback(async () => {
+    setLoading(true); setError('')
+    try {
+      const [c, d] = await Promise.all([supabase.from('anki_cards').select('*').order('created_at', { ascending: false }), supabase.from('anki_decks').select('*').order('name')])
+      if (c.error) throw new Error(c.error.message); if (d.error) throw new Error(d.error.message)
+      setCards(c.data || []); setDecks(d.data || [])
+    } catch (e) { setError(e.message) }
     setLoading(false)
   }, [])
+  useEffect(() => { load() }, [load])
 
-  const fetchCards = useCallback(async (did) => {
-    setLoading(true)
-    try { const d = await apiGet("/flashcards?deck_id=" + did); if (!d.error) setCards(d) } catch (e) { console.error(e) }
-    setLoading(false)
-  }, [])
+  const today = td(), all = activeDeckId ? cards.filter(c => c.deck_id === activeDeckId) : cards
+  const due = all.filter(c => !c.last_reviewed || !c.next_review_date || c.next_review_date <= today)
+  const nw = all.filter(c => !c.last_reviewed)
+  const vis = filter === 'due' ? due : filter === 'new' ? nw : all
+  const dn = id => dm(decks, id)
 
-  useEffect(() => { if (!hasFetched.current) { fetchDecks(); hasFetched.current = true } }, [fetchDecks])
-  useEffect(() => { if (activeDeckId) fetchCards(activeDeckId); else setCards([]) }, [activeDeckId, fetchCards])
+  async function createDeck() { if (!deckName.trim()) return; setSavingDeck(true); try { const { error } = await supabase.from('anki_decks').insert({ user_id: user.id, name: deckName.trim(), description: '' }); if (error) throw error; setDeckName(''); load() } catch (e) { alert(e.message) } setSavingDeck(false) }
+  async function deleteDeck(id) { if (!confirm('Delete deck and all its cards?')) return; try { await supabase.from('anki_cards').delete().eq('deck_id', id); const { error } = await supabase.from('anki_decks').delete().eq('id', id); if (error) throw error; if (activeDeckId === id) { setActiveDeckId(null); setView('decks') } load() } catch (e) { alert(e.message) } }
+  async function addCard() { if (!front.trim() || !back.trim()) return; setSaving(true); try { const { error } = await supabase.from('anki_cards').insert({ user_id: user.id, front: front.trim(), back: back.trim(), deck_id: cl(formDeckId), high_yield: highYield, ease_factor: 2.5, interval_days: 0, times_reviewed: 0, last_reviewed: null, next_review_date: today }); if (error) throw error; setFront(''); setBack(''); setHighYield(false); load() } catch (e) { alert(e.message) } setSaving(false) }
+  async function deleteCard(id) { if (!confirm('Delete this card?')) return; try { const { error } = await supabase.from('anki_cards').delete().eq('id', id); if (error) throw error; load() } catch (e) { alert(e.message) } }
+  function startReview() { if (due.length) { setQueue(due); setQIdx(0); setShowAns(false); setView('review') } }
+  async function submitReview(o) { const c = queue[qIdx]; if (!c) return; try { const { error } = await supabase.from('anki_cards').update(sm2(o, c)).eq('id', c.id); if (error) throw error; if (qIdx + 1 < queue.length) { setQIdx(qIdx + 1); setShowAns(false) } else { setView(activeDeckId ? 'browse' : 'decks'); load() } } catch (e) { alert(e.message) } }
+  function exitReview() { setQueue([]); setQIdx(0); setShowAns(false); setView(activeDeckId ? 'browse' : 'decks'); load() }
 
-  async function createDeck(e) {
-    e.preventDefault()
-    if (!newDeckName.trim()) return
-    try { const r = await apiPost("/decks", { name: newDeckName.trim() }); if (r.error) throw new Error(r.error); setDecks(p => [...p, r]); setNewDeckName("") }
-    catch (ex) { alert(ex.message) }
+  async function handleFile(file) { if (!file) return; setParsing(true); setParseErr(''); try { let r = []; if (file.name.toLowerCase().endsWith('.apkg')) r = await pApkg(file); else { const t = await file.text(); r = file.name.endsWith('.csv') || file.name.endsWith('.tsv') ? pCsv(t, file.name) : pTxt(t) } if (!r.length) { setParseErr('No cards found.'); setParsing(false); return } setParsed(r); setUploadDeck(activeDeckId || ''); setView('upload') } catch (e) { setParseErr(e.message) } setParsing(false) }
+  async function importCards() { if (!parsed.length) return; setImporting(true); try { const rows = parsed.map(c => ({ user_id: user.id, front: c.front, back: c.back, deck_id: cl(uploadDeck), high_yield: false, ease_factor: 2.5, interval_days: 0, times_reviewed: 0, last_reviewed: null, next_review_date: today })); for (let i = 0; i < rows.length; i += 100) { const { error } = await supabase.from('anki_cards').insert(rows.slice(i, i + 100)); if (error) throw error } setParsed([]); setUploadDeck(''); load(); setView(activeDeckId ? 'browse' : 'decks') } catch (e) { alert(e.message) } setImporting(false) }
+
+  if (loading) return <div className={s.loading}>Loading Anki...</div>
+  if (error && !cards.length && !decks.length) return (<div className={s.page}><div className={s.errorBox}><h3>Setup Required</h3><p>Run anki-migration.sql in Supabase SQL Editor first.</p><p className={s.errorDetail}>{error}</p></div></div>)
+  const cur = queue[qIdx]
+
+  const getNrClass = (c) => {
+    const st = ds(c)
+    return st.l === 'Due' ? s.nr_due : st.l === 'New' ? s.nr_soon : s.nr_later
   }
 
-  async function deleteDeck(id) {
-    if (!confirm("Delete this deck and all its cards?")) return
-    try { const r = await apiDel("/decks/" + id); if (r.error) throw new Error(r.error); if (activeDeckId === id) { setActiveDeckId(null); setView("decks") } setDecks(p => p.filter(d => d.id !== id)) }
-    catch (ex) { alert(ex.message) }
-  }
-
-  function openDeck(id) { setActiveDeckId(id); setView("cards"); setShowForm(false) }
-
-  async function createCard(e) {
-    e.preventDefault()
-    if (!form.front.trim() || !form.back.trim() || !form.deck_id) return
-    try {
-      const r = await apiPost("/flashcards", { deck_id: form.deck_id, front: form.front.trim(), back: form.back.trim() })
-      if (r.error) throw new Error(r.error)
-      setCards(p => [...p, r]); setForm({ front: "", back: "", deck_id: form.deck_id }); setShowForm(false)
-    } catch (ex) { alert(ex.message) }
-  }
-
-  async function deleteCard(cid) {
-    if (!confirm("Delete this card?")) return
-    try { const r = await apiDel("/flashcards/" + cid); if (r.error) throw new Error(r.error); setCards(p => p.filter(c => c.id !== cid)) }
-    catch (ex) { alert(ex.message) }
-  }
-
-  function startReview() {
-    const now = new Date()
-    const due = cards.filter(c => { if (!c.next_review) return true; return new Date(c.next_review) <= now })
-    if (!due.length) return alert("No cards due for review!")
-    setReviewCards(due); setReviewIdx(0); setShowAnswer(false); setView("review")
-  }
-
-  async function rateCard(quality) {
-    const card = reviewCards[reviewIdx]
-    const u = sm2(quality, card)
-    try {
-      const r = await apiPut("/flashcards/" + card.id, { ease_factor: u.ease_factor, interval: u.interval, repetitions: u.repetitions, next_review: u.next_review, last_review: u.last_review })
-      if (r.error) throw new Error(r.error)
-      setCards(p => p.map(c => c.id === card.id ? { ...c, ...r } : c))
-      if (reviewIdx + 1 < reviewCards.length) { setReviewIdx(p => p + 1); setShowAnswer(false) } else setView("cards")
-    } catch (ex) { alert(ex.message) }
-  }
-
-  async function handleFile(file) {
-    setUploadFile(file); setUploadError(""); setUploadLoading(true); setParsedCards([]); setUploadProgress("Parsing file...")
-    try { const r = await parseFile(file, m => setUploadProgress(m)); setParsedCards(r) }
-    catch (ex) { setUploadError(ex.message) }
-    finally { setUploadLoading(false) }
-  }
-
-  async function importParsedCards() {
-    if (!parsedCards.length || !activeDeckId) return
-    setUploadLoading(true)
-    try {
-      const withDeck = parsedCards.map(c => Object.assign({}, c, { deck_id: activeDeckId }))
-      const r = await apiPost("/flashcards", { cards: withDeck })
-      if (r.error) throw new Error(r.error)
-      setCards(p => p.concat(r)); setParsedCards([]); setUploadFile(null); setShowForm(false)
-    } catch (ex) { setUploadError(ex.message) }
-    finally { setUploadLoading(false) }
-  }
-
-  function onDrop(e) { e.preventDefault(); setDragOver(false); var f = e.dataTransfer.files[0]; if (f) handleFile(f) }
-  function onFileInput(e) { var f = e.target.files[0]; if (f) handleFile(f) }
-
-  const totalCards = cards.length
-  const dueCards = cards.filter(c => { if (!c.next_review) return true; return new Date(c.next_review) <= new Date() }).length
-  const activeDeck = decks.find(d => d.id === activeDeckId)
-
-  if (view === "review") {
-    const card = reviewCards[reviewIdx]
-    if (!card) return null
-    const pct = ((reviewIdx + 1) / reviewCards.length * 100).toFixed(0)
-    return (
-      <div className={s.page}>
-        <div className={s.reviewHeader}>
-          <button className={s.exitReviewBtn} onClick={() => setView("cards")}>&#8592;</button>
-          <span className={s.reviewProgress}>{reviewIdx + 1} / {reviewCards.length}</span>
-          <div className={s.reviewProgBar}><div className={s.reviewProgFill} style={{ width: pct + "%" }}></div></div>
-        </div>
-        <div className={s.reviewCard}>
-          {activeDeck && <span className={s.reviewDeckLabel}>{activeDeck.name}</span>}
-          <div className={s.reviewLabel}>Question</div>
-          <div className={s.reviewContent}>{card.front}</div>
-          {showAnswer && (
-            <div className={s.reviewAnswer}>
-              <div className={s.reviewLabel}>Answer</div>
-              <div className={s.reviewContent}>{card.back}</div>
-            </div>
-          )}
-          {!showAnswer ? (
-            <button className={s.showAnswerBtn} onClick={() => setShowAnswer(true)}>Show Answer</button>
-          ) : (
-            <div className={s.reviewBtns}>
-              <button className={s.revBtn + " " + s.rev_again} onClick={() => rateCard(1)}>Again</button>
-              <button className={s.revBtn + " " + s.rev_hard} onClick={() => rateCard(3)}>Hard</button>
-              <button className={s.revBtn + " " + s.rev_good} onClick={() => rateCard(4)}>Good</button>
-              <button className={s.revBtn + " " + s.rev_easy} onClick={() => rateCard(5)}>Easy</button>
-            </div>
-          )}
-        </div>
+  return (<div className={s.page}>
+    <div className={s.header}>
+      <div>
+        <h1 className={s.title}>Anki</h1>
+        <p className={s.sub}>Spaced repetition — SM-2</p>
       </div>
-    )
-  }
-
-  if (view === "cards") {
-    return (
-      <div className={s.page}>
-        <div className={s.breadcrumb}>
-          <button className={s.breadLink} onClick={() => { setView("decks"); setActiveDeckId(null) }}>Decks</button>
-          <span className={s.breadSep}>&#8250;</span>
-          <span className={s.breadCurrent}>{activeDeck ? activeDeck.name : "Cards"}</span>
-        </div>
-
-        <div className={s.header}>
-          <div>
-            <div className={s.title}>{activeDeck ? activeDeck.name : "Cards"}</div>
-            <div className={s.sub}>{totalCards} cards</div>
-          </div>
-          <div className={s.pills}>
-            <div className={s.pill}><strong>{dueCards}</strong> due</div>
-            <div className={s.pill}><strong>{totalCards - dueCards}</strong> later</div>
-          </div>
-        </div>
-
-        {dueCards > 0 && <button className={s.reviewAllBtn} onClick={startReview}>Review {dueCards} Due Card{dueCards !== 1 ? "s" : ""}</button>}
-
-        {!showForm ? (
-          <div className={s.tabs}>
-            <button className={s.tabAdd} onClick={() => { setShowForm(true); setFormMode("manual"); setForm(Object.assign({}, form, { deck_id: activeDeckId })) }}>+ Add Card</button>
-            <button className={s.tabReview} onClick={() => { setShowForm(true); setFormMode("upload"); setUploadError(""); setParsedCards([]); setUploadFile(null) }}>Import File</button>
-          </div>
-        ) : (
-          <div>
-            <div className={s.tabs} style={{ marginBottom: 16 }}>
-              <button className={formMode === "manual" ? s.tabOn : s.tab} onClick={() => setFormMode("manual")}>Manual</button>
-              <button className={formMode === "upload" ? s.tabOn : s.tab} onClick={() => { setFormMode("upload"); setUploadError(""); setParsedCards([]); setUploadFile(null) }}>Import File</button>
-              <button className={s.tab} onClick={() => { setShowForm(false); setUploadError("") }}>&#10005; Close</button>
-            </div>
-
-            {formMode === "manual" && (
-              <div className={s.formCard}>
-                <div className={s.formTitle}>New Card</div>
-                <form onSubmit={createCard}>
-                  <div className={s.field}>
-                    <label>Front (Question)</label>
-                    <input value={form.front} onChange={e => setForm(Object.assign({}, form, { front: e.target.value }))} placeholder="Enter question..." />
-                  </div>
-                  <div className={s.field}>
-                    <label>Back (Answer)</label>
-                    <input value={form.back} onChange={e => setForm(Object.assign({}, form, { back: e.target.value }))} placeholder="Enter answer..." />
-                  </div>
-                  <button type="submit" className={s.primaryBtn}>Create Card</button>
-                </form>
-              </div>
-            )}
-
-            {formMode === "upload" && (
-              <div className={s.formCard}>
-                <div className={s.formTitle}>Import Flashcards</div>
-                <div className={s.uploadDesc}>Upload a file to bulk-import cards. Supports CSV, TSV, TXT, APKG (Anki), and images (OCR with English + Arabic).</div>
-
-                {uploadError && <div className={s.parseError}>{uploadError}</div>}
-
-                <div className={dragOver ? s.dropZone + " " + s.dragOver : s.dropZone}
-                  onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={onDrop}
-                  onClick={() => document.getElementById("anki-file-input").click()}>
-                  <div className={s.dropIcon}>{uploadLoading ? "..." : uploadFile ? uploadFile.name : "Drop file here or click to browse"}</div>
-                  <div className={s.dropText}>{uploadLoading ? uploadProgress : "Supports .csv .tsv .txt .apkg .jpg .png .webp"}</div>
-                  <div className={s.dropFormats}>Arabic and English supported</div>
-                  <input id="anki-file-input" type="file" accept=".csv,.tsv,.txt,.apkg,.jpg,.jpeg,.png,.gif,.bmp,.webp" onChange={onFileInput} style={{ display: "none" }} />
-                </div>
-
-                {parsedCards.length > 0 && (
-                  <div className={s.uploadSection}>
-                    <div className={s.previewList}>
-                      <div className={s.previewHeader}>Preview - {parsedCards.length} cards</div>
-                      {parsedCards.slice(0, 10).map((c, i) => (
-                        <div key={i} className={s.previewRow}>
-                          <span className={s.previewFront}>{c.front}</span>
-                          <span className={s.previewArrow}>&#8594;</span>
-                          <span className={s.previewBack}>{c.back}</span>
-                        </div>
-                      ))}
-                      {parsedCards.length > 10 && <div className={s.previewMore}>+ {parsedCards.length - 10} more</div>}
-                    </div>
-                    <div className={s.uploadActions}>
-                      <button className={s.primaryBtn} onClick={importParsedCards} disabled={uploadLoading}>
-                        {uploadLoading ? "Importing..." : "Import " + parsedCards.length + " Cards"}
-                      </button>
-                      <button className={s.cancelBtn} onClick={() => { setParsedCards([]); setUploadFile(null); setUploadError("") }}>Clear</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {loading ? <div className={s.empty}>Loading...</div> : cards.length === 0 && !showForm ? <div className={s.empty}>No cards yet. Click "Add Card" or "Import File" to get started.</div> : (
-          <div className={s.cardList}>
-            {cards.map(card => (
-              <div key={card.id} className={s.ankiCard}>
-                <div className={s.ankiTopRow}>
-                  <div className={s.badges}>
-                    <span className={s.badgeMaturity}>{matLabel(card)}</span>
-                    <span className={s.badgeReview + " " + s[revClass(card)]}>{revLabel(card)}</span>
-                  </div>
-                  <button className={s.delBtn} onClick={() => deleteCard(card.id)}>&#10005;</button>
-                </div>
-                <div className={s.ankiFront}>{card.front}</div>
-                <div className={s.ankiBack}>{card.back}</div>
-                <div className={s.ankiStats}>
-                  <span>EF: {Number(card.ease_factor).toFixed(2)}</span>
-                  <span>Interval: {Number(card.interval) || 0}d</span>
-                  <span>Reps: {Number(card.repetitions) || 0}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      <div className={s.pills}>
+        {[{ n: decks.length, l: 'decks' }, { n: cards.length, l: 'cards' }, { n: due.length, l: 'due' }, { n: nw.length, l: 'new' }].map(t => (
+          <span key={t.l} className={s.pill}><strong>{t.n}</strong> {t.l}</span>
+        ))}
       </div>
-    )
-  }
+    </div>
 
-  return (
-    <div className={s.page}>
-      <div className={s.header}>
-        <div>
-          <div className={s.title}>Flashcards</div>
-          <div className={s.sub}>{decks.length} deck{decks.length !== 1 ? "s" : ""}</div>
-        </div>
-        <div className={s.pills}>
-          <div className={s.pill}><strong>{cards.length}</strong> total cards</div>
-        </div>
-      </div>
-
+    {view === 'decks' && (<>
       <div className={s.createDeckRow}>
-        <input className={s.createDeckInput} value={newDeckName} onChange={e => setNewDeckName(e.target.value)} placeholder="New deck name..." onKeyDown={e => { if (e.key === "Enter") createDeck(e) }} />
-        <button className={s.createDeckBtn} onClick={createDeck} disabled={!newDeckName.trim()}>Create</button>
+        <input className={s.createDeckInput} value={deckName} onChange={e => setDeckName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createDeck()} placeholder="New deck name..." maxLength={80} />
+        <button className={s.createDeckBtn} onClick={createDeck} disabled={savingDeck || !deckName.trim()}>{savingDeck ? '...' : '+ Deck'}</button>
       </div>
+      {due.length > 0 && <button className={s.reviewAllBtn} onClick={startReview}>Review {due.length} Due Card{due.length > 1 ? 's' : ''}</button>}
+      <div className={s.deckGrid}>
+        <div className={s.deckCard} onClick={() => { setActiveDeckId(null); setFilter('all'); setView('browse') }}>
+          <div className={s.deckTop}><span className={s.deckName}>All Cards</span></div>
+          <div className={s.deckMeta}><span><strong>{cards.length}</strong> total</span><span><strong>{due.length}</strong> due</span><span><strong>{nw.length}</strong> new</span></div>
+          {cards.length > 0 && <div className={s.progBar}><div className={s.progFill} style={{ width: Math.round(due.length / cards.length * 100) + '%', background: 'var(--teal)' }} /></div>}
+        </div>
+        {!decks.length && <div className={s.empty}>No decks yet. Create your first deck to get started!</div>}
+        {decks.map(d => { const dc = cards.filter(c => c.deck_id === d.id), dd = dc.filter(c => !c.last_reviewed || !c.next_review_date || c.next_review_date <= today); return (
+          <div key={d.id} className={s.deckCard} onClick={() => { setActiveDeckId(d.id); setFilter('all'); setView('browse') }}>
+            <button className={s.deckDelBtn} onClick={e => { e.stopPropagation(); deleteDeck(d.id) }} title="Delete">x</button>
+            <div className={s.deckTop}><span className={s.deckName}>{d.name}</span></div>
+            <div className={s.deckMeta}><span><strong>{dc.length}</strong> total</span><span><strong>{dd.length}</strong> due</span></div>
+            {dc.length > 0 && <div className={s.progBar}><div className={s.progFill} style={{ width: Math.round(dd.length / dc.length * 100) + '%', background: 'var(--violet)' }} /></div>}
+          </div>
+        )})}
+      </div>
+    </>)}
 
-      {loading ? <div className={s.empty}>Loading decks...</div> : decks.length === 0 ? <div className={s.empty}>No decks yet. Create your first deck above.</div> : (
-        <div className={s.deckGrid}>
-          {decks.map(deck => (
-            <div key={deck.id} className={s.deckCard} onClick={() => openDeck(deck.id)}>
-              <button className={s.deckDelBtn} onClick={e => { e.stopPropagation(); deleteDeck(deck.id) }}>&#10005;</button>
-              <div className={s.deckName}>{deck.name}</div>
-              <div className={s.deckMeta}><span><strong>0</strong> cards</span></div>
+    {view === 'browse' && (<>
+      <div className={s.breadcrumb}>
+        <button className={s.breadLink} onClick={() => { setActiveDeckId(null); setView('decks') }}>Decks</button>
+        {activeDeckId && <span className={s.breadSep}>/</span>}
+        {activeDeckId && <span className={s.breadCurrent}>{dn(activeDeckId)}</span>}
+      </div>
+      <div className={s.tabs}>
+        <button className={`${s.tab} ${filter === 'all' ? s.tabOn : ''}`} onClick={() => setFilter('all')}>All ({all.length})</button>
+        <button className={`${s.tab} ${filter === 'due' ? s.tabOn : ''}`} onClick={() => setFilter('due')}>Due ({due.length})</button>
+        <button className={`${s.tab} ${filter === 'new' ? s.tabOn : ''}`} onClick={() => setFilter('new')}>New ({nw.length})</button>
+        {due.length > 0 && <button className={s.tabReview} onClick={startReview}>Review</button>}
+        <div style={{ flex: 1 }} />
+        <button className={s.tabAdd} onClick={() => setView('add')}>+ Add</button>
+      </div>
+      <div className={s.cardList}>
+        {!vis.length && <div className={s.empty}>{filter === 'due' ? 'No cards due!' : filter === 'new' ? 'No new cards.' : 'No cards.'}</div>}
+        {vis.map(card => {
+          const st = ds(card), r = nr(card)
+          return (<div key={card.id} className={s.ankiCard}>
+            <div className={s.ankiTopRow}>
+              <div className={s.badges}>
+                <span className={`${s.badge} ${st.l === 'Due' ? s.nr_due : st.l === 'New' ? s.nr_soon : s.nr_later}`}>{st.l === 'Due' ? 'Due' : st.l === 'New' ? 'New' : 'Later'}</span>
+                <span className={s.badgeMaturity}>{ml(card)}</span>
+                {card.high_yield && <span className={s.badgeHY}>HY</span>}
+                {card.deck_id && <span className={s.badgeDeck}>{dn(card.deck_id)}</span>}
+                <span className={`${s.badge} ${s.badgeReview} ${getNrClass(card)}`}>{r.t}</span>
+              </div>
+              <button className={s.delBtn} onClick={() => deleteCard(card.id)}>x</button>
+            </div>
+            <div className={s.ankiFront}>{card.front}</div>
+            <div className={s.ankiBack}>{card.back}</div>
+            <div className={s.ankiStats}><span>EF: {Number(card.ease_factor || 2.5).toFixed(2)}</span><span>Interval: {card.interval_days || 0}d</span><span>Reviews: {card.times_reviewed || 0}</span><span>Next: {card.next_review_date || '--'}</span></div>
+            <div className={s.reviewBtns}>{['Again', 'Hard', 'Good', 'Easy'].map(o => (<button key={o} className={`${s.revBtn} ${o === 'Again' ? s.rev_again : o === 'Hard' ? s.rev_hard : o === 'Good' ? s.rev_good : s.rev_easy}`} onClick={() => submitReview(o)}>{o}</button>))}</div>
+          </div>)
+        })}
+      </div>
+    </>)}
+
+    {view === 'add' && (<>
+      <div className={s.breadcrumb}>
+        <button className={s.breadLink} onClick={() => setView(activeDeckId ? 'browse' : 'decks')}>Back</button>
+      </div>
+      <div className={s.formCard}>
+        <h3 className={s.formTitle}>Add Flashcard</h3>
+        <div className={s.field}><label>Front</label><textarea rows={3} value={front} onChange={e => setFront(e.target.value)} placeholder="Question..." /></div>
+        <div className={s.field}><label>Back</label><textarea rows={3} value={back} onChange={e => setBack(e.target.value)} placeholder="Answer..." /></div>
+        <div className={s.field}><label>Deck</label><select value={formDeckId} onChange={e => setFormDeckId(e.target.value)}><option value="">No deck</option>{decks.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
+        <label className={s.checkRow}><input type="checkbox" checked={highYield} onChange={e => setHighYield(e.target.checked)} /> High Yield</label>
+        <button className={s.primaryBtn} onClick={addCard} disabled={saving || !front.trim() || !back.trim()}>{saving ? 'Saving...' : 'Add Card'}</button>
+        <div className={s.uploadSection}>
+          <div className={s.uploadTitle}>Import File</div>
+          <div className={s.uploadDesc}>Upload .apkg, .csv, .tsv, or .txt files to bulk import flashcards.</div>
+          {parseErr && <div className={s.parseError}>{parseErr}</div>}
+          <div className={s.dropZone} onClick={() => fileRef.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f) }}>
+            <input ref={fileRef} type="file" accept=".apkg,.csv,.tsv,.txt" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }} style={{ display: 'none' }} />
+            <div className={s.dropIcon}>{parsing ? '...' : '+'}</div>
+            <div className={s.dropText}>{parsing ? 'Parsing...' : 'Click or drop file'}</div>
+            <div className={s.dropFormats}>.apkg .csv .tsv .txt</div>
+          </div>
+        </div>
+      </div>
+    </>)}
+
+    {view === 'upload' && parsed.length > 0 && (<>
+      <div className={s.breadcrumb}>
+        <button className={s.breadLink} onClick={() => { setParsed([]); setView('add') }}>Back</button>
+      </div>
+      <div className={s.formCard}>
+        <h3 className={s.formTitle}>Import {parsed.length} Cards</h3>
+        <div className={s.field}><label>Deck</label><select value={uploadDeck} onChange={e => setUploadDeck(e.target.value)}><option value="">No deck</option>{decks.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
+        <div className={s.previewList}>
+          <div className={s.previewHeader}>Showing {Math.min(parsed.length, 30)} of {parsed.length}</div>
+          {parsed.slice(0, 30).map((c, i) => (
+            <div key={i} className={s.previewRow}>
+              <span className={s.previewFront}>{c.front}</span>
+              <span className={s.previewArrow}>{'\u2192'}</span>
+              <span className={s.previewBack}>{c.back}</span>
             </div>
           ))}
+          {parsed.length > 30 && <div className={s.previewMore}>+{parsed.length - 30} more</div>}
         </div>
-      )}
-    </div>
-  )
+        <div className={s.uploadActions}>
+          <button className={s.cancelBtn} onClick={() => { setParsed([]); setView('add') }}>Cancel</button>
+          <button className={s.primaryBtn} onClick={importCards} disabled={importing} style={{ marginTop: 0 }}>{importing ? '...' : 'Import ' + parsed.length + ' Cards'}</button>
+        </div>
+      </div>
+    </>)}
+
+    {view === 'review' && cur && (<>
+      <div className={s.reviewHeader}>
+        <button className={s.exitReviewBtn} onClick={exitReview}>x</button>
+        <span className={s.reviewProgress}>{qIdx + 1} / {queue.length}</span>
+        <div className={s.reviewProgBar}><div className={s.reviewProgFill} style={{ width: ((qIdx + 1) / queue.length * 100) + '%' }} /></div>
+      </div>
+      <div className={s.reviewCard}>
+        <span className={s.reviewDeckLabel}>{dn(cur.deck_id)}</span>
+        <div className={s.reviewLabel}>Question</div>
+        <div className={s.reviewContent}>{cur.front}</div>
+        {!showAns ? (
+          <button className={s.showAnswerBtn} onClick={() => setShowAns(true)}>Show Answer</button>
+        ) : (<>
+          <div className={s.reviewAnswer}>
+            <div className={s.reviewLabel}>Answer</div>
+            <div className={s.reviewContent}>{cur.back}</div>
+          </div>
+          <div className={s.reviewMeta}><span>EF: {Number(cur.ease_factor || 2.5).toFixed(2)}</span><span>Interval: {cur.interval_days || 0}d</span><span>Reviews: {cur.times_reviewed || 0}</span></div>
+          <div className={s.reviewBtns}>
+            <button className={`${s.revBtn} ${s.rev_again}`} onClick={() => submitReview('again')}>Again</button>
+            <button className={`${s.revBtn} ${s.rev_hard}`} onClick={() => submitReview('hard')}>Hard</button>
+            <button className={`${s.revBtn} ${s.rev_good}`} onClick={() => submitReview('good')}>Good</button>
+            <button className={`${s.revBtn} ${s.rev_easy}`} onClick={() => submitReview('easy')}>Easy</button>
+          </div>
+        </>)}
+      </div>
+    </>)}
+  </div>)
 }
