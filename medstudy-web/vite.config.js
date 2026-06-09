@@ -8,11 +8,8 @@ export default defineConfig({
   root: path.resolve(__dirname),
   css: { postcss: { plugins: [] } },
   build: {
-    commonjsOptions: {
-      include: [/node_modules/]
+    rollupOptions: {
+      external: ['jszip', 'sql.js']
     }
-  },
-  optimizeDeps: {
-    include: ['jszip']
   }
 })
