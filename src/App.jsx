@@ -1,5 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+﻿import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { PomodoroProvider } from './context/PomodoroContext'
 import Landing    from './pages/Landing'
 import Login      from './pages/Login'
 import Signup     from './pages/Signup'
@@ -13,7 +14,7 @@ import Layout     from './components/Layout'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
-  if (loading) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:'var(--teal)',fontSize:'24px'}}>🏥</div>
+  if (loading) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:'var(--teal)',fontSize:'24px'}}>ðŸ¥</div>
   if (!user) return <Navigate to="/login" replace />
   return children
 }
@@ -38,7 +39,7 @@ export default function App() {
             <Route path="curriculum" element={<Curriculum />} />
             <Route path="anki"       element={<Anki />} />
             <Route path="uworld"     element={<UWorld />} />
-            <Route path="pomodoro"   element={<Pomodoro />} />
+            <Route path="pomodoro"   element={<PomodoroProvider><Pomodoro /></PomodoroProvider>} />
             <Route path="sessions"   element={<Sessions />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
