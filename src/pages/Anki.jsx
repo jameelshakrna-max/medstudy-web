@@ -128,7 +128,7 @@ export default function Anki() {
 
   return (<div className={s.page}>
     <div className={s.header}>
-      <div><h1 className={s.title}>Anki</h1><p className={s.sub}>Spaced repetition — SM-2</p></div>
+      <div><h1 className={s.title}>Anki</h1><p className={s.sub}>Spaced repetition â€” SM-2</p></div>
       <div className={s.pills}>{[{ n: decks.length, l: 'decks' }, { n: cards.length, l: 'cards' }, { n: due.length, l: 'due' }, { n: nw.length, l: 'new' }].map(t => (<span key={t.l} className={s.pill}><strong>{t.n}</strong> {t.l}</span>))}</div>
     </div>
 
