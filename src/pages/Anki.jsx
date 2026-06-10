@@ -259,5 +259,3 @@ export default function Anki() {
     </>)}
   </div>)
 }
-'@
-[System.IO.File]::WriteAllText("C:\Users\jamee_zidkh08\OneDrive\Desktop\projects\medstudy-web\src\pages\Anki.jsx", $anki, [System.Text.UTF8Encoding]::new($false))
