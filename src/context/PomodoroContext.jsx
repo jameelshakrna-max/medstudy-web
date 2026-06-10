@@ -14,10 +14,15 @@ export function PomodoroProvider({ children }) {
   );
 }
 
+const defaultContext = {
+  timeLeft: 25 * 60,
+  setTimeLeft: () => {},
+  isRunning: false,
+  setIsRunning: () => {},
+  mode: 'work',
+  setMode: () => {},
+};
+
 export function usePomodoro() {
-  const context = useContext(PomodoroContext);
-  if (!context) {
-    throw new Error('usePomodoro must be used within a PomodoroProvider');
-  }
-  return context;
+  return useContext(PomodoroContext) || defaultContext;
 }
