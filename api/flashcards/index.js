@@ -1,4 +1,3 @@
- $fc = @'
 import { createClient } from "@libsql/client"
 
 const turso = createClient({
@@ -61,5 +60,3 @@ export default async function handler(req, res) {
   }
   return res.status(405).json({ error: "Method not allowed" })
 }
-'@
-[System.IO.File]::WriteAllText("C:\Users\jamee_zidkh08\OneDrive\Desktop\projects\medstudy-web\api\flashcards\index.js", $fc, [System.Text.UTF8Encoding]::new($false))
