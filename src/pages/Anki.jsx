@@ -7,22 +7,22 @@ const API = '/api'
 async function apiGet(path) {
   const { data: { session } } = await supabase.auth.getSession()
   const res = await fetch(API + path, { headers: { Authorization: 'Bearer ' + session.access_token } })
-  return res.json()
+  if(!res.ok){let m='Request failed ('+res.status+')';try{const j=await res.json();m=j.error||m}catch{}throw new Error(m)}return res.json()
 }
 async function apiPost(path, body) {
   const { data: { session } } = await supabase.auth.getSession()
   const res = await fetch(API + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token }, body: JSON.stringify(body) })
-  return res.json()
+  if(!res.ok){let m='Request failed ('+res.status+')';try{const j=await res.json();m=j.error||m}catch{}throw new Error(m)}return res.json()
 }
 async function apiPut(path, body) {
   const { data: { session } } = await supabase.auth.getSession()
   const res = await fetch(API + path, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token }, body: JSON.stringify(body) })
-  return res.json()
+  if(!res.ok){let m='Request failed ('+res.status+')';try{const j=await res.json();m=j.error||m}catch{}throw new Error(m)}return res.json()
 }
 async function apiDel(path) {
   const { data: { session } } = await supabase.auth.getSession()
   const res = await fetch(API + path, { method: 'DELETE', headers: { Authorization: 'Bearer ' + session.access_token } })
-  return res.json()
+  if(!res.ok){let m='Request failed ('+res.status+')';try{const j=await res.json();m=j.error||m}catch{}throw new Error(m)}return res.json()
 }
 
 const dm = (dks, id) => { if (!id) return 'Unassigned'; const d = dks.find(x => x.id === id); return d ? d.name : 'Unknown' }
