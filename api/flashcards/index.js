@@ -1,4 +1,5 @@
-﻿import { createClient } from "@libsql/client"
+ $fc = @'
+import { createClient } from "@libsql/client"
 
 const turso = createClient({
   url: process.env.TURSO_DATABASE_URL,
@@ -27,7 +28,12 @@ export default async function handler(req, res) {
   if (req.method === "GET") {
     const deck_id = req.query.deck_id
     try {
-      const r = await turso.execute({ sql: "SELECT * FROM anki_cards WHERE user_id = ? AND deck_id = ? ORDER BY created_at DESC", args: [uid, deck_id] })
+      let r
+      if (deck_id) {
+        r = await turso.execute({ sql: "SELECT * FROM anki_cards WHERE user_id = ? AND deck_id = ? ORDER BY created_at DESC", args: [uid, deck_id] })
+      } else {
+        r = await turso.execute({ sql: "SELECT * FROM anki_cards WHERE user_id = ? ORDER BY created_at DESC", args: [uid] })
+      }
       return res.json(r.rows)
     } catch (e) { return res.status(500).json({ error: e.message }) }
   }
@@ -55,3 +61,5 @@ export default async function handler(req, res) {
   }
   return res.status(405).json({ error: "Method not allowed" })
 }
+'@
+[System.IO.File]::WriteAllText("C:\Users\jamee_zidkh08\OneDrive\Desktop\projects\medstudy-web\api\flashcards\index.js", $fc, [System.Text.UTF8Encoding]::new($false))
