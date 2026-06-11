@@ -735,3 +735,120 @@
   .deckCard, .ankiCard, .formCard, .reviewCard { transition: none; }
   .revBtn:hover, .createDeckBtn:hover, .tabAdd:hover { transform: none; }
 }
+/* -- Main navigation tabs -- */
+.mainTabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid var(--border, #e2e8f0);
+}
+.mainTab {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  background: none;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--muted, #64748b);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+.mainTab:hover { color: var(--fg, #1e293b); }
+.mainTabOn {
+  color: var(--violet, #7c3aed);
+  border-bottom-color: var(--violet, #7c3aed);
+}
+
+/* -- Share badges and buttons -- */
+.sharedBadge {
+  background: var(--teal, #14b8a6);
+  color: white;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  margin-left: 0.4rem;
+  font-weight: 600;
+}
+.shareBtn {
+  margin-top: 0.5rem;
+  width: 100%;
+  padding: 0.35rem;
+  border: 1px solid var(--violet, #7c3aed);
+  background: none;
+  color: var(--violet, #7c3aed);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.shareBtn:hover { background: var(--violet, #7c3aed); color: white; }
+.shareBtnOn {
+  background: var(--teal, #14b8a6);
+  border-color: var(--teal, #14b8a6);
+  color: white;
+}
+.shareBtnOn:hover { background: #ef4444; border-color: #ef4444; }
+.shareLink {
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--teal, #14b8a6);
+  cursor: pointer;
+  margin-top: 0.3rem;
+  text-decoration: underline;
+}
+
+/* -- Shared/Community section -- */
+.sharedSearchRow {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+.sharedSearchInput {
+  flex: 1;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: var(--card, white);
+  color: var(--fg, #1e293b);
+}
+.sharedSearchInput:focus { outline: none; border-color: var(--violet, #7c3aed); }
+.sharedSearchBtn {
+  padding: 0.6rem 1.2rem;
+  background: var(--violet, #7c3aed);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.sharedSearchBtn:hover { opacity: 0.9; }
+.sharedSection { margin-bottom: 2rem; }
+.sharedSectionTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.8rem;
+  color: var(--fg, #1e293b);
+}
+.copyBtn {
+  margin-top: 0.5rem;
+  width: 100%;
+  padding: 0.35rem;
+  border: 1px solid var(--teal, #14b8a6);
+  background: none;
+  color: var(--teal, #14b8a6);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.copyBtn:hover { background: var(--teal, #14b8a6); color: white; }
+.copyBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ownLabel {
+  margin-top: 0.5rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--muted, #64748b);
+  font-style: italic;
+}
