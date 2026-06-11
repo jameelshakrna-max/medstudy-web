@@ -25,18 +25,18 @@ export default function Pomodoro() {
   const { user } = useAuth()
   const {
     mode, running, displayRemaining, total,
-    done, focusMins, sessionPomodoros, sessionStart,
+    done, focusMins, sessionPomodoros,
     studyMin, breakMin, longMin,
-    log, form, setForm, setLog,
+    log, setLog,
     selectedTopic, setSelectedTopic,
     switchMode, togglePlay, resetTimer, skipTimer, setTimerSettings, resetSession,
   } = usePomodoro()
 
-  const [saving, setSaving] = useState(false)
-  const [showDetails, setShowDetails] = useState(false)
+  const [savingSession, setSavingSession] = useState(false)
   const [curriculumTopics, setCurriculumTopics] = useState([])
   const [curriculumSubjects, setCurriculumSubjects] = useState([])
-  const [savingSession, setSavingSession] = useState(false)
+  const [showFinishModal, setShowFinishModal] = useState(false)
+  const [topicStatus, setTopicStatus] = useState('In Progress')
 
   useEffect(() => { loadCurriculum() }, [])
 
@@ -56,15 +56,21 @@ export default function Pomodoro() {
     return sub ? sub.name : ''
   }
 
-  async function finishAndSave() {
+  async function openFinishModal() {
     if (sessionPomodoros === 0) return alert('Complete at least one pomodoro first.')
+    setShowFinishModal(true)
+    setTopicStatus('In Progress')
+  }
+
+  async function confirmFinish() {
     setSavingSession(true)
     try {
-      const topicName = selectedTopic ? selectedTopic.name : (form.label || 'Study Session')
+      const topicName = selectedTopic ? selectedTopic.name : 'Study Session'
       const hours = (focusMins / 60).toFixed(1)
       const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-      const dayName = dayNames[sessionStart.getDay()]
-      const dateStr = sessionStart.toISOString().split('T')[0]
+      const now = new Date()
+      const dayName = dayNames[now.getDay()]
+      const dateStr = now.toISOString().split('T')[0]
 
       const { error } = await supabase.from('study_sessions').insert({
         user_id: user.id,
@@ -78,30 +84,24 @@ export default function Pomodoro() {
         notes: sessionPomodoros + ' pomodoro(s) - ' + hours + ' hours' + (selectedTopic ? ' | Topic: ' + selectedTopic.name : '') + ' | ' + dayName,
       })
       if (error) { alert('Error saving: ' + error.message); setSavingSession(false); return }
-      setLog(l => [{ label: topicName, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }, ...l])
+
+      if (selectedTopic) {
+        const completionPct = topicStatus === 'Complete' ? 100 : 50
+        const { error: topicError } = await supabase.from('curriculum_topics')
+          .update({ status: topicStatus, completion_pct: completionPct })
+          .eq('id', selectedTopic.id)
+        if (topicError) console.error('Error updating topic:', topicError)
+        setCurriculumTopics(prev => prev.map(t => t.id === selectedTopic.id ? { ...t, status: topicStatus, completion_pct: completionPct } : t))
+        setSelectedTopic(prev => ({ ...prev, status: topicStatus, completion_pct: completionPct }))
+      }
+
+      setLog(l => [{ label: topicName, time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }, ...l])
+      setShowFinishModal(false)
       resetSession()
       setSelectedTopic(null)
-      setForm({ label: '', topic: '', notes: '' })
       alert('Session saved! ' + sessionPomodoros + ' pomodoro(s) - ' + hours + ' hours on ' + dayName)
-    } catch (err) { console.error('finishAndSave error:', err) }
+    } catch (err) { console.error('confirmFinish error:', err) }
     setSavingSession(false)
-  }
-
-  async function saveSession() {
-    if (!form.label) return
-    setSaving(true)
-    try {
-      const { error } = await supabase.from('pomodoro_sessions').insert({
-        user_id: user.id, label: form.label, topic: form.topic || null,
-        notes: form.notes || null, date: new Date().toISOString().split('T')[0],
-        duration_min: studyMin, completed: true, focus_quality: 'Deep focus', session_type: 'Study',
-      })
-      if (error) { alert('Error saving session: ' + error.message); setSaving(false); return }
-      setLog(l => [{ label: form.label, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }, ...l])
-      setForm({ label: '', topic: '', notes: '' })
-      setShowDetails(false)
-    } catch (err) { console.error('saveSession error:', err) }
-    setSaving(false)
   }
 
   const mm = String(Math.floor(displayRemaining / 60)).padStart(2, '0')
@@ -232,9 +232,45 @@ export default function Pomodoro() {
               {sessionPomodoros} pomodoro(s) | {focusMins} min | {(focusMins / 60).toFixed(1)} hrs
               {selectedTopic && <span> | {selectedTopic.name}</span>}
             </div>
-            <button className={s.finishBtn} onClick={finishAndSave} disabled={savingSession}>
-              {savingSession ? 'Saving...' : 'Finish & Save Session'}
+            <button className={s.finishBtn} onClick={openFinishModal}>
+              Finish & Save Session
             </button>
+          </div>
+        )}
+
+        {/* Finish Modal */}
+        {showFinishModal && (
+          <div className={s.modalOverlay} onClick={() => setShowFinishModal(false)}>
+            <div className={s.modal} onClick={e => e.stopPropagation()}>
+              <h3 className={s.modalTitle}>Save Study Session</h3>
+              <div className={s.modalSummary}>
+                <span>{sessionPomodoros} pomodoro(s)</span>
+                <span>{focusMins} minutes ({(focusMins / 60).toFixed(1)} hours)</span>
+                {selectedTopic && <span>Topic: {selectedTopic.name}</span>}
+              </div>
+              {selectedTopic && (
+                <div className={s.modalField}>
+                  <label>How did this topic go?</label>
+                  <div className={s.statusOptions}>
+                    {['In Progress', 'Reviewing', 'Complete'].map(st => (
+                      <button
+                        key={st}
+                        className={`${s.statusOpt} ${topicStatus === st ? s.statusOptOn : ''}`}
+                        onClick={() => setTopicStatus(st)}
+                      >
+                        {st}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className={s.modalActions}>
+                <button className={s.modalCancel} onClick={() => setShowFinishModal(false)}>Cancel</button>
+                <button className={s.modalSave} onClick={confirmFinish} disabled={savingSession}>
+                  {savingSession ? 'Saving...' : 'Save Session'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -274,18 +310,6 @@ export default function Pomodoro() {
               ))}
             </div>
           </div>
-          <button className={s.toggleBtn} onClick={() => setShowDetails(!showDetails)}>
-            <span>Session Details</span>
-            <span className={`${s.toggleArrow} ${showDetails ? s.toggleArrowOpen : ''}`}>&#x25BC;</span>
-          </button>
-          {showDetails && (
-            <div className={s.detailsSection}>
-              <div className={s.field}><label>Session Name</label><input value={form.label} onChange={e => setForm({ ...form, label: e.target.value })} placeholder="e.g. Cardiology Block 3" /></div>
-              <div className={s.field}><label>Topic</label><input value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })} placeholder="e.g. Arrhythmias" /></div>
-              <div className={s.field}><label>Notes</label><textarea rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="What you covered..." /></div>
-              <button className={s.primaryBtn} onClick={saveSession} disabled={saving || !form.label}>{saving ? 'Saving...' : 'Save to Database'}</button>
-            </div>
-          )}
           {log.length > 0 && (
             <div className={s.sessionLog}>
               <div className={s.logTitle}>Today's Sessions</div>

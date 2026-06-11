@@ -199,3 +199,102 @@
 }
 .finishBtn:hover { opacity: 0.9; }
 .finishBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Finish Modal */
+.modalOverlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+.modal {
+  background: #1a1a2e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 1.5rem;
+  max-width: 400px;
+  width: 100%;
+  color: white;
+}
+.modalTitle {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+.modalSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 0.8rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+}
+.modalField {
+  margin-bottom: 1rem;
+}
+.modalField label {
+  display: block;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+.statusOptions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+.statusOpt {
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.statusOpt:hover { border-color: rgba(255, 255, 255, 0.3); color: white; }
+.statusOptOn {
+  background: rgba(0, 181, 163, 0.2);
+  border-color: #00B5A3;
+  color: #00B5A3;
+  font-weight: 600;
+}
+.modalActions {
+  display: flex;
+  gap: 0.5rem;
+}
+.modalCancel {
+  flex: 1;
+  padding: 0.6rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.modalCancel:hover { background: rgba(255, 255, 255, 0.1); color: white; }
+.modalSave {
+  flex: 1;
+  padding: 0.6rem;
+  background: linear-gradient(135deg, #00B5A3, #3DBE7A);
+  border: none;
+  color: white;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.modalSave:hover { opacity: 0.9; }
+.modalSave:disabled { opacity: 0.5; cursor: not-allowed; }
