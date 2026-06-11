@@ -96,7 +96,7 @@ export function PomodoroProvider({ children }) {
       switchMode, togglePlay, resetTimer, skipTimer, setTimerSettings, resetSession,
     }}>
       {children}
-    </PomoroContext.Provider>
+    </PomodoroContext.Provider>
   );
 }
 
@@ -105,3 +105,4 @@ export function usePomodoro() {
   if (!context) throw new Error('usePomodoro must be used within a PomodoroProvider');
   return context;
 }
+
