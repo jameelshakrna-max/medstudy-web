@@ -1,4 +1,4 @@
-import { createClient } from '@libsql/client'
+ï»¿import { createClient } from '@libsql/client'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 const turso = createClient({
@@ -19,6 +19,23 @@ async function getUser(req) {
   return user
 }
 
+function mapCard(r) {
+  return {
+    id: r.id,
+    user_id: r.user_id,
+    deck_id: r.deck_id || null,
+    front: r.front,
+    back: r.back,
+    high_yield: Boolean(r.high_yield),
+    ease_factor: Number(r.ease_factor),
+    interval: Number(r.interval_days),
+    repetitions: Number(r.times_reviewed),
+    last_review: r.last_reviewed || null,
+    next_review: r.next_review_date || null,
+    created_at: r.created_at
+  }
+}
+
 export async function GET(req) {
   const user = await getUser(req)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -34,21 +51,7 @@ export async function GET(req) {
       args = [user.id]
     }
     const result = await turso.execute({ sql, args })
-    const cards = result.rows.map(r => ({
-      id: r.id,
-      user_id: r.user_id,
-      deck_id: r.deck_id || null,
-      front: r.front,
-      back: r.back,
-      high_yield: Boolean(r.high_yield),
-      ease_factor: Number(r.ease_factor),
-      interval_days: Number(r.interval_days),
-      times_reviewed: Number(‚.times_reviewed),
-      last_reviewed: r.last_reviewed || null,
-      next_review_date: r.next_review_date || null,
-      created_at: r.created_at
-    }))
-    return Response.json(cards)
+    return Response.json(result.rows.map(mapCard))
   } catch (e) { return Response.json({ error: e.message }, { status: 500 }) }
 }
 
@@ -57,20 +60,23 @@ export async function POST(req) {
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const body = await req.json()
-    const items = Array.isArray(body) ? body : [body]
+    let items
+    if (Array.isArray(body.cards)) { items = body.cards }
+    else if (Array.isArray(body)) { items = body }
+    else { items = [body] }
     const today = new Date().toISOString().split('T')[0]
     const inserted = []
     for (const c of items) {
       const id = crypto.randomUUID()
       await turso.execute({
         sql: `INSERT INTO anki_cards (id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, next_review_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-        args: [id, user.id, c.deck_id || null, c.front, c.back, c.high_yield ? 1 : 0, c.ease_factor ?? 2.5, c.interval_days ?? 0, c.times_reviewed ?? 0, c.next_review_date || today],
+        args: [id, user.id, c.deck_id || null, c.front, c.back, c.high_yield ? 1 : 0, c.ease_factor ?? 2.5, c.interval ?? c.interval_days ?? 0, c.repetitions ?? c.times_reviewed ?? 0, c.next_review ?? c.next_review_date || today],
       })
       inserted.push({
         id, user_id: user.id, deck_id: c.deck_id || null, front: c.front, back: c.back,
         high_yield: Boolean(c.high_yield), ease_factor: c.ease_factor ?? 2.5,
-        interval_days: c.interval_days ?? 0, times_reviewed: c.times_reviewed ?? 0,
-        last_reviewed: null, next_review_date: c.next_review_date || today,
+        interval: c.interval ?? c.interval_days ?? 0, repetitions: c.repetitions ?? c.times_reviewed ?? 0,
+        last_review: null, next_review: c.next_review ?? c.next_review_date || today,
         created_at: new Date().toISOString()
       })
     }
