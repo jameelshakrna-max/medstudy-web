@@ -125,10 +125,9 @@ export default function Anki() {
   const [sharedLoading, setSharedLoading] = useState(false)
   const [copying, setCopying] = useState('')
   const [sharedViewDeck, setSharedViewDeck] = useState(null)
-  @
   const [copyCardId, setCopyCardId] = useState(null)
   const [copyCardDeckId, setCopyCardDeckId] = useState(')
-  const [copyingCard, setCopyingCard] = useState(false)@
+  const [copyingCard, setCopyingCard] = useState(false)
 
   const [sharedViewCards, setSharedViewCards] = useState([])
 
@@ -687,6 +686,7 @@ export default function Anki() {
     </div>
   )
 }
+
 
 
 
