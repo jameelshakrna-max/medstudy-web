@@ -1,4 +1,4 @@
-import { createClient } from '@libsql/client'
+﻿import { createClient } from '@libsql/client'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 export const config = { regions: ['sin1'] }
@@ -38,12 +38,27 @@ function mapCard(r) {
   }
 }
 
-/* GET /api/shared — list all shared decks with their cards, optional search */
+/* GET /api/shared - list all shared decks, optional search, or ?deck_id= for specific deck cards */
 export async function GET(req) {
   const user = await getUser(req)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const url = new URL(req.url)
+    const deckId = url.searchParams.get('deck_id')
+
+    /* Fetch cards for a specific shared deck */
+    if (deckId) {
+      const cardResult = await turso.execute({
+        sql: `SELECT c.* FROM anki_cards c
+          JOIN anki_decks d ON d.id = c.deck_id
+          WHERE c.deck_id = ? AND d.is_shared = 1
+          ORDER BY c.created_at DESC`,
+        args: [deckId]
+      })
+      const cards = cardResult.rows.map(mapCard)
+      return Response.json({ cards })
+    }
+
     const search = url.searchParams.get('q') || ''
 
     let deckSql, deckArgs
@@ -77,7 +92,7 @@ export async function GET(req) {
       created_at: r.created_at
     }))
 
-    /* If searching cards specifically */
+    /* If searching, also search cards */
     if (search.trim()) {
       const term = '%' + search.trim().toLowerCase() + '%'
       const cardResult = await turso.execute({
@@ -108,7 +123,7 @@ export async function GET(req) {
   }
 }
 
-/* POST /api/shared — copy a shared deck (and its cards) to the user's collection */
+/* POST /api/shared - copy a shared deck (and its cards) to the user's collection */
 export async function POST(req) {
   const user = await getUser(req)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -117,7 +132,6 @@ export async function POST(req) {
     const { share_code } = body
     if (!share_code) return Response.json({ error: 'share_code required' }, { status: 400 })
 
-    /* Find the shared deck */
     const deckResult = await turso.execute({
       sql: 'SELECT * FROM anki_decks WHERE share_code = ? AND is_shared = 1',
       args: [share_code]
@@ -126,24 +140,20 @@ export async function POST(req) {
 
     const sourceDeck = deckResult.rows[0]
 
-    /* Don't copy your own deck */
     if (sourceDeck.user_id === user.id) return Response.json({ error: 'This is your own deck' }, { status: 400 })
 
-    /* Check if already copied */
     const existing = await turso.execute({
       sql: 'SELECT id FROM anki_decks WHERE user_id = ? AND name = ?',
       args: [user.id, sourceDeck.name + ' (Copy)']
     })
     if (existing.rows.length) return Response.json({ error: 'Already copied this deck' }, { status: 409 })
 
-    /* Create the deck copy */
     const newDeckId = crypto.randomUUID()
     await turso.execute({
       sql: `INSERT INTO anki_decks (id, user_id, name, description, created_at) VALUES (?, ?, ?, ?, datetime('now'))`,
       args: [newDeckId, user.id, sourceDeck.name + ' (Copy)', sourceDeck.description || '']
     })
 
-    /* Copy all cards */
     const cards = await turso.execute({
       sql: 'SELECT * FROM anki_cards WHERE deck_id = ?',
       args: [sourceDeck.id]

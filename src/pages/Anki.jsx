@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+﻿import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { parseFile } from '../lib/fileParser'
 import s from './Anki.module.css'
@@ -204,6 +204,16 @@ export default function Anki() {
     setCopying('')
   }
 
+  async function loadSharedCards(deck) {
+    try {
+      const data = await api('GET', '/shared?deck_id=' + deck.id)
+      if (data.error) throw new Error(data.error)
+      setSharedViewDeck(deck)
+      setSharedViewCards(data.cards || [])
+      setView('shared-view')
+    } catch (e) { alert(e.message) }
+  }
+
   async function addCard() {
     if (!front.trim() || !back.trim()) return
     if (!formDeckId) return alert('Please select or create a deck first.')
@@ -310,7 +320,7 @@ export default function Anki() {
       <div className={s.header}>
         <div>
           <h1 className={s.title}>Anki</h1>
-          <p className={s.sub}>Spaced repetition — SM-2</p>
+          <p className={s.sub}>Spaced repetition â€” SM-2</p>
         </div>
         <div className={s.pills}>
           {[
@@ -330,7 +340,7 @@ export default function Anki() {
         <button className={`${s.mainTab} ${view === 'shared' || view === 'shared-view' ? s.mainTabOn : ''}`} onClick={() => { setView('shared'); loadShared('') }}>Community</button>
       </div>
 
-      {/* ── decks view ──────────────────────────────────── */}
+      {/* â”€â”€ decks view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {view === 'decks' && (
         <>
           <div className={s.createDeckRow}>
@@ -385,7 +395,7 @@ export default function Anki() {
         </>
       )}
 
-      {/* ── browse view ─────────────────────────────────── */}
+      {/* â”€â”€ browse view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {view === 'browse' && (
         <>
           <div className={s.breadcrumb}>
@@ -443,7 +453,7 @@ export default function Anki() {
         </>
       )}
 
-      {/* ── shared/community view ───────────────────────── */}
+      {/* â”€â”€ shared/community view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {view === 'shared' && (
         <>
           <div className={s.sharedSearchRow}>
@@ -524,7 +534,32 @@ export default function Anki() {
         </>
       )}
 
-      {/* ── add card view ───────────────────────────────── */}
+      {/* -- shared deck detail view -- */}
+      {view === 'shared-view' && sharedViewDeck && (
+        <>
+          <div className={s.breadcrumb}>
+            <button className={s.breadLink} onClick={() => { setSharedViewDeck(null); setView('shared') }}>Community</button>
+            <span className={s.breadSep}>/</span>
+            <span className={s.breadCurrent}>{sharedViewDeck.name}</span>
+          </div>
+          <div className={s.cardList}>
+            {!sharedViewCards.length && <div className={s.empty}>No cards in this deck.</div>}
+            {sharedViewCards.map(c => (
+              <div key={c.id} className={s.ankiCard}>
+                <div className={s.ankiTopRow}>
+                  <div className={s.badges}>
+                    {c.high_yield && <span className={s.badgeHY}>HY</span>}
+                  </div>
+                </div>
+                <div className={s.ankiFront}>{c.front}</div>
+                <div className={s.ankiBack}>{c.back}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      
       {view === 'add' && (
         <>
           <div className={s.breadcrumb}>
@@ -552,7 +587,7 @@ export default function Anki() {
         </>
       )}
 
-      {/* ── upload preview view ─────────────────────────── */}
+      {/* â”€â”€ upload preview view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {view === 'upload' && parsed.length > 0 && (
         <>
           <div className={s.breadcrumb}>
@@ -576,7 +611,7 @@ export default function Anki() {
         </>
       )}
 
-      {/* ── review session view ─────────────────────────── */}
+      {/* â”€â”€ review session view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {view === 'review' && cur && (
         <>
           <div className={s.reviewHeader}>
@@ -612,3 +647,4 @@ export default function Anki() {
     </div>
   )
 }
+
