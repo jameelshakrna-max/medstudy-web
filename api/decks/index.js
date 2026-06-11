@@ -1,5 +1,5 @@
 import { createClient } from '@libsql/client'
-import { jwtVerify } from 'jose'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 export const config = { regions: ['sin1'] }
 
@@ -8,17 +8,17 @@ const turso = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN,
 })
 
-const JWT_SECRET = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET)
+const supabase = createSupabaseClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.VITE_SUPABASE_ANON_KEY
+)
 
 async function getUser(req) {
   const auth = req.headers.get('authorization')
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.replace('Bearer ', '')
-  try {
-    const { payload } = await jwtVerify(token, JWT_SECRET)
-    if (!payload.sub) return null
-    return { id: payload.sub }
-  } catch { return null }
+  const { data: { user } } = await supabase.auth.getUser(token)
+  return user
 }
 
 export async function GET(req) {
