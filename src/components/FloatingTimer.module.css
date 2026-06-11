@@ -1,0 +1,335 @@
+/* ═══════════════════════════════════════════
+   FloatingTimer.module.css
+   Draggable floating Pomodoro widget
+   ═══════════════════════════════════════════ */
+
+/* ── Expanded floating panel ── */
+.floating {
+  position: fixed;
+  z-index: 9999;
+  width: 196px;
+  border-radius: 18px;
+  background: rgba(20, 22, 35, 0.88);
+  -webkit-backdrop-filter: blur(22px);
+  backdrop-filter: blur(22px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+  overflow: hidden;
+  animation: floatIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.floating:active {
+  cursor: grabbing;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  transform: scale(1.02);
+}
+
+@keyframes floatIn {
+  from { opacity: 0; transform: scale(0.85) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ── Drag bar ── */
+.dragBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.dragDots {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.25);
+  letter-spacing: 2px;
+  line-height: 1;
+}
+
+.dragMode {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.minBtn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+
+.minBtn:hover {
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Timer body ── */
+.body {
+  padding: 10px 14px 14px;
+  text-align: center;
+}
+
+.time {
+  display: block;
+  font-family: 'DM Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  line-height: 1.1;
+  text-shadow: 0 0 20px currentColor;
+}
+
+/* ── Dots ── */
+.dots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin: 8px 0 10px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  transition: background-color 0.3s, box-shadow 0.3s;
+}
+
+.dotFill {
+  box-shadow: 0 0 6px currentColor;
+}
+
+/* ── Controls ── */
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.fBtn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fBtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.fPlay {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s, box-shadow 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fPlay:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+}
+
+.fPlay:active {
+  transform: scale(0.95);
+}
+
+/* ── Minimized floating circle ── */
+.mini {
+  position: fixed;
+  z-index: 9999;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(20, 22, 35, 0.9);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: box-shadow 0.2s, transform 0.15s;
+  animation: floatIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mini:active {
+  cursor: grabbing;
+  transform: scale(1.06);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+
+.mini.study  { border-color: rgba(0, 181, 163, 0.5); box-shadow: 0 6px 24px rgba(0, 181, 163, 0.15); }
+.mini.break  { border-color: rgba(61, 190, 122, 0.5); box-shadow: 0 6px 24px rgba(61, 190, 122, 0.15); }
+.mini.long   { border-color: rgba(108, 99, 255, 0.5); box-shadow: 0 6px 24px rgba(108, 99, 255, 0.15); }
+
+.miniTime {
+  font-family: 'DM Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.miniExpand {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 9px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  line-height: 1;
+}
+
+.miniExpand:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* ── Mode classes ── */
+.study  { }
+.break  { }
+.long   { }
+
+/* ── Utility: no-drag for buttons ── */
+.noDrag { }
+
+/* ═══ RESPONSIVE ═══ */
+
+@media (max-width: 480px) {
+  .floating {
+    width: 172px;
+    border-radius: 14px;
+  }
+  .time {
+    font-size: 32px;
+  }
+  .fPlay {
+    width: 42px;
+    height: 42px;
+    font-size: 16px;
+  }
+  .fBtn {
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 360px) {
+  .floating {
+    width: 156px;
+    border-radius: 12px;
+  }
+  .time {
+    font-size: 28px;
+  }
+}
+
+/* Landscape on small devices */
+@media (max-height: 500px) and (orientation: landscape) {
+  .floating {
+    width: 160px;
+    border-radius: 12px;
+  }
+  .time {
+    font-size: 26px;
+  }
+  .body {
+    padding: 6px 10px 10px;
+  }
+  .dots {
+    margin: 4px 0 6px;
+  }
+  .fPlay {
+    width: 38px;
+    height: 38px;
+  }
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .floating,
+  .mini {
+    animation: none;
+  }
+  .fPlay:hover,
+  .mini:active {
+    transform: none;
+  }
+}
+
+/* ── Safari-specific: ensure backdrop-filter works ── */
+@supports (-webkit-backdrop-filter: blur(1px)) {
+  .floating {
+    -webkit-backdrop-filter: blur(22px);
+    backdrop-filter: blur(22px);
+  }
+  .mini {
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+  }
+}
+
+/* ── Firefox-specific ── */
+@supports (-moz-appearance: none) {
+  .floating,
+  .mini {
+    background: rgba(20, 22, 35, 0.95);
+  }
+}
+
+/* ── Retina: sharper borders ── */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .floating,
+  .mini {
+    border-width: 0.5px;
+  }
+}
