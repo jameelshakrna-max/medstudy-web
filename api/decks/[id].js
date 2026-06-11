@@ -7,8 +7,8 @@ const turso = createClient({
 })
 
 const supabase = createSupabaseClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.VITE_SUPABASE_ANON_KEY
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
 )
 
 async function getUser(req) {
@@ -19,13 +19,26 @@ async function getUser(req) {
   return user
 }
 
-export async function DELETE(req, { params }) {
+function extractId(url) {
+  const parts = new URL(url).pathname.split('/')
+  return parts[parts.length - 1]
+}
+
+export async function DELETE(req) {
   const user = await getUser(req)
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  const { id } = await params
   try {
-    await turso.execute({ sql: 'DELETE FROM anki_cards WHERE deck_id = ? AND user_id = ?', args: [id, user.id] })
-    await turso.execute({ sql: 'DELETE FROM anki_decks WHERE id = ? AND user_id = ?', args: [id, user.id] })
+    const id = extractId(req.url)
+    await turso.execute({
+      sql: 'DELETE FROM anki_cards WHERE deck_id = ? AND user_id = ?',
+      args: [id, user.id],
+    })
+    await turso.execute({
+      sql: 'DELETE FROM anki_decks WHERE id = ? AND user_id = ?',
+      args: [id, user.id],
+    })
     return Response.json({ success: true })
-  } catch (e) { return Response.json({ error: e.message }, { status: 500 }) }
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 })
+  }
 }
