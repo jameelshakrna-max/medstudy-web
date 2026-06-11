@@ -9,3 +9,4 @@ dist
 .env.prod
 .env.pulled
 check-turso.js
+check-turso.cjs

@@ -1,3 +1,5 @@
+export const config = { regions: ['sin1'] }
+
 import { createClient } from '@libsql/client'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
