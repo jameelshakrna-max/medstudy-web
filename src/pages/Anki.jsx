@@ -5,8 +5,19 @@ import s from './Anki.module.css'
 
 const API = '/api'
 
-async function apiGet(path) {
+let _sessionCache = null
+let _sessionTime = 0
+async function getSession() {
+  const now = Date.now()
+  if (_sessionCache && now - _sessionTime < 50000) return _sessionCache
   const { data: { session } } = await supabase.auth.getSession()
+  _sessionCache = session
+  _sessionTime = now
+  return session
+}
+
+async function apiGet(path) {
+  const session = await getSession()
   const res = await fetch(API + path, {
     headers: { Authorization: 'Bearer ' + session.access_token }
   })
@@ -14,7 +25,7 @@ async function apiGet(path) {
 }
 
 async function apiPost(path, body) {
-  const { data: { session } } = await supabase.auth.getSession()
+  const session = await getSession()
   const res = await fetch(API + path, {
     method: 'POST',
     headers: {
@@ -27,7 +38,7 @@ async function apiPost(path, body) {
 }
 
 async function apiPut(path, body) {
-  const { data: { session } } = await supabase.auth.getSession()
+  const session = await getSession()
   const res = await fetch(API + path, {
     method: 'PUT',
     headers: {
@@ -40,7 +51,7 @@ async function apiPut(path, body) {
 }
 
 async function apiDel(path) {
-  const { data: { session } } = await supabase.auth.getSession()
+  const session = await getSession()
   const res = await fetch(API + path, {
     method: 'DELETE',
     headers: { Authorization: 'Bearer ' + session.access_token }
@@ -151,18 +162,15 @@ export default function Anki() {
   const [activeDeckId, setActiveDeckId] = useState(null)
   const [filter, setFilter] = useState('all')
 
-  // add-card form
   const [front, setFront] = useState('')
   const [back, setBack] = useState('')
   const [formDeckId, setFormDeckId] = useState('')
   const [highYield, setHighYield] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // create-deck form
   const [deckName, setDeckName] = useState('')
   const [savingDeck, setSavingDeck] = useState(false)
 
-  // file upload / import
   const [parsed, setParsed] = useState([])
   const [uploadDeck, setUploadDeck] = useState('')
   const [importing, setImporting] = useState(false)
@@ -172,12 +180,9 @@ export default function Anki() {
   const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef(null)
 
-  // review session
   const [queue, setQueue] = useState([])
   const [qIdx, setQIdx] = useState(0)
   const [showAns, setShowAns] = useState(false)
-
-  // single-card inline review (browse view)
   const [reviewingCardId, setReviewingCardId] = useState(null)
 
   /* ── data loading ────────────────────────────────────── */
@@ -218,8 +223,8 @@ export default function Anki() {
     try {
       const r = await apiPost('/decks', { name: deckName.trim() })
       if (r.error) throw new Error(r.error)
+      setDecks(prev => [...prev, r])
       setDeckName('')
-      load()
     } catch (e) { alert(e.message) }
     setSavingDeck(false)
   }
@@ -229,11 +234,12 @@ export default function Anki() {
     try {
       const r = await apiDel('/decks/' + id)
       if (r.error) throw new Error(r.error)
+      setDecks(prev => prev.filter(d => d.id !== id))
+      setCards(prev => prev.filter(c => c.deck_id !== id))
       if (activeDeckId === id) {
         setActiveDeckId(null)
         setView('decks')
       }
-      load()
     } catch (e) { alert(e.message) }
   }
 
@@ -251,10 +257,10 @@ export default function Anki() {
         high_yield: highYield
       })
       if (r.error) throw new Error(r.error)
+      setCards(prev => [...prev, r])
       setFront('')
       setBack('')
       setHighYield(false)
-      load()
     } catch (e) { alert(e.message) }
     setSaving(false)
   }
@@ -264,7 +270,7 @@ export default function Anki() {
     try {
       const r = await apiDel('/flashcards/' + id)
       if (r.error) throw new Error(r.error)
-      load()
+      setCards(prev => prev.filter(c => c.id !== id))
     } catch (e) { alert(e.message) }
   }
 
@@ -283,21 +289,16 @@ export default function Anki() {
     const c = queue[qIdx]
     if (!c) return
     const u = sm2(option, c)
+    const updated = { ...c, ...u }
     try {
-      const r = await apiPut('/flashcards/' + c.id, {
-        ease_factor: u.ease_factor,
-        interval: u.interval,
-        repetitions: u.repetitions,
-        next_review: u.next_review,
-        last_review: u.last_review
-      })
+      const r = await apiPut('/flashcards/' + c.id, u)
       if (r.error) throw new Error(r.error)
+      setCards(prev => prev.map(card => card.id === c.id ? { ...card, ...r } : card))
       if (qIdx + 1 < queue.length) {
         setQIdx(qIdx + 1)
         setShowAns(false)
       } else {
         setView(activeDeckId ? 'browse' : 'decks')
-        load()
       }
     } catch (e) { alert(e.message) }
   }
@@ -307,7 +308,6 @@ export default function Anki() {
     setQIdx(0)
     setShowAns(false)
     setView(activeDeckId ? 'browse' : 'decks')
-    load()
   }
 
   /* ── inline review (single card in browse view) ──────── */
@@ -315,16 +315,10 @@ export default function Anki() {
   async function submitInlineReview(option, card) {
     const u = sm2(option, card)
     try {
-      const r = await apiPut('/flashcards/' + card.id, {
-        ease_factor: u.ease_factor,
-        interval: u.interval,
-        repetitions: u.repetitions,
-        next_review: u.next_review,
-        last_review: u.last_review
-      })
+      const r = await apiPut('/flashcards/' + card.id, u)
       if (r.error) throw new Error(r.error)
+      setCards(prev => prev.map(c => c.id === card.id ? { ...c, ...r } : c))
       setReviewingCardId(null)
-      load()
     } catch (e) { alert(e.message) }
   }
 
@@ -361,9 +355,10 @@ export default function Anki() {
       }))
       const r = await apiPost('/flashcards', { cards: withDeck })
       if (r.error) throw new Error(r.error)
+      const newCards = Array.isArray(r) ? r : [r]
+      setCards(prev => [...prev, ...newCards])
       setParsed([])
       setUploadDeck('')
-      load()
       setView(activeDeckId ? 'browse' : 'decks')
     } catch (e) { alert(e.message) }
     setImporting(false)
@@ -395,7 +390,6 @@ export default function Anki() {
 
   return (
     <div className={s.page}>
-      {/* header */}
       <div className={s.header}>
         <div>
           <h1 className={s.title}>Anki</h1>
@@ -415,7 +409,6 @@ export default function Anki() {
         </div>
       </div>
 
-      {/* ── decks view ──────────────────────────────────── */}
       {view === 'decks' && (
         <>
           <div className={s.createDeckRow}>
@@ -443,7 +436,6 @@ export default function Anki() {
           )}
 
           <div className={s.deckGrid}>
-            {/* all-cards card */}
             <div
               className={s.deckCard}
               onClick={() => { setActiveDeckId(null); setFilter('all'); setView('browse') }}
@@ -516,7 +508,6 @@ export default function Anki() {
         </>
       )}
 
-      {/* ── browse view ─────────────────────────────────── */}
       {view === 'browse' && (
         <>
           <div className={s.breadcrumb}>
@@ -614,7 +605,6 @@ export default function Anki() {
         </>
       )}
 
-      {/* ── add card view ───────────────────────────────── */}
       {view === 'add' && (
         <>
           <div className={s.breadcrumb}>
@@ -708,7 +698,6 @@ export default function Anki() {
         </>
       )}
 
-      {/* ── upload preview view ─────────────────────────── */}
       {view === 'upload' && parsed.length > 0 && (
         <>
           <div className={s.breadcrumb}>
@@ -761,7 +750,6 @@ export default function Anki() {
         </>
       )}
 
-      {/* ── review session view ─────────────────────────── */}
       {view === 'review' && cur && (
         <>
           <div className={s.reviewHeader}>
