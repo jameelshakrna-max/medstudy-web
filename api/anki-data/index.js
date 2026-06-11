@@ -18,7 +18,12 @@ async function getUser(req) {
     const { payload } = await jwtVerify(token, JWT_SECRET)
     if (!payload.sub) return null
     return { id: payload.sub }
-  } catch { return null }
+  } catch (e) {
+    console.log('JWT verify error:', e.message)
+    console.log('JWT_SECRET length:', JWT_SECRET.length)
+    console.log('Token first 20 chars:', token.substring(0, 20))
+    return null
+  }
 }
 
 function mapCard(r) {
