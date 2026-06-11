@@ -124,3 +124,78 @@
   .ctrlBtn { width: 44px; height: 44px; font-size: 16px; }
   .playBtn { width: 68px; height: 68px; font-size: 26px; }
 }
+/* Topic Selector */
+.topicSelector {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+.topicLabel {
+  display: block;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.topicSelect {
+  width: 100%;
+  padding: 0.5rem 0.8rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: white;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.topicSelect:focus { outline: none; border-color: #00B5A3; }
+.topicSelect option { background: #1a1a2e; color: white; }
+.topicInfo {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+.topicHY {
+  background: rgba(255, 183, 77, 0.2);
+  color: #FFB74D;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+.topicStatus {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Finish & Save Section */
+.finishSection {
+  background: rgba(0, 181, 163, 0.08);
+  border: 1px solid rgba(0, 181, 163, 0.2);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-top: 1rem;
+  text-align: center;
+}
+.finishInfo {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 0.6rem;
+}
+.finishBtn {
+  width: 100%;
+  padding: 0.65rem;
+  background: linear-gradient(135deg, #00B5A3, #3DBE7A);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.finishBtn:hover { opacity: 0.9; }
+.finishBtn:disabled { opacity: 0.5; cursor: not-allowed; }

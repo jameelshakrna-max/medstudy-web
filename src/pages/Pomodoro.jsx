@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+﻿import { useState, useMemo, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { usePomodoro } from '../context/PomodoroContext'
 import { supabase } from '../lib/supabase'
@@ -6,24 +6,16 @@ import s from './Pomodoro.module.css'
 
 function generateStars(count) {
   return Array.from({ length: count }, (_, i) => ({
-    id: i,
-    left: Math.random() * 100,
-    top: Math.random() * 60,
-    size: Math.random() * 2 + 1,
-    duration: Math.random() * 4 + 2,
-    delay: Math.random() * 5,
+    id: i, left: Math.random() * 100, top: Math.random() * 60,
+    size: Math.random() * 2 + 1, duration: Math.random() * 4 + 2, delay: Math.random() * 5,
   }))
 }
 
 function generateFireflies(count) {
   return Array.from({ length: count }, (_, i) => ({
-    id: i,
-    left: Math.random() * 90 + 5,
-    top: Math.random() * 60 + 20,
-    dx: (Math.random() - 0.5) * 60,
-    dy: (Math.random() - 0.5) * 50,
-    dur: Math.random() * 6 + 4,
-    delay: Math.random() * 8,
+    id: i, left: Math.random() * 90 + 5, top: Math.random() * 60 + 20,
+    dx: (Math.random() - 0.5) * 60, dy: (Math.random() - 0.5) * 50,
+    dur: Math.random() * 6 + 4, delay: Math.random() * 8,
   }))
 }
 
@@ -33,37 +25,82 @@ export default function Pomodoro() {
   const { user } = useAuth()
   const {
     mode, running, displayRemaining, total,
-    done, focusMins,
+    done, focusMins, sessionPomodoros, sessionStart,
     studyMin, breakMin, longMin,
     log, form, setForm, setLog,
-    switchMode, togglePlay, resetTimer, skipTimer, setTimerSettings,
+    selectedTopic, setSelectedTopic,
+    switchMode, togglePlay, resetTimer, skipTimer, setTimerSettings, resetSession,
   } = usePomodoro()
 
   const [saving, setSaving] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
+  const [curriculumTopics, setCurriculumTopics] = useState([])
+  const [curriculumSubjects, setCurriculumSubjects] = useState([])
+  const [savingSession, setSavingSession] = useState(false)
+
+  useEffect(() => { loadCurriculum() }, [])
+
+  async function loadCurriculum() {
+    try {
+      const [topRes, subRes] = await Promise.all([
+        supabase.from('curriculum_topics').select('id, name, subject_id, high_yield, status').order('name'),
+        supabase.from('curriculum_subjects').select('id, name').order('name'),
+      ])
+      setCurriculumTopics(topRes.data || [])
+      setCurriculumSubjects(subRes.data || [])
+    } catch (err) { console.error('Error loading curriculum:', err) }
+  }
+
+  function getSubjectName(subjectId) {
+    const sub = curriculumSubjects.find(s => s.id === subjectId)
+    return sub ? sub.name : ''
+  }
+
+  async function finishAndSave() {
+    if (sessionPomodoros === 0) return alert('Complete at least one pomodoro first.')
+    setSavingSession(true)
+    try {
+      const topicName = selectedTopic ? selectedTopic.name : (form.label || 'Study Session')
+      const hours = (focusMins / 60).toFixed(1)
+      const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+      const dayName = dayNames[sessionStart.getDay()]
+      const dateStr = sessionStart.toISOString().split('T')[0]
+
+      const { error } = await supabase.from('study_sessions').insert({
+        user_id: user.id,
+        label: topicName,
+        date: dateStr,
+        duration_min: focusMins,
+        session_type: 'Pomodoro',
+        energy_level: 'High',
+        focus_quality: 'Deep focus',
+        goals_met: true,
+        notes: sessionPomodoros + ' pomodoro(s) - ' + hours + ' hours' + (selectedTopic ? ' | Topic: ' + selectedTopic.name : '') + ' | ' + dayName,
+      })
+      if (error) { alert('Error saving: ' + error.message); setSavingSession(false); return }
+      setLog(l => [{ label: topicName, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }, ...l])
+      resetSession()
+      setSelectedTopic(null)
+      setForm({ label: '', topic: '', notes: '' })
+      alert('Session saved! ' + sessionPomodoros + ' pomodoro(s) - ' + hours + ' hours on ' + dayName)
+    } catch (err) { console.error('finishAndSave error:', err) }
+    setSavingSession(false)
+  }
 
   async function saveSession() {
     if (!form.label) return
     setSaving(true)
     try {
       const { error } = await supabase.from('pomodoro_sessions').insert({
-        user_id: user.id,
-        label: form.label,
-        topic: form.topic || null,
-        notes: form.notes || null,
-        date: new Date().toISOString().split('T')[0],
-        duration_min: studyMin,
-        completed: true,
-        focus_quality: 'Deep focus',
-        session_type: 'Study'
+        user_id: user.id, label: form.label, topic: form.topic || null,
+        notes: form.notes || null, date: new Date().toISOString().split('T')[0],
+        duration_min: studyMin, completed: true, focus_quality: 'Deep focus', session_type: 'Study',
       })
       if (error) { alert('Error saving session: ' + error.message); setSaving(false); return }
       setLog(l => [{ label: form.label, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }, ...l])
       setForm({ label: '', topic: '', notes: '' })
       setShowDetails(false)
-    } catch (err) {
-      console.error('saveSession error:', err)
-    }
+    } catch (err) { console.error('saveSession error:', err) }
     setSaving(false)
   }
 
@@ -81,32 +118,14 @@ export default function Pomodoro() {
       const posIdx = i % positions.length
       const row = Math.floor(i / positions.length)
       const baseSize = 16 + Math.random() * 8
-      result.push({
-        id: i,
-        left: positions[posIdx] + (Math.random() * 6 - 3),
-        bottom: 32 + row * 4,
-        w: baseSize,
-        h: baseSize * 1.8,
-        cls: treeClasses[i % treeClasses.length],
-        delay: 0,
-        growing: false,
-      })
+      result.push({ id: i, left: positions[posIdx] + (Math.random() * 6 - 3), bottom: 32 + row * 4, w: baseSize, h: baseSize * 1.8, cls: treeClasses[i % treeClasses.length], delay: 0, growing: false })
     }
     if (running && mode === 'study') {
       const nextIdx = done % positions.length
       const row = Math.floor(done / positions.length)
       const baseSize = 16 + Math.random() * 8
       const progress = 1 - pct
-      result.push({
-        id: 'growing',
-        left: positions[nextIdx] + (Math.random() * 6 - 3),
-        bottom: 32 + row * 4,
-        w: baseSize,
-        h: baseSize * 1.8 * progress,
-        cls: treeClasses[done % treeClasses.length],
-        delay: 0,
-        growing: true,
-      })
+      result.push({ id: 'growing', left: positions[nextIdx] + (Math.random() * 6 - 3), bottom: 32 + row * 4, w: baseSize, h: baseSize * 1.8 * progress, cls: treeClasses[done % treeClasses.length], delay: 0, growing: true })
     }
     return result
   }, [done, running, mode, pct])
@@ -119,14 +138,7 @@ export default function Pomodoro() {
       <div className={`${s.ambient} ${s['ambient' + mode.charAt(0).toUpperCase() + mode.slice(1)]}`} />
       <div className={s.stars}>
         {stars.map(star => (
-          <div key={star.id} className={s.star} style={{
-            left: star.left + '%',
-            top: star.top + '%',
-            width: star.size + 'px',
-            height: star.size + 'px',
-            '--duration': star.duration + 's',
-            '--delay': star.delay + 's',
-          }} />
+          <div key={star.id} className={s.star} style={{ left: star.left + '%', top: star.top + '%', width: star.size + 'px', height: star.size + 'px', '--duration': star.duration + 's', '--delay': star.delay + 's' }} />
         ))}
       </div>
       <div className={s.content}>
@@ -134,54 +146,67 @@ export default function Pomodoro() {
           <h1 className={s.title}>Pomodoro</h1>
           <p className={s.sub}>Deep focus. Every session tracked.</p>
         </div>
+
+        {/* Topic Selector */}
+        <div className={s.topicSelector}>
+          <label className={s.topicLabel}>Study Topic</label>
+          <select className={s.topicSelect} value={selectedTopic ? selectedTopic.id : ''} onChange={e => {
+            const t = curriculumTopics.find(t => t.id === e.target.value)
+            setSelectedTopic(t || null)
+          }}>
+            <option value="">Select a topic...</option>
+            {curriculumTopics.map(t => (
+              <option key={t.id} value={t.id}>{t.name} {getSubjectName(t.subject_id) ? '(' + getSubjectName(t.subject_id) + ')' : ''}</option>
+            ))}
+          </select>
+          {selectedTopic && (
+            <div className={s.topicInfo}>
+              {selectedTopic.high_yield && <span className={s.topicHY}>High Yield</span>}
+              <span className={s.topicStatus}>{selectedTopic.status || 'Not Started'}</span>
+            </div>
+          )}
+        </div>
+
         <div className={s.modeTabs}>
           {[
             { key: 'study', label: 'Focus', cls: 'study' },
             { key: 'break', label: 'Short Break', cls: 'break' },
             { key: 'long', label: 'Long Break', cls: 'long' },
           ].map(({ key, label, cls }) => (
-            <button
-              key={key}
-              className={`${s.modeTab} ${mode === key ? `${s.modeTabActive} ${s[cls]}` : ''}`}
-              onClick={() => switchMode(key)}
-            >
-              {label}
-            </button>
+            <button key={key} className={`${s.modeTab} ${mode === key ? s.modeTabActive + ' ' + s[cls] : ''}`} onClick={() => switchMode(key)}>{label}</button>
           ))}
         </div>
+
         <div className={s.timerContainer}>
           <div className={`${s.glowRing} ${s[mode]} ${running ? s.pulseActive : ''}`} />
           <div className={s.ringOuter}>
             <svg viewBox="0 0 280 280" className={s.ringSvg}>
               <circle className={s.ringBg} cx="140" cy="140" r="130" />
               <circle className={s.ringTrack} cx="140" cy="140" r="130" />
-              <circle className={s.ringFg} cx="140" cy="140" r="130"
-                style={{
-                  stroke: mode === 'study' ? '#00B5A3' : mode === 'break' ? '#3DBE7A' : '#6C63FF',
-                  '--ring-color': mode === 'study' ? 'rgba(0,181,163,0.6)' : mode === 'break' ? 'rgba(61,190,122,0.6)' : 'rgba(108,99,255,0.6)',
-                  strokeDashoffset: offset,
-                }} />
+              <circle className={s.ringFg} cx="140" cy="140" r="130" style={{
+                stroke: mode === 'study' ? '#00B5A3' : mode === 'break' ? '#3DBE7A' : '#6C63FF',
+                '--ring-color': mode === 'study' ? 'rgba(0,181,163,0.6)' : mode === 'break' ? 'rgba(61,190,122,0.6)' : 'rgba(108,99,255,0.6)',
+                strokeDashoffset: offset,
+              }} />
             </svg>
             <div className={s.ringInner}>
-              <div className={s.ringLabel}>
-                {isFinished ? 'COMPLETE' : running ? 'COUNTING...' : mode === 'study' ? 'FOCUS TIME' : mode === 'break' ? 'SHORT BREAK' : 'LONG BREAK'}
-              </div>
+              <div className={s.ringLabel}>{isFinished ? 'COMPLETE' : running ? 'COUNTING...' : mode === 'study' ? 'FOCUS TIME' : mode === 'break' ? 'SHORT BREAK' : 'LONG BREAK'}</div>
               <div className={`${s.ringTime} ${s[mode]}`}>{mm}:{ss}</div>
               <div className={s.ringDots}>
                 {[0, 1, 2, 3].map(i => (
-                  <div key={i} className={`${s.dot} ${i < done % 4 ? `${s.filled} ${s[mode]}` : ''}`} />
+                  <div key={i} className={`${s.dot} ${i < done % 4 ? s.filled + ' ' + s[mode] : ''}`} />
                 ))}
               </div>
             </div>
           </div>
         </div>
+
         <div className={s.controls}>
           <button className={s.ctrlBtn} onClick={resetTimer} title="Reset">&#x21BA;</button>
-          <button className={`${s.playBtn} ${s[mode]}`} onClick={togglePlay}>
-            {running ? '\u23F8' : '\u25B6'}
-          </button>
+          <button className={`${s.playBtn} ${s[mode]}`} onClick={togglePlay}>{running ? '\u23F8' : '\u25B6'}</button>
           <button className={s.ctrlBtn} onClick={skipTimer} title="Skip">&#x23ED;</button>
         </div>
+
         <div className={s.statsGrid}>
           <div className={s.statCard}>
             <span className={s.statIcon}>&#x1F345;</span>
@@ -199,47 +224,37 @@ export default function Pomodoro() {
             <span className={s.statLabel}>Hours</span>
           </div>
         </div>
+
+        {/* Finish & Save Button */}
+        {sessionPomodoros > 0 && (
+          <div className={s.finishSection}>
+            <div className={s.finishInfo}>
+              {sessionPomodoros} pomodoro(s) | {focusMins} min | {(focusMins / 60).toFixed(1)} hrs
+              {selectedTopic && <span> | {selectedTopic.name}</span>}
+            </div>
+            <button className={s.finishBtn} onClick={finishAndSave} disabled={savingSession}>
+              {savingSession ? 'Saving...' : 'Finish & Save Session'}
+            </button>
+          </div>
+        )}
+
         <div className={s.forest}>
           <div className={s.forestLabel}>
-            {done === 0 ? 'Complete your first pomodoro to plant a tree!' :
-             done === 1 ? 'Your forest begins \u2014 1 tree planted!' :
-             done + ' trees planted in your focus forest'}
+            {done === 0 ? 'Complete your first pomodoro to plant a tree!' : done === 1 ? 'Your forest begins \u2014 1 tree planted!' : done + ' trees planted in your focus forest'}
           </div>
           <div className={s.forestGround}>
             {trees.map(t => (
-              <div
-                key={t.id}
-                className={`${s.tree} ${s[t.cls]} ${t.growing ? s.treeGrowing : ''}`}
-                style={{
-                  left: t.left + '%',
-                  bottom: t.bottom + 'px',
-                  animationDelay: t.delay + 's',
-                  '--w': t.w + 'px',
-                  '--h': (t.growing ? Math.max(t.h * (1 - pct), 8) : t.h) + 'px',
-                }}
-              >
-                <div className={s.treeCrown}>
-                  <div className={s.treeTop} />
-                </div>
+              <div key={t.id} className={`${s.tree} ${s[t.cls]} ${t.growing ? s.treeGrowing : ''}`} style={{ left: t.left + '%', bottom: t.bottom + 'px', animationDelay: t.delay + 's', '--w': t.w + 'px', '--h': (t.growing ? Math.max(t.h * (1 - pct), 8) : t.h) + 'px' }}>
+                <div className={s.treeCrown}><div className={s.treeTop} /></div>
                 <div className={s.treeTrunk} />
               </div>
             ))}
             {fireflies.map(ff => (
-              <div
-                key={ff.id}
-                className={s.firefly}
-                style={{
-                  left: ff.left + '%',
-                  top: ff.top + '%',
-                  '--dx': ff.dx + 'px',
-                  '--dy': ff.dy + 'px',
-                  '--dur': ff.dur + 's',
-                  '--delay': ff.delay + 's',
-                }}
-              />
+              <div key={ff.id} className={s.firefly} style={{ left: ff.left + '%', top: ff.top + '%', '--dx': ff.dx + 'px', '--dy': ff.dy + 'px', '--dur': ff.dur + 's', '--delay': ff.delay + 's' }} />
             ))}
           </div>
         </div>
+
         <div className={s.bottomPanel}>
           <div className={s.settingsSection}>
             <div className={s.settingsTitle}>Timer Settings</div>
@@ -251,20 +266,10 @@ export default function Pomodoro() {
               ].map(({ label, value }) => (
                 <div key={label} className={s.setItem}>
                   <label>{label}</label>
-                  <input
-                    type="number"
-                    value={value}
-                    onChange={e => {
-                      const v = +e.target.value
-                      setTimerSettings(
-                        label.includes('Focus') ? v : studyMin,
-                        label.includes('Break') ? v : breakMin,
-                        label.includes('Long') ? v : longMin
-                      )
-                    }}
-                    min="1"
-                    max="90"
-                  />
+                  <input type="number" value={value} onChange={e => {
+                    const v = +e.target.value
+                    setTimerSettings(label.includes('Focus') ? v : studyMin, label.includes('Break') ? v : breakMin, label.includes('Long') ? v : longMin)
+                  }} min="1" max="90" />
                 </div>
               ))}
             </div>
@@ -275,21 +280,10 @@ export default function Pomodoro() {
           </button>
           {showDetails && (
             <div className={s.detailsSection}>
-              <div className={s.field}>
-                <label>Session Name</label>
-                <input value={form.label} onChange={e => setForm({ ...form, label: e.target.value })} placeholder="e.g. Cardiology Block 3" />
-              </div>
-              <div className={s.field}>
-                <label>Topic</label>
-                <input value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })} placeholder="e.g. Arrhythmias" />
-              </div>
-              <div className={s.field}>
-                <label>Notes</label>
-                <textarea rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="What you covered..." />
-              </div>
-              <button className={s.primaryBtn} onClick={saveSession} disabled={saving || !form.label}>
-                {saving ? 'Saving...' : 'Save to Database'}
-              </button>
+              <div className={s.field}><label>Session Name</label><input value={form.label} onChange={e => setForm({ ...form, label: e.target.value })} placeholder="e.g. Cardiology Block 3" /></div>
+              <div className={s.field}><label>Topic</label><input value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })} placeholder="e.g. Arrhythmias" /></div>
+              <div className={s.field}><label>Notes</label><textarea rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="What you covered..." /></div>
+              <button className={s.primaryBtn} onClick={saveSession} disabled={saving || !form.label}>{saving ? 'Saving...' : 'Save to Database'}</button>
             </div>
           )}
           {log.length > 0 && (

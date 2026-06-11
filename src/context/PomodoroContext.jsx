@@ -14,11 +14,12 @@ export function PomodoroProvider({ children }) {
   const [focusMins, setFocusMins] = useState(0);
   const [log, setLog] = useState([]);
   const [form, setForm] = useState({ label: '', topic: '', notes: '' });
+  const [selectedTopic, setSelectedTopic] = useState(null);
+  const [sessionPomodoros, setSessionPomodoros] = useState(0);
+  const [sessionStart, setSessionStart] = useState(new Date());
   const intervalRef = useRef(null);
 
-  function getSeconds(m) {
-    return m * 60;
-  }
+  function getSeconds(m) { return m * 60; }
 
   function applyMode(m) {
     const mins = m === 'study' ? studyMin : m === 'break' ? breakMin : longMin;
@@ -29,22 +30,15 @@ export function PomodoroProvider({ children }) {
     setRunning(false);
   }
 
-  const switchMode = useCallback((m) => {
-    applyMode(m);
-  }, [studyMin, breakMin, longMin]);
-
-  const togglePlay = useCallback(() => {
-    setRunning(r => !r);
-  }, []);
-
-  const resetTimer = useCallback(() => {
-    applyMode(mode);
-  }, [mode, studyMin, breakMin, longMin]);
+  const switchMode = useCallback((m) => { applyMode(m); }, [studyMin, breakMin, longMin]);
+  const togglePlay = useCallback(() => { setRunning(r => !r); }, []);
+  const resetTimer = useCallback(() => { applyMode(mode); }, [mode, studyMin, breakMin, longMin]);
 
   const skipTimer = useCallback(() => {
     if (mode === 'study') {
       setDone(d => d + 1);
       setFocusMins(f => f + studyMin);
+      setSessionPomodoros(p => p + 1);
       const next = done % 4 === 3 ? 'long' : 'break';
       setTimeout(() => applyMode(next), 0);
     } else {
@@ -53,14 +47,18 @@ export function PomodoroProvider({ children }) {
   }, [mode, done, studyMin]);
 
   const setTimerSettings = useCallback((s, b, l) => {
-    setStudyMin(s);
-    setBreakMin(b);
-    setLongMin(l);
+    setStudyMin(s); setBreakMin(b); setLongMin(l);
     const mins = mode === 'study' ? s : mode === 'break' ? b : l;
     const secs = getSeconds(mins);
-    setDisplayRemaining(secs);
-    setTotal(secs);
+    setDisplayRemaining(secs); setTotal(secs);
   }, [mode]);
+
+  const resetSession = useCallback(() => {
+    setSessionPomodoros(0);
+    setSessionStart(new Date());
+    setDone(0);
+    setFocusMins(0);
+  }, []);
 
   useEffect(() => {
     if (running) {
@@ -71,6 +69,7 @@ export function PomodoroProvider({ children }) {
             if (mode === 'study') {
               setDone(d => d + 1);
               setFocusMins(f => f + studyMin);
+              setSessionPomodoros(p => p + 1);
               const next = done % 4 === 3 ? 'long' : 'break';
               setTimeout(() => applyMode(next), 0);
             } else {
@@ -90,20 +89,19 @@ export function PomodoroProvider({ children }) {
   return (
     <PomodoroContext.Provider value={{
       mode, running, displayRemaining, total,
-      done, focusMins,
+      done, focusMins, sessionPomodoros, sessionStart,
       studyMin, breakMin, longMin,
       log, form, setForm, setLog,
-      switchMode, togglePlay, resetTimer, skipTimer, setTimerSettings,
+      selectedTopic, setSelectedTopic,
+      switchMode, togglePlay, resetTimer, skipTimer, setTimerSettings, resetSession,
     }}>
       {children}
-    </PomodoroContext.Provider>
+    </PomoroContext.Provider>
   );
 }
 
 export function usePomodoro() {
   const context = useContext(PomodoroContext);
-  if (!context) {
-    throw new Error('usePomodoro must be used within a PomodoroProvider');
-  }
+  if (!context) throw new Error('usePomodoro must be used within a PomodoroProvider');
   return context;
 }
