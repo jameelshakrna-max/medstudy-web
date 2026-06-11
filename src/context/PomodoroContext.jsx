@@ -4,6 +4,127 @@ const PomodoroContext = createContext(null)
 
 const MODES = ['study', 'break', 'long']
 
+// ══════════════════════════════════════════════════
+//  SOUND SYSTEM — Web Audio API + Notification API
+//  Works when: same tab, another tab, another app,
+//  or mobile PWA in background
+// ══════════════════════════════════════════════════
+
+let audioCtx = null  // persistent across the session
+
+function getAudioCtx() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+  }
+  // Resume if suspended (browsers auto-suspend after inactivity)
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume()
+  }
+  return audioCtx
+}
+
+// Unlock AudioContext on first user gesture (required by all browsers)
+function unlockAudio() {
+  try {
+    const ctx = getAudioCtx()
+    const src = ctx.createBufferSource()
+    src.buffer = ctx.createBuffer(1, 1, 22050)
+    src.connect(ctx.destination)
+    src.start(0)
+    src.stop(0)
+  } catch (_) { /* ignore */ }
+}
+
+// Play a pleasant chime sound (no external file needed — synthesized)
+function playChime() {
+  try {
+    const ctx = getAudioCtx()
+    const now = ctx.currentTime
+
+    // Two-tone chime: C5 → E5 with soft fade
+    const frequencies = [523.25, 659.25] // C5, E5
+
+    frequencies.forEach((freq, i) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+
+      osc.type = 'sine'
+      osc.frequency.value = freq
+
+      gain.gain.setValueAtTime(0, now + i * 0.15)
+      gain.gain.linearRampToValueAtTime(0.3, now + i * 0.15 + 0.05)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.15 + 0.6)
+
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(now + i * 0.15)
+      osc.stop(now + i * 0.15 + 0.7)
+    })
+
+    // Second chime (echo, quieter)
+    frequencies.forEach((freq, i) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+
+      osc.type = 'sine'
+      osc.frequency.value = freq
+
+      gain.gain.setValueAtTime(0, now + 0.4 + i * 0.15)
+      gain.gain.linearRampToValueAtTime(0.15, now + 0.4 + i * 0.15 + 0.05)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4 + i * 0.15 + 0.5)
+
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(now + 0.4 + i * 0.15)
+      osc.stop(now + 0.4 + i * 0.15 + 0.6)
+    })
+  } catch (e) {
+    console.warn('Audio chime failed:', e)
+  }
+}
+
+// Show system notification (works when tab is hidden, PWA in background, etc.)
+function notifyTimerEnd(mode) {
+  const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
+  const label = MODE_LABELS[mode] || 'Timer'
+  const body = mode === 'study'
+    ? 'Great work! Time for a break.'
+    : 'Break is over. Ready to focus?'
+
+  // Try Notification API
+  if ('Notification' in window) {
+    if (Notification.permission === 'granted') {
+      try {
+        new Notification(`⏰ ${label} Complete`, {
+          body,
+          icon: '/favicon.ico',
+          tag: 'pomodoro-timer',
+          requireInteraction: true,  // stays until user dismisses
+          silent: false              // play system sound
+        })
+      } catch (_) { /* ServiceWorker notification fallback below */ }
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission().then(perm => {
+        if (perm === 'granted') {
+          try {
+            new Notification(`⏰ ${label} Complete`, {
+              body,
+              icon: '/favicon.ico',
+              tag: 'pomodoro-timer',
+              requireInteraction: true,
+              silent: false
+            })
+          } catch (_) { /* ignore */ }
+        }
+      })
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  CONTEXT PROVIDER
+// ══════════════════════════════════════════════════
+
 export function PomodoroProvider({ children }) {
   // ── Settings ──
   const [focusMins, setFocusMins] = useState(25)
@@ -24,20 +145,40 @@ export function PomodoroProvider({ children }) {
   const [sessionLog, setSessionLog] = useState([])
 
   // ── Refs for precise timing ──
-  const rafRef = useRef(null)            // requestAnimationFrame ID
-  const endTimeRef = useRef(null)         // absolute timestamp when timer = 0
-  const lastTickRef = useRef(null)        // last second we rendered (avoid redundant setSeconds)
-  const totalRef = useRef(25 * 60)        // mirrors totalSec
+  const rafRef = useRef(null)
+  const endTimeRef = useRef(null)
+  const lastTickRef = useRef(null)
+  const totalRef = useRef(25 * 60)
   const modeRef = useRef('study')
   const doneRef = useRef(0)
-  const runningRef = useRef(false)        // mirror of running for callbacks
-  const completingRef = useRef(false)     // guard against double completion
+  const runningRef = useRef(false)
+  const completingRef = useRef(false)
 
   // Keep refs in sync
   useEffect(() => { totalRef.current = totalSec }, [totalSec])
   useEffect(() => { modeRef.current = mode }, [mode])
   useEffect(() => { doneRef.current = done }, [done])
   useEffect(() => { runningRef.current = running }, [running])
+
+  // ── Unlock audio + request notification permission on mount ──
+  useEffect(() => {
+    // Unlock AudioContext on first user interaction
+    const onGesture = () => {
+      unlockAudio()
+      // Request notification permission
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission()
+      }
+    }
+    document.addEventListener('click', onGesture, { once: true })
+    document.addEventListener('touchstart', onGesture, { once: true })
+    document.addEventListener('keydown', onGesture, { once: true })
+    return () => {
+      document.removeEventListener('click', onGesture)
+      document.removeEventListener('touchstart', onGesture)
+      document.removeEventListener('keydown', onGesture)
+    }
+  }, [])
 
   // ── Duration for a mode ──
   const getDuration = useCallback((m) => {
@@ -55,12 +196,10 @@ export function PomodoroProvider({ children }) {
 
   // ── Handle timer completion ──
   const handleComplete = useCallback(() => {
-    // Guard: prevent double-fire
     if (completingRef.current) return
     completingRef.current = true
 
-    clearInterval(rafRef.current)
-    rafRef.current = null
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
     endTimeRef.current = null
     lastTickRef.current = null
 
@@ -70,6 +209,10 @@ export function PomodoroProvider({ children }) {
     const currentMode = modeRef.current
     const currentDone = doneRef.current + 1
     setDone(currentDone)
+
+    // 🔔 Play chime + notification
+    playChime()
+    notifyTimerEnd(currentMode)
 
     // Log entry
     const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
@@ -96,11 +239,10 @@ export function PomodoroProvider({ children }) {
       totalRef.current = nextDur
     }
 
-    // Reset guard after state settles
     setTimeout(() => { completingRef.current = false }, 100)
   }, [focusMins, shortMins, longMins])
 
-  // ── Core tick: calculates from Date.now() vs endTimeRef ──
+  // ── Core tick ──
   const tick = useCallback(() => {
     if (!endTimeRef.current) return
 
@@ -108,25 +250,22 @@ export function PomodoroProvider({ children }) {
     const remainingMs = endTimeRef.current - now
     const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000))
 
-    // Timer completed?
     if (remainingMs <= 0) {
       handleComplete()
       return
     }
 
-    // Only update React state when the second changes (avoid wasted renders)
     if (remainingSec !== lastTickRef.current) {
       lastTickRef.current = remainingSec
       setSeconds(remainingSec)
     }
 
-    // Keep looping with rAF while visible
     if (runningRef.current) {
       rafRef.current = requestAnimationFrame(tick)
     }
   }, [handleComplete])
 
-  // ── Start / stop the rAF loop based on running state ──
+  // ── Start / stop the rAF loop ──
   useEffect(() => {
     if (!running) {
       if (rafRef.current) {
@@ -138,13 +277,14 @@ export function PomodoroProvider({ children }) {
 
     if (!sessionStart) setSessionStart(Date.now())
 
-    // Set endTime if not already set (fresh start)
     if (!endTimeRef.current) {
       endTimeRef.current = Date.now() + seconds * 1000
     }
     lastTickRef.current = null
 
-    // Start rAF loop
+    // Unlock audio when starting timer (user gesture context)
+    unlockAudio()
+
     rafRef.current = requestAnimationFrame(tick)
 
     return () => {
@@ -155,33 +295,29 @@ export function PomodoroProvider({ children }) {
     }
   }, [running]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Visibility change: instant sync when tab/app becomes visible ──
+  // ── Visibility change: instant sync + catch completions that happened while away ──
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return
       if (!runningRef.current || !endTimeRef.current) return
 
-      // Check if timer completed while away
       const remainingMs = endTimeRef.current - Date.now()
       if (remainingMs <= 0) {
+        // Timer completed while we were away — handleComplete plays chime + notification
         handleComplete()
         return
       }
 
-      // Update display immediately with correct time
       const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000))
       lastTickRef.current = remainingSec
       setSeconds(remainingSec)
 
-      // Restart rAF loop
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       rafRef.current = requestAnimationFrame(tick)
     }
 
     document.addEventListener('visibilitychange', onVisible)
-    // Also handle iOS PWA resume (pageshow fires when PWA comes back)
     window.addEventListener('pageshow', onVisible)
-    // Handle focus event as fallback
     window.addEventListener('focus', onVisible)
 
     return () => {
@@ -194,7 +330,6 @@ export function PomodoroProvider({ children }) {
   // ── Actions ──
   const togglePlay = useCallback(() => {
     if (!runningRef.current) {
-      // Starting or resuming
       if (seconds <= 0) {
         const dur = getDuration(modeRef.current)
         setSeconds(dur)
@@ -206,8 +341,9 @@ export function PomodoroProvider({ children }) {
       }
       completingRef.current = false
       setRunning(true)
+      // Unlock audio on play (user gesture)
+      unlockAudio()
     } else {
-      // Pausing — calculate real remaining from clock
       const remaining = endTimeRef.current
         ? Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
         : seconds
@@ -262,14 +398,13 @@ export function PomodoroProvider({ children }) {
     totalRef.current = dur
   }, [focusMins])
 
-  // ── Derived: display string ──
+  // ── Derived ──
   const displayRemaining = (() => {
     const m = Math.floor(seconds / 60)
     const s = seconds % 60
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   })()
 
-  // ── Derived: progress (0 → 1) ──
   const progress = totalSec > 0 ? (totalSec - seconds) / totalSec : 0
 
   const value = {

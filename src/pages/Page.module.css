@@ -94,3 +94,142 @@
   .sessionCard { padding: 18px 20px; }
   .sessLabel { font-size: 15px; }
 }
+/* ═══════════════════════════════════════════
+   Page.module.css ADDITIONS
+   Add these to the END of your existing Page.module.css
+   ═══════════════════════════════════════════ */
+
+/* ── Filter row (date + type) ── */
+.filterRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.filterBtn {
+  padding: 7px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--mist);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.filterBtn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.filterBtnActive {
+  background: rgba(0, 181, 163, 0.15);
+  border-color: rgba(0, 181, 163, 0.35);
+  color: #00D4B8;
+  font-weight: 600;
+}
+
+.filterBtnSm {
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--mist);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.filterBtnSm:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.filterBtnSmActive {
+  background: rgba(108, 99, 255, 0.12);
+  border-color: rgba(108, 99, 255, 0.3);
+  color: #A89FFF;
+  font-weight: 600;
+}
+
+/* ── Date group header ── */
+.dateGroup {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--mist);
+  padding: 16px 0 6px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  margin-bottom: 8px;
+}
+
+.dateGroup:first-child {
+  padding-top: 4px;
+}
+
+/* ── Session type badge ── */
+.sessType {
+  background: rgba(108, 99, 255, 0.12);
+  color: #A89FFF;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ── Delete button on session card ── */
+.sessDelete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sessionCard {
+  position: relative;
+}
+
+.sessionCard:hover .sessDelete,
+.sessionCard:focus-within .sessDelete {
+  opacity: 1;
+}
+
+.sessDelete:hover {
+  background: rgba(255, 80, 80, 0.2);
+  color: #ff6b6b;
+}
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+  .filterRow { gap: 4px; }
+  .filterBtn { padding: 6px 10px; font-size: 12px; }
+  .filterBtnSm { padding: 3px 8px; font-size: 10px; }
+
+  /* Stats grid: 2x2 on mobile */
+  div[style*="gridTemplateColumns: repeat(4"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .filterBtn { padding: 5px 8px; font-size: 11px; }
+}
