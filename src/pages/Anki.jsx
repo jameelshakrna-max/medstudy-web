@@ -125,6 +125,11 @@ export default function Anki() {
   const [sharedLoading, setSharedLoading] = useState(false)
   const [copying, setCopying] = useState('')
   const [sharedViewDeck, setSharedViewDeck] = useState(null)
+  @
+  const [copyCardId, setCopyCardId] = useState(null)
+  const [copyCardDeckId, setCopyCardDeckId] = useState(')
+  const [copyingCard, setCopyingCard] = useState(false)@
+
   const [sharedViewCards, setSharedViewCards] = useState([])
 
   const load = useCallback(async () => {
@@ -212,6 +217,25 @@ export default function Anki() {
       setSharedViewCards(data.cards || [])
       setView('shared-view')
     } catch (e) { alert(e.message) }
+  }
+
+  async function copySingleCard(card) {
+    if (!copyCardDeckId) return alert('Please select a deck first.')
+    setCopyingCard(true)
+    try {
+      const r = await api('POST', '/flashcards', {
+        deck_id: copyCardDeckId,
+        front: card.front,
+        back: card.back,
+        high_yield: card.high_yield
+      })
+      if (r.error) throw new Error(r.error)
+      setCards(prev => [...prev, r])
+      setCopyCardId(null)
+      setCopyCardDeckId('')
+      alert('Card copied to your deck!')
+    } catch (e) { alert(e.message) }
+    setCopyingCard(false)
   }
 
   async function addCard() {
@@ -553,6 +577,22 @@ export default function Anki() {
                 </div>
                 <div className={s.ankiFront}>{c.front}</div>
                 <div className={s.ankiBack}>{c.back}</div>
+                {copyCardId === c.id ? (
+                  <div className={s.copyCardRow}>
+                    <select className={s.copyCardSelect} value={copyCardDeckId} onChange={e => setCopyCardDeckId(e.target.value)}>
+                      <option value="">Select deck...</option>
+                      {decks.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                    <button className={s.copyCardBtn} disabled={copyingCard || !copyCardDeckId} onClick={() => copySingleCard(c)}>
+                      {copyingCard ? '...' : 'Copy'}
+                    </button>
+                    <button className={s.copyCardBtn} style={{ borderColor: '#94a3b8', color: '#94a3b8' }} onClick={() => { setCopyCardId(null); setCopyCardDeckId('') }}>Cancel</button>
+                  </div>
+                ) : (
+                  <button className={s.copyCardBtn} style={{ marginTop: '0.5rem' }} onClick={() => { setCopyCardId(c.id); setCopyCardDeckId('') }}>
+                    Copy to My Deck
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -647,4 +687,7 @@ export default function Anki() {
     </div>
   )
 }
+
+
+
 
