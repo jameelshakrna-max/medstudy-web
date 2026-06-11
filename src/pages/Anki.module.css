@@ -811,7 +811,7 @@
   border-radius: 8px;
   font-size: 0.9rem;
   background: var(--card, white);
-  color: #1e293b;
+  color: #1e293b !important;
 }
 .sharedSearchInput::placeholder { color: #94a3b8; }
 .sharedSearchInput:focus { outline: none; border-color: var(--violet, #7c3aed); }
@@ -871,7 +871,7 @@
   border-radius: 6px;
   font-size: 0.8rem;
   background: var(--card, white);
-  color: var(--fg, #1e293b);
+  color: #1e293b !important;
   cursor: pointer;
 }
 .copyCardBtn {
@@ -887,4 +887,6 @@
 }
 .copyCardBtn:hover { background: var(--teal, #14b8a6); color: white; }
 .copyCardBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+
 
