@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d0f1a"/>
+      <stop offset="100%" stop-color="#141623"/>
+    </linearGradient>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00B5A3"/>
+      <stop offset="50%" stop-color="#00D4B8"/>
+      <stop offset="100%" stop-color="#3DBE7A"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square background -->
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <!-- Open book shape -->
+  <path d="M130 340 Q130 280 256 250 Q382 280 382 340 L382 400 Q382 390 256 360 Q130 390 130 400 Z" fill="url(#g)" opacity="0.3"/>
+  <!-- Medical cross -->
+  <rect x="220" y="110" width="72" height="220" rx="14" fill="url(#g)"/>
+  <rect x="148" y="182" width="216" height="72" rx="14" fill="url(#g)"/>
+  <!-- Accent dots (study nodes) -->
+  <circle cx="100" cy="256" r="6" fill="#00D4B8" opacity="0.5"/>
+  <circle cx="412" cy="256" r="6" fill="#3DBE7A" opacity="0.5"/>
+  <circle cx="256" cy="440" r="5" fill="#00D4B8" opacity="0.4"/>
+</svg>

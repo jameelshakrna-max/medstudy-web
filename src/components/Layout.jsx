@@ -27,7 +27,10 @@ export default function Layout() {
       {/* Sidebar */}
       <aside className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ''}`}>
         <div className={styles.sidebarTop}>
-          <div className={styles.logo}>🏥 MedStudy OS</div>
+          <div className={styles.logo}>
+            <img src="/icon.svg" alt="MedStudy" className={styles.logoIcon} />
+            <span className={styles.logoText}>MedStudy OS</span>
+          </div>
           <div className={styles.userChip}>
             <div className={styles.userDot} />
             <span>{profile?.full_name || profile?.email?.split('@')[0] || 'Student'}</span>
@@ -62,7 +65,10 @@ export default function Layout() {
       <main className={styles.main}>
         <div className={styles.mobileHeader}>
           <button className={styles.menuBtn} onClick={() => setMobileOpen(!mobileOpen)}>☰</button>
-          <div className={styles.mobileLogo}>🏥 MedStudy OS</div>
+          <div className={styles.mobileLogo}>
+            <img src="/icon.svg" alt="MedStudy" className={styles.logoIconMobile} />
+            <span>MedStudy OS</span>
+          </div>
         </div>
         <div className={styles.content}>
           <Outlet />

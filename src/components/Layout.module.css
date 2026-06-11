@@ -39,3 +39,63 @@
 @media (max-width: 480px) {
   .content { padding: 20px 16px; }
 }
+/* ═══════════════════════════════════════════
+   Layout.module.css ADDITIONS
+   Add these to your existing Layout.module.css
+   ═══════════════════════════════════════════ */
+
+/* ── Logo with icon ── */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logoIcon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  transition: transform 0.2s ease;
+}
+
+.logoIcon:hover {
+  transform: scale(1.08) rotate(-2deg);
+}
+
+.logoText {
+  font-family: 'DM Serif Display', serif;
+  font-size: 18px;
+  color: #fff;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+/* ── Mobile logo ── */
+.mobileLogo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logoIconMobile {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 6px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+  .logoIcon {
+    width: 28px;
+    height: 28px;
+  }
+  .logoText {
+    font-size: 16px;
+  }
+  .logoIconMobile {
+    width: 22px;
+    height: 22px;
+  }
+}
