@@ -1,24 +1,24 @@
-export const config = { regions: ['sin1'] }
-
 import { createClient } from '@libsql/client'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { jwtVerify } from 'jose'
+
+export const config = { regions: ['sin1'] }
 
 const turso = createClient({
   url: process.env.TURSO_DATABASE_URL,
   authToken: process.env.TURSO_AUTH_TOKEN,
 })
 
-const supabase = createSupabaseClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.VITE_SUPABASE_ANON_KEY
-)
+const JWT_SECRET = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET)
 
 async function getUser(req) {
   const auth = req.headers.get('authorization')
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.replace('Bearer ', '')
-  const { data: { user } } = await supabase.auth.getUser(token)
-  return user
+  try {
+    const { payload } = await jwtVerify(token, JWT_SECRET)
+    if (!payload.sub) return null
+    return { id: payload.sub }
+  } catch { return null }
 }
 
 function extractId(url) {
@@ -62,7 +62,7 @@ export async function PUT(req) {
     })
 
     const result = await turso.execute({
-      sql: 'SELECT * FROM anki_cards WHERE id = ? AND user_id = ?',
+      sql: 'SELECT id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, interval, repetitions, last_review, next_review, created_at FROM anki_cards WHERE id = ? AND user_id = ?',
       args: [id, user.id],
     })
     if (result.rows.length) return Response.json(mapCard(result.rows[0]))
