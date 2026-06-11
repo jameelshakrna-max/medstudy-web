@@ -811,7 +811,7 @@
   border-radius: 8px;
   font-size: 0.9rem;
   background: var(--card, white);
-  color: var(--fg, #1e293b);
+  color: #1e293b;
 }
 .sharedSearchInput::placeholder { color: #94a3b8; }
 .sharedSearchInput:focus { outline: none; border-color: var(--violet, #7c3aed); }
@@ -887,3 +887,4 @@
 }
 .copyCardBtn:hover { background: var(--teal, #14b8a6); color: white; }
 .copyCardBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
