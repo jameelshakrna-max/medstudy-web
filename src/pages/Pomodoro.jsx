@@ -322,7 +322,6 @@ export default function Pomodoro() {
                 {/* PUSH TEST - REMOVE AFTER TESTING */}
         <div style={{ padding: 10, background: '#1a1a2e', borderRadius: 8, marginTop: 10, width: '100%', maxWidth: 400 }}>
           <button onClick={async () => {
-          onClick={async () => {
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { alert('NOT LOGGED IN'); return }
