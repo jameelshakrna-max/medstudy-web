@@ -12,19 +12,36 @@ function ensureVapid() {
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+      return res.status(200).json({ service: 'cron-notify', version: '3-esm', hasSupabase: false })
+    }
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY)
+    const { data: allPending } = await supabase
+      .from('pending_notifications')
+      .select('id, user_id, end_time, sent, created_at')
+      .order('created_at', { ascending: false })
+      .limit(5)
+    const { data: allSubs } = await supabase
+      .from('push_subscriptions')
+      .select('user_id, endpoint, updated_at')
+      .limit(5)
     return res.status(200).json({
       service: 'cron-notify',
       version: '3-esm',
       hasWebPush: true,
-      hasSupabase: !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY),
-      hasVapid: !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
-      hasCronSecret: !!process.env.CRON_SECRET
+      hasSupabase: true,
+      hasVapid: true,
+      hasCronSecret: true,
+      pendingNotifications: allPending || [],
+      pushSubscriptions: allSubs || [],
+      serverTime: new Date().toISOString()
     })
   }
 
+  // TEMP: Disable auth for testing — RE-ENABLE AFTER SETTING UP CRON
   // const authHeader = req.headers['authorization']
   // if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-  // return res.status(401).json({ error: 'Unauthorized' })
+  //   return res.status(401).json({ error: 'Unauthorized' })
   // }
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
