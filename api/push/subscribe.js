@@ -1,8 +1,5 @@
-// api/push/subscribe.js
-// Stores or updates a push subscription for a user
-
-import webpush from 'web-push'
-import { createClient } from '@supabase/supabase-js'
+const webpush = require('web-push')
+const { createClient } = require('@supabase/supabase-js')
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY
@@ -15,7 +12,7 @@ webpush.setVapidDetails(
   VAPID_PRIVATE_KEY
 )
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -29,12 +26,11 @@ export default async function handler(req, res) {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-    // Upsert the subscription (one per user)
     const { error } = await supabase
       .from('push_subscriptions')
       .upsert({
         user_id,
-        endpoint: subscription.endpoint,
+        endpoint: subscription.endpoint, 
         p256dh: subscription.keys?.p256dh,
         auth: subscription.keys?.auth,
         subscription: JSON.stringify(subscription),
@@ -49,6 +45,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true })
   } catch (err) {
     console.error('Subscribe error:', err)
-    return res.status(500).json({ error: 'Internal server error' })
+    return res.status(500).json({ error: err.message })
   }
 }
