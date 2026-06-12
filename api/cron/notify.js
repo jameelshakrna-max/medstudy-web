@@ -38,11 +38,11 @@ export default async function handler(req, res) {
     })
   }
 
-  // TEMP: Disable auth for testing — RE-ENABLE AFTER SETTING UP CRON
-  // const authHeader = req.headers['authorization']
-  // if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-  //   return res.status(401).json({ error: 'Unauthorized' })
-  // }
+   TEMP: Disable auth for testing — RE-ENABLE AFTER SETTING UP CRON
+   const authHeader = req.headers['authorization']
+   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+     return res.status(401).json({ error: 'Unauthorized' })
+   }
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
     return res.status(500).json({ error: 'Server misconfigured' })
