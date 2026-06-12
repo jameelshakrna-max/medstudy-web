@@ -156,8 +156,13 @@ async function subscribeToPush(userId) {
         subscription: subscription.toJSON()
       })
     })
-    const subData = await subRes.json()
-    pushLog('Subscribe API: ' + subRes.status + ' ' + JSON.stringify(subData))
+    const subText = await subRes.text()
+    try {
+      const subData = JSON.parse(subText)
+      pushLog('Subscribe API: ' + subRes.status + ' ' + JSON.stringify(subData))
+    } catch (_) {
+      pushLog('Subscribe API: ' + subRes.status + ' (non-JSON response): ' + subText.substring(0, 200))
+    }
 
     return subscription
   } catch (err) {
@@ -176,8 +181,13 @@ async function schedulePushNotification(userId, endTime, mode) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: userId, end_time: endTime, mode })
     })
-    const data = await res.json()
-    pushLog('Schedule API: ' + res.status + ' ' + JSON.stringify(data))
+    const resText = await res.text()
+    try {
+      const data = JSON.parse(resText)
+      pushLog('Schedule API: ' + res.status + ' ' + JSON.stringify(data))
+    } catch (_) {
+      pushLog('Schedule API: ' + res.status + ' (non-JSON response): ' + resText.substring(0, 200))
+    }
   } catch (err) {
     pushLog('ERROR: Schedule failed: ' + err.message)
   }
