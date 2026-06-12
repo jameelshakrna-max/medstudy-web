@@ -157,11 +157,10 @@ export default function Pomodoro() {
       const elapsedMinNow = sessionStart ? Math.round((Date.now() - sessionStart) / 60000) : 0
       const topicName = topicInfo?.name || 'General Study'
 
-      // Insert with ALL columns that study_sessions table expects
+      // Insert with only columns that exist in study_sessions table
       const { error: insertError } = await supabase.from('study_sessions').insert({
         user_id: user.id,
         label: `Pomodoro — ${topicName}`,
-        topic: topicName,
         date: new Date().toISOString().split('T')[0],
         duration_min: elapsedMinNow,
         session_type: 'Pomodoro',
