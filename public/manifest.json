@@ -8,6 +8,11 @@
   "theme_color": "#0A1628",
   "orientation": "any",
   "categories": ["education", "medical", "productivity"],
+  "scope": "/",
+  "serviceworker": {
+    "src": "/sw.js",
+    "scope": "/"
+  },
   "icons": [
     {
       "src": "/pwa-192x192.png",
