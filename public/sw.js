@@ -1,6 +1,8 @@
 // ══════════════════════════════════════════════════
 //  Service Worker for MedStudy OS
-//  Handles notifications when the app is in background
+//  - Background notifications via Web Push
+//  - Handles push events from server
+//  - Handles notification clicks
 // ══════════════════════════════════════════════════
 
 const CACHE_NAME = 'medstudy-v1'
@@ -15,70 +17,79 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim())
 })
 
-// Handle messages from the main app
-self.addEventListener('message', (event) => {
-  const { type, endTime, mode } = event.data
+// ── Push event: receives push from server, shows notification ──
+self.addEventListener('push', (event) => {
+  let data = {}
 
-  if (type === 'START_TIMER') {
-    // Store the end time so we can check it
-    self.timerEndTime = endTime
-    self.timerMode = mode
-
-    // Calculate delay until timer ends
-    const delay = endTime - Date.now()
-
-    if (delay > 0) {
-      // Clear any existing timeout
-      if (self.timerTimeout) clearTimeout(self.timerTimeout)
-
-      // Set a timeout to fire when the timer ends
-      // Browsers allow setTimeout in Service Workers for this purpose
-      self.timerTimeout = setTimeout(() => {
-        const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
-        const label = MODE_LABELS[self.timerMode] || 'Timer'
-        const body = self.timerMode === 'study'
-          ? 'Great work! Time for a break.'
-          : 'Break is over. Ready to focus?'
-
-        self.registration.showNotification(`⏰ ${label} Complete`, {
-          body,
-          icon: '/icon.svg',
-          badge: '/icon.svg',
-          tag: 'pomodoro-timer',
-          requireInteraction: true,
-          silent: false,
-          vibrate: [200, 100, 200, 100, 200],
-          data: { url: self.location.origin + '/pomodoro' }
-        })
-
-        self.timerEndTime = null
-      }, delay)
+  if (event.data) {
+    try {
+      data = event.data.json()
+    } catch (e) {
+      data = { title: 'MedStudy OS', body: 'Timer update' }
     }
   }
 
-  if (type === 'CANCEL_TIMER') {
-    if (self.timerTimeout) {
-      clearTimeout(self.timerTimeout)
-      self.timerTimeout = null
+  const title = data.title || '⏰ Timer Complete'
+  const options = {
+    body: data.body || 'Your Pomodoro timer has ended.',
+    icon: '/icon.svg',
+    badge: '/icon.svg',
+    tag: data.tag || 'pomodoro-timer',
+    requireInteraction: true,
+    silent: false,
+    vibrate: [200, 100, 200, 100, 200],
+    data: {
+      url: data.url || (self.location.origin + '/pomodoro'),
+      mode: data.mode || 'study'
     }
-    self.timerEndTime = null
   }
+
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  )
 })
 
-// Handle notification click — bring the app to focus
+// ── Notification click: bring app to focus ──
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = event.notification.data?.url || self.location.origin
+  const url = event.notification.data?.url || self.location.origin + '/pomodoro'
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      // Focus existing window if open
       for (const client of clients) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
           return client.focus()
         }
       }
-      // Otherwise open new window
       return self.clients.openWindow(url)
     })
   )
+})
+
+// ── Push subscription change: inform server ──
+self.addEventListener('pushsubscriptionchange', (event) => {
+  // When subscription changes (e.g. expires), re-subscribe
+  event.waitUntil(
+    self.registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: self.vapidKey
+    }).then((subscription) => {
+      // Tell the app about the new subscription
+      return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+        clients.forEach(client => {
+          client.postMessage({
+            type: 'PUSH_SUBSCRIPTION_CHANGED',
+            subscription: subscription.toJSON()
+          })
+        })
+      })
+    })
+  )
+})
+
+// ── Messages from app ──
+self.addEventListener('message', (event) => {
+  const { type, vapidKey } = event.data
+  if (type === 'SET_VAPID_KEY') {
+    self.vapidKey = vapidKey
+  }
 })
