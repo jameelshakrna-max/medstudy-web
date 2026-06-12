@@ -12,7 +12,7 @@ const MODES = ['study', 'break', 'long']
 //  in Vercel environment variables.
 // ══════════════════════════════════════════════════
 
-const VAPID_PUBLIC_KEY = 'BPQiOPQCyl12r7GPgMcEMznoWTExFrX5cMMUE5UxFL-tZ4oiREo5ogD84_mv6xgWFUnp5vgGr2ySSSr2MheXWgU'
+const VAPID_PUBLIC_KEY = 'BKbcMQDt4fIvsxpU5j1mWFBsMNIyy-N3xMlOldlLkzpEUzmKtKNoxkI_s_lvl1_IsjX74bqNB5E9Xf8lhmYTtkE'
 
 // Convert base64 string to Uint8Array for push subscription
 function urlBase64ToUint8Array(base64String) {
