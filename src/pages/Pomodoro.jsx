@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { usePomodoro } from '../context/PomodoroContext'
+import { usePomodoro, PushDebugBanner } from '../context/PomodoroContext'
 import { supabase } from '../lib/supabase'
 import s from './Pomodoro.module.css'
 
@@ -502,6 +502,9 @@ export default function Pomodoro() {
           </div>
         </div>
       )}
+
+      {/* Push Debug Banner - REMOVE AFTER TESTING */}
+      <PushDebugBanner />
     </div>
   )
 }

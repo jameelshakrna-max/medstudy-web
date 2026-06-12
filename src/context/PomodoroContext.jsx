@@ -12,6 +12,14 @@ const MODES = ['study', 'break', 'long']
 //  in Vercel environment variables.
 // ══════════════════════════════════════════════════
 
+window.__pushLog = window.__pushLog || []
+function pushLog(msg) {
+  const entry = `[${new Date().toLocaleTimeString()}] ${msg}`
+  console.log('[Push]', entry)
+  window.__pushLog.push(entry)
+  if (window.__pushLog.length > 20) window.__pushLog.shift()
+  window.dispatchEvent(new CustomEvent('pushlog', { detail: window.__pushLog }))
+}
 const VAPID_PUBLIC_KEY = 'BKbcMQDt4fIvsxpU5j1mWFBsMNIyy-N3xMlOldlLkzpEUzmKtKNoxkI_s_lvl1_IsjX74bqNB5E9Xf8lhmYTtkE'
 
 // Convert base64 string to Uint8Array for push subscription
@@ -552,6 +560,34 @@ export function PomodoroProvider({ children }) {
   )
 }
 
+export function PushDebugBanner() {
+  const [logs, setLogs] = useState(window.__pushLog || [])
+  const [show, setShow] = useState(true)
+
+  useEffect(() => {
+    const handler = (e) => setLogs([...e.detail])
+    window.addEventListener('pushlog', handler)
+    return () => window.removeEventListener('pushlog', handler)
+  }, [])
+
+  if (!show || logs.length === 0) {
+    return logs.length > 0 ? (
+      <div onClick={() => setShow(true)} style={{ position: 'fixed', bottom: 10, right: 10, zIndex: 99999, background: '#ff9800', color: '#000', padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 'bold', cursor: 'pointer', fontFamily: 'monospace' }}>Push Log ({logs.length})</div>
+    ) : null
+  }
+
+  return (
+    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 99999, background: '#1a1a2e', color: '#0f0', fontSize: 11, fontFamily: 'monospace', maxHeight: '40vh', overflow: 'auto', borderTop: '2px solid #ff9800', padding: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+        <span style={{ color: '#ff9800', fontWeight: 'bold' }}>🔔 Push Debug Log</span>
+        <span onClick={() => setShow(false)} style={{ color: '#ff9800', cursor: 'pointer', fontWeight: 'bold' }}>✕ Close</span>
+      </div>
+      {logs.map((log, i) => (
+        <div key={i} style={{ padding: '2px 0', color: log.includes('ERROR') ? '#ff4444' : log.includes('OK') ? '#00ff00' : '#aaa', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{log}</div>
+      ))}
+    </div>
+  )
+}
 export function usePomodoro() {
   const ctx = useContext(PomodoroContext)
   if (!ctx) throw new Error('usePomodoro must be used inside PomodoroProvider')
