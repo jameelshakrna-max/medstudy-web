@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { usePomodoro } from '../context/PomodoroContext'
 import { supabase } from '../lib/supabase'
 import s from './Pomodoro.module.css'
@@ -169,8 +169,6 @@ export default function Pomodoro() {
         focus_quality: 'Deep focus',
         goals_met: true,
         notes: `${sessionPomodoros} pomodoro${sessionPomodoros > 1 ? 's' : ''} completed`,
-        pomodoros: sessionPomodoros,
-        hours: +(elapsedMinNow / 60).toFixed(2),
       })
 
       if (insertError) {
