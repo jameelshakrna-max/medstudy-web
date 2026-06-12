@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
+import { supabase } from '../lib/supabase'
 
 const PomodoroContext = createContext(null)
 
@@ -244,7 +245,7 @@ export function PomodoroProvider({ children }) {
 
           try {
             // Dynamically import supabase to get the current user
-            const { supabase } = await import('../lib/supabase')
+            // supabase already imported at top
             const { data: { user } } = await supabase.auth.getUser()
             if (user) {
               await subscribeToPush(user.id)
@@ -390,7 +391,7 @@ export function PomodoroProvider({ children }) {
     // the server will send the push at the right time.
     ;(async () => {
       try {
-        const { supabase } = await import('../lib/supabase')
+        // supabase already imported at top
         const { data: { user } } = await supabase.auth.getUser()
         if (user && endTimeRef.current) {
           await schedulePushNotification(user.id, endTimeRef.current, modeRef.current)
@@ -456,7 +457,7 @@ export function PomodoroProvider({ children }) {
           const registration = await navigator.serviceWorker.ready
           const existingSub = await registration.pushManager.getSubscription()
           if (!existingSub) {
-            const { supabase } = await import('../lib/supabase')
+            // supabase already imported at top
             const { data: { user } } = await supabase.auth.getUser()
             if (user) {
               await subscribeToPush(user.id)
