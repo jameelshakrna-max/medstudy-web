@@ -1,18 +1,15 @@
-// api/push/subscribe.js — v2 CommonJS
-const { createClient } = require('@supabase/supabase-js')
+// api/push/subscribe.js — v3 ESM
+import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method === 'GET') {
     return res.status(200).json({
       service: 'push-subscribe',
-      version: '2-commonjs',
-      hasSupabase: !!(SUPABASE_URL && SUPABASE_SERVICE_KEY),
-      envKeys: Object.keys(process.env).filter(k =>
-        k.startsWith('SUPABASE') || k.startsWith('VAPID')
-      ).map(k => k + '=SET')
+      version: '3-esm',
+      hasSupabase: !!(SUPABASE_URL && SUPABASE_SERVICE_KEY)
     })
   }
 

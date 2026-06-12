@@ -1,24 +1,21 @@
-// api/cron/notify.js — v2 CommonJS
-let webpush
-try { webpush = require('web-push') } catch (e) { console.error('web-push not available:', e.message) }
-
-const { createClient } = require('@supabase/supabase-js')
+// api/cron/notify.js — v3 ESM
+import webpush from 'web-push'
+import { createClient } from '@supabase/supabase-js'
 
 let vapidInitialized = false
 function ensureVapid() {
   if (vapidInitialized) return
-  if (!webpush) throw new Error('web-push package not installed')
   if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) throw new Error('Missing VAPID keys')
   webpush.setVapidDetails('mailto:medstudy.os.app@gmail.com', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY)
   vapidInitialized = true
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method === 'GET') {
     return res.status(200).json({
       service: 'cron-notify',
-      version: '2-commonjs',
-      hasWebPush: !!webpush,
+      version: '3-esm',
+      hasWebPush: true,
       hasSupabase: !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY),
       hasVapid: !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
       hasCronSecret: !!process.env.CRON_SECRET
