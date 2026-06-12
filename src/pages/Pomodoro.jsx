@@ -322,33 +322,55 @@ export default function Pomodoro() {
                 {/* PUSH TEST - REMOVE AFTER TESTING */}
         <div style={{ padding: 10, background: '#1a1a2e', borderRadius: 8, marginTop: 10, width: '100%', maxWidth: 400 }}>
           <button onClick={async () => {
-            try {
-              const { data: { user } } = await supabase.auth.getUser()
-              if (!user) { alert('NOT LOGGED IN'); return }
-              alert('1. User found: ' + user.id.substring(0,8))
-              const reg = await navigator.serviceWorker?.ready
-              if (!reg) { alert('No Service Worker'); return }
-              alert('2. SW ready')
-              const perm = await Notification.requestPermission()
-              alert('3. Permission: ' + perm)
-              let sub = await reg.pushManager.getSubscription()
-              if (!sub) {
-                alert('4. Creating subscription...')
-                const VAPID_KEY = 'BKbcMQDt4fIvsxpU5j1mWFBsMNIyy-N3xMlOldlLkzpEUzmKtKNoxkI_s_lvl1_IsjX74bqNB5E9Xf8lhmYTtkE'
-                const padding = '='.repeat((4 - VAPID_KEY.length % 4) % 4)
-                const base64 = (VAPID_KEY + padding).replace(/-/g, '+').replace(/_/g, '/')
-                const rawData = window.atob(base64)
-                const outputArray = new Uint8Array(rawData.length)
-                for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i)
-                sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: outputArray })
-                alert('5. Subscription created')
-              } else {
-                alert('4. Already subscribed')
-              }
-              const subRes = await fetch('/api/push/subscribe', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: user.id, subscription: sub.toJSON() })
+          onClick={async () => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { alert('NOT LOGGED IN'); return }
+    alert('1. User: ' + user.id.substring(0,8))
+
+    const reg = await navigator.serviceWorker.ready
+    let sub = await reg.pushManager.getSubscription()
+    if (!sub) {
+      const perm = await Notification.requestPermission()
+      if (perm !== 'granted') { alert('Permission denied'); return }
+      const VAPID_KEY = 'BKbcMQDt4fIvsxpU5j1mWFBsMNIyy-N3xMlOldlLkzpEUzmKtKNoxkI_s_lvl1_IsjX74bqNB5E9Xf8lhmYTtkE'
+      const padding = '='.repeat((4 - VAPID_KEY.length % 4) % 4)
+      const base64 = (VAPID_KEY + padding).replace(/-/g, '+').replace(/_/g, '/')
+      const rawData = window.atob(base64)
+      const outputArray = new Uint8Array(rawData.length)
+      for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i)
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: outputArray })
+    }
+    alert('2. Got subscription, endpoint: ' + sub.endpoint.substring(0, 40) + '...')
+
+    const subJson = sub.toJSON()
+    alert('3. toJSON keys: ' + JSON.stringify(Object.keys(subJson)))
+    alert('4. keys.p256dh length: ' + (subJson.keys?.p256dh?.length || 'MISSING'))
+    alert('5. keys.auth length: ' + (subJson.keys?.auth?.length || 'MISSING'))
+
+    const body1 = JSON.stringify({ user_id: user.id, subscription: subJson })
+    alert('6. Request body length: ' + body1.length)
+
+    const subRes = await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body1
+    })
+    const subText = await subRes.text()
+    alert('7. Subscribe API: ' + subRes.status + ' ' + subText)
+
+    const endTime = Date.now() + 60000
+    const schRes = await fetch('/api/push/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: user.id, end_time: endTime, mode: 'study' })
+    })
+    const schText = await schRes.text()
+    alert('8. Schedule API: ' + schRes.status + ' ' + schText)
+  } catch (e) {
+    alert('ERROR at step: ' + e.message)
+  }
+}}
               })
               alert('6. Subscribe API: ' + subRes.status + ' ' + JSON.stringify(await subRes.json()))
               const endTime = Date.now() + 60000
