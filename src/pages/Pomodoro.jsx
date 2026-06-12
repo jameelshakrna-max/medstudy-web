@@ -144,30 +144,50 @@ export default function Pomodoro() {
     setShowFinish(true)
   }
 
+  // ── Error state for save failures ──
+  const [saveError, setSaveError] = useState('')
+
   const confirmFinish = async () => {
     setSaving(true)
+    setSaveError('')
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) { setSaveError('Not logged in'); setSaving(false); return }
 
       const elapsedMinNow = sessionStart ? Math.round((Date.now() - sessionStart) / 60000) : 0
       const topicName = topicInfo?.name || 'General Study'
 
-      await supabase.from('study_sessions').insert({
+      // Insert with ALL columns that study_sessions table expects
+      const { error: insertError } = await supabase.from('study_sessions').insert({
         user_id: user.id,
+        label: `Pomodoro — ${topicName}`,
         topic: topicName,
-        hours: +(elapsedMinNow / 60).toFixed(2),
-        pomodoros: sessionPomodoros,
         date: new Date().toISOString().split('T')[0],
-        label: `Pomodoro — ${topicName}`
+        duration_min: elapsedMinNow,
+        session_type: 'Pomodoro',
+        energy_level: 'High',
+        focus_quality: 'Deep focus',
+        goals_met: true,
+        notes: `${sessionPomodoros} pomodoro${sessionPomodoros > 1 ? 's' : ''} completed`,
+        pomodoros: sessionPomodoros,
+        hours: +(elapsedMinNow / 60).toFixed(2),
       })
+
+      if (insertError) {
+        console.error('Insert error:', insertError)
+        setSaveError(insertError.message)
+        setSaving(false)
+        return
+      }
 
       if (selectedTopic && topicStatus) {
         const pct = topicStatus === 'Complete' ? 100 : topicStatus === 'Reviewing' ? 75 : 40
-        await supabase.from('curriculum_topics').update({
+        const { error: topicError } = await supabase.from('curriculum_topics').update({
           status: topicStatus,
           completion_pct: pct
         }).eq('id', selectedTopic)
+
+        if (topicError) console.error('Topic update error:', topicError)
       }
 
       setShowFinish(false)
@@ -175,6 +195,7 @@ export default function Pomodoro() {
       setSessionStart(null)
     } catch (err) {
       console.error(err)
+      setSaveError('Something went wrong. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -468,6 +489,11 @@ export default function Pomodoro() {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+            {saveError && (
+              <div style={{ color: '#ff6b6b', fontSize: '13px', textAlign: 'center', padding: '8px', background: 'rgba(255,80,80,0.1)', borderRadius: '8px', marginTop: '8px' }}>
+                {saveError}
               </div>
             )}
             <div className={s.modalActions}>
