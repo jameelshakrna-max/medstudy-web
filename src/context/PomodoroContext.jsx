@@ -6,21 +6,9 @@ const PomodoroContext = createContext(null)
 const MODES = ['study', 'break', 'long']
 
 // ══════════════════════════════════════════════════
-//  VAPID PUBLIC KEY (from server — safe to expose)
-//  ⚠️ REPLACE THIS with YOUR key from running:
-//     npx web-push generate-vapid-keys
-//  Then also set VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY
-//  in Vercel environment variables.
+//  VAPID PUBLIC KEY — REPLACE WITH YOUR OWN KEY
 // ══════════════════════════════════════════════════
 
-window.__pushLog = window.__pushLog || []
-function pushLog(msg) {
-  const entry = `[${new Date().toLocaleTimeString()}] ${msg}`
-  console.log('[Push]', entry)
-  window.__pushLog.push(entry)
-  if (window.__pushLog.length > 20) window.__pushLog.shift()
-  window.dispatchEvent(new CustomEvent('pushlog', { detail: window.__pushLog }))
-}
 const VAPID_PUBLIC_KEY = 'BKbcMQDt4fIvsxpU5j1mWFBsMNIyy-N3xMlOldlLkzpEUzmKtKNoxkI_s_lvl1_IsjX74bqNB5E9Xf8lhmYTtkE'
 
 // Convert base64 string to Uint8Array for push subscription
@@ -99,61 +87,68 @@ function playChime() {
 }
 
 // ══════════════════════════════════════════════════
-//  PUSH NOTIFICATION HELPERS
+//  PUSH NOTIFICATION HELPERS WITH DEBUG LOGGING
 // ══════════════════════════════════════════════════
 
-// Detect iOS PWA
-function isIOSPWA() {
-  return (
-    /iPad|iPhone|iPod/.test(navigator.userAgent) &&
-    window.navigator.standalone === true
-  )
-}
-
-// Detect iOS Safari (not PWA yet)
-function isIOSSafari() {
-  return (
-    /iPad|iPhone|iPod/.test(navigator.userAgent) &&
-    !window.navigator.standalone &&
-    !window.MSStream
-  )
+// Global debug log that components can read
+window.__pushLog = window.__pushLog || []
+function pushLog(msg) {
+  const entry = `[${new Date().toLocaleTimeString()}] ${msg}`
+  console.log('[Push]', entry)
+  window.__pushLog.push(entry)
+  // Keep only last 20 entries
+  if (window.__pushLog.length > 20) window.__pushLog.shift()
+  // Dispatch event for UI update
+  window.dispatchEvent(new CustomEvent('pushlog', { detail: window.__pushLog }))
 }
 
 // Subscribe to push and send subscription to server
 async function subscribeToPush(userId) {
-  if (!('serviceWorker' in navigator)) return null
-  if (!('PushManager' in window)) return null
+  pushLog('subscribeToPush called for: ' + userId?.substring(0, 8) + '...')
+
+  if (!('serviceWorker' in navigator)) {
+    pushLog('ERROR: Service Worker not supported')
+    return null
+  }
+  if (!('PushManager' in window)) {
+    pushLog('ERROR: PushManager not supported')
+    return null
+  }
 
   try {
     const registration = await navigator.serviceWorker.ready
+    pushLog('SW ready')
 
-    // Check if already subscribed
     let subscription = await registration.pushManager.getSubscription()
 
     if (!subscription) {
-      // iOS 16.4+ requires notification permission to be requested
-      // from within a user gesture. The caller should ensure this
-      // is called from a click/touch handler.
+      pushLog('No subscription yet, requesting permission...')
       const permission = await Notification.requestPermission()
+      pushLog('Permission result: ' + permission)
+
       if (permission !== 'granted') {
-        console.warn('Notification permission denied')
+        pushLog('ERROR: Permission denied')
         return null
       }
 
+      pushLog('Creating push subscription...')
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
       })
+      pushLog('Subscription created OK')
 
-      // Send VAPID key to SW for pushsubscriptionchange
       navigator.serviceWorker.controller?.postMessage({
         type: 'SET_VAPID_KEY',
         vapidKey: VAPID_PUBLIC_KEY
       })
+    } else {
+      pushLog('Already subscribed')
     }
 
     // Save subscription to server
-    await fetch('/api/push/subscribe', {
+    pushLog('Sending subscription to /api/push/subscribe...')
+    const subRes = await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -161,24 +156,30 @@ async function subscribeToPush(userId) {
         subscription: subscription.toJSON()
       })
     })
+    const subData = await subRes.json()
+    pushLog('Subscribe API: ' + subRes.status + ' ' + JSON.stringify(subData))
 
     return subscription
   } catch (err) {
-    console.warn('Push subscription failed:', err)
+    pushLog('ERROR: subscribeToPush failed: ' + err.message)
     return null
   }
 }
 
 // Schedule a server-side push notification for when timer ends
 async function schedulePushNotification(userId, endTime, mode) {
+  pushLog('Scheduling push for ' + mode + ' at ' + new Date(endTime).toLocaleTimeString())
+
   try {
-    await fetch('/api/push/schedule', {
+    const res = await fetch('/api/push/schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: userId, end_time: endTime, mode })
     })
+    const data = await res.json()
+    pushLog('Schedule API: ' + res.status + ' ' + JSON.stringify(data))
   } catch (err) {
-    console.warn('Schedule push failed:', err)
+    pushLog('ERROR: Schedule failed: ' + err.message)
   }
 }
 
@@ -223,35 +224,40 @@ export function PomodoroProvider({ children }) {
   // ── Register SW + set up push subscription on user gesture ──
   useEffect(() => {
     if ('serviceWorker' in navigator) {
+      pushLog('Registering Service Worker...')
       navigator.serviceWorker.register('/sw.js').then(async (reg) => {
-        console.log('SW registered:', reg.scope)
+        pushLog('SW registered OK')
         swReadyRef.current = true
 
-        // Wait for SW to be active
         if (reg.active) {
           reg.active.postMessage({ type: 'SET_VAPID_KEY', vapidKey: VAPID_PUBLIC_KEY })
+          pushLog('VAPID key sent to active SW')
         } else {
           reg.addEventListener('activate', () => {
             reg.active?.postMessage({ type: 'SET_VAPID_KEY', vapidKey: VAPID_PUBLIC_KEY })
+            pushLog('VAPID key sent after SW activation')
           })
         }
 
-        // On iOS, we MUST subscribe to push during a user gesture.
-        // This is the key fix: we listen for the FIRST user interaction
-        // (click/touch/keydown) and subscribe then.
+        // On iOS, we MUST subscribe to push during a user gesture
         const onGesture = async () => {
           if (pushSubscribedRef.current) return
           pushSubscribedRef.current = true
+          pushLog('User gesture detected, checking auth...')
 
           try {
-            // Dynamically import supabase to get the current user
-            // supabase already imported at top
             const { data: { user } } = await supabase.auth.getUser()
+
             if (user) {
+              pushLog('User logged in: ' + user.id.substring(0, 8) + '...')
               await subscribeToPush(user.id)
+            } else {
+              pushLog('ERROR: No user logged in! Cannot subscribe.')
+              pushSubscribedRef.current = false
             }
           } catch (e) {
-            console.warn('Auto push subscribe failed:', e)
+            pushLog('ERROR: Auth check failed: ' + e.message)
+            pushSubscribedRef.current = false
           }
 
           document.removeEventListener('click', onGesture)
@@ -263,11 +269,12 @@ export function PomodoroProvider({ children }) {
         document.addEventListener('touchstart', onGesture, { once: false })
         document.addEventListener('keydown', onGesture, { once: false })
       }).catch((err) => {
-        console.warn('SW registration failed:', err)
+        pushLog('ERROR: SW registration failed: ' + err.message)
       })
+    } else {
+      pushLog('ERROR: Service Worker not supported')
     }
 
-    // Unlock audio on first user gesture
     const unlock = () => {
       unlockAudio()
       document.removeEventListener('click', unlock)
@@ -387,17 +394,18 @@ export function PomodoroProvider({ children }) {
     unlockAudio()
 
     // ── Schedule server-side push notification ──
-    // This is the key iOS fix: even if iOS suspends our JS,
-    // the server will send the push at the right time.
     ;(async () => {
       try {
-        // supabase already imported at top
+        pushLog('Timer started, checking auth for push schedule...')
         const { data: { user } } = await supabase.auth.getUser()
         if (user && endTimeRef.current) {
+          pushLog('Scheduling push for user: ' + user.id.substring(0, 8) + '...')
           await schedulePushNotification(user.id, endTimeRef.current, modeRef.current)
+        } else {
+          pushLog('ERROR: No user or no endTime — push NOT scheduled')
         }
       } catch (e) {
-        console.warn('Schedule push failed:', e)
+        pushLog('ERROR: Schedule push failed: ' + e.message)
       }
     })()
 
@@ -450,21 +458,22 @@ export function PomodoroProvider({ children }) {
       unlockAudio()
 
       // ── iOS: Re-subscribe on play if needed ──
-      // iOS can revoke push subscriptions. Re-confirm on each play.
       ;(async () => {
         try {
           if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
           const registration = await navigator.serviceWorker.ready
           const existingSub = await registration.pushManager.getSubscription()
           if (!existingSub) {
-            // supabase already imported at top
+            pushLog('No subscription on play, re-subscribing...')
             const { data: { user } } = await supabase.auth.getUser()
             if (user) {
               await subscribeToPush(user.id)
+            } else {
+              pushLog('ERROR: No user — cannot re-subscribe')
             }
           }
         } catch (e) {
-          console.warn('Re-subscribe check failed:', e)
+          pushLog('ERROR: Re-subscribe failed: ' + e.message)
         }
       })()
     } else {
@@ -561,6 +570,18 @@ export function PomodoroProvider({ children }) {
   )
 }
 
+export function usePomodoro() {
+  const ctx = useContext(PomodoroContext)
+  if (!ctx) throw new Error('usePomodoro must be used inside PomodoroProvider')
+  return ctx
+}
+
+// ══════════════════════════════════════════════════
+//  DEBUG BANNER COMPONENT
+//  Shows push notification status on screen
+//  Add <PushDebugBanner /> to Pomodoro.jsx
+// ══════════════════════════════════════════════════
+
 export function PushDebugBanner() {
   const [logs, setLogs] = useState(window.__pushLog || [])
   const [show, setShow] = useState(true)
@@ -573,24 +594,40 @@ export function PushDebugBanner() {
 
   if (!show || logs.length === 0) {
     return logs.length > 0 ? (
-      <div onClick={() => setShow(true)} style={{ position: 'fixed', bottom: 10, right: 10, zIndex: 99999, background: '#ff9800', color: '#000', padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 'bold', cursor: 'pointer', fontFamily: 'monospace' }}>Push Log ({logs.length})</div>
+      <div
+        onClick={() => setShow(true)}
+        style={{
+          position: 'fixed', bottom: 10, right: 10, zIndex: 99999,
+          background: '#ff9800', color: '#000', padding: '4px 10px',
+          borderRadius: 12, fontSize: 11, fontWeight: 'bold',
+          cursor: 'pointer', fontFamily: 'monospace'
+        }}
+      >
+        Push Log ({logs.length})
+      </div>
     ) : null
   }
 
   return (
-    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 99999, background: '#1a1a2e', color: '#0f0', fontSize: 11, fontFamily: 'monospace', maxHeight: '40vh', overflow: 'auto', borderTop: '2px solid #ff9800', padding: 8 }}>
+    <div style={{
+      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 99999,
+      background: '#1a1a2e', color: '#0f0', fontSize: 11,
+      fontFamily: 'monospace', maxHeight: '40vh', overflow: 'auto',
+      borderTop: '2px solid #ff9800', padding: 8
+    }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
         <span style={{ color: '#ff9800', fontWeight: 'bold' }}>🔔 Push Debug Log</span>
         <span onClick={() => setShow(false)} style={{ color: '#ff9800', cursor: 'pointer', fontWeight: 'bold' }}>✕ Close</span>
       </div>
       {logs.map((log, i) => (
-        <div key={i} style={{ padding: '2px 0', color: log.includes('ERROR') ? '#ff4444' : log.includes('OK') ? '#00ff00' : '#aaa', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{log}</div>
+        <div key={i} style={{
+          padding: '2px 0',
+          color: log.includes('ERROR') ? '#ff4444' : log.includes('OK') ? '#00ff00' : '#aaa',
+          borderBottom: '1px solid rgba(255,255,255,0.05)'
+        }}>
+          {log}
+        </div>
       ))}
     </div>
   )
-}
-export function usePomodoro() {
-  const ctx = useContext(PomodoroContext)
-  if (!ctx) throw new Error('usePomodoro must be used inside PomodoroProvider')
-  return ctx
 }
