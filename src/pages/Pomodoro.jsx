@@ -321,12 +321,11 @@ export default function Pomodoro() {
         </div>
                 {/* PUSH TEST - REMOVE AFTER TESTING */}
         <div style={{ padding: 10, background: '#1a1a2e', borderRadius: 8, marginTop: 10, width: '100%', maxWidth: 400 }}>
-          <button onClick={async () => {
+         <button onClick={async () => {
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { alert('NOT LOGGED IN'); return }
     alert('1. User: ' + user.id.substring(0,8))
-
     const reg = await navigator.serviceWorker.ready
     let sub = await reg.pushManager.getSubscription()
     if (!sub) {
@@ -341,20 +340,33 @@ export default function Pomodoro() {
       sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: outputArray })
     }
     alert('2. Got subscription, endpoint: ' + sub.endpoint.substring(0, 40) + '...')
-
     const subJson = sub.toJSON()
     alert('3. toJSON keys: ' + JSON.stringify(Object.keys(subJson)))
     alert('4. keys.p256dh length: ' + (subJson.keys?.p256dh?.length || 'MISSING'))
     alert('5. keys.auth length: ' + (subJson.keys?.auth?.length || 'MISSING'))
-
     const body1 = JSON.stringify({ user_id: user.id, subscription: subJson })
     alert('6. Request body length: ' + body1.length)
-
     const subRes = await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: body1
     })
+    const subText = await subRes.text()
+    alert('7. Subscribe API: ' + subRes.status + ' ' + subText)
+    const endTime = Date.now() + 60000
+    const schRes = await fetch('/api/push/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: user.id, end_time: endTime, mode: 'study' })
+    })
+    const schText = await schRes.text()
+    alert('8. Schedule API: ' + schRes.status + ' ' + schText)
+  } catch (e) {
+    alert('ERROR at step: ' + e.message)
+  }
+}} style={{ background: '#ff9800', color: '#000', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', fontSize: 14, width: '100%', cursor: 'pointer' }}>
+  🔔 TEST PUSH NOTIFICATION
+</button>
     const subText = await subRes.text()
     alert('7. Subscribe API: ' + subRes.status + ' ' + subText)
 
