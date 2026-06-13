@@ -42,6 +42,7 @@ function AppRoutes() {
         <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
         <Route path="/login"  element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
+        <Route path="/reset-password" element={<ResetPassword />} />  {/* ADD HERE */}
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route path="dashboard"  element={<Dashboard />} />
           <Route path="curriculum" element={<Curriculum />} />
