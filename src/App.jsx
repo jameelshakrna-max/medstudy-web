@@ -13,6 +13,7 @@ import UWorld     from './pages/UWorld'
 import Pomodoro   from './pages/Pomodoro'
 import Sessions   from './pages/Sessions'
 import Layout     from './components/Layout'
+import Settings from './pages/Settings'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
