@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from './AuthContext'
 
 const PomodoroContext = createContext(null)
 
@@ -190,6 +191,7 @@ async function schedulePushNotification(userId, endTime, mode) {
 // ══════════════════════════════════════════════════
 
 export function PomodoroProvider({ children }) {
+  const { user, profile } = useAuth()
   const [focusMins, setFocusMins] = useState(25)
   const [shortMins, setShortMins] = useState(5)
   const [longMins, setLongMins] = useState(15)
@@ -222,6 +224,38 @@ export function PomodoroProvider({ children }) {
   useEffect(() => { modeRef.current = mode }, [mode])
   useEffect(() => { doneRef.current = done }, [done])
   useEffect(() => { runningRef.current = running }, [running])
+
+  // ── Load timer settings from profile ──
+  useEffect(() => {
+    if (profile?.focus_mins != null) setFocusMins(profile.focus_mins)
+    if (profile?.short_mins != null) setShortMins(profile.short_mins)
+    if (profile?.long_mins != null) setLongMins(profile.long_mins)
+  }, [profile])
+
+  // ── Save timer setting to Supabase ──
+  const updateTimerSetting = useCallback(async (field, value) => {
+    if (!user) return
+    const { error } = await supabase
+      .from('profiles')
+      .update({ [field]: value })
+      .eq('id', user.id)
+    if (error) console.error('Failed to save timer setting:', error)
+  }, [user])
+
+  const saveFocusMins = useCallback((val) => {
+    setFocusMins(val)
+    updateTimerSetting('focus_mins', val)
+  }, [updateTimerSetting])
+
+  const saveShortMins = useCallback((val) => {
+    setShortMins(val)
+    updateTimerSetting('short_mins', val)
+  }, [updateTimerSetting])
+
+  const saveLongMins = useCallback((val) => {
+    setLongMins(val)
+    updateTimerSetting('long_mins', val)
+  }, [updateTimerSetting])
 
   // ── Register SW + set up push subscription on user gesture ──
   useEffect(() => {
@@ -550,9 +584,9 @@ export function PomodoroProvider({ children }) {
     running, setRunning,
     done, setDone,
     seconds, totalSec,
-    focusMins, setFocusMins,
-    shortMins, setShortMins,
-    longMins, setLongMins,
+    focusMins, setFocusMins: saveFocusMins,
+    shortMins, setShortMins: saveShortMins,
+    longMins, setLongMins: saveLongMins,
     selectedTopic, setSelectedTopic,
     sessionPomodoros, setSessionPomodoros,
     sessionStart, setSessionStart,
@@ -577,5 +611,3 @@ export function usePomodoro() {
   if (!ctx) throw new Error('usePomodoro must be used inside PomodoroProvider')
   return ctx
 }
-
-
