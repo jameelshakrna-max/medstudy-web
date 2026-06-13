@@ -10,6 +10,7 @@ const NAV = [
   { to: '/uworld',     icon: '📊', label: 'UWorld' },
   { to: '/pomodoro',   icon: '🍅', label: 'Pomodoro' },
   { to: '/sessions',   icon: '📖', label: 'Sessions' },
+  { to: '/settings', icon: '⚙️', label: 'Settings' }
 ]
 
 export default function Layout() {
