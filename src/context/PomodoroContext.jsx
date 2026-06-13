@@ -94,6 +94,54 @@ function pushLog(msg) {
   console.log('[Push]', msg)
 }
 
+// Show an instant local notification (no server round-trip)
+async function showLocalNotification(mode) {
+  try {
+    const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
+    const label = MODE_LABELS[mode] || 'Timer'
+    const body = mode === 'study'
+      ? 'Great work! Time for a break.'
+      : 'Break is over. Ready to focus?'
+
+    // Try service worker first (works on iOS PWA)
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration()
+      if (reg) {
+        pushLog('Showing local notification via SW')
+        reg.showNotification(label + ' Complete', {
+          body,
+          tag: 'pomodoro-timer',
+          icon: '/icon.svg',
+          badge: '/icon.svg',
+          requireInteraction: true,
+          silent: false,
+          vibrate: [200, 100, 200, 100, 200],
+          data: {
+            url: window.location.origin + '/pomodoro',
+            mode
+          }
+        })
+        return
+      }
+    }
+
+    // Fallback: direct Notification API
+    if (Notification.permission === 'granted') {
+      pushLog('Showing local notification via Notification API')
+      new Notification(label + ' Complete', {
+        body,
+        tag: 'pomodoro-timer',
+        icon: '/icon.svg',
+        badge: '/icon.svg'
+      })
+    } else {
+      pushLog('Cannot show notification: permission=' + Notification.permission)
+    }
+  } catch (e) {
+    pushLog('Local notification error: ' + e.message)
+  }
+}
+
 // Subscribe to push and send subscription to server
 async function subscribeToPush(userId) {
   pushLog('subscribeToPush called for: ' + userId?.substring(0, 8) + '...')
@@ -312,13 +360,16 @@ export function PomodoroProvider({ children }) {
     setRunning(false)
     setSeconds(0)
 
+    const currentMode = modeRef.current
+    const currentDone = doneRef.current + 1
+
     if (!bgChimedRef.current) {
       playChime()
+      // Instant local notification — no server round-trip delay
+      showLocalNotification(currentMode)
     }
     bgChimedRef.current = false
 
-    const currentMode = modeRef.current
-    const currentDone = doneRef.current + 1
     setDone(currentDone)
 
     const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
@@ -424,7 +475,9 @@ export function PomodoroProvider({ children }) {
       if (!runningRef.current || !endTimeRef.current) return
       const remainingMs = endTimeRef.current - Date.now()
       if (remainingMs <= 0) {
-        if (!completingRef.current) handleComplete()
+        if (!completingRef.current) {
+          handleComplete()
+        }
         return
       }
       const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000))

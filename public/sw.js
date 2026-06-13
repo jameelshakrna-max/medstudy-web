@@ -88,8 +88,26 @@ self.addEventListener('pushsubscriptionchange', (event) => {
 
 // ── Messages from app ──
 self.addEventListener('message', (event) => {
-  const { type, vapidKey } = event.data
+  const { type, vapidKey, title, body, tag, mode } = event.data
+
   if (type === 'SET_VAPID_KEY') {
     self.vapidKey = vapidKey
+  }
+
+  // Instant local notification from foreground timer completion
+  if (type === 'SHOW_NOTIFICATION') {
+    self.registration.showNotification(title || '⏰ Timer Complete', {
+      body: body || 'Your Pomodoro timer has ended.',
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+      tag: tag || 'pomodoro-timer',
+      requireInteraction: true,
+      silent: false,
+      vibrate: [200, 100, 200, 100, 200],
+      data: {
+        url: self.location.origin + '/pomodoro',
+        mode: mode || 'study'
+      }
+    })
   }
 })
