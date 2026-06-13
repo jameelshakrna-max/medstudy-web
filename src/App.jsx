@@ -5,6 +5,7 @@ import FloatingTimer from './components/FloatingTimer'
 import Landing    from './pages/Landing'
 import Login      from './pages/Login'
 import Signup     from './pages/Signup'
+import ResetPassword from './pages/ResetPassword'
 import Dashboard  from './pages/Dashboard'
 import Curriculum from './pages/Curriculum'
 import Anki       from './pages/Anki'
@@ -42,7 +43,7 @@ function AppRoutes() {
         <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
         <Route path="/login"  element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
-        <Route path="/reset-password" element={<ResetPassword />} />  {/* ADD HERE */}
+        <Route path="/reset-password" element={<ResetPassword />} /> 
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route path="dashboard"  element={<Dashboard />} />
           <Route path="curriculum" element={<Curriculum />} />
