@@ -39,14 +39,55 @@
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
-  padding: 24px;
-  margin-bottom: 20px;
+  padding: 0;
+  margin-bottom: 12px;
   backdrop-filter: blur(12px);
   transition: border-color 0.2s;
+  overflow: hidden;
 }
 
 .section:hover {
   border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* ── Accordion Toggle Button ── */
+.sectionToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 18px 24px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s;
+}
+
+.sectionToggle:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.chevron {
+  font-size: 12px;
+  color: var(--mist, #8B95A5);
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+/* ── Section Content (expanded) ── */
+.sectionContent {
+  padding: 0 24px 24px;
+  animation: slideDown 0.25s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .sectionHeader {
@@ -437,6 +478,71 @@
   color: #fff;
 }
 
+/* ── Field Hint ── */
+.fieldHint {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: var(--gold, #E8A838);
+  margin-top: 4px;
+}
+
+/* ── Forgot Password ── */
+.forgotBtn {
+  background: none;
+  border: none;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--teal, #00B5A3);
+  cursor: pointer;
+  padding: 0;
+  margin-top: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.forgotBtn:hover {
+  color: #00D4B8;
+}
+
+.forgotSection {
+  margin-top: 16px;
+  padding: 14px;
+  background: rgba(0, 181, 163, 0.06);
+  border: 1px solid rgba(0, 181, 163, 0.12);
+  border-radius: 10px;
+}
+
+.forgotText {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--mist, #8B95A5);
+  margin: 0 0 10px;
+}
+
+/* ── Danger Zone ── */
+.dangerZone {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(242, 92, 92, 0.12);
+}
+
+.dangerLabel {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--coral, #F25C5C);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.dangerText {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--coral, #F25C5C);
+  margin: 0 0 10px;
+}
+
 /* ── Logout Section ── */
 .logoutSection {
   margin-top: 8px;
@@ -561,8 +667,12 @@
     font-size: 22px;
   }
 
-  .section {
-    padding: 18px;
+  .sectionToggle {
+    padding: 14px 18px;
+  }
+
+  .sectionContent {
+    padding: 0 18px 18px;
   }
 
   .profileRow {

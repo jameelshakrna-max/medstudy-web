@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import s from './Settings.module.css'
 
 const APP_VERSION = '1.0.0'
+const NAME_CHANGE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
 export default function Settings() {
   const { user, profile, signOut } = useAuth()
@@ -13,7 +14,14 @@ export default function Settings() {
   // ── Local state ──
   const [fullName, setFullName] = useState('')
   const [saving, setSaving] = useState(false)
-  const [status, setStatus] = useState(null) // { type: 'success'|'error', msg: '' }
+  const [status, setStatus] = useState(null)
+
+  // Name change tracking
+  const [nameLastChanged, setNameLastChanged] = useState(null)
+  const nameChangeAllowed = !nameLastChanged || (Date.now() - nameLastChanged) > NAME_CHANGE_COOLDOWN_MS
+  const nameCooldownDays = nameLastChanged
+    ? Math.max(0, Math.ceil((NAME_CHANGE_COOLDOWN_MS - (Date.now() - nameLastChanged)) / (24 * 60 * 60 * 1000)))
+    : 0
 
   // Account
   const [currentPassword, setCurrentPassword] = useState('')
@@ -21,6 +29,7 @@ export default function Settings() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordSaving, setPasswordSaving] = useState(false)
   const [passwordStatus, setPasswordStatus] = useState(null)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
 
   // Notifications
   const [pushEnabled, setPushEnabled] = useState(true)
@@ -28,6 +37,12 @@ export default function Settings() {
 
   // Appearance
   const [theme, setTheme] = useState('dark')
+
+  // Accordion — which section is open
+  const [openSection, setOpenSection] = useState('profile')
+
+  // Delete account
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   // ── Init from profile ──
   useEffect(() => {
@@ -49,8 +64,22 @@ export default function Settings() {
     if (saved !== null) setSoundEnabled(saved === 'true')
   }, [])
 
+  useEffect(() => {
+    const saved = localStorage.getItem('medstudy-name-last-changed')
+    if (saved) setNameLastChanged(parseInt(saved, 10))
+  }, [])
+
+  // ── Accordion toggle ──
+  const toggleSection = (section) => {
+    setOpenSection(prev => prev === section ? null : section)
+  }
+
   // ── Profile save ──
   const handleSaveProfile = async () => {
+    if (!nameChangeAllowed) {
+      setStatus({ type: 'error', msg: `You can change your name again in ${nameCooldownDays} days` })
+      return
+    }
     setSaving(true)
     setStatus(null)
     try {
@@ -60,6 +89,10 @@ export default function Settings() {
         .eq('id', user.id)
 
       if (error) throw error
+
+      const now = Date.now()
+      setNameLastChanged(now)
+      localStorage.setItem('medstudy-name-last-changed', String(now))
       setStatus({ type: 'success', msg: 'Profile updated!' })
     } catch (err) {
       console.error(err)
@@ -72,10 +105,17 @@ export default function Settings() {
   // ── Password change ──
   const handleChangePassword = async () => {
     setPasswordStatus(null)
-    if (!newPassword || newPassword.length < 6) {
-      setPasswordStatus({ type: 'error', msg: 'Password must be at least 6 characters' })
+
+    if (!currentPassword) {
+      setPasswordStatus({ type: 'error', msg: 'Please enter your current password' })
       return
     }
+
+    if (!newPassword || newPassword.length < 6) {
+      setPasswordStatus({ type: 'error', msg: 'New password must be at least 6 characters' })
+      return
+    }
+
     if (newPassword !== confirmPassword) {
       setPasswordStatus({ type: 'error', msg: 'Passwords do not match' })
       return
@@ -83,8 +123,22 @@ export default function Settings() {
 
     setPasswordSaving(true)
     try {
+      // First verify current password by re-authenticating
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword
+      })
+
+      if (authError) {
+        setPasswordStatus({ type: 'error', msg: 'Current password is incorrect' })
+        setPasswordSaving(false)
+        return
+      }
+
+      // Now update the password
       const { error } = await supabase.auth.updateUser({ password: newPassword })
       if (error) throw error
+
       setPasswordStatus({ type: 'success', msg: 'Password changed successfully!' })
       setCurrentPassword('')
       setNewPassword('')
@@ -96,13 +150,26 @@ export default function Settings() {
     }
   }
 
+  // ── Forgot password ──
+  const handleForgotPassword = async () => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: `${window.location.origin}/login`
+      })
+      if (error) throw error
+      setPasswordStatus({ type: 'success', msg: 'Password reset email sent! Check your inbox.' })
+      setShowForgotPassword(false)
+    } catch (err) {
+      setPasswordStatus({ type: 'error', msg: err.message || 'Failed to send reset email' })
+    }
+  }
+
   // ── Toggle handlers ──
   const handlePushToggle = async (enabled) => {
     setPushEnabled(enabled)
     localStorage.setItem('medstudy-push-enabled', String(enabled))
 
     if (!enabled) {
-      // Unsubscribe from push
       try {
         const reg = await navigator.serviceWorker.getRegistration()
         if (reg) {
@@ -113,7 +180,6 @@ export default function Settings() {
         console.error('Unsubscribe error:', e)
       }
     } else {
-      // Re-subscribe on next user gesture — just flag it
       localStorage.setItem('medstudy-push-resubscribe', 'true')
     }
   }
@@ -130,16 +196,11 @@ export default function Settings() {
   }
 
   // ── Delete account ──
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-
   const handleDeleteAccount = async () => {
     try {
-      // Delete user data first
       await supabase.from('push_subscriptions').delete().eq('user_id', user.id)
       await supabase.from('pending_notifications').delete().eq('user_id', user.id)
       await supabase.from('study_sessions').delete().eq('user_id', user.id)
-
-      // Sign out
       await signOut()
     } catch (err) {
       console.error('Delete account error:', err)
@@ -156,167 +217,188 @@ export default function Settings() {
 
   const themeClass = theme === 'light' ? s.pageLight : ''
 
-  return (
-    <div className={`${s.page} ${themeClass}`}>
-      {/* Header */}
-      <div className={s.header}>
-        <h1 className={s.title}>Settings</h1>
-        <p className={s.subtitle}>Manage your account and preferences</p>
-      </div>
-
-      {/* ═══ Profile ═══ */}
-      <div className={s.section}>
-        <div className={s.sectionHeader}>
-          <div className={s.sectionIcon}>👤</div>
-          <h2 className={s.sectionTitle}>Profile</h2>
-        </div>
-
-        <div className={s.profileRow}>
-          <div className={s.avatar}>{initials}</div>
-          <div className={s.profileInfo}>
-            <div className={s.profileName}>{profile?.full_name || 'Student'}</div>
-            <div className={s.profileEmail}>{user?.email}</div>
-            <div className={s.profilePlan}>
-              {profile?.plan === 'pro' ? '🏆 Pro' : profile?.plan === 'core' ? '🎓 Core' : '🆓 Free'}
+  // ── Accordion sections config ──
+  const sections = [
+    {
+      key: 'profile',
+      icon: '👤',
+      title: 'Profile',
+      content: (
+        <>
+          <div className={s.profileRow}>
+            <div className={s.avatar}>{initials}</div>
+            <div className={s.profileInfo}>
+              <div className={s.profileName}>{profile?.full_name || 'Student'}</div>
+              <div className={s.profileEmail}>{user?.email}</div>
+              <div className={s.profilePlan}>
+                {profile?.plan === 'pro' ? '🏆 Pro' : profile?.plan === 'core' ? '🎓 Core' : '🆓 Free'}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className={s.field}>
-          <label className={s.label}>Display Name</label>
-          <input
-            className={s.input}
-            type="text"
-            value={fullName}
-            onChange={e => setFullName(e.target.value)}
-            placeholder="Enter your name"
-          />
-        </div>
-
-        <div className={s.field}>
-          <label className={s.label}>Email</label>
-          <input
-            className={s.input}
-            type="email"
-            value={user?.email || ''}
-            disabled
-          />
-        </div>
-
-        <div className={s.btnRow}>
-          <button className={`${s.btn} ${s.btnPrimary}`} onClick={handleSaveProfile} disabled={saving}>
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
-        </div>
-
-        {status && (
-          <div className={`${s.statusMsg} ${status.type === 'success' ? s.statusSuccess : s.statusError}`}>
-            {status.msg}
+          <div className={s.field}>
+            <label className={s.label}>Display Name</label>
+            <input
+              className={s.input}
+              type="text"
+              value={fullName}
+              onChange={e => setFullName(e.target.value)}
+              placeholder="Enter your name"
+              disabled={!nameChangeAllowed}
+            />
+            {!nameChangeAllowed && (
+              <p className={s.fieldHint}>You can change your name again in {nameCooldownDays} day{nameCooldownDays !== 1 ? 's' : ''}</p>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* ═══ Account ═══ */}
-      <div className={s.section}>
-        <div className={s.sectionHeader}>
-          <div className={s.sectionIcon}>🔐</div>
-          <h2 className={s.sectionTitle}>Account</h2>
-        </div>
-
-        <div className={s.field}>
-          <label className={s.label}>New Password</label>
-          <input
-            className={s.input}
-            type="password"
-            value={newPassword}
-            onChange={e => setNewPassword(e.target.value)}
-            placeholder="At least 6 characters"
-          />
-        </div>
-
-        <div className={s.field}>
-          <label className={s.label}>Confirm New Password</label>
-          <input
-            className={s.input}
-            type="password"
-            value={confirmPassword}
-            onChange={e => setConfirmPassword(e.target.value)}
-            placeholder="Re-enter new password"
-          />
-        </div>
-
-        <div className={s.btnRow}>
-          <button className={`${s.btn} ${s.btnPrimary}`} onClick={handleChangePassword} disabled={passwordSaving}>
-            {passwordSaving ? 'Changing...' : 'Change Password'}
-          </button>
-        </div>
-
-        {passwordStatus && (
-          <div className={`${s.statusMsg} ${passwordStatus.type === 'success' ? s.statusSuccess : s.statusError}`}>
-            {passwordStatus.msg}
+          <div className={s.field}>
+            <label className={s.label}>Email</label>
+            <input className={s.input} type="email" value={user?.email || ''} disabled />
           </div>
-        )}
 
-        <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          {!showDeleteConfirm ? (
-            <button className={`${s.btn} ${s.btnDanger}`} onClick={() => setShowDeleteConfirm(true)}>
-              Delete Account
+          <div className={s.btnRow}>
+            <button className={`${s.btn} ${s.btnPrimary}`} onClick={handleSaveProfile} disabled={saving || !nameChangeAllowed}>
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+
+          {status && (
+            <div className={`${s.statusMsg} ${status.type === 'success' ? s.statusSuccess : s.statusError}`}>
+              {status.msg}
+            </div>
+          )}
+        </>
+      )
+    },
+    {
+      key: 'account',
+      icon: '🔐',
+      title: 'Account',
+      content: (
+        <>
+          <div className={s.field}>
+            <label className={s.label}>Current Password</label>
+            <input
+              className={s.input}
+              type="password"
+              value={currentPassword}
+              onChange={e => setCurrentPassword(e.target.value)}
+              placeholder="Enter your current password"
+            />
+          </div>
+
+          <div className={s.field}>
+            <label className={s.label}>New Password</label>
+            <input
+              className={s.input}
+              type="password"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              placeholder="At least 6 characters"
+            />
+          </div>
+
+          <div className={s.field}>
+            <label className={s.label}>Confirm New Password</label>
+            <input
+              className={s.input}
+              type="password"
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter new password"
+            />
+          </div>
+
+          <div className={s.btnRow}>
+            <button className={`${s.btn} ${s.btnPrimary}`} onClick={handleChangePassword} disabled={passwordSaving}>
+              {passwordSaving ? 'Changing...' : 'Change Password'}
+            </button>
+          </div>
+
+          {passwordStatus && (
+            <div className={`${s.statusMsg} ${passwordStatus.type === 'success' ? s.statusSuccess : s.statusError}`}>
+              {passwordStatus.msg}
+            </div>
+          )}
+
+          {!showForgotPassword ? (
+            <button className={s.forgotBtn} onClick={() => setShowForgotPassword(true)}>
+              Forgot password?
             </button>
           ) : (
-            <div>
-              <p style={{ color: 'var(--coral, #F25C5C)', fontSize: '13px', margin: '0 0 8px', fontFamily: 'DM Sans, sans-serif' }}>
-                This will permanently delete your account and all data. This cannot be undone.
-              </p>
+            <div className={s.forgotSection}>
+              <p className={s.forgotText}>We'll send a password reset link to your email.</p>
               <div className={s.btnRow}>
-                <button className={`${s.btn} ${s.btnDanger}`} onClick={handleDeleteAccount}>
-                  Yes, Delete My Account
+                <button className={`${s.btn} ${s.btnSecondary}`} onClick={handleForgotPassword}>
+                  Send Reset Link
                 </button>
-                <button className={`${s.btn} ${s.btnSecondary}`} onClick={() => setShowDeleteConfirm(false)}>
+                <button className={`${s.btn} ${s.btnSecondary}`} onClick={() => setShowForgotPassword(false)}>
                   Cancel
                 </button>
               </div>
             </div>
           )}
-        </div>
-      </div>
 
-      {/* ═══ Notifications ═══ */}
-      <div className={s.section}>
-        <div className={s.sectionHeader}>
-          <div className={s.sectionIcon}>🔔</div>
-          <h2 className={s.sectionTitle}>Notifications</h2>
-        </div>
-
-        <div className={s.toggleRow}>
-          <div className={s.toggleInfo}>
-            <p className={s.toggleLabel}>Push Notifications</p>
-            <p className={s.toggleDesc}>Receive timer notifications when the app is in the background</p>
+          <div className={s.dangerZone}>
+            <div className={s.dangerLabel}>Danger Zone</div>
+            {!showDeleteConfirm ? (
+              <button className={`${s.btn} ${s.btnDanger}`} onClick={() => setShowDeleteConfirm(true)}>
+                Delete Account
+              </button>
+            ) : (
+              <div>
+                <p className={s.dangerText}>
+                  This will permanently delete your account and all data. This cannot be undone.
+                </p>
+                <div className={s.btnRow}>
+                  <button className={`${s.btn} ${s.btnDanger}`} onClick={handleDeleteAccount}>
+                    Yes, Delete My Account
+                  </button>
+                  <button className={`${s.btn} ${s.btnSecondary}`} onClick={() => setShowDeleteConfirm(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-          <label className={s.toggle}>
-            <input type="checkbox" checked={pushEnabled} onChange={e => handlePushToggle(e.target.checked)} />
-            <span className={s.slider} />
-          </label>
-        </div>
-
-        <div className={s.toggleRow}>
-          <div className={s.toggleInfo}>
-            <p className={s.toggleLabel}>Sound & Chime</p>
-            <p className={s.toggleDesc}>Play a chime sound when the timer completes</p>
+        </>
+      )
+    },
+    {
+      key: 'notifications',
+      icon: '🔔',
+      title: 'Notifications',
+      content: (
+        <>
+          <div className={s.toggleRow}>
+            <div className={s.toggleInfo}>
+              <p className={s.toggleLabel}>Push Notifications</p>
+              <p className={s.toggleDesc}>Receive timer notifications when the app is in the background</p>
+            </div>
+            <label className={s.toggle}>
+              <input type="checkbox" checked={pushEnabled} onChange={e => handlePushToggle(e.target.checked)} />
+              <span className={s.slider} />
+            </label>
           </div>
-          <label className={s.toggle}>
-            <input type="checkbox" checked={soundEnabled} onChange={e => handleSoundToggle(e.target.checked)} />
-            <span className={s.slider} />
-          </label>
-        </div>
-      </div>
 
-      {/* ═══ Appearance ═══ */}
-      <div className={s.section}>
-        <div className={s.sectionHeader}>
-          <div className={s.sectionIcon}>🎨</div>
-          <h2 className={s.sectionTitle}>Appearance</h2>
-        </div>
-
+          <div className={s.toggleRow}>
+            <div className={s.toggleInfo}>
+              <p className={s.toggleLabel}>Sound & Chime</p>
+              <p className={s.toggleDesc}>Play a chime sound when the timer completes</p>
+            </div>
+            <label className={s.toggle}>
+              <input type="checkbox" checked={soundEnabled} onChange={e => handleSoundToggle(e.target.checked)} />
+              <span className={s.slider} />
+            </label>
+          </div>
+        </>
+      )
+    },
+    {
+      key: 'appearance',
+      icon: '🎨',
+      title: 'Appearance',
+      content: (
         <div className={s.themePicker}>
           <div
             className={`${s.themeOption} ${theme === 'dark' ? s.themeOptionActive : ''}`}
@@ -333,15 +415,13 @@ export default function Settings() {
             <div className={s.themeLabel}>Light</div>
           </div>
         </div>
-      </div>
-
-      {/* ═══ Timer ═══ */}
-      <div className={s.section}>
-        <div className={s.sectionHeader}>
-          <div className={s.sectionIcon}>⏱</div>
-          <h2 className={s.sectionTitle}>Timer Defaults</h2>
-        </div>
-
+      )
+    },
+    {
+      key: 'timer',
+      icon: '⏱',
+      title: 'Timer Defaults',
+      content: (
         <div className={s.durationsGrid}>
           <div className={s.durationItem}>
             <label className={s.durationLabel}>Focus (min)</label>
@@ -377,36 +457,67 @@ export default function Settings() {
             />
           </div>
         </div>
+      )
+    },
+    {
+      key: 'about',
+      icon: 'ℹ️',
+      title: 'About',
+      content: (
+        <>
+          <div className={s.aboutGrid}>
+            <div className={s.aboutRow}>
+              <span className={s.aboutLabel}>App Version</span>
+              <span className={s.aboutValue}>v{APP_VERSION}</span>
+            </div>
+            <div className={s.aboutRow}>
+              <span className={s.aboutLabel}>Platform</span>
+              <span className={s.aboutValue}>PWA</span>
+            </div>
+            <div className={s.aboutRow}>
+              <span className={s.aboutLabel}>User ID</span>
+              <span className={s.aboutValue}>{user?.id?.slice(0, 8)}...</span>
+            </div>
+          </div>
+
+          <div className={s.logoutSection}>
+            <button className={`${s.btn} ${s.btnSecondary}`} onClick={signOut} style={{ width: '100%', justifyContent: 'center' }}>
+              Sign Out
+            </button>
+          </div>
+        </>
+      )
+    }
+  ]
+
+  return (
+    <div className={`${s.page} ${themeClass}`}>
+      {/* Header */}
+      <div className={s.header}>
+        <h1 className={s.title}>Settings</h1>
+        <p className={s.subtitle}>Manage your account and preferences</p>
       </div>
 
-      {/* ═══ About ═══ */}
-      <div className={s.section}>
-        <div className={s.sectionHeader}>
-          <div className={s.sectionIcon}>ℹ️</div>
-          <h2 className={s.sectionTitle}>About</h2>
-        </div>
-
-        <div className={s.aboutGrid}>
-          <div className={s.aboutRow}>
-            <span className={s.aboutLabel}>App Version</span>
-            <span className={s.aboutValue}>v{APP_VERSION}</span>
-          </div>
-          <div className={s.aboutRow}>
-            <span className={s.aboutLabel}>Platform</span>
-            <span className={s.aboutValue}>PWA</span>
-          </div>
-          <div className={s.aboutRow}>
-            <span className={s.aboutLabel}>User ID</span>
-            <span className={s.aboutValue}>{user?.id?.slice(0, 8)}...</span>
-          </div>
-        </div>
-
-        <div className={s.logoutSection}>
-          <button className={`${s.btn} ${s.btnSecondary}`} onClick={signOut} style={{ width: '100%', justifyContent: 'center' }}>
-            Sign Out
+      {/* Accordion Sections */}
+      {sections.map(({ key, icon, title, content }) => (
+        <div key={key} className={s.section}>
+          <button className={s.sectionToggle} onClick={() => toggleSection(key)}>
+            <div className={s.sectionHeader}>
+              <div className={s.sectionIcon}>{icon}</div>
+              <h2 className={s.sectionTitle}>{title}</h2>
+            </div>
+            <span className={`${s.chevron} ${openSection === key ? s.chevronOpen : ''}`}>
+              ▼
+            </span>
           </button>
+
+          {openSection === key && (
+            <div className={s.sectionContent}>
+              {content}
+            </div>
+          )}
         </div>
-      </div>
+      ))}
     </div>
   )
 }
