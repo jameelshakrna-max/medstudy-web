@@ -11,6 +11,7 @@ import Anki       from './pages/Anki'
 import UWorld     from './pages/UWorld'
 import Pomodoro   from './pages/Pomodoro'
 import Sessions   from './pages/Sessions'
+import Settings   from './pages/Settings'
 import Layout     from './components/Layout'
 
 function ProtectedRoute({ children }) {
@@ -49,6 +50,7 @@ function AppRoutes() {
           <Route path="uworld"     element={<UWorld />} />
           <Route path="pomodoro"   element={<Pomodoro />} />
           <Route path="sessions"   element={<Sessions />} />
+          <Route path="settings"   element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

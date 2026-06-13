@@ -364,10 +364,11 @@ export function PomodoroProvider({ children }) {
     const currentDone = doneRef.current + 1
 
     if (!bgChimedRef.current) {
-      playChime()
-      // Instant local notification — no server round-trip delay
-      showLocalNotification(currentMode)
-    }
+  const soundEnabled = localStorage.getItem('medstudy-sound-enabled') !== 'false'
+  if (soundEnabled) playChime()
+  // Instant local notification — no server round-trip delay
+  showLocalNotification(currentMode)
+}
     bgChimedRef.current = false
 
     setDone(currentDone)
