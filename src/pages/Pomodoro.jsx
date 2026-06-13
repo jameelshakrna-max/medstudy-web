@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { usePomodoro, PushDebugBanner } from '../context/PomodoroContext'
+import { usePomodoro } from '../context/PomodoroContext'
 import { supabase } from '../lib/supabase'
 import s from './Pomodoro.module.css'
 
@@ -137,70 +137,6 @@ export default function Pomodoro() {
   }, [])
 
   const modeClass = mode
-
-  // ══════════════════════════════════════════════════
-  //  PUSH TEST FUNCTION — REMOVE AFTER TESTING
-  //  This tests the full push notification flow:
-  //  1. Check user is logged in
-  //  2. Get/create push subscription
-  //  3. Save subscription to server
-  //  4. Schedule a test notification (1 min from now)
-  // ══════════════════════════════════════════════════
-  const testPush = async () => {
-    try {
-      // Step 1: Check authentication
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { alert('1. NOT LOGGED IN'); return }
-      alert('1. User OK: ' + user.id.substring(0, 8))
-
-      // Step 2: Get service worker registration
-      const reg = await navigator.serviceWorker.ready
-      alert('2. SW ready')
-
-      // Step 3: Get or create push subscription
-      let sub = await reg.pushManager.getSubscription()
-      if (!sub) {
-        const perm = await Notification.requestPermission()
-        if (perm !== 'granted') { alert('3. Permission DENIED'); return }
-        const VAPID_KEY = 'BKbcMQDt4fIvsxpU5j1mWFBsMNIyy-N3xMlOldlLkzpEUzmKtKNoxkI_s_lvl1_IsjX74bqNB5E9Xf8lhmYTtkE'
-        const padding = '='.repeat((4 - VAPID_KEY.length % 4) % 4)
-        const base64 = (VAPID_KEY + padding).replace(/-/g, '+').replace(/_/g, '/')
-        const rawData = window.atob(base64)
-        const outputArray = new Uint8Array(rawData.length)
-        for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i)
-        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: outputArray })
-        alert('3. Subscription CREATED')
-      } else {
-        alert('3. Subscription EXISTS')
-      }
-
-      // Step 4: Send subscription to server
-      const subJson = sub.toJSON()
-      const subscribeBody = JSON.stringify({ user_id: user.id, subscription: subJson })
-      const subscribeResponse = await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: subscribeBody
-      })
-      const subscribeText = await subscribeResponse.text()
-      alert('4. Subscribe API: ' + subscribeResponse.status + ' ' + subscribeText)
-
-      // Step 5: Schedule a test notification 1 minute from now
-      const endTime = Date.now() + 60000
-      const scheduleBody = JSON.stringify({ user_id: user.id, end_time: endTime, mode: 'study' })
-      const scheduleResponse = await fetch('/api/push/schedule', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: scheduleBody
-      })
-      const scheduleText = await scheduleResponse.text()
-      alert('5. Schedule API: ' + scheduleResponse.status + ' ' + scheduleText)
-
-      alert('TEST COMPLETE! If step 4 & 5 returned 200, check Supabase tables.')
-    } catch (e) {
-      alert('ERROR: ' + e.message)
-    }
-  }
 
   // ── Finish session ──
   const handleFinish = () => {
@@ -382,13 +318,6 @@ export default function Pomodoro() {
             {running && <span className={`${s.playBtnPulse} ${s[modeClass]}`} />}
           </button>
           <button className={s.ctrlBtn} onClick={skipTimer} title="Skip">⏭</button>
-        </div>
-
-        {/* PUSH TEST BUTTON — REMOVE AFTER TESTING */}
-        <div style={{ padding: 10, background: '#1a1a2e', borderRadius: 8, marginTop: 10, width: '100%', maxWidth: 400 }}>
-          <button onClick={testPush} style={{ background: '#ff9800', color: '#000', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', fontSize: 14, width: '100%', cursor: 'pointer' }}>
-            TEST PUSH NOTIFICATION
-          </button>
         </div>
 
         {/* Stats */}
@@ -574,8 +503,6 @@ export default function Pomodoro() {
         </div>
       )}
 
-      {/* Push Debug Banner - REMOVE AFTER TESTING */}
-      <PushDebugBanner />
     </div>
   )
 }
