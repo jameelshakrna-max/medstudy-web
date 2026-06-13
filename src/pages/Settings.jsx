@@ -10,6 +10,9 @@ const NAME_CHANGE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 export default function Settings() {
   const { user, profile, signOut } = useAuth()
   const { focusMins, setFocusMins, shortMins, setShortMins, longMins, setLongMins } = usePomodoro()
+  const [error, setError] = useState(null)
+  const [message, setMessage] = useState(null)
+   const [loading, setLoading] = useState(false)
 
   // ── Local state ──
   const [fullName, setFullName] = useState('')
