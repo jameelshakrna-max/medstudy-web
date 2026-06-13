@@ -52,6 +52,7 @@ function AppRoutes() {
           <Route path="uworld"     element={<UWorld />} />
           <Route path="pomodoro"   element={<Pomodoro />} />
           <Route path="sessions"   element={<Sessions />} />
+          <Route path="settings"   element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
