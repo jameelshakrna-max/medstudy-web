@@ -1,11 +1,11 @@
 ﻿import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { parseFile } from '../lib/fileParser'
-import { fsrs, createEmptyCard, Rating, State } from 'fsrs.js'
+import { FSRS, createEmptyCard, Rating, State } from 'fsrs.js'
 import s from './Anki.module.css'
 
 const API = '/api'
-const f = fsrs()
+const f = new FSRS()
 
 let _sessionCache = null
 let _sessionTime = 0
