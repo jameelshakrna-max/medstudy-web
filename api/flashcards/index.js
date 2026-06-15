@@ -1,5 +1,5 @@
 import { createClient } from '@libsql/client'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { jwtVerify } from 'jose'
 
 export const config = { regions: ['sin1'] }
 
@@ -8,17 +8,15 @@ const turso = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN,
 })
 
-const supabase = createSupabaseClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.VITE_SUPABASE_ANON_KEY
-)
-
 async function getUser(req) {
   const auth = req.headers.get('authorization')
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.replace('Bearer ', '')
-  const { data: { user } } = await supabase.auth.getUser(token)
-  return user
+  try {
+    const secret = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET)
+    const { payload } = await jwtVerify(token, secret)
+    return { id: payload.sub, email: payload.email, role: payload.role }
+  } catch (e) { return null }
 }
 
 function mapCard(r) {
@@ -29,18 +27,11 @@ function mapCard(r) {
     front: r.front,
     back: r.back,
     high_yield: Boolean(r.high_yield),
-    difficulty: Number(r.difficulty) || 0,
-    stability: Number(r.stability) || 0,
-    state: Number(r.state) || 0,
-    reps: Number(r.reps) || 0,
-    lapses: Number(r.lapses) || 0,
-    elapsed_days: Number(r.elapsed_days) || 0,
-    scheduled_days: Number(r.scheduled_days) || 0,
-    ease_factor: Number(r.ease_factor) || 2.5,
-    interval: Number(r.interval ?? r.interval_days) ?? 0,
-    repetitions: Number(r.repetitions ?? r.times_reviewed) ?? 0,
-    last_review: (r.last_review ?? r.last_reviewed) || null,
-    next_review: (r.next_review ?? r.next_review_date) || null,
+    ease_factor: Number(r.ease_factor),
+    interval: Number(r.interval ?? r.interval_days),
+    repetitions: Number(r.repetitions ?? r.times_reviewed),
+    last_review: r.last_review ?? r.last_reviewed || null,
+    next_review: r.next_review ?? r.next_review_date || null,
     created_at: r.created_at
   }
 }
@@ -53,10 +44,10 @@ export async function GET(req) {
     const deckId = url.searchParams.get('deck_id')
     let sql, args
     if (deckId) {
-      sql = 'SELECT id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, interval, repetitions, last_review, next_review, difficulty, stability, state, reps, lapses, elapsed_days, scheduled_days, created_at FROM anki_cards WHERE user_id = ? AND deck_id = ? ORDER BY CASE WHEN next_review IS NULL AND next_review_date IS NULL THEN 1 ELSE 0 END, COALESCE(next_review, next_review_date) ASC, created_at DESC'
+      sql = 'SELECT * FROM anki_cards WHERE user_id = ? AND deck_id = ? ORDER BY CASE WHEN next_review_date IS NULL AND next_review IS NULL THEN 1 ELSE 0 END, COALESCE(next_review, next_review_date) ASC, created_at DESC'
       args = [user.id, deckId]
     } else {
-      sql = 'SELECT id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, interval, repetitions, last_review, next_review, difficulty, stability, state, reps, lapses, elapsed_days, scheduled_days, created_at FROM anki_cards WHERE user_id = ? ORDER BY CASE WHEN next_review IS NULL AND next_review_date IS NULL THEN 1 ELSE 0 END, COALESCE(next_review, next_review_date) ASC, created_at DESC'
+      sql = 'SELECT * FROM anki_cards WHERE user_id = ? ORDER BY CASE WHEN next_review_date IS NULL AND next_review IS NULL THEN 1 ELSE 0 END, COALESCE(next_review, next_review_date) ASC, created_at DESC'
       args = [user.id]
     }
     const result = await turso.execute({ sql, args })
@@ -79,26 +70,16 @@ export async function POST(req) {
       const id = crypto.randomUUID()
       const interval = c.interval ?? c.interval_days ?? 0
       const repetitions = c.repetitions ?? c.times_reviewed ?? 0
-      const nextRev = (c.next_review ?? c.next_review_date) || today
-      const lastRev = (c.last_review ?? c.last_reviewed) || null
-      // FSRS fields
-      const difficulty = c.difficulty ?? 0
-      const stability = c.stability ?? 0
-      const state = c.state ?? 0
-      const reps = c.reps ?? 0
-      const lapses = c.lapses ?? 0
-      const elapsed_days = c.elapsed_days ?? 0
-      const scheduled_days = c.scheduled_days ?? 0
-
+      const nextRev = c.next_review ?? c.next_review_date || today
+      const lastRev = c.last_review ?? c.last_reviewed || null
       await turso.execute({
-        sql: `INSERT INTO anki_cards (id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, interval, repetitions, last_review, next_review, difficulty, stability, state, reps, lapses, elapsed_days, scheduled_days, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-        args: [id, user.id, c.deck_id || null, c.front, c.back, c.high_yield ? 1 : 0, c.ease_factor ?? 2.5, interval, repetitions, lastRev, nextRev, interval, repetitions, lastRev, nextRev, difficulty, stability, state, reps, lapses, elapsed_days, scheduled_days],
+        sql: `INSERT INTO anki_cards (id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, interval, repetitions, last_review, next_review, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+        args: [id, user.id, c.deck_id || null, c.front, c.back, c.high_yield ? 1 : 0, c.ease_factor ?? 2.5, interval, repetitions, lastRev, nextRev, interval, repetitions, lastRev, nextRev],
       })
       inserted.push({
         id, user_id: user.id, deck_id: c.deck_id || null, front: c.front, back: c.back,
         high_yield: Boolean(c.high_yield), ease_factor: c.ease_factor ?? 2.5,
         interval, repetitions, last_review: lastRev, next_review: nextRev,
-        difficulty, stability, state, reps, lapses, elapsed_days, scheduled_days,
         created_at: new Date().toISOString()
       })
     }

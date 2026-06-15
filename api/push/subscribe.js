@@ -1,26 +1,50 @@
-// api/push/subscribe.js — v4 ESM multi-device
-import { createClient } from '@supabase/supabase-js'
+// api/push/subscribe.js — ESM multi-device
+// Stores or updates a push subscription per device (unique by endpoint)
 
-const SUPABASE_URL = process.env.SUPABASE_URL
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY
+import { createClient } from '@supabase/supabase-js'
+import { jwtVerify } from 'jose'
+
+async function getUser(req) {
+  const auth = req.headers.get('authorization')
+  if (!auth || !auth.startsWith('Bearer ')) return null
+  const token = auth.replace('Bearer ', '')
+  try {
+    const secret = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET)
+    const { payload } = await jwtVerify(token, secret)
+    return { id: payload.sub, email: payload.email, role: payload.role }
+  } catch (e) { return null }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
+  const SUPABASE_URL = process.env.SUPABASE_URL
+  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY
+
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY')
     return res.status(500).json({ error: 'Server misconfigured' })
   }
 
   try {
-    const { user_id, subscription } = req.body
+    // Verify user identity via JWT instead of trusting user_id from body
+    const user = await getUser(req)
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
 
-    if (!user_id || !subscription || !subscription.endpoint) {
-      return res.status(400).json({ error: 'Missing user_id or subscription' })
+    const { subscription } = req.body
+
+    if (!subscription || !subscription.endpoint) {
+      return res.status(400).json({ error: 'Missing subscription.endpoint' })
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
+    // Use verified user.id instead of user_id from request body
+    const user_id = user.id
 
     // Upsert by endpoint — allows multiple devices per user
     const { error } = await supabase
@@ -30,16 +54,18 @@ export default async function handler(req, res) {
         endpoint: subscription.endpoint,
         p256dh: subscription.keys?.p256dh || null,
         auth: subscription.keys?.auth || null,
-        subscription: subscription,
+        subscription,
         updated_at: new Date().toISOString()
       }, { onConflict: 'endpoint' })
 
     if (error) {
+      console.error('Save subscription error:', error)
       return res.status(500).json({ error: error.message })
     }
 
     return res.status(200).json({ success: true })
   } catch (err) {
-    return res.status(500).json({ error: 'Internal server error: ' + err.message })
+    console.error('Subscribe error:', err)
+    return res.status(500).json({ error: 'Internal server error' })
   }
 }
