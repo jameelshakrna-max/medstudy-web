@@ -1,8 +1,26 @@
 ﻿import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { parseFile } from '../lib/fileParser'
-import { FSRS, createEmptyCard, Rating, State } from 'fsrs.js'
+import { FSRS } from 'fsrs.js'
 import s from './Anki.module.css'
+
+// FSRS constants
+const State = { New: 0, Learning: 1, Review: 2, Relearning: 3 }
+const Rating = { Again: 1, Hard: 2, Good: 3, Easy: 4 }
+
+function createEmptyCard() {
+  return {
+    due: new Date(),
+    stability: 0,
+    difficulty: 0,
+    elapsed_days: 0,
+    scheduled_days: 0,
+    reps: 0,
+    lapses: 0,
+    state: 0,
+    last_review: null,
+  }
+}
 
 const API = '/api'
 const f = new FSRS()
