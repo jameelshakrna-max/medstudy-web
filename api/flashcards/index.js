@@ -50,8 +50,8 @@ function mapCard(r) {
     ease_factor: Number(r.ease_factor),
     interval: Number(r.interval ?? r.interval_days),
     repetitions: Number(r.repetitions ?? r.times_reviewed),
-    last_review: r.last_review ?? r.last_reviewed || null,
-    next_review: r.next_review ?? r.next_review_date || null,
+    last_review: (r.last_review ?? r.last_reviewed) || null,
+    next_review: (r.next_review ?? r.next_review_date) || null,
     created_at: r.created_at
   }
 }
@@ -90,8 +90,8 @@ export async function POST(req) {
       const id = crypto.randomUUID()
       const interval = c.interval ?? c.interval_days ?? 0
       const repetitions = c.repetitions ?? c.times_reviewed ?? 0
-      const nextRev = c.next_review ?? c.next_review_date || today
-      const lastRev = c.last_review ?? c.last_reviewed || null
+      const nextRev = (c.next_review ?? c.next_review_date) || today
+      const lastRev = (c.last_review ?? c.last_reviewed) || null
       await turso.execute({
         sql: `INSERT INTO anki_cards (id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, interval, repetitions, last_review, next_review, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
         args: [id, user.id, c.deck_id || null, c.front, c.back, c.high_yield ? 1 : 0, c.ease_factor ?? 2.5, interval, repetitions, lastRev, nextRev, interval, repetitions, lastRev, nextRev],

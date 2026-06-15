@@ -70,8 +70,8 @@ export async function PUT(req) {
     const ease_factor = body.ease_factor ?? 2.5
     const interval_days = body.interval ?? body.interval_days ?? 0
     const times_reviewed = body.repetitions ?? body.times_reviewed ?? 0
-    const next_review_date = body.next_review ?? body.next_review_date || null
-    const last_reviewed = body.last_review ?? body.last_reviewed || null
+    const next_review_date = (body.next_review ?? body.next_review_date) || null
+    const last_reviewed = (body.last_review ?? body.last_reviewed) || null
     await turso.execute({
       sql: `UPDATE anki_cards SET ease_factor = ?, interval_days = ?, times_reviewed = ?, next_review_date = ?, last_reviewed = ? WHERE id = ? AND user_id = ?`,
       args: [ease_factor, interval_days, times_reviewed, next_review_date, last_reviewed, id, user.id],
