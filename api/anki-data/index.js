@@ -1,5 +1,5 @@
 import { createClient } from '@libsql/client'
-import { getUser } from '../_auth.js'
+import { jwtVerify, createRemoteJWKSet } from 'jose'
 
 export const config = { regions: ['sin1'] }
 
@@ -7,6 +7,20 @@ const turso = createClient({
   url: process.env.TURSO_DATABASE_URL,
   authToken: process.env.TURSO_AUTH_TOKEN,
 })
+
+const JWKS = createRemoteJWKSet(
+  new URL(process.env.SUPABASE_URL + '/auth/v1/jwks')
+)
+
+async function getUser(req) {
+  const auth = req.headers.get('authorization')
+  if (!auth || !auth.startsWith('Bearer ')) return null
+  const token = auth.replace('Bearer ', '')
+  try {
+    const { payload } = await jwtVerify(token, JWKS)
+    return { id: payload.sub, email: payload.email, role: payload.role }
+  } catch (e) { return null }
+}
 
 function mapCard(r) {
   return {
@@ -16,6 +30,7 @@ function mapCard(r) {
     front: r.front,
     back: r.back,
     high_yield: Boolean(r.high_yield),
+    // FSRS fields
     difficulty: Number(r.difficulty) || 0,
     stability: Number(r.stability) || 0,
     state: Number(r.state) || 0,
@@ -23,6 +38,7 @@ function mapCard(r) {
     lapses: Number(r.lapses) || 0,
     elapsed_days: Number(r.elapsed_days) || 0,
     scheduled_days: Number(r.scheduled_days) || 0,
+    // Legacy SM-2 fields
     ease_factor: Number(r.ease_factor) || 2.5,
     interval: Number(r.interval ?? r.interval_days) ?? 0,
     repetitions: Number(r.repetitions ?? r.times_reviewed) ?? 0,

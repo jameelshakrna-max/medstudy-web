@@ -1,8 +1,11 @@
+// api/push/subscribe.js — ESM multi-device
+// Stores or updates a push subscription per device (unique by endpoint)
+
 import { createClient } from '@supabase/supabase-js'
 import { jwtVerify, createRemoteJWKSet } from 'jose'
 
 const JWKS = createRemoteJWKSet(
-  new URL(process.env.VITE_SUPABASE_URL + '/auth/v1/jwks')
+  new URL(process.env.SUPABASE_URL + '/auth/v1/jwks')
 )
 
 async function getUser(req) {

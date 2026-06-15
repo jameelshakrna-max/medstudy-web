@@ -1,5 +1,5 @@
 import { createClient } from '@libsql/client'
-import { getUser } from '../_auth.js'
+import { jwtVerify, createRemoteJWKSet } from 'jose'
 
 export const config = { regions: ['sin1'] }
 
@@ -7,6 +7,20 @@ const turso = createClient({
   url: process.env.TURSO_DATABASE_URL,
   authToken: process.env.TURSO_AUTH_TOKEN,
 })
+
+const JWKS = createRemoteJWKSet(
+  new URL(process.env.SUPABASE_URL + '/auth/v1/jwks')
+)
+
+async function getUser(req) {
+  const auth = req.headers.get('authorization')
+  if (!auth || !auth.startsWith('Bearer ')) return null
+  const token = auth.replace('Bearer ', '')
+  try {
+    const { payload } = await jwtVerify(token, JWKS)
+    return { id: payload.sub, email: payload.email, role: payload.role }
+  } catch (e) { return null }
+}
 
 function mapCard(r) {
   return {

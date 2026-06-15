@@ -1,5 +1,5 @@
 import { createClient } from '@libsql/client'
-import { getUser } from '../_auth.js'
+import { jwtVerify, createRemoteJWKSet } from 'jose'
 
 export const config = { regions: ['sin1'] }
 
@@ -8,11 +8,27 @@ const turso = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN,
 })
 
+const JWKS = createRemoteJWKSet(
+  new URL(process.env.SUPABASE_URL + '/auth/v1/jwks')
+)
+
+async function getUser(req) {
+  const auth = req.headers.get('authorization')
+  if (!auth || !auth.startsWith('Bearer ')) return null
+  const token = auth.replace('Bearer ', '')
+  try {
+    const { payload } = await jwtVerify(token, JWKS)
+    return { id: payload.sub, email: payload.email, role: payload.role }
+  } catch (e) { return null }
+}
+
+/* Extract card id from URL: /api/flashcards/<id> */
 function extractId(url) {
   const parts = new URL(url).pathname.split('/')
   return parts[parts.length - 1]
 }
 
+/* Map Turso columns → names Anki.jsx expects */
 function mapCard(r) {
   return {
     id: r.id,
@@ -36,15 +52,21 @@ export async function PUT(req) {
   try {
     const id = extractId(req.url)
     const body = await req.json()
+
+    /* Anki.jsx sends: ease_factor, interval, repetitions, next_review, last_review */
+    /* Turso columns:  ease_factor, interval_days, times_reviewed, next_review_date, last_reviewed */
     const ease_factor = body.ease_factor ?? 2.5
     const interval_days = body.interval ?? body.interval_days ?? 0
     const times_reviewed = body.repetitions ?? body.times_reviewed ?? 0
     const next_review_date = body.next_review ?? body.next_review_date || null
     const last_reviewed = body.last_review ?? body.last_reviewed || null
+
     await turso.execute({
       sql: `UPDATE anki_cards SET ease_factor = ?, interval_days = ?, times_reviewed = ?, next_review_date = ?, last_reviewed = ? WHERE id = ? AND user_id = ?`,
       args: [ease_factor, interval_days, times_reviewed, next_review_date, last_reviewed, id, user.id],
     })
+
+    /* Return the updated card */
     const result = await turso.execute({
       sql: 'SELECT * FROM anki_cards WHERE id = ? AND user_id = ?',
       args: [id, user.id],
