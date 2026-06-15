@@ -8,16 +8,22 @@ const turso = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN,
 })
 
-const JWKS = createRemoteJWKSet(
-  new URL(process.env.SUPABASE_URL + '/auth/v1/jwks')
-)
+let JWKS = null
+function getJWKS() {
+  if (!JWKS) {
+    const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+    if (!url) throw new Error('Missing SUPABASE_URL')
+    JWKS = createRemoteJWKSet(new URL(url + '/auth/v1/jwks'))
+  }
+  return JWKS
+}
 
 async function getUser(req) {
   const auth = req.headers.get('authorization')
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.replace('Bearer ', '')
   try {
-    const { payload } = await jwtVerify(token, JWKS)
+    const { payload } = await jwtVerify(token, getJWKS())
     return { id: payload.sub, email: payload.email, role: payload.role }
   } catch (e) { return null }
 }
