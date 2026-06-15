@@ -1,5 +1,5 @@
 import { createClient } from '@libsql/client'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { getUser } from '../_auth.js'
 
 export const config = { regions: ['sin1'] }
 
@@ -7,19 +7,6 @@ const turso = createClient({
   url: process.env.TURSO_DATABASE_URL,
   authToken: process.env.TURSO_AUTH_TOKEN,
 })
-
-const supabase = createSupabaseClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.VITE_SUPABASE_ANON_KEY
-)
-
-async function getUser(req) {
-  const auth = req.headers.get('authorization')
-  if (!auth || !auth.startsWith('Bearer ')) return null
-  const token = auth.replace('Bearer ', '')
-  const { data: { user } } = await supabase.auth.getUser(token)
-  return user
-}
 
 function mapCard(r) {
   return {
@@ -29,7 +16,6 @@ function mapCard(r) {
     front: r.front,
     back: r.back,
     high_yield: Boolean(r.high_yield),
-    // FSRS fields
     difficulty: Number(r.difficulty) || 0,
     stability: Number(r.stability) || 0,
     state: Number(r.state) || 0,
@@ -37,7 +23,6 @@ function mapCard(r) {
     lapses: Number(r.lapses) || 0,
     elapsed_days: Number(r.elapsed_days) || 0,
     scheduled_days: Number(r.scheduled_days) || 0,
-    // Legacy SM-2 fields
     ease_factor: Number(r.ease_factor) || 2.5,
     interval: Number(r.interval ?? r.interval_days) ?? 0,
     repetitions: Number(r.repetitions ?? r.times_reviewed) ?? 0,

@@ -1,5 +1,5 @@
 import { createClient } from '@libsql/client'
-import { jwtVerify } from 'jose'
+import { getUser } from '../_auth.js'
 
 export const config = { regions: ['sin1'] }
 
@@ -7,17 +7,6 @@ const turso = createClient({
   url: process.env.TURSO_DATABASE_URL,
   authToken: process.env.TURSO_AUTH_TOKEN,
 })
-
-async function getUser(req) {
-  const auth = req.headers.get('authorization')
-  if (!auth || !auth.startsWith('Bearer ')) return null
-  const token = auth.replace('Bearer ', '')
-  try {
-    const secret = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET)
-    const { payload } = await jwtVerify(token, secret)
-    return { id: payload.sub, email: payload.email, role: payload.role }
-  } catch (e) { return null }
-}
 
 function mapCard(r) {
   return {

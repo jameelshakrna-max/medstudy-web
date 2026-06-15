@@ -1,11 +1,8 @@
-// api/push/subscribe.js — ESM multi-device
-// Stores or updates a push subscription per device (unique by endpoint)
-
 import { createClient } from '@supabase/supabase-js'
 import { jwtVerify } from 'jose'
 
 async function getUser(req) {
-  const auth = req.headers.get('authorization')
+  const auth = req.headers.authorization
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.replace('Bearer ', '')
   try {
@@ -29,31 +26,26 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Verify user identity via JWT instead of trusting user_id from body
     const user = await getUser(req)
     if (!user) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
     const { subscription } = req.body
-
     if (!subscription || !subscription.endpoint) {
       return res.status(400).json({ error: 'Missing subscription.endpoint' })
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
-    // Use verified user.id instead of user_id from request body
     const user_id = user.id
 
-    // Upsert by endpoint — allows multiple devices per user
     const { error } = await supabase
       .from('push_subscriptions')
       .upsert({
         user_id,
         endpoint: subscription.endpoint,
-        p256dh: subscription.keys?.p256dh || null,
-        auth: subscription.keys?.auth || null,
+        p256dh: subscription.keys ? subscription.keys.p256dh : null,
+        auth: subscription.keys ? subscription.keys.auth : null,
         subscription,
         updated_at: new Date().toISOString()
       }, { onConflict: 'endpoint' })

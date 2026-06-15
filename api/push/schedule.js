@@ -1,11 +1,8 @@
-// api/push/schedule.js — ESM
-// Schedules a push notification for when the timer ends
-
 import { createClient } from '@supabase/supabase-js'
 import { jwtVerify } from 'jose'
 
 async function getUser(req) {
-  const auth = req.headers.get('authorization')
+  const auth = req.headers.authorization
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.replace('Bearer ', '')
   try {
@@ -29,21 +26,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Verify user identity via JWT instead of trusting user_id from body
     const user = await getUser(req)
     if (!user) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
     const { end_time, mode } = req.body
-
     if (!end_time) {
       return res.status(400).json({ error: 'Missing end_time' })
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
-    // Use verified user.id instead of user_id from request body
     const user_id = user.id
 
     const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
@@ -52,13 +45,11 @@ export default async function handler(req, res) {
       ? 'Great work! Time for a break.'
       : 'Break is over. Ready to focus?'
 
-    // Delete any existing pending notifications for this user
     await supabase
       .from('pending_notifications')
       .delete()
       .eq('user_id', user_id)
 
-    // Insert new pending notification
     const { error: insertError } = await supabase
       .from('pending_notifications')
       .insert({
