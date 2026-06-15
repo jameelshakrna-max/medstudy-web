@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useRef, useCallback } from 'react'
+﻿import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { parseFile } from '../lib/fileParser'
 import { FSRS } from 'fsrs.js'
@@ -22,8 +22,13 @@ function createEmptyCard() {
   }
 }
 
+const DEFAULT_RETENTION = 0.9
+const DEFAULT_WEIGHTS = [
+  0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01, 1.49, 0.14,
+  0.94, 2.18, 0.05, 0.34, 1.26, 0.29, 2.61
+]
+
 const API = '/api'
-const f = new FSRS()
 
 let _sessionCache = null
 let _sessionTime = 0
@@ -133,38 +138,6 @@ function formatScheduledDays(days) {
 // Rating map
 const ratingMap = { again: Rating.Again, hard: Rating.Hard, good: Rating.Good, easy: Rating.Easy }
 
-// FSRS review — replaces sm2()
-function fsrsReview(option, card) {
-  const fsrsCard = toFSRSCard(card)
-  const now = new Date()
-  const scheduling = f.repeat(fsrsCard, now)
-  const rating = ratingMap[option] || Rating.Good
-  const next = scheduling[rating].card
-
-  return {
-    difficulty: next.difficulty,
-    stability: next.stability,
-    state: next.state,
-    reps: next.reps,
-    lapses: next.lapses,
-    elapsed_days: next.elapsed_days,
-    scheduled_days: next.scheduled_days,
-    next_review: next.due.toISOString(),
-    last_review: now.toISOString(),
-    // Keep legacy fields in sync
-    ease_factor: card.ease_factor || 2.5,
-    interval: next.scheduled_days,
-    repetitions: next.reps,
-  }
-}
-
-// Get FSRS scheduling preview for all ratings
-function getSchedulingPreview(card) {
-  const fsrsCard = toFSRSCard(card)
-  const now = new Date()
-  return f.repeat(fsrsCard, now)
-}
-
 export default function Anki() {
   const [cards, setCards] = useState([])
   const [decks, setDecks] = useState([])
@@ -194,6 +167,19 @@ export default function Anki() {
   const [reviewingCardId, setReviewingCardId] = useState(null)
   const [scheduling, setScheduling] = useState(null)
 
+  // ── FSRS parameters ──
+  const [fsrsParams, setFsrsParams] = useState({
+    retention: DEFAULT_RETENTION,
+    weights: DEFAULT_WEIGHTS,
+  })
+
+  const fsrsInstance = useMemo(() => {
+    return new FSRS({
+      request_retention: fsrsParams.retention,
+      w: fsrsParams.weights,
+    })
+  }, [fsrsParams])
+
   // shared decks
   const [sharedDecks, setSharedDecks] = useState([])
   const [sharedCards, setSharedCards] = useState([])
@@ -204,7 +190,6 @@ export default function Anki() {
   const [copyCardId, setCopyCardId] = useState(null)
   const [copyCardDeckId, setCopyCardDeckId] = useState('')
   const [copyingCard, setCopyingCard] = useState(false)
-
   const [sharedViewCards, setSharedViewCards] = useState([])
 
   const load = useCallback(async () => {
@@ -220,6 +205,46 @@ export default function Anki() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Load FSRS params from cards data
+  useEffect(() => {
+    if (cards.length > 0) {
+      const userRetention = cards[0]?.fsrs_retention
+      if (userRetention && userRetention !== fsrsParams.retention) {
+        setFsrsParams(prev => ({ ...prev, retention: userRetention }))
+      }
+    }
+  }, [cards])
+
+  // ── FSRS review logic (inside component to access fsrsInstance) ──
+  function fsrsReview(option, card) {
+    const fsrsCard = toFSRSCard(card)
+    const now = new Date()
+    const scheduling = fsrsInstance.repeat(fsrsCard, now)
+    const rating = ratingMap[option] || Rating.Good
+    const next = scheduling[rating].card
+
+    return {
+      difficulty: next.difficulty,
+      stability: next.stability,
+      state: next.state,
+      reps: next.reps,
+      lapses: next.lapses,
+      elapsed_days: next.elapsed_days,
+      scheduled_days: next.scheduled_days,
+      next_review: next.due.toISOString(),
+      last_review: now.toISOString(),
+      ease_factor: card.ease_factor || 2.5,
+      interval: next.scheduled_days,
+      repetitions: next.reps,
+    }
+  }
+
+  function getSchedulingPreview(card) {
+    const fsrsCard = toFSRSCard(card)
+    const now = new Date()
+    return fsrsInstance.repeat(fsrsCard, now)
+  }
 
   const all = activeDeckId ? cards.filter(c => c.deck_id === activeDeckId) : cards
   const due = all.filter(c => isDue(c))
@@ -690,7 +715,6 @@ export default function Anki() {
         </>
       )}
 
-      
       {view === 'add' && (
         <>
           <div className={s.breadcrumb}>
