@@ -44,7 +44,7 @@ export async function GET(req) {
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const result = await turso.execute({
-      sql: 'SELECT * FROM anki_decks WHERE user_id = ? ORDER BY name ASC',
+      sql: 'SELECT id, user_id, name, description, created_at FROM anki_decks WHERE user_id = ? ORDER BY name ASC',
       args: [user.id],
     })
     const decks = result.rows.map(r => ({

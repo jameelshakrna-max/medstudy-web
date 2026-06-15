@@ -5,6 +5,28 @@
       "destination": "/index.html"
     }
   ],
+  "headers": [
+    {
+      "source": "/api/anki-data",
+      "headers": [{ "key": "Cache-Control", "value": "private, max-age=5" }]
+    },
+    {
+      "source": "/api/decks",
+      "headers": [{ "key": "Cache-Control", "value": "private, max-age=5" }]
+    },
+    {
+      "source": "/api/flashcards",
+      "headers": [{ "key": "Cache-Control", "value": "private, max-age=5" }]
+    },
+    {
+      "source": "/api/decks/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "private, no-cache" }]
+    },
+    {
+      "source": "/api/flashcards/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "private, no-cache" }]
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/notify",

@@ -64,10 +64,10 @@ export async function GET(req) {
     const deckId = url.searchParams.get('deck_id')
     let sql, args
     if (deckId) {
-      sql = 'SELECT * FROM anki_cards WHERE user_id = ? AND deck_id = ? ORDER BY CASE WHEN next_review_date IS NULL AND next_review IS NULL THEN 1 ELSE 0 END, COALESCE(next_review, next_review_date) ASC, created_at DESC'
+      sql = 'SELECT id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date FROM anki_cards WHERE user_id = ? AND deck_id = ? ORDER BY CASE WHEN next_review_date IS NULL THEN 1 ELSE 0 END, next_review_date ASC, created_at DESC'
       args = [user.id, deckId]
     } else {
-      sql = 'SELECT * FROM anki_cards WHERE user_id = ? ORDER BY CASE WHEN next_review_date IS NULL AND next_review IS NULL THEN 1 ELSE 0 END, COALESCE(next_review, next_review_date) ASC, created_at DESC'
+      sql = 'SELECT id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date FROM anki_cards WHERE user_id = ? ORDER BY CASE WHEN next_review_date IS NULL THEN 1 ELSE 0 END, next_review_date ASC, created_at DESC'
       args = [user.id]
     }
     const result = await turso.execute({ sql, args })

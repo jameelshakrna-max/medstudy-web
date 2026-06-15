@@ -77,7 +77,7 @@ export async function PUT(req) {
       args: [ease_factor, interval_days, times_reviewed, next_review_date, last_reviewed, id, user.id],
     })
     const result = await turso.execute({
-      sql: 'SELECT * FROM anki_cards WHERE id = ? AND user_id = ?',
+      sql: 'SELECT id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, created_at FROM anki_cards WHERE id = ? AND user_id = ?',
       args: [id, user.id],
     })
     if (result.rows.length) return Response.json(mapCard(result.rows[0]))

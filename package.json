@@ -20,6 +20,7 @@
         "recharts": "^2.10.0",
         "sql.js": "^1.14.1",
         "tesseract.js": "^7.0.0",
+        "vite-plugin-imagemin": "^0.6.1",
         "web-push": "^3.6.7"
     },
     "devDependencies": {
