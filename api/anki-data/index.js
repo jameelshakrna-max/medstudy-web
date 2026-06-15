@@ -29,9 +29,18 @@ function mapCard(r) {
     front: r.front,
     back: r.back,
     high_yield: Boolean(r.high_yield),
-    ease_factor: Number(r.ease_factor),
-    interval: Number(r.interval ?? r.interval_days),
-    repetitions: Number(r.repetitions ?? r.times_reviewed),
+    // FSRS fields
+    difficulty: Number(r.difficulty) || 0,
+    stability: Number(r.stability) || 0,
+    state: Number(r.state) || 0,
+    reps: Number(r.reps) || 0,
+    lapses: Number(r.lapses) || 0,
+    elapsed_days: Number(r.elapsed_days) || 0,
+    scheduled_days: Number(r.scheduled_days) || 0,
+    // Legacy SM-2 fields
+    ease_factor: Number(r.ease_factor) || 2.5,
+    interval: Number(r.interval ?? r.interval_days) ?? 0,
+    repetitions: Number(r.repetitions ?? r.times_reviewed) ?? 0,
     last_review: (r.last_review ?? r.last_reviewed) || null,
     next_review: (r.next_review ?? r.next_review_date) || null,
     created_at: r.created_at
@@ -44,7 +53,7 @@ export async function GET(req) {
   try {
     const [deckResult, cardResult] = await Promise.all([
       turso.execute({ sql: 'SELECT id, user_id, name, description, created_at FROM anki_decks WHERE user_id = ? ORDER BY name ASC', args: [user.id] }),
-      turso.execute({ sql: "SELECT id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, interval, repetitions, last_review, next_review, created_at FROM anki_cards WHERE user_id = ? ORDER BY CASE WHEN next_review IS NULL AND next_review_date IS NULL THEN 1 ELSE 0 END, COALESCE(next_review, next_review_date) ASC, created_at DESC", args: [user.id] })
+      turso.execute({ sql: "SELECT id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, interval, repetitions, last_review, next_review, difficulty, stability, state, reps, lapses, elapsed_days, scheduled_days, created_at FROM anki_cards WHERE user_id = ? ORDER BY CASE WHEN next_review IS NULL AND next_review_date IS NULL THEN 1 ELSE 0 END, COALESCE(next_review, next_review_date) ASC, created_at DESC", args: [user.id] })
     ])
     const decks = deckResult.rows.map(r => ({
       id: r.id, user_id: r.user_id, name: r.name,

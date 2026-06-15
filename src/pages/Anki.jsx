@@ -1,9 +1,11 @@
 ﻿import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { parseFile } from '../lib/fileParser'
+import { fsrs, createEmptyCard, Rating, State } from 'fsrs.js'
 import s from './Anki.module.css'
 
 const API = '/api'
+const f = fsrs()
 
 let _sessionCache = null
 let _sessionTime = 0
@@ -36,22 +38,28 @@ const dm = (dks, id) => {
   return d ? d.name : 'Unknown'
 }
 
+// ── FSRS helpers ──
 function isDue(c) {
-  if (!c.last_review) return true
+  const state = Number(c.state) || 0
+  if (state === State.New) return true
   if (!c.next_review) return true
   return new Date(c.next_review) <= new Date()
 }
 
-function isNew(c) { return !c.last_review }
+function isNew(c) {
+  return (Number(c.state) || 0) === State.New
+}
 
 function statusInfo(c) {
-  if (!c.last_review) return { l: 'New' }
+  const state = Number(c.state) || 0
+  if (state === State.New) return { l: 'New' }
   if (isDue(c)) return { l: 'Due' }
   return { l: 'Later' }
 }
 
 function nextReviewLabel(c) {
-  if (!c.last_review) return { t: 'Not scheduled' }
+  const state = Number(c.state) || 0
+  if (state === State.New) return { t: 'Not scheduled' }
   if (!c.next_review) return { t: 'Due now' }
   const now = new Date()
   const nr = new Date(c.next_review)
@@ -64,30 +72,79 @@ function nextReviewLabel(c) {
 }
 
 function maturityLabel(c) {
-  const r = Number(c.repetitions) || 0
-  const iv = Number(c.interval) || 0
-  if (r === 0) return 'New'
-  if (r === 1) return 'Learning'
-  if (iv <= 21) return 'Young'
+  const state = Number(c.state) || 0
+  if (state === State.New) return 'New'
+  if (state === State.Learning) return 'Learning'
+  if (state === State.Relearning) return 'Relearning'
+  if (Number(c.scheduled_days) <= 21) return 'Young'
   return 'Mature'
 }
 
-function sm2(option, card) {
-  const qMap = { again: 1, hard: 3, good: 4, easy: 5 }
-  const quality = qMap[option] || 3
-  let ease_factor = Number(card.ease_factor) || 2.5
-  let interval = Number(card.interval) || 0
-  let repetitions = Number(card.repetitions) || 0
-  if (quality >= 3) {
-    if (quality === 5 && repetitions === 0) { interval = 6; repetitions = 2 }
-    else if (repetitions === 0) { interval = 1; repetitions = 1 }
-    else if (repetitions === 1) { interval = 6; repetitions = 2 }
-    else { interval = Math.round(interval * ease_factor); repetitions += 1 }
-  } else { repetitions = 0; interval = 1 }
-  ease_factor = Math.max(1.3, ease_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))
-  const nr = new Date()
-  nr.setDate(nr.getDate() + interval)
-  return { ease_factor, interval, repetitions, next_review: nr.toISOString(), last_review: new Date().toISOString() }
+// Convert DB card to FSRS card format
+function toFSRSCard(card) {
+  const state = Number(card.state) || 0
+  if (state === State.New && !card.last_review) {
+    return createEmptyCard()
+  }
+  return {
+    due: card.next_review ? new Date(card.next_review) : new Date(),
+    stability: Number(card.stability) || 0.1,
+    difficulty: Number(card.difficulty) || 0,
+    elapsed_days: Number(card.elapsed_days) || 0,
+    scheduled_days: Number(card.scheduled_days) || 0,
+    reps: Number(card.reps) || 0,
+    lapses: Number(card.lapses) || 0,
+    state: state,
+    last_review: card.last_review ? new Date(card.last_review) : null,
+  }
+}
+
+// Format scheduled days for button labels
+function formatScheduledDays(days) {
+  if (days < 1) {
+    const mins = Math.round(days * 1440)
+    if (mins < 1) return '<1m'
+    if (mins < 60) return mins + 'm'
+    return Math.round(mins / 60) + 'h'
+  }
+  if (days < 30) return Math.round(days) + 'd'
+  const months = Math.round(days / 30)
+  return months + 'mo'
+}
+
+// Rating map
+const ratingMap = { again: Rating.Again, hard: Rating.Hard, good: Rating.Good, easy: Rating.Easy }
+
+// FSRS review — replaces sm2()
+function fsrsReview(option, card) {
+  const fsrsCard = toFSRSCard(card)
+  const now = new Date()
+  const scheduling = f.repeat(fsrsCard, now)
+  const rating = ratingMap[option] || Rating.Good
+  const next = scheduling[rating].card
+
+  return {
+    difficulty: next.difficulty,
+    stability: next.stability,
+    state: next.state,
+    reps: next.reps,
+    lapses: next.lapses,
+    elapsed_days: next.elapsed_days,
+    scheduled_days: next.scheduled_days,
+    next_review: next.due.toISOString(),
+    last_review: now.toISOString(),
+    // Keep legacy fields in sync
+    ease_factor: card.ease_factor || 2.5,
+    interval: next.scheduled_days,
+    repetitions: next.reps,
+  }
+}
+
+// Get FSRS scheduling preview for all ratings
+function getSchedulingPreview(card) {
+  const fsrsCard = toFSRSCard(card)
+  const now = new Date()
+  return f.repeat(fsrsCard, now)
 }
 
 export default function Anki() {
@@ -117,6 +174,7 @@ export default function Anki() {
   const [qIdx, setQIdx] = useState(0)
   const [showAns, setShowAns] = useState(false)
   const [reviewingCardId, setReviewingCardId] = useState(null)
+  const [scheduling, setScheduling] = useState(null)
 
   // shared decks
   const [sharedDecks, setSharedDecks] = useState([])
@@ -262,35 +320,42 @@ export default function Anki() {
   }
 
   function startReview() {
-    if (due.length) { setQueue(due); setQIdx(0); setShowAns(false); setView('review') }
+    if (due.length) { setQueue(due); setQIdx(0); setShowAns(false); setScheduling(null); setView('review') }
   }
 
   async function submitReview(option) {
     const c = queue[qIdx]
     if (!c) return
-    const u = sm2(option, c)
+    const u = fsrsReview(option, c)
     try {
       const r = await api('PUT', '/flashcards/' + c.id, u)
       if (r.error) throw new Error(r.error)
       setCards(prev => prev.map(card => card.id === c.id ? { ...card, ...r } : card))
-      if (qIdx + 1 < queue.length) { setQIdx(qIdx + 1); setShowAns(false) }
+      if (qIdx + 1 < queue.length) { setQIdx(qIdx + 1); setShowAns(false); setScheduling(null) }
       else { setView(activeDeckId ? 'browse' : 'decks') }
     } catch (e) { alert(e.message) }
   }
 
   function exitReview() {
-    setQueue([]); setQIdx(0); setShowAns(false)
+    setQueue([]); setQIdx(0); setShowAns(false); setScheduling(null)
     setView(activeDeckId ? 'browse' : 'decks')
   }
 
   async function submitInlineReview(option, card) {
-    const u = sm2(option, card)
+    const u = fsrsReview(option, card)
     try {
       const r = await api('PUT', '/flashcards/' + card.id, u)
       if (r.error) throw new Error(r.error)
       setCards(prev => prev.map(c => c.id === card.id ? { ...c, ...r } : c))
       setReviewingCardId(null)
     } catch (e) { alert(e.message) }
+  }
+
+  function handleShowAnswer() {
+    setShowAns(true)
+    if (cur) {
+      setScheduling(getSchedulingPreview(cur))
+    }
   }
 
   async function handleFile(file) {
@@ -338,12 +403,21 @@ export default function Anki() {
     return st.l === 'Due' ? s.nr_due : st.l === 'New' ? s.nr_soon : s.nr_later
   }
 
+  // Get button label with interval preview
+  const revLabel = (option) => {
+    if (!scheduling) return option.charAt(0).toUpperCase() + option.slice(1)
+    const rating = ratingMap[option]
+    const days = scheduling[rating]?.card?.scheduled_days ?? 0
+    const interval = formatScheduledDays(days)
+    return `${option.charAt(0).toUpperCase() + option.slice(1)} (${interval})`
+  }
+
   return (
     <div className={s.page}>
       <div className={s.header}>
         <div>
           <h1 className={s.title}>Anki</h1>
-          <p className={s.sub}>Spaced repetition â€” SM-2</p>
+          <p className={s.sub}>Spaced repetition — FSRS</p>
         </div>
         <div className={s.pills}>
           {[
@@ -363,7 +437,7 @@ export default function Anki() {
         <button className={`${s.mainTab} ${view === 'shared' || view === 'shared-view' ? s.mainTabOn : ''}`} onClick={() => { setView('shared'); loadShared('') }}>Community</button>
       </div>
 
-      {/* â”€â”€ decks view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── decks view ── */}
       {view === 'decks' && (
         <>
           <div className={s.createDeckRow}>
@@ -418,7 +492,7 @@ export default function Anki() {
         </>
       )}
 
-      {/* â”€â”€ browse view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── browse view ── */}
       {view === 'browse' && (
         <>
           <div className={s.breadcrumb}>
@@ -455,10 +529,10 @@ export default function Anki() {
                   <div className={s.ankiFront}>{card.front}</div>
                   {isReviewing && (<div className={s.ankiBack}>{card.back}</div>)}
                   <div className={s.ankiStats}>
-                    <span>EF: {Number(card.ease_factor || 2.5).toFixed(2)}</span>
-                    <span>Interval: {Number(card.interval) || 0}d</span>
-                    <span>Reviews: {Number(card.repetitions) || 0}</span>
-                    <span>Next: {card.next_review ? nextReviewLabel(card).t : '--'}</span>
+                    <span>D: {Number(card.difficulty || 0).toFixed(1)}</span>
+                    <span>S: {Number(card.stability || 0).toFixed(1)}d</span>
+                    <span>Reviews: {Number(card.reps || 0)}</span>
+                    <span>Lapses: {Number(card.lapses || 0)}</span>
                   </div>
                   {isReviewing ? (
                     <div className={s.reviewBtns}>
@@ -476,7 +550,7 @@ export default function Anki() {
         </>
       )}
 
-      {/* â”€â”€ shared/community view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── shared/community view ── */}
       {view === 'shared' && (
         <>
           <div className={s.sharedSearchRow}>
@@ -626,7 +700,7 @@ export default function Anki() {
         </>
       )}
 
-      {/* â”€â”€ upload preview view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── upload preview view ── */}
       {view === 'upload' && parsed.length > 0 && (
         <>
           <div className={s.breadcrumb}>
@@ -650,7 +724,7 @@ export default function Anki() {
         </>
       )}
 
-      {/* â”€â”€ review session view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── review session view ── */}
       {view === 'review' && cur && (
         <>
           <div className={s.reviewHeader}>
@@ -663,20 +737,21 @@ export default function Anki() {
             <div className={s.reviewLabel}>Question</div>
             <div className={s.reviewContent}>{cur.front}</div>
             {!showAns ? (
-              <button className={s.showAnswerBtn} onClick={() => setShowAns(true)}>Show Answer</button>
+              <button className={s.showAnswerBtn} onClick={handleShowAnswer}>Show Answer</button>
             ) : (
               <>
                 <div className={s.reviewAnswer}><div className={s.reviewLabel}>Answer</div><div className={s.reviewContent}>{cur.back}</div></div>
                 <div className={s.reviewMeta}>
-                  <span>EF: {Number(cur.ease_factor || 2.5).toFixed(2)}</span>
-                  <span>Interval: {Number(cur.interval) || 0}d</span>
-                  <span>Reviews: {Number(cur.repetitions) || 0}</span>
+                  <span>D: {Number(cur.difficulty || 0).toFixed(1)}</span>
+                  <span>S: {Number(cur.stability || 0).toFixed(1)}d</span>
+                  <span>Reviews: {Number(cur.reps || 0)}</span>
+                  <span>Lapses: {Number(cur.lapses || 0)}</span>
                 </div>
                 <div className={s.reviewBtns}>
-                  <button className={`${s.revBtn} ${s.rev_again}`} onClick={() => submitReview('again')}>Again</button>
-                  <button className={`${s.revBtn} ${s.rev_hard}`} onClick={() => submitReview('hard')}>Hard</button>
-                  <button className={`${s.revBtn} ${s.rev_good}`} onClick={() => submitReview('good')}>Good</button>
-                  <button className={`${s.revBtn} ${s.rev_easy}`} onClick={() => submitReview('easy')}>Easy</button>
+                  <button className={`${s.revBtn} ${s.rev_again}`} onClick={() => submitReview('again')}>{revLabel('again')}</button>
+                  <button className={`${s.revBtn} ${s.rev_hard}`} onClick={() => submitReview('hard')}>{revLabel('hard')}</button>
+                  <button className={`${s.revBtn} ${s.rev_good}`} onClick={() => submitReview('good')}>{revLabel('good')}</button>
+                  <button className={`${s.revBtn} ${s.rev_easy}`} onClick={() => submitReview('easy')}>{revLabel('easy')}</button>
                 </div>
               </>
             )}
@@ -686,9 +761,3 @@ export default function Anki() {
     </div>
   )
 }
-
-
-
-
-
-
