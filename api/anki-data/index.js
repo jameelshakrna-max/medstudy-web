@@ -11,11 +11,19 @@ const turso = createClient({
 let JWKS = null
 function getJWKS() {
   if (!JWKS) {
-    const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+    let url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
     if (!url) throw new Error('Missing SUPABASE_URL')
-    JWKS = createRemoteJWKSet(new URL(url + '/auth/v1/jwks'))
+    url = url.replace(/\/+$/, '')
+    JWKS = createRemoteJWKSet(new URL(url + '/auth/v1/.well-known/jwks.json'))
   }
   return JWKS
+}
+
+function getIssuer() {
+  let url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+  if (!url) return undefined
+  url = url.replace(/\/+$/, '')
+  return url + '/auth/v1'
 }
 
 async function getUser(req) {
@@ -23,7 +31,10 @@ async function getUser(req) {
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.replace('Bearer ', '')
   try {
-    const { payload } = await jwtVerify(token, getJWKS())
+    const { payload } = await jwtVerify(token, getJWKS(), {
+      issuer: getIssuer(),
+      audience: 'authenticated',
+    })
     return { id: payload.sub, email: payload.email, role: payload.role }
   } catch (e) { return null }
 }
@@ -36,7 +47,6 @@ function mapCard(r) {
     front: r.front,
     back: r.back,
     high_yield: Boolean(r.high_yield),
-    // FSRS fields
     difficulty: Number(r.difficulty) || 0,
     stability: Number(r.stability) || 0,
     state: Number(r.state) || 0,
@@ -44,7 +54,6 @@ function mapCard(r) {
     lapses: Number(r.lapses) || 0,
     elapsed_days: Number(r.elapsed_days) || 0,
     scheduled_days: Number(r.scheduled_days) || 0,
-    // Legacy SM-2 fields
     ease_factor: Number(r.ease_factor) || 2.5,
     interval: Number(r.interval ?? r.interval_days) ?? 0,
     repetitions: Number(r.repetitions ?? r.times_reviewed) ?? 0,
