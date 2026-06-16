@@ -5,6 +5,7 @@
  */
 
 import JSZip from 'jszip'
+import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url'
 
 /* ── helpers ────────────────────────────────────────────── */
 
@@ -144,10 +145,10 @@ async function parseApkg(file, onProgress) {
 
   const dbBuffer = await dbFile.async('arraybuffer')
 
-  // Use sql.js to read the SQLite database (load WASM from public/)
+  // Use sql.js to read the SQLite database (Vite serves WASM as URL asset)
   const initSqlJs = (await import('sql.js')).default
   const SQL = await initSqlJs({
-    locateFile: file => `/${file}`
+    locateFile: () => sqlWasmUrl
   })
   const db = new SQL.Database(new Uint8Array(dbBuffer))
 
