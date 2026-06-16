@@ -152,9 +152,15 @@ async function parseApkg(file, onProgress) {
   })
   const db = new SQL.Database(new Uint8Array(dbBuffer))
 
-  // Query notes (front/back content)
+  // Query notes (Anki uses 'flds' column for fields)
   const notes = {}
-  const noteResult = db.exec('SELECT id, fields FROM notes')
+  let noteResult
+  try {
+    noteResult = db.exec('SELECT id, flds FROM notes')
+  } catch (e) {
+    // Fallback for older/different schemas
+    noteResult = db.exec('SELECT id, fields FROM notes')
+  }
   if (noteResult.length) {
     for (const row of noteResult[0].values) {
       notes[row[0]] = row[1]
@@ -163,9 +169,16 @@ async function parseApkg(file, onProgress) {
 
   // Query cards (link notes to decks)
   const cards = []
-  const cardResult = db.exec(
-    'SELECT c.id, c.nid, c.did, n.fields FROM cards c JOIN notes n ON c.nid = n.id'
-  )
+  let cardResult
+  try {
+    cardResult = db.exec(
+      'SELECT c.id, c.nid, c.did, n.flds FROM cards c JOIN notes n ON c.nid = n.id'
+    )
+  } catch (e) {
+    cardResult = db.exec(
+      'SELECT c.id, c.nid, c.did, n.fields FROM cards c JOIN notes n ON c.nid = n.id'
+    )
+  }
   if (cardResult.length) {
     for (const row of cardResult[0].values) {
       cards.push({ id: row[0], nid: row[1], did: row[2], fields: row[3] })
