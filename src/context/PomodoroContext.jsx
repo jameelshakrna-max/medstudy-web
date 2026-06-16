@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
-import { useAuth } from './AuthContext'
 
 const PomodoroContext = createContext(null)
 
@@ -95,6 +94,54 @@ function pushLog(msg) {
   console.log('[Push]', msg)
 }
 
+// Show an instant local notification (no server round-trip)
+async function showLocalNotification(mode) {
+  try {
+    const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
+    const label = MODE_LABELS[mode] || 'Timer'
+    const body = mode === 'study'
+      ? 'Great work! Time for a break.'
+      : 'Break is over. Ready to focus?'
+
+    // Try service worker first (works on iOS PWA)
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration()
+      if (reg) {
+        pushLog('Showing local notification via SW')
+        reg.showNotification(label + ' Complete', {
+          body,
+          tag: 'pomodoro-timer',
+          icon: '/icon.svg',
+          badge: '/icon.svg',
+          requireInteraction: true,
+          silent: false,
+          vibrate: [200, 100, 200, 100, 200],
+          data: {
+            url: window.location.origin + '/pomodoro',
+            mode
+          }
+        })
+        return
+      }
+    }
+
+    // Fallback: direct Notification API
+    if (Notification.permission === 'granted') {
+      pushLog('Showing local notification via Notification API')
+      new Notification(label + ' Complete', {
+        body,
+        tag: 'pomodoro-timer',
+        icon: '/icon.svg',
+        badge: '/icon.svg'
+      })
+    } else {
+      pushLog('Cannot show notification: permission=' + Notification.permission)
+    }
+  } catch (e) {
+    pushLog('Local notification error: ' + e.message)
+  }
+}
+
 // Subscribe to push and send subscription to server
 async function subscribeToPush(userId) {
   pushLog('subscribeToPush called for: ' + userId?.substring(0, 8) + '...')
@@ -139,11 +186,15 @@ async function subscribeToPush(userId) {
       pushLog('Already subscribed')
     }
 
-    // Save subscription to server
+    // Save subscription to server — with JWT auth
     pushLog('Sending subscription to /api/push/subscribe...')
+    const { data: { session } } = await supabase.auth.getSession()
     const subRes = await fetch('/api/push/subscribe', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + session.access_token
+      },
       body: JSON.stringify({
         user_id: userId,
         subscription: subscription.toJSON()
@@ -169,9 +220,13 @@ async function schedulePushNotification(userId, endTime, mode) {
   pushLog('Scheduling push for ' + mode + ' at ' + new Date(endTime).toLocaleTimeString())
 
   try {
+    const { data: { session } } = await supabase.auth.getSession()
     const res = await fetch('/api/push/schedule', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + session.access_token
+      },
       body: JSON.stringify({ user_id: userId, end_time: endTime, mode })
     })
     const resText = await res.text()
@@ -191,7 +246,6 @@ async function schedulePushNotification(userId, endTime, mode) {
 // ══════════════════════════════════════════════════
 
 export function PomodoroProvider({ children }) {
-  const { user, profile } = useAuth()
   const [focusMins, setFocusMins] = useState(25)
   const [shortMins, setShortMins] = useState(5)
   const [longMins, setLongMins] = useState(15)
@@ -224,38 +278,6 @@ export function PomodoroProvider({ children }) {
   useEffect(() => { modeRef.current = mode }, [mode])
   useEffect(() => { doneRef.current = done }, [done])
   useEffect(() => { runningRef.current = running }, [running])
-
-  // ── Load timer settings from profile ──
-  useEffect(() => {
-    if (profile?.focus_mins != null) setFocusMins(profile.focus_mins)
-    if (profile?.short_mins != null) setShortMins(profile.short_mins)
-    if (profile?.long_mins != null) setLongMins(profile.long_mins)
-  }, [profile])
-
-  // ── Save timer setting to Supabase ──
-  const updateTimerSetting = useCallback(async (field, value) => {
-    if (!user) return
-    const { error } = await supabase
-      .from('profiles')
-      .update({ [field]: value })
-      .eq('id', user.id)
-    if (error) console.error('Failed to save timer setting:', error)
-  }, [user])
-
-  const saveFocusMins = useCallback((val) => {
-    setFocusMins(val)
-    updateTimerSetting('focus_mins', val)
-  }, [updateTimerSetting])
-
-  const saveShortMins = useCallback((val) => {
-    setShortMins(val)
-    updateTimerSetting('short_mins', val)
-  }, [updateTimerSetting])
-
-  const saveLongMins = useCallback((val) => {
-    setLongMins(val)
-    updateTimerSetting('long_mins', val)
-  }, [updateTimerSetting])
 
   // ── Register SW + set up push subscription on user gesture ──
   useEffect(() => {
@@ -346,13 +368,17 @@ export function PomodoroProvider({ children }) {
     setRunning(false)
     setSeconds(0)
 
+    const currentMode = modeRef.current
+    const currentDone = doneRef.current + 1
+
     if (!bgChimedRef.current) {
-      playChime()
+      const soundEnabled = localStorage.getItem('medstudy-sound-enabled') !== 'false'
+      if (soundEnabled) playChime()
+      // Instant local notification — no server round-trip delay
+      showLocalNotification(currentMode)
     }
     bgChimedRef.current = false
 
-    const currentMode = modeRef.current
-    const currentDone = doneRef.current + 1
     setDone(currentDone)
 
     const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
@@ -458,7 +484,9 @@ export function PomodoroProvider({ children }) {
       if (!runningRef.current || !endTimeRef.current) return
       const remainingMs = endTimeRef.current - Date.now()
       if (remainingMs <= 0) {
-        if (!completingRef.current) handleComplete()
+        if (!completingRef.current) {
+          handleComplete()
+        }
         return
       }
       const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000))
@@ -584,9 +612,9 @@ export function PomodoroProvider({ children }) {
     running, setRunning,
     done, setDone,
     seconds, totalSec,
-    focusMins, setFocusMins: saveFocusMins,
-    shortMins, setShortMins: saveShortMins,
-    longMins, setLongMins: saveLongMins,
+    focusMins, setFocusMins,
+    shortMins, setShortMins,
+    longMins, setLongMins,
     selectedTopic, setSelectedTopic,
     sessionPomodoros, setSessionPomodoros,
     sessionStart, setSessionStart,
@@ -611,3 +639,5 @@ export function usePomodoro() {
   if (!ctx) throw new Error('usePomodoro must be used inside PomodoroProvider')
   return ctx
 }
+
+
