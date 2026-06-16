@@ -1,4 +1,4 @@
-**
+/**
  * api/flashcards/index.js
  * GET: List all flashcards for the authenticated user
  * POST: Create one or many flashcards (with FSRS defaults)
