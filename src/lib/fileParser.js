@@ -170,56 +170,150 @@ async function parseApkg(file, onProgress) {
     throw new Error('Could not find fields column in notes table. Columns: ' + colNames.join(', '))
   }
 
-  // Query notes to get field data
-  const noteResult = db.exec(`SELECT id, ${fldsCol} FROM notes`)
-  const noteMap = {}  // nid → field string
-  if (noteResult.length) {
-    for (const row of noteResult[0].values) {
-      noteMap[row[0]] = row[1]
+  // Query notes to get field data and model id
+  const hasMid = colNames.includes('mid')
+  let noteResult
+  const noteMap = {}  // nid → { fields, mid }
+  if (hasMid) {
+    noteResult = db.exec(`SELECT id, mid, ${fldsCol} FROM notes`)
+    if (noteResult.length) {
+      for (const row of noteResult[0].values) {
+        noteMap[row[0]] = { fields: row[2], mid: String(row[1]) }
+      }
+    }
+  } else {
+    noteResult = db.exec(`SELECT id, ${fldsCol} FROM notes`)
+    if (noteResult.length) {
+      for (const row of noteResult[0].values) {
+        noteMap[row[0]] = { fields: row[1], mid: null }
+      }
     }
   }
 
-  // Query cards (link notes to decks)
-  const cardResult = db.exec(`SELECT id, nid, did FROM cards`)
+  // Read model (template) info to handle reversed cards
+  // The models tell us which card templates exist and which field each template shows on front
+  const modelTemplates = {}  // mid → [{ front: fieldIdx, back: fieldIdx }, ...]
+  try {
+    const colTableInfo = db.exec("PRAGMA table_info(col)")
+    const colCols = colTableInfo.length ? colTableInfo[0].values.map(r => r[1]) : []
+    const modelsCol = colCols.includes('models') ? 'models' : null
+
+    if (modelsCol) {
+      const modelsResult = db.exec(`SELECT ${modelsCol} FROM col LIMIT 1`)
+      if (modelsResult.length && modelsResult[0].values[0]) {
+        const models = JSON.parse(modelsResult[0].values[0][0])
+        for (const [mid, model] of Object.entries(models)) {
+          if (model.tmpls && model.flds) {
+            // Get field names to find their indices
+            const fieldNames = model.flds.map(f => f.name.toLowerCase())
+            modelTemplates[mid] = model.tmpls.map(tmpl => {
+              // Parse the template's front and back to find which fields are used
+              const frontTmpl = tmpl.qfmt || ''
+              const backTmpl = tmpl.afmt || ''
+              return {
+                frontTemplate: frontTmpl,
+                backTemplate: backTmpl,
+                fieldNames: fieldNames
+              }
+            })
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // If we can't read models, we'll use default field order
+  }
+
+  // Also try notetypes table (newer Anki versions)
+  try {
+    const ntInfo = db.exec("PRAGMA table_info(notetypes)")
+    if (ntInfo.length) {
+      const ntCols = ntInfo.length ? ntInfo[0].values.map(r => r[1]) : []
+      const hasNtFlds = ntCols.includes('flds')
+      const hasNtTmpls = ntCols.includes('tmpls')
+      if (hasNtFlds && hasNtTmpls) {
+        const ntResult = db.exec('SELECT id, flds, tmpls FROM notetypes')
+        if (ntResult.length) {
+          for (const row of ntResult[0].values) {
+            try {
+              const fields = JSON.parse(row[1])
+              const tmpls = JSON.parse(row[2])
+              const fieldNames = fields.map(f => f.name.toLowerCase())
+              modelTemplates[String(row[0])] = tmpls.map(tmpl => ({
+                frontTemplate: tmpl.qfmt || '',
+                backTemplate: tmpl.afmt || '',
+                fieldNames: fieldNames
+              }))
+            } catch (e) {}
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
+  // Query cards with ord (template ordinal — 0=forward, 1=reversed, etc.)
+  const cardResult = db.exec(`SELECT id, nid, did, ord FROM cards`)
   const result = []
 
   if (cardResult.length) {
     for (const row of cardResult[0].values) {
       const nid = row[1]
-      const fields = noteMap[nid]
+      const ord = row[3] || 0  // card ordinal (0=first template, 1=second, etc.)
+      const note = noteMap[nid]
+      if (!note) continue
+
+      const fields = note.fields
       if (!fields) continue
 
       // Split fields by Anki's field separator \x1f
       const fieldParts = String(fields).split('\x1f')
       if (fieldParts.length < 2) continue
 
-      // SIMPLE RULE: In Anki, the FIRST field is always the front,
-      // the SECOND field is always the back.
-      // This is how Anki templates work — {{Front}} = field 0, {{Back}} = field 1
-      // Any extra fields (Extra, Notes, etc.) are joined to the back
-      const frontHtml = fieldParts[0]
-      const backHtml = fieldParts.length === 2
+      // Determine front and back based on the card template (ord)
+      let frontHtml = fieldParts[0]
+      let backHtml = fieldParts.length === 2
         ? fieldParts[1]
         : fieldParts.slice(1).join('<br>')
 
-      // Check for images in front or back HTML
+      // If we have template info, check if this is a reversed card
+      const mid = note.mid
+      if (mid && modelTemplates[mid] && modelTemplates[mid][ord]) {
+        const tmpl = modelTemplates[mid][ord]
+        const frontTmpl = tmpl.frontTemplate
+
+        // Check if the front template references {{Back}} or field[1] instead of {{Front}}/field[0]
+        // Common patterns for reversed cards:
+        //   {{FrontSide}} → normal (uses front)
+        //   {{Back}} on the question side → reversed
+        //   {{field1}} on question side → reversed
+        const fieldNames = tmpl.fieldNames
+
+        // Simple heuristic: if the front template (qfmt) contains the 2nd field name but not the 1st, it's reversed
+        if (fieldNames.length >= 2) {
+          const frontUsesFirst = frontTmpl.includes('{{' + fieldNames[0]) || frontTmpl.includes('{{Front')
+          const frontUsesSecond = frontTmpl.includes('{{' + fieldNames[1]) || frontTmpl.includes('{{Back')
+
+          if (frontUsesSecond && !frontUsesFirst) {
+            // This is a reversed card — swap front and back
+            frontHtml = fieldParts[1] || fieldParts[0]
+            backHtml = fieldParts[0] || fieldParts[1]
+            if (fieldParts.length > 2) {
+              backHtml = fieldParts[0] + '<br>' + fieldParts.slice(2).join('<br>')
+            }
+          }
+        }
+      }
+
+      // Extract images ONLY from <img> src attributes (strict matching)
       let imageUrl = null
       const frontImgName = extractImgSrc(frontHtml)
       const backImgName = extractImgSrc(backHtml)
-      const imgName = frontImgName || backImgName
 
-      if (imgName && mediaUrls[imgName]) {
-        imageUrl = mediaUrls[imgName]
-      }
-
-      // Also check for images stored with full media path
-      if (!imageUrl) {
-        for (const [name, url] of Object.entries(mediaUrls)) {
-          if (frontHtml.includes(name) || backHtml.includes(name)) {
-            imageUrl = url
-            break
-          }
-        }
+      // Front image takes priority, then back image
+      if (frontImgName && mediaUrls[frontImgName]) {
+        imageUrl = mediaUrls[frontImgName]
+      } else if (backImgName && mediaUrls[backImgName]) {
+        imageUrl = mediaUrls[backImgName]
       }
 
       result.push({
