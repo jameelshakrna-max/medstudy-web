@@ -20,7 +20,7 @@ function processCloze(text, ord) {
   if (!text) return { front: '', back: '' }
   const clozeNum = ord + 1  // ord 0 = c1, ord 1 = c2, etc.
 
-  // First strip HTML
+  // First strip HTML but preserve sentence boundaries
   let clean = stripHtml(text)
 
   // Check if this text actually has cloze deletions
@@ -40,22 +40,25 @@ function processCloze(text, ord) {
     }
   )
 
-  // Build back: reveal THIS card's cloze, replace others with [...]
+  // Build back: reveal ALL clozes (this is how Anki works — the back shows everything)
+  // The current cloze is the "answer" and is highlighted; others are shown normally
   let back = clean.replace(
     /\{\{c(\d+)::([^:}]+?)(?:::([^}]+))?\}\}/g,
     (match, num, hidden, hint) => {
       if (parseInt(num) === clozeNum) {
-        return ' ' + hidden + ' '  // reveal the answer with spacing
+        return ' **' + hidden + '** '  // highlight the answer
       } else {
-        return hint ? ' [' + hint + '] ' : ' [...] '
+        return ' ' + hidden + ' '  // reveal other clozes too
       }
     }
   )
 
-  // Clean up spacing
+  // Clean up spacing and artifacts
   const cleanSpacing = s => s
+    .replace(/,\s*,/g, ',')           // remove double commas (,,)
+    .replace(/\s+,\s*/g, ', ')       // fix comma spacing
+    .replace(/\.([A-Z])/g, '. $1')   // add space after period before capital letter
     .replace(/\s+/g, ' ')           // collapse multiple spaces
-    .replace(/\s,\s/g, ', ')        // fix comma spacing
     .replace(/\s\.\s/g, '. ')       // fix period spacing
     .replace(/\.\s{2,}/g, '. ')     // fix double spaces after periods
     .replace(/\s+$/g, '')           // trim trailing spaces
@@ -348,8 +351,13 @@ async function parseApkg(file, onProgress) {
               if (f.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) return false
               // Skip video link metadata
               if (f.match(/^Watch associated/i)) return false
+              // Skip lines that are just URLs
+              if (f.match(/^https?:\/\//i)) return false
+              // Skip very short junk (< 3 chars)
+              if (f.trim().length < 3) return false
               return true
             })
+            .map(f => f.replace(/,\s*,/g, ',').trim())  // clean artifacts
             .join('\n')
           if (extra) backText += '\n' + extra
         }
