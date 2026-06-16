@@ -33,9 +33,9 @@ function processCloze(text, ord) {
     /\{\{c(\d+)::([^:}]+?)(?:::([^}]+))?\}\}/g,
     (match, num, hidden, hint) => {
       if (parseInt(num) === clozeNum) {
-        return hint ? '[' + hint + ']' : '[...]'
+        return hint ? ' [' + hint + '] ' : ' [...] '
       } else {
-        return hidden  // reveal other clozes
+        return ' ' + hidden + ' '  // reveal other clozes with spacing
       }
     }
   )
@@ -45,14 +45,23 @@ function processCloze(text, ord) {
     /\{\{c(\d+)::([^:}]+?)(?:::([^}]+))?\}\}/g,
     (match, num, hidden, hint) => {
       if (parseInt(num) === clozeNum) {
-        return hidden  // reveal the answer
+        return ' ' + hidden + ' '  // reveal the answer with spacing
       } else {
-        return hint ? '[' + hint + ']' : '[...]'
+        return hint ? ' [' + hint + '] ' : ' [...] '
       }
     }
   )
 
-  return { front, back }
+  // Clean up spacing
+  const cleanSpacing = s => s
+    .replace(/\s+/g, ' ')           // collapse multiple spaces
+    .replace(/\s,\s/g, ', ')        // fix comma spacing
+    .replace(/\s\.\s/g, '. ')       // fix period spacing
+    .replace(/\.\s{2,}/g, '. ')     // fix double spaces after periods
+    .replace(/\s+$/g, '')           // trim trailing spaces
+    .replace(/^\s+/g, '')           // trim leading spaces
+
+  return { front: cleanSpacing(front), back: cleanSpacing(back) }
 }
 
 function stripHtml(html) {
@@ -333,7 +342,14 @@ async function parseApkg(file, onProgress) {
           // Extra fields (like "Extra" or "Notes") go in the back
           const extra = fieldParts.slice(1)
             .map(f => stripHtml(f))
-            .filter(f => f && f.length > 0 && !f.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i))
+            .filter(f => {
+              if (!f || f.length === 0) return false
+              // Skip UUIDs
+              if (f.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) return false
+              // Skip video link metadata
+              if (f.match(/^Watch associated/i)) return false
+              return true
+            })
             .join('\n')
           if (extra) backText += '\n' + extra
         }
