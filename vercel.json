@@ -1,7 +1,7 @@
 {
   "rewrites": [
     {
-      "source": "/((?!api/|sql-wasm\\.wasm).*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ],
@@ -34,3 +34,4 @@
       ]
     }
   ]
+}
