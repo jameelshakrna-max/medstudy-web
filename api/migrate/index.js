@@ -1,5 +1,4 @@
 import { createClient } from '@libsql/client'
-import { jwtVerify, createRemoteJWKSet } from 'jose'
 
 export const config = { regions: ['sin1'] }
 
@@ -8,44 +7,10 @@ const turso = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN,
 })
 
-let JWKS = null
-function getJWKS() {
-  if (!JWKS) {
-    let url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
-    if (!url) throw new Error('Missing SUPABASE_URL')
-    url = url.replace(/\/+$/, '')
-    JWKS = createRemoteJWKSet(new URL(url + '/auth/v1/.well-known/jwks.json'))
-  }
-  return JWKS
-}
-
-function getIssuer() {
-  let url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
-  if (!url) return undefined
-  url = url.replace(/\/+$/, '')
-  return url + '/auth/v1'
-}
-
-async function getUser(req) {
-  const auth = req.headers.get('authorization')
-  if (!auth || !auth.startsWith('Bearer ')) return null
-  const token = auth.replace('Bearer ', '')
-  try {
-    const { payload } = await jwtVerify(token, getJWKS(), {
-      issuer: getIssuer(),
-      audience: 'authenticated',
-    })
-    return { id: payload.sub, email: payload.email, role: payload.role }
-  } catch (e) { return null }
-}
-
 export async function GET(req) {
-  const user = await getUser(req)
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-
   const migrations = []
 
-  // Add FSRS difficulty column (1-10 scale, 0 = not yet rated)
+  // Add FSRS difficulty column
   try {
     await turso.execute(`ALTER TABLE anki_cards ADD COLUMN difficulty REAL DEFAULT 0`)
     migrations.push('added difficulty (REAL DEFAULT 0)')
@@ -57,7 +22,7 @@ export async function GET(req) {
     }
   }
 
-  // Add FSRS stability column (memory stability in days, 0 = new card)
+  // Add FSRS stability column
   try {
     await turso.execute(`ALTER TABLE anki_cards ADD COLUMN stability REAL DEFAULT 0`)
     migrations.push('added stability (REAL DEFAULT 0)')
@@ -69,7 +34,7 @@ export async function GET(req) {
     }
   }
 
-  // Add FSRS state column (0=New, 1=Learning, 2=Review, 3=Relearning)
+  // Add FSRS state column
   try {
     await turso.execute(`ALTER TABLE anki_cards ADD COLUMN state INTEGER DEFAULT 0`)
     migrations.push('added state (INTEGER DEFAULT 0)')
@@ -93,7 +58,7 @@ export async function GET(req) {
     }
   }
 
-  // Migrate existing reviewed cards: set FSRS state=2 (Review), derive difficulty/stability from SM-2
+  // Migrate existing reviewed cards to FSRS
   try {
     const result = await turso.execute(`
       UPDATE anki_cards
@@ -112,9 +77,9 @@ export async function GET(req) {
           END
       WHERE last_reviewed IS NOT NULL AND (state IS NULL OR state = 0)
     `)
-    migrations.push('migrated ' + (result.rowsAffected || 0) + ' existing cards to FSRS (state=Review)')
+    migrations.push('migrated ' + (result.rowsAffected || 0) + ' existing cards to FSRS')
   } catch (e) {
-    migrations.push('SM-2 to FSRS migration warning: ' + e.message)
+    migrations.push('SM-2 to FSRS warning: ' + e.message)
   }
 
   // Make sure unreviewed cards have FSRS defaults
@@ -126,16 +91,16 @@ export async function GET(req) {
     `)
     migrations.push('set ' + (result.rowsAffected || 0) + ' unreviewed cards to state=New')
   } catch (e) {
-    migrations.push('new cards migration warning: ' + e.message)
+    migrations.push('new cards warning: ' + e.message)
   }
 
-  // Show final schema
+  // Show schema
   try {
     const schema = await turso.execute(`PRAGMA table_info(anki_cards)`)
     const columns = schema.rows.map(r => r.name + ' (' + r.type + ')')
     migrations.push('Schema: ' + columns.join(', '))
   } catch (e) {
-    migrations.push('Schema check error: ' + e.message)
+    migrations.push('Schema error: ' + e.message)
   }
 
   return Response.json({ ok: true, migrations })
