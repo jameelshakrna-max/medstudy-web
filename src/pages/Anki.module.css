@@ -1,13 +1,13 @@
-﻿/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   ANKI â€” Complete CSS Module
+﻿/* ══════════════════════════════════════════════════════════════════════════════
+   ANKI — Complete CSS Module
    Self-contained. No shared Page.module.css.
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ══════════════════════════════════════════════════════════════════════════════ */
 
-/* â”€â”€â”€ Base â”€â”€â”€ */
+/* ─── Base ─── */
 .page { position: relative; min-height: 100vh; }
 .loading { color: var(--mist); padding: 40px; font-size: 14px; }
 
-/* â”€â”€â”€ Header â”€â”€â”€ */
+/* ─── Header ─── */
 .header {
   margin-bottom: 28px;
   display: flex;
@@ -45,7 +45,7 @@
   font-weight: 600;
 }
 
-/* â”€â”€â”€ Error Screen â”€â”€â”€ */
+/* ─── Error Screen ─── */
 .errorBox {
   background: rgba(242,92,92,0.06);
   border: 1px solid rgba(242,92,92,0.2);
@@ -74,7 +74,7 @@
 }
 .errorIcon { font-size: 32px; margin-bottom: 8px; }
 
-/* â”€â”€â”€ Breadcrumb â”€â”€â”€ */
+/* ─── Breadcrumb ─── */
 .breadcrumb {
   display: flex;
   align-items: center;
@@ -95,7 +95,7 @@
 .breadSep { color: rgba(255,255,255,0.15); }
 .breadCurrent { color: #E0E8F0; font-weight: 600; }
 
-/* â”€â”€â”€ Tabs â”€â”€â”€ */
+/* ─── Tabs ─── */
 .tabs {
   display: flex;
   align-items: center;
@@ -145,7 +145,7 @@
 }
 .tabAdd:hover { background: var(--teal2); transform: translateY(-1px); }
 
-/* â”€â”€â”€ Deck Grid â”€â”€â”€ */
+/* ─── Deck Grid ─── */
 .deckGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -285,14 +285,14 @@
   grid-column: 1 / -1;
 }
 
-/* â”€â”€â”€ Card List â”€â”€â”€ */
+/* ─── Card List ─── */
 .cardList {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-/* â”€â”€â”€ Anki Card â”€â”€â”€ */
+/* ─── Anki Card ─── */
 .ankiCard {
   background: rgba(255,255,255,0.03);
   border: 1px solid var(--border);
@@ -416,7 +416,7 @@
 .rev_good { background: var(--tealL); color: var(--teal); }
 .rev_easy { background: var(--sageL); color: var(--sage); }
 
-/* â”€â”€â”€ Form â”€â”€â”€ */
+/* ─── Form ─── */
 .formCard {
   background: rgba(255,255,255,0.03);
   border: 1px solid var(--border);
@@ -488,7 +488,7 @@
 .primaryBtn:hover:not(:disabled) { background: var(--teal2); transform: translateY(-1px); }
 .primaryBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* â”€â”€â”€ File Upload â”€â”€â”€ */
+/* ─── File Upload ─── */
 .uploadSection {
   margin-top: 24px;
   padding-top: 24px;
@@ -529,7 +529,7 @@
 .dropText { font-size: 14px; color: var(--mist); margin-bottom: 4px; }
 .dropFormats { font-size: 11px; color: rgba(255,255,255,0.25); }
 
-/* â”€â”€â”€ Upload Preview â”€â”€â”€ */
+/* ─── Upload Preview ─── */
 .previewList {
   background: rgba(255,255,255,0.03);
   border: 1px solid var(--border);
@@ -600,7 +600,7 @@
 }
 .cancelBtn:hover { border-color: var(--coral); color: var(--coral); }
 
-/* â”€â”€â”€ Review Mode â”€â”€â”€ */
+/* ─── Review Mode ─── */
 .reviewHeader {
   display: flex;
   align-items: center;
@@ -695,7 +695,69 @@
 }
 .showAnswerBtn:hover { background: var(--teal2); transform: translateY(-1px); }
 
-/* â”€â”€â”€ Responsive â”€â”€â”€ */
+/* ─── Image Upload ─── */
+.cardImage {
+  margin: 0.5rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.03);
+}
+.cardImage img {
+  width: 100%;
+  max-height: 250px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.imageUploadRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.secondaryBtn {
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.06);
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--mist);
+  transition: background 0.2s;
+}
+.secondaryBtn:hover {
+  background: rgba(255,255,255,0.1);
+}
+.secondaryBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.removeImageBtn {
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid rgba(242,92,92,0.3);
+  background: transparent;
+  color: var(--coral);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+.removeImageBtn:hover {
+  background: rgba(242,92,92,0.08);
+}
+.imagePreview {
+  margin-top: 0.5rem;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px dashed rgba(255,255,255,0.1);
+  padding: 0.25rem;
+}
+.imagePreview img {
+  width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+/* ─── Responsive ─── */
 @media (max-width: 480px) {
   .header { flex-direction: column; align-items: flex-start; }
   .pills { width: 100%; }
@@ -887,8 +949,3 @@
 }
 .copyCardBtn:hover { background: var(--teal, #14b8a6); color: white; }
 .copyCardBtn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-
-
-
-

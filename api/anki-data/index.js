@@ -46,6 +46,7 @@ function mapCard(r) {
     deck_id: r.deck_id || null,
     front: r.front,
     back: r.back,
+    image_url: r.image_url || null,
     high_yield: Boolean(r.high_yield),
     difficulty: Number(r.difficulty) || 0,
     stability: Number(r.stability) || 0,
@@ -69,7 +70,7 @@ export async function GET(req) {
   try {
     const [deckResult, cardResult] = await Promise.all([
       turso.execute({ sql: 'SELECT id, user_id, name, description, created_at FROM anki_decks WHERE user_id = ? ORDER BY name ASC', args: [user.id] }),
-      turso.execute({ sql: "SELECT id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, interval, repetitions, last_review, next_review, difficulty, stability, state, reps, lapses, elapsed_days, scheduled_days, created_at FROM anki_cards WHERE user_id = ? ORDER BY CASE WHEN next_review IS NULL AND next_review_date IS NULL THEN 1 ELSE 0 END, COALESCE(next_review, next_review_date) ASC, created_at DESC", args: [user.id] })
+      turso.execute({ sql: "SELECT id, user_id, deck_id, front, back, image_url, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, interval, repetitions, last_review, next_review, difficulty, stability, state, reps, lapses, elapsed_days, scheduled_days, created_at FROM anki_cards WHERE user_id = ? ORDER BY CASE WHEN next_review IS NULL AND next_review_date IS NULL THEN 1 ELSE 0 END, COALESCE(next_review, next_review_date) ASC, created_at DESC", args: [user.id] })
     ])
     const decks = deckResult.rows.map(r => ({
       id: r.id, user_id: r.user_id, name: r.name,

@@ -51,6 +51,7 @@ function mapCard(r) {
     deck_id: r.deck_id || null,
     front: r.front,
     back: r.back,
+    image_url: r.image_url || null,
     high_yield: Boolean(r.high_yield),
     ease_factor: Number(r.ease_factor),
     interval: Number(r.interval_days),
@@ -72,12 +73,13 @@ export async function PUT(req) {
     const times_reviewed = body.repetitions ?? body.times_reviewed ?? 0
     const next_review_date = (body.next_review ?? body.next_review_date) || null
     const last_reviewed = (body.last_review ?? body.last_reviewed) || null
+    const image_url = body.image_url || null
     await turso.execute({
-      sql: `UPDATE anki_cards SET ease_factor = ?, interval_days = ?, times_reviewed = ?, next_review_date = ?, last_reviewed = ? WHERE id = ? AND user_id = ?`,
-      args: [ease_factor, interval_days, times_reviewed, next_review_date, last_reviewed, id, user.id],
+      sql: `UPDATE anki_cards SET ease_factor = ?, interval_days = ?, times_reviewed = ?, next_review_date = ?, last_reviewed = ?, image_url = ? WHERE id = ? AND user_id = ?`,
+      args: [ease_factor, interval_days, times_reviewed, next_review_date, last_reviewed, image_url, id, user.id],
     })
     const result = await turso.execute({
-      sql: 'SELECT id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, created_at FROM anki_cards WHERE id = ? AND user_id = ?',
+      sql: 'SELECT id, user_id, deck_id, front, back, image_url, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, created_at FROM anki_cards WHERE id = ? AND user_id = ?',
       args: [id, user.id],
     })
     if (result.rows.length) return Response.json(mapCard(result.rows[0]))

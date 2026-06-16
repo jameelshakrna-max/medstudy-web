@@ -46,6 +46,7 @@ function mapCard(r) {
     deck_id: r.deck_id || null,
     front: r.front,
     back: r.back,
+    image_url: r.image_url || null,
     high_yield: Boolean(r.high_yield),
     ease_factor: Number(r.ease_factor),
     interval: Number(r.interval ?? r.interval_days),
@@ -64,10 +65,10 @@ export async function GET(req) {
     const deckId = url.searchParams.get('deck_id')
     let sql, args
     if (deckId) {
-      sql = 'SELECT id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date FROM anki_cards WHERE user_id = ? AND deck_id = ? ORDER BY CASE WHEN next_review_date IS NULL THEN 1 ELSE 0 END, next_review_date ASC, created_at DESC'
+      sql = 'SELECT id, user_id, deck_id, front, back, image_url, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date FROM anki_cards WHERE user_id = ? AND deck_id = ? ORDER BY CASE WHEN next_review_date IS NULL THEN 1 ELSE 0 END, next_review_date ASC, created_at DESC'
       args = [user.id, deckId]
     } else {
-      sql = 'SELECT id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date FROM anki_cards WHERE user_id = ? ORDER BY CASE WHEN next_review_date IS NULL THEN 1 ELSE 0 END, next_review_date ASC, created_at DESC'
+      sql = 'SELECT id, user_id, deck_id, front, back, image_url, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date FROM anki_cards WHERE user_id = ? ORDER BY CASE WHEN next_review_date IS NULL THEN 1 ELSE 0 END, next_review_date ASC, created_at DESC'
       args = [user.id]
     }
     const result = await turso.execute({ sql, args })
@@ -93,12 +94,12 @@ export async function POST(req) {
       const nextRev = (c.next_review ?? c.next_review_date) || today
       const lastRev = (c.last_review ?? c.last_reviewed) || null
       await turso.execute({
-        sql: `INSERT INTO anki_cards (id, user_id, deck_id, front, back, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, interval, repetitions, last_review, next_review, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-        args: [id, user.id, c.deck_id || null, c.front, c.back, c.high_yield ? 1 : 0, c.ease_factor ?? 2.5, interval, repetitions, lastRev, nextRev, interval, repetitions, lastRev, nextRev],
+        sql: `INSERT INTO anki_cards (id, user_id, deck_id, front, back, image_url, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, interval, repetitions, last_review, next_review, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+        args: [id, user.id, c.deck_id || null, c.front, c.back, c.image_url || null, c.high_yield ? 1 : 0, c.ease_factor ?? 2.5, interval, repetitions, lastRev, nextRev, interval, repetitions, lastRev, nextRev],
       })
       inserted.push({
         id, user_id: user.id, deck_id: c.deck_id || null, front: c.front, back: c.back,
-        high_yield: Boolean(c.high_yield), ease_factor: c.ease_factor ?? 2.5,
+        image_url: c.image_url || null, high_yield: Boolean(c.high_yield), ease_factor: c.ease_factor ?? 2.5,
         interval, repetitions, last_review: lastRev, next_review: nextRev,
         created_at: new Date().toISOString()
       })
