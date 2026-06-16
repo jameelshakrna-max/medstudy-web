@@ -144,9 +144,11 @@ async function parseApkg(file, onProgress) {
 
   const dbBuffer = await dbFile.async('arraybuffer')
 
-  // Use sql.js to read the SQLite database
+  // Use sql.js to read the SQLite database (load WASM from CDN to avoid Vite bundling issues)
   const initSqlJs = (await import('sql.js')).default
-  const SQL = await initSqlJs()
+  const SQL = await initSqlJs({
+    locateFile: file => `https://sql.js.org/dist/${file}`
+  })
   const db = new SQL.Database(new Uint8Array(dbBuffer))
 
   // Query notes (front/back content)
