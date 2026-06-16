@@ -287,6 +287,34 @@ function fsrs(option, card) {
   }
 }
 
+/**
+ * Format an interval (in days) as a human-readable label
+ * e.g. 0.0007 → "1m", 0.5 → "12h", 1 → "1d", 14 → "14d", 60 → "2mo"
+ */
+function formatInterval(intervalDays) {
+  if (intervalDays < 1) {
+    const mins = Math.round(intervalDays * 1440)
+    if (mins < 60) return mins + 'm'
+    const hrs = Math.round(intervalDays * 24)
+    return hrs + 'h'
+  }
+  if (intervalDays < 30) return Math.round(intervalDays) + 'd'
+  return Math.round(intervalDays / 30) + 'mo'
+}
+
+/**
+ * Preview FSRS intervals for all 4 rating options
+ * Returns { again: '1m', hard: '10m', good: '4d', easy: '7d' }
+ */
+function previewIntervals(card) {
+  const labels = {}
+  for (const option of ['Again', 'Hard', 'Good', 'Easy']) {
+    const result = fsrs(option, card)
+    labels[option.toLowerCase()] = formatInterval(result.interval)
+  }
+  return labels
+}
+
 /* ── component ──────────────────────────────────────────── */
 
 export default function Anki() {
@@ -330,6 +358,10 @@ export default function Anki() {
 
   // single-card inline review (browse view)
   const [reviewingCardId, setReviewingCardId] = useState(null)
+
+  // optimistic UI: track pending review saves
+  const [submitting, setSubmitting] = useState(false)
+  const [toast, setToast] = useState(null) // { msg, type } | null
 
   /* ── data loading ────────────────────────────────────── */
 
@@ -436,6 +468,20 @@ export default function Anki() {
     const c = queue[qIdx]
     if (!c) return
     const u = fsrs(option, c)
+
+    // ── OPTIMISTIC: advance UI immediately ──
+    const nextIdx = qIdx + 1
+    const isLast = nextIdx >= queue.length
+
+    if (isLast) {
+      setView(activeDeckId ? 'browse' : 'decks')
+    } else {
+      setQIdx(nextIdx)
+      setShowAns(false)
+    }
+    setSubmitting(true)
+
+    // ── BACKGROUND: save to server ──
     try {
       const r = await apiPut('/flashcards/' + c.id, {
         difficulty: u.difficulty,
@@ -446,14 +492,14 @@ export default function Anki() {
         last_review: u.last_review
       })
       if (r.error) throw new Error(r.error)
-      if (qIdx + 1 < queue.length) {
-        setQIdx(qIdx + 1)
-        setShowAns(false)
-      } else {
-        setView(activeDeckId ? 'browse' : 'decks')
-        load()
-      }
-    } catch (e) { alert(e.message) }
+      // success — reload data silently to sync DB state
+      if (isLast) load()
+    } catch (e) {
+      // failed — show toast, don't block the user
+      setToast({ msg: 'Save failed: ' + e.message, type: 'error' })
+      setTimeout(() => setToast(null), 4000)
+    }
+    setSubmitting(false)
   }
 
   function exitReview() {
@@ -468,6 +514,12 @@ export default function Anki() {
 
   async function submitInlineReview(option, card) {
     const u = fsrs(option, card)
+
+    // ── OPTIMISTIC: close the review UI immediately ──
+    setReviewingCardId(null)
+    setSubmitting(true)
+
+    // ── BACKGROUND: save to server ──
     try {
       const r = await apiPut('/flashcards/' + card.id, {
         difficulty: u.difficulty,
@@ -478,9 +530,16 @@ export default function Anki() {
         last_review: u.last_review
       })
       if (r.error) throw new Error(r.error)
-      setReviewingCardId(null)
+      // success — reload silently
       load()
-    } catch (e) { alert(e.message) }
+    } catch (e) {
+      // failed — show toast
+      setToast({ msg: 'Save failed: ' + e.message, type: 'error' })
+      setTimeout(() => setToast(null), 4000)
+      // restore the review state so user can retry
+      setReviewingCardId(card.id)
+    }
+    setSubmitting(false)
   }
 
   /* ── file upload / import ────────────────────────────── */
@@ -582,7 +641,7 @@ export default function Anki() {
       <div className={s.header}>
         <div>
           <h1 className={s.title}>Anki</h1>
-          <p className={s.sub}>Spaced repetition — FSRS</p>
+          <p className={s.sub}>Spaced repetition — FSRS{submitting && <span className={s.savingDot} />}</p>
         </div>
         <div className={s.pills}>
           {[
@@ -778,15 +837,18 @@ export default function Anki() {
 
                   {isReviewing ? (
                     <div className={s.reviewBtns}>
-                      {['again', 'hard', 'good', 'easy'].map(o => (
-                        <button
-                          key={o}
-                          className={`${s.revBtn} ${o === 'again' ? s.rev_again : o === 'hard' ? s.rev_hard : o === 'good' ? s.rev_good : s.rev_easy}`}
-                          onClick={() => submitInlineReview(o, card)}
-                        >
-                          {o.charAt(0).toUpperCase() + o.slice(1)}
-                        </button>
-                      ))}
+                      <button className={`${s.revBtn} ${s.rev_again}`} onClick={() => submitInlineReview('again', card)}>
+                        Again<span className={s.revInterval}>{previewIntervals(card).again}</span>
+                      </button>
+                      <button className={`${s.revBtn} ${s.rev_hard}`} onClick={() => submitInlineReview('hard', card)}>
+                        Hard<span className={s.revInterval}>{previewIntervals(card).hard}</span>
+                      </button>
+                      <button className={`${s.revBtn} ${s.rev_good}`} onClick={() => submitInlineReview('good', card)}>
+                        Good<span className={s.revInterval}>{previewIntervals(card).good}</span>
+                      </button>
+                      <button className={`${s.revBtn} ${s.rev_easy}`} onClick={() => submitInlineReview('easy', card)}>
+                        Easy<span className={s.revInterval}>{previewIntervals(card).easy}</span>
+                      </button>
                     </div>
                   ) : (
                     <button
@@ -1047,15 +1109,30 @@ export default function Anki() {
                 </div>
 
                 <div className={s.reviewBtns}>
-                  <button className={`${s.revBtn} ${s.rev_again}`} onClick={() => submitReview('again')}>Again</button>
-                  <button className={`${s.revBtn} ${s.rev_hard}`} onClick={() => submitReview('hard')}>Hard</button>
-                  <button className={`${s.revBtn} ${s.rev_good}`} onClick={() => submitReview('good')}>Good</button>
-                  <button className={`${s.revBtn} ${s.rev_easy}`} onClick={() => submitReview('easy')}>Easy</button>
+                  <button className={`${s.revBtn} ${s.rev_again}`} onClick={() => submitReview('again')}>
+                    Again<span className={s.revInterval}>{previewIntervals(cur).again}</span>
+                  </button>
+                  <button className={`${s.revBtn} ${s.rev_hard}`} onClick={() => submitReview('hard')}>
+                    Hard<span className={s.revInterval}>{previewIntervals(cur).hard}</span>
+                  </button>
+                  <button className={`${s.revBtn} ${s.rev_good}`} onClick={() => submitReview('good')}>
+                    Good<span className={s.revInterval}>{previewIntervals(cur).good}</span>
+                  </button>
+                  <button className={`${s.revBtn} ${s.rev_easy}`} onClick={() => submitReview('easy')}>
+                    Easy<span className={s.revInterval}>{previewIntervals(cur).easy}</span>
+                  </button>
                 </div>
               </>
             )}
           </div>
         </>
+      )}
+
+      {/* ── toast notification ── */}
+      {toast && (
+        <div className={`${s.toast} ${toast.type === 'error' ? s.toastError : ''}`}>
+          {toast.msg}
+        </div>
       )}
     </div>
   )

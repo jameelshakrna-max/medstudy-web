@@ -1,4 +1,4 @@
-﻿/* ══════════════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════════════════════
    ANKI — Complete CSS Module
    Self-contained. No shared Page.module.css.
    ══════════════════════════════════════════════════════════════════════════════ */
@@ -411,6 +411,14 @@
   transition: all 0.2s;
 }
 .revBtn:hover { opacity: 0.8; transform: translateY(-1px); }
+.revInterval {
+  display: inline;
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.65;
+  font-family: 'DM Mono', monospace;
+  margin-left: 4px;
+}
 .rev_again { background: var(--coralL); color: var(--coral); }
 .rev_hard { background: var(--goldL); color: var(--gold); }
 .rev_good { background: var(--tealL); color: var(--teal); }
@@ -757,6 +765,49 @@
   max-height: 200px;
   object-fit: contain;
   border-radius: 6px;
+}
+
+/* ─── Optimistic UI: Toast ─── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  animation: toastIn 0.3s ease-out;
+  max-width: 90vw;
+  text-align: center;
+  pointer-events: none;
+}
+.toastError {
+  background: rgba(242, 92, 92, 0.15);
+  border: 1px solid rgba(242, 92, 92, 0.3);
+  color: var(--coral);
+  backdrop-filter: blur(12px);
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Optimistic UI: saving indicator */
+.savingDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--teal);
+  margin-left: 8px;
+  animation: pulse 0.8s ease-in-out infinite;
+  vertical-align: middle;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
 }
 
 /* ─── Responsive ─── */
