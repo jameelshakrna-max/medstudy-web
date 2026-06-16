@@ -137,10 +137,18 @@ async function parseApkg(file, onProgress) {
   }
 
   // Read the SQLite database
+  // Try all known Anki database file names (newest first)
   onProgress?.('Reading cards...')
-  const dbFile = zip.file('collection.anki2') || zip.file('collection.anki21')
+  const dbFile =
+    zip.file('collection.anki21b') ||  // Anki 23.10+
+    zip.file('collection.anki21')  ||  // Anki 2.1.45+
+    zip.file('collection.anki2')   ||  // Anki 2.0/2.1 early
+    zip.file('collection.db')           // very old or alternative exports
+
   if (!dbFile) {
-    throw new Error('Invalid .apkg file: no database found')
+    // List what's in the zip for debugging
+    const files = Object.keys(zip.files).join(', ')
+    throw new Error('Invalid .apkg file: no database found. Files in archive: ' + files)
   }
 
   const dbBuffer = await dbFile.async('arraybuffer')
@@ -152,15 +160,24 @@ async function parseApkg(file, onProgress) {
   })
   const db = new SQL.Database(new Uint8Array(dbBuffer))
 
-  // Query notes (Anki uses 'flds' column for fields)
-  const notes = {}
-  let noteResult
-  try {
-    noteResult = db.exec('SELECT id, flds FROM notes')
-  } catch (e) {
-    // Fallback for older/different schemas
-    noteResult = db.exec('SELECT id, fields FROM notes')
+  // Discover the actual column names in the notes table
+  const tableInfo = db.exec("PRAGMA table_info(notes)")
+  const colNames = tableInfo.length ? tableInfo[0].values.map(r => r[1]) : []
+
+  // Find the fields column (Anki versions use different names)
+  const fldsCol = colNames.includes('flds') ? 'flds'
+    : colNames.includes('fields') ? 'fields'
+    : colNames.includes('flds') ? 'flds'
+    : null
+
+  if (!fldsCol) {
+    db.close()
+    throw new Error('Could not find fields column in notes table. Columns: ' + colNames.join(', '))
   }
+
+  // Query notes
+  const notes = {}
+  const noteResult = db.exec(`SELECT id, ${fldsCol} FROM notes`)
   if (noteResult.length) {
     for (const row of noteResult[0].values) {
       notes[row[0]] = row[1]
@@ -169,16 +186,9 @@ async function parseApkg(file, onProgress) {
 
   // Query cards (link notes to decks)
   const cards = []
-  let cardResult
-  try {
-    cardResult = db.exec(
-      'SELECT c.id, c.nid, c.did, n.flds FROM cards c JOIN notes n ON c.nid = n.id'
-    )
-  } catch (e) {
-    cardResult = db.exec(
-      'SELECT c.id, c.nid, c.did, n.fields FROM cards c JOIN notes n ON c.nid = n.id'
-    )
-  }
+  const cardResult = db.exec(
+    `SELECT c.id, c.nid, c.did, n.${fldsCol} FROM cards c JOIN notes n ON c.nid = n.id`
+  )
   if (cardResult.length) {
     for (const row of cardResult[0].values) {
       cards.push({ id: row[0], nid: row[1], did: row[2], fields: row[3] })
@@ -286,7 +296,7 @@ function parseTxt(text) {
 export async function parseFile(file, onProgress) {
   const name = file.name.toLowerCase()
 
-  if (name.endsWith('.apkg')) {
+  if (name.endsWith('.apkg') || name.endsWith('.colpkg')) {
     return parseApkg(file, onProgress)
   }
 
