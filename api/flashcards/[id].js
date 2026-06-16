@@ -1,81 +1,150 @@
-/**
- * api/flashcards/[id].js
- * PUT: Update a flashcard with FSRS scheduling data
- * DELETE: Delete a flashcard
- *
- * FSRS fields sent from the client:
- *   difficulty, stability, state, interval, next_review, last_review
- */
-
 import { createClient } from '@libsql/client'
+import { jwtVerify, createRemoteJWKSet } from 'jose'
 
-const db = createClient({
-  url: process.env.TURSO_DB_URL,
-  authToken: process.env.TURSO_DB_AUTH_TOKEN,
+export const config = { regions: ['sin1'] }
+
+const turso = createClient({
+  url: process.env.TURSO_DATABASE_URL,
+  authToken: process.env.TURSO_AUTH_TOKEN,
 })
 
-export default async function handler(req, res) {
-  const { id } = req.query
-
-  if (!id) {
-    return res.status(400).json({ error: 'Missing card ID' })
+let JWKS = null
+function getJWKS() {
+  if (!JWKS) {
+    let url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+    if (!url) throw new Error('Missing SUPABASE_URL')
+    url = url.replace(/\/+$/, '')
+    JWKS = createRemoteJWKSet(new URL(url + '/auth/v1/.well-known/jwks.json'))
   }
+  return JWKS
+}
 
-  // Verify auth
-  const auth = req.headers.authorization
-  if (!auth?.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized' })
+function getIssuer() {
+  let url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+  if (!url) return undefined
+  url = url.replace(/\/+$/, '')
+  return url + '/auth/v1'
+}
+
+async function getUser(req) {
+  const auth = req.headers.get('authorization')
+  if (!auth || !auth.startsWith('Bearer ')) return null
+  const token = auth.replace('Bearer ', '')
+  try {
+    const { payload } = await jwtVerify(token, getJWKS(), {
+      issuer: getIssuer(),
+      audience: 'authenticated',
+    })
+    return { id: payload.sub, email: payload.email, role: payload.role }
+  } catch (e) { return null }
+}
+
+function extractId(url) {
+  const parts = new URL(url).pathname.split('/')
+  return parts[parts.length - 1]
+}
+
+function mapCard(r) {
+  return {
+    id: r.id,
+    user_id: r.user_id,
+    deck_id: r.deck_id || null,
+    front: r.front,
+    back: r.back,
+    high_yield: Boolean(r.high_yield),
+    image_url: r.image_url || null,
+    // FSRS fields
+    difficulty: Number(r.difficulty ?? 0),
+    stability: Number(r.stability ?? 0),
+    state: Number(r.state ?? 0),
+    // Legacy SM-2 fields
+    ease_factor: Number(r.ease_factor),
+    interval: Number(r.interval ?? r.interval_days),
+    repetitions: Number(r.repetitions ?? r.times_reviewed),
+    last_review: (r.last_review ?? r.last_reviewed) || null,
+    next_review: (r.next_review ?? r.next_review_date) || null,
+    created_at: r.created_at,
   }
+}
 
-  // ── PUT: Update card ─────────────────────────────────
-  if (req.method === 'PUT') {
-    const {
-      front, back, high_yield, image_url,
-      // FSRS fields
-      difficulty, stability, state, interval,
-      next_review, last_review,
-      // Legacy SM-2 fields (still supported for backward compat)
-      ease_factor, repetitions
-    } = req.body
+export async function PUT(req) {
+  const user = await getUser(req)
+  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const id = extractId(req.url)
+    const body = await req.json()
 
     // Build SET clause dynamically
     const sets = []
-    const vals = []
-
-    if (front !== undefined) { sets.push('front = ?'); vals.push(front) }
-    if (back !== undefined) { sets.push('back = ?'); vals.push(back) }
-    if (high_yield !== undefined) { sets.push('high_yield = ?'); vals.push(high_yield ? 1 : 0) }
-    if (image_url !== undefined) { sets.push('image_url = ?'); vals.push(image_url) }
+    const args = []
 
     // FSRS fields
-    if (difficulty !== undefined) { sets.push('difficulty = ?'); vals.push(difficulty) }
-    if (stability !== undefined) { sets.push('stability = ?'); vals.push(stability) }
-    if (state !== undefined) { sets.push('state = ?'); vals.push(state) }
-    if (interval !== undefined) { sets.push('interval = ?'); vals.push(interval) }
-    if (next_review !== undefined) { sets.push('next_review = ?'); vals.push(next_review) }
-    if (last_review !== undefined) { sets.push('last_review = ?'); vals.push(last_review) }
+    if (body.difficulty !== undefined) { sets.push('difficulty = ?'); args.push(body.difficulty) }
+    if (body.stability !== undefined) { sets.push('stability = ?'); args.push(body.stability) }
+    if (body.state !== undefined) { sets.push('state = ?'); args.push(body.state) }
 
-    // Legacy SM-2 fields (still write them for compatibility)
-    if (ease_factor !== undefined) { sets.push('ease_factor = ?'); vals.push(ease_factor) }
-    if (repetitions !== undefined) { sets.push('repetitions = ?'); vals.push(repetitions) }
+    // Legacy SM-2 fields
+    if (body.ease_factor !== undefined) { sets.push('ease_factor = ?'); args.push(body.ease_factor) }
+    if (body.interval !== undefined || body.interval_days !== undefined) {
+      const iv = body.interval ?? body.interval_days ?? 0
+      sets.push('interval_days = ?'); args.push(iv)
+      sets.push('interval = ?'); args.push(iv)
+    }
+    if (body.repetitions !== undefined || body.times_reviewed !== undefined) {
+      const rep = body.repetitions ?? body.times_reviewed ?? 0
+      sets.push('times_reviewed = ?'); args.push(rep)
+      sets.push('repetitions = ?'); args.push(rep)
+    }
+    if (body.next_review !== undefined || body.next_review_date !== undefined) {
+      const nr = (body.next_review ?? body.next_review_date) || null
+      sets.push('next_review_date = ?'); args.push(nr)
+      sets.push('next_review = ?'); args.push(nr)
+    }
+    if (body.last_review !== undefined || body.last_reviewed !== undefined) {
+      const lr = (body.last_review ?? body.last_reviewed) || null
+      sets.push('last_reviewed = ?'); args.push(lr)
+      sets.push('last_review = ?'); args.push(lr)
+    }
+
+    // Other fields
+    if (body.front !== undefined) { sets.push('front = ?'); args.push(body.front) }
+    if (body.back !== undefined) { sets.push('back = ?'); args.push(body.back) }
+    if (body.high_yield !== undefined) { sets.push('high_yield = ?'); args.push(body.high_yield ? 1 : 0) }
+    if (body.image_url !== undefined) { sets.push('image_url = ?'); args.push(body.image_url) }
 
     if (!sets.length) {
-      return res.status(400).json({ error: 'No fields to update' })
+      return Response.json({ error: 'No fields to update' }, { status: 400 })
     }
 
-    vals.push(id)
+    args.push(id, user.id)
 
-    try {
-      await db.execute(
-        `UPDATE anki_cards SET ${sets.join(', ')} WHERE id = ?`,
-        vals
-      )
-      return res.json({ ok: true })
-    } catch (e) {
-      return res.status(500).json({ error: e.message })
-    }
+    await turso.execute({
+      sql: `UPDATE anki_cards SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`,
+      args,
+    })
+
+    const result = await turso.execute({
+      sql: 'SELECT id, user_id, deck_id, front, back, high_yield, image_url, difficulty, stability, state, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, interval, repetitions, last_review, next_review, created_at FROM anki_cards WHERE id = ? AND user_id = ?',
+      args: [id, user.id],
+    })
+    if (result.rows.length) return Response.json(mapCard(result.rows[0]))
+    return Response.json({ error: 'Card not found' }, { status: 404 })
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 })
   }
+}
 
-  // ── DELETE: Remove card ──────────────────────────────
-  if (req.method === 'DELETE') {
-    tr
+export async function DELETE(req) {
+  const user = await getUser(req)
+  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const id = extractId(req.url)
+    await turso.execute({
+      sql: 'DELETE FROM anki_cards WHERE id = ? AND user_id = ?',
+      args: [id, user.id],
+    })
+    return Response.json({ success: true })
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 })
+  }
+}
