@@ -1,7 +1,8 @@
 /**
  * lib/fileParser.js
- * Parses .apkg, .csv, .tsv, .txt files into flashcard arrays.
+ * Parses .apkg, .colpkg, .csv, .tsv, .txt files into flashcard arrays.
  * .apkg files extract images from media and return base64 data URLs.
+ * Reads Anki model templates to correctly identify front/back fields.
  */
 
 import JSZip from 'jszip'
@@ -121,12 +122,9 @@ async function parseApkg(file, onProgress) {
       if (mime !== 'image/svg+xml') {
         mediaUrls[filename] = await resizeBlobToDataUrl(blob)
       } else {
-        // SVG: convert to data URL directly
-        const svgText = await zippedFile.async('text')
         mediaUrls[filename] = 'data:image/svg+xml;base64,' + base64
       }
     } catch (e) {
-      // Skip files that fail to process
       console.warn('Skipping media file:', filename, e.message)
     }
 
@@ -146,7 +144,6 @@ async function parseApkg(file, onProgress) {
     zip.file('collection.db')           // very old or alternative exports
 
   if (!dbFile) {
-    // List what's in the zip for debugging
     const files = Object.keys(zip.files).join(', ')
     throw new Error('Invalid .apkg file: no database found. Files in archive: ' + files)
   }
@@ -167,7 +164,6 @@ async function parseApkg(file, onProgress) {
   // Find the fields column (Anki versions use different names)
   const fldsCol = colNames.includes('flds') ? 'flds'
     : colNames.includes('fields') ? 'fields'
-    : colNames.includes('flds') ? 'flds'
     : null
 
   if (!fldsCol) {
@@ -175,38 +171,120 @@ async function parseApkg(file, onProgress) {
     throw new Error('Could not find fields column in notes table. Columns: ' + colNames.join(', '))
   }
 
-  // Query notes
-  const notes = {}
-  const noteResult = db.exec(`SELECT id, ${fldsCol} FROM notes`)
-  if (noteResult.length) {
-    for (const row of noteResult[0].values) {
-      notes[row[0]] = row[1]
+  // Check if notes table has mid (model id) column
+  const hasMid = colNames.includes('mid')
+
+  // Read model (template) info to determine field names
+  // This tells us which field is "front" vs "back"
+  let modelFieldNames = {}  // mid → array of field names like ["Front", "Back", "Extra"]
+  try {
+    // Anki stores models as JSON in the col table
+    const colTableInfo = db.exec("PRAGMA table_info(col)")
+    const colCols = colTableInfo.length ? colTableInfo[0].values.map(r => r[1]) : []
+    const modelsCol = colCols.includes('models') ? 'models'
+      : colCols.includes('decks') ? 'decks'  // fallback
+      : null
+
+    if (modelsCol) {
+      const modelsResult = db.exec(`SELECT ${modelsCol} FROM col LIMIT 1`)
+      if (modelsResult.length && modelsResult[0].values[0]) {
+        const models = JSON.parse(modelsResult[0].values[0][0])
+        for (const [mid, model] of Object.entries(models)) {
+          if (model.flds) {
+            modelFieldNames[mid] = model.flds.map(f => f.name)
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // If we can't read models, we'll use position-based field assignment
+  }
+
+  // Also try notetypes table (newer Anki versions)
+  try {
+    const ntInfo = db.exec("PRAGMA table_info(notetypes)")
+    if (ntInfo.length) {
+      const ntResult = db.exec('SELECT id, flds FROM notetypes')
+      if (ntResult.length) {
+        for (const row of ntResult[0].values) {
+          try {
+            const fields = JSON.parse(row[1])
+            modelFieldNames[row[0]] = fields.map(f => f.name)
+          } catch (e) {}
+        }
+      }
+    }
+  } catch (e) {}
+
+  // Query notes with their mid (model id) for field name lookup
+  const noteMap = {}  // nid → { fields, mid }
+  let noteResult
+  if (hasMid) {
+    noteResult = db.exec(`SELECT id, mid, ${fldsCol} FROM notes`)
+    if (noteResult.length) {
+      for (const row of noteResult[0].values) {
+        noteMap[row[0]] = { fields: row[2], mid: String(row[1]) }
+      }
+    }
+  } else {
+    noteResult = db.exec(`SELECT id, ${fldsCol} FROM notes`)
+    if (noteResult.length) {
+      for (const row of noteResult[0].values) {
+        noteMap[row[0]] = { fields: row[1], mid: null }
+      }
     }
   }
 
   // Query cards (link notes to decks)
-  const cards = []
+  const cardRows = []
   const cardResult = db.exec(
-    `SELECT c.id, c.nid, c.did, n.${fldsCol} FROM cards c JOIN notes n ON c.nid = n.id`
+    `SELECT id, nid, did FROM cards`
   )
   if (cardResult.length) {
     for (const row of cardResult[0].values) {
-      cards.push({ id: row[0], nid: row[1], did: row[2], fields: row[3] })
+      const note = noteMap[row[1]]
+      if (note) {
+        cardRows.push({ id: row[0], nid: row[1], did: row[2], fields: note.fields, mid: note.mid })
+      }
     }
   }
 
   db.close()
 
   // Parse cards into front/back + image
-  onProgress?.(`Found ${cards.length} cards`)
+  onProgress?.(`Found ${cardRows.length} cards`)
   const result = []
 
-  for (const card of cards) {
+  for (const card of cardRows) {
     const fieldParts = card.fields.split('\x1f')  // Anki uses \x1f as field separator
     if (fieldParts.length < 2) continue
 
-    const frontHtml = fieldParts[0]
-    const backHtml = fieldParts.slice(1).join('<br>')
+    // Determine front and back based on field names from the model
+    let frontIdx = 0
+    let backIdx = 1
+
+    if (card.mid && modelFieldNames[card.mid]) {
+      const names = modelFieldNames[card.mid]
+      const lowerNames = names.map(n => n.toLowerCase().trim())
+      // Look for common front field names
+      const frontHint = lowerNames.findIndex(n =>
+        n === 'front' || n === 'question' || n === 'q' || n === 'term' || n === 'word' || n === 'prompt'
+      )
+      // Look for common back field names
+      const backHint = lowerNames.findIndex(n =>
+        n === 'back' || n === 'answer' || n === 'a' || n === 'definition' || n === 'meaning' || n === 'response'
+      )
+      if (frontHint >= 0) frontIdx = frontHint
+      if (backHint >= 0) backIdx = backHint
+      // If only front found, back = everything else
+      if (frontHint >= 0 && backHint < 0) backIdx = -1
+    }
+
+    const frontHtml = fieldParts[frontIdx] || fieldParts[0]
+    // Back is either the detected back field, or everything except front joined
+    const backHtml = backIdx >= 0
+      ? (fieldParts[backIdx] || fieldParts.slice(1).join('<br>'))
+      : fieldParts.filter((_, i) => i !== frontIdx).join('<br>')
 
     // Check for images in front or back
     let imageUrl = null
@@ -245,13 +323,10 @@ function parseCsv(text, delimiter = ',') {
   const cards = []
 
   for (const line of lines) {
-    // Simple split (doesn't handle quoted fields with delimiters inside)
-    // For production, use a proper CSV parser, but this works for most flashcard exports
     let parts
     if (delimiter === '\t') {
       parts = line.split('\t')
     } else {
-      // Handle basic quoting
       parts = []
       let current = ''
       let inQuotes = false
@@ -275,7 +350,6 @@ function parseCsv(text, delimiter = ',') {
 }
 
 function parseTxt(text) {
-  // Try tab-separated first, then comma, then semicolon
   const lines = text.split(/\r?\n/).filter(l => l.trim())
   if (!lines.length) return []
 
@@ -315,5 +389,5 @@ export async function parseFile(file, onProgress) {
     return parseTxt(text)
   }
 
-  throw new Error('Unsupported file type. Use .apkg, .csv, .tsv, or .txt')
+  throw new Error('Unsupported file type. Use .apkg, .colpkg, .csv, .tsv, or .txt')
 }
