@@ -1,105 +1,81 @@
+/**
+ * api/flashcards/[id].js
+ * PUT: Update a flashcard with FSRS scheduling data
+ * DELETE: Delete a flashcard
+ *
+ * FSRS fields sent from the client:
+ *   difficulty, stability, state, interval, next_review, last_review
+ */
+
 import { createClient } from '@libsql/client'
-import { jwtVerify, createRemoteJWKSet } from 'jose'
 
-export const config = { regions: ['sin1'] }
-
-const turso = createClient({
-  url: process.env.TURSO_DATABASE_URL,
-  authToken: process.env.TURSO_AUTH_TOKEN,
+const db = createClient({
+  url: process.env.TURSO_DB_URL,
+  authToken: process.env.TURSO_DB_AUTH_TOKEN,
 })
 
-let JWKS = null
-function getJWKS() {
-  if (!JWKS) {
-    let url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
-    if (!url) throw new Error('Missing SUPABASE_URL')
-    url = url.replace(/\/+$/, '')
-    JWKS = createRemoteJWKSet(new URL(url + '/auth/v1/.well-known/jwks.json'))
+export default async function handler(req, res) {
+  const { id } = req.query
+
+  if (!id) {
+    return res.status(400).json({ error: 'Missing card ID' })
   }
-  return JWKS
-}
 
-function getIssuer() {
-  let url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
-  if (!url) return undefined
-  url = url.replace(/\/+$/, '')
-  return url + '/auth/v1'
-}
-
-async function getUser(req) {
-  const auth = req.headers.get('authorization')
-  if (!auth || !auth.startsWith('Bearer ')) return null
-  const token = auth.replace('Bearer ', '')
-  try {
-    const { payload } = await jwtVerify(token, getJWKS(), {
-      issuer: getIssuer(),
-      audience: 'authenticated',
-    })
-    return { id: payload.sub, email: payload.email, role: payload.role }
-  } catch (e) { return null }
-}
-
-function extractId(url) {
-  const parts = new URL(url).pathname.split('/')
-  return parts[parts.length - 1]
-}
-
-function mapCard(r) {
-  return {
-    id: r.id,
-    user_id: r.user_id,
-    deck_id: r.deck_id || null,
-    front: r.front,
-    back: r.back,
-    image_url: r.image_url || null,
-    high_yield: Boolean(r.high_yield),
-    ease_factor: Number(r.ease_factor),
-    interval: Number(r.interval_days),
-    repetitions: Number(r.times_reviewed),
-    last_review: r.last_reviewed || null,
-    next_review: r.next_review_date || null,
-    created_at: r.created_at,
+  // Verify auth
+  const auth = req.headers.authorization
+  if (!auth?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' })
   }
-}
 
-export async function PUT(req) {
-  const user = await getUser(req)
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  try {
-    const id = extractId(req.url)
-    const body = await req.json()
-    const ease_factor = body.ease_factor ?? 2.5
-    const interval_days = body.interval ?? body.interval_days ?? 0
-    const times_reviewed = body.repetitions ?? body.times_reviewed ?? 0
-    const next_review_date = (body.next_review ?? body.next_review_date) || null
-    const last_reviewed = (body.last_review ?? body.last_reviewed) || null
-    const image_url = body.image_url || null
-    await turso.execute({
-      sql: `UPDATE anki_cards SET ease_factor = ?, interval_days = ?, times_reviewed = ?, next_review_date = ?, last_reviewed = ?, image_url = ? WHERE id = ? AND user_id = ?`,
-      args: [ease_factor, interval_days, times_reviewed, next_review_date, last_reviewed, image_url, id, user.id],
-    })
-    const result = await turso.execute({
-      sql: 'SELECT id, user_id, deck_id, front, back, image_url, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, created_at FROM anki_cards WHERE id = ? AND user_id = ?',
-      args: [id, user.id],
-    })
-    if (result.rows.length) return Response.json(mapCard(result.rows[0]))
-    return Response.json({ error: 'Card not found' }, { status: 404 })
-  } catch (e) {
-    return Response.json({ error: e.message }, { status: 500 })
-  }
-}
+  // ── PUT: Update card ─────────────────────────────────
+  if (req.method === 'PUT') {
+    const {
+      front, back, high_yield, image_url,
+      // FSRS fields
+      difficulty, stability, state, interval,
+      next_review, last_review,
+      // Legacy SM-2 fields (still supported for backward compat)
+      ease_factor, repetitions
+    } = req.body
 
-export async function DELETE(req) {
-  const user = await getUser(req)
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  try {
-    const id = extractId(req.url)
-    await turso.execute({
-      sql: 'DELETE FROM anki_cards WHERE id = ? AND user_id = ?',
-      args: [id, user.id],
-    })
-    return Response.json({ success: true })
-  } catch (e) {
-    return Response.json({ error: e.message }, { status: 500 })
+    // Build SET clause dynamically
+    const sets = []
+    const vals = []
+
+    if (front !== undefined) { sets.push('front = ?'); vals.push(front) }
+    if (back !== undefined) { sets.push('back = ?'); vals.push(back) }
+    if (high_yield !== undefined) { sets.push('high_yield = ?'); vals.push(high_yield ? 1 : 0) }
+    if (image_url !== undefined) { sets.push('image_url = ?'); vals.push(image_url) }
+
+    // FSRS fields
+    if (difficulty !== undefined) { sets.push('difficulty = ?'); vals.push(difficulty) }
+    if (stability !== undefined) { sets.push('stability = ?'); vals.push(stability) }
+    if (state !== undefined) { sets.push('state = ?'); vals.push(state) }
+    if (interval !== undefined) { sets.push('interval = ?'); vals.push(interval) }
+    if (next_review !== undefined) { sets.push('next_review = ?'); vals.push(next_review) }
+    if (last_review !== undefined) { sets.push('last_review = ?'); vals.push(last_review) }
+
+    // Legacy SM-2 fields (still write them for compatibility)
+    if (ease_factor !== undefined) { sets.push('ease_factor = ?'); vals.push(ease_factor) }
+    if (repetitions !== undefined) { sets.push('repetitions = ?'); vals.push(repetitions) }
+
+    if (!sets.length) {
+      return res.status(400).json({ error: 'No fields to update' })
+    }
+
+    vals.push(id)
+
+    try {
+      await db.execute(
+        `UPDATE anki_cards SET ${sets.join(', ')} WHERE id = ?`,
+        vals
+      )
+      return res.json({ ok: true })
+    } catch (e) {
+      return res.status(500).json({ error: e.message })
+    }
   }
-}
+
+  // ── DELETE: Remove card ──────────────────────────────
+  if (req.method === 'DELETE') {
+    tr

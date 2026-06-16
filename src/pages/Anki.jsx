@@ -68,7 +68,11 @@ function isNew(c) {
 }
 
 function statusInfo(c) {
-  if (!c.last_review) return { l: 'New' }
+  const state = Number(c.state) || 0
+  // FSRS states: 0=New, 1=Learning, 2=Review, 3=Relearning
+  if (state === 0 || !c.last_review) return { l: 'New' }
+  if (state === 1) return { l: 'Learning' }
+  if (state === 3) return { l: 'Relearning' }
   if (isDue(c)) return { l: 'Due' }
   return { l: 'Later' }
 }
@@ -87,57 +91,199 @@ function nextReviewLabel(c) {
 }
 
 function maturityLabel(c) {
-  const r = Number(c.repetitions) || 0
-  const iv = Number(c.interval) || 0
-  if (r === 0) return 'New'
-  if (r === 1) return 'Learning'
-  if (iv <= 21) return 'Young'
+  const state = Number(c.state) || 0
+  const stability = Number(c.stability) || 0
+  if (state === 0 || !c.last_review) return 'New'
+  if (state === 1) return 'Learning'
+  if (state === 3) return 'Relearning'
+  if (stability <= 21) return 'Young'
   return 'Mature'
 }
 
-/* ── SM-2 algorithm ─────────────────────────────────────── */
+/* ── FSRS-5 algorithm ──────────────────────────────────── */
+// Free Spaced Repetition Scheduler (FSRS-5)
+// Based on the open-source FSRS algorithm by open-spaced-repetition
+// https://github.com/open-spaced-repetition/fsrs4anki
 
-function sm2(option, card) {
-  const qMap = { again: 1, hard: 3, good: 4, easy: 5 }
-  const quality = qMap[option] || 3
+// FSRS default parameters (tuned for general use)
+const FSRS_DEFAULT = {
+  w: [0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01, 1.49, 0.14, 0.94, 2.18, 0.05, 0.34, 1.26, 0.29, 2.61],
+  requestRetention: 0.9,  // target 90% retention
+  maximumInterval: 36500,  // max 100 years
+  easyBonus: 1.3,
+  hardInterval: 1.2,
+}
 
-  let ease_factor = Number(card.ease_factor) || 2.5
-  let interval = Number(card.interval) || 0
-  let repetitions = Number(card.repetitions) || 0
+// Rating enum (matches Anki FSRS)
+const Rating = { Again: 1, Hard: 2, Good: 3, Easy: 4 }
 
-  if (quality >= 3) {
-    if (quality === 5 && repetitions === 0) {
-      interval = 6
-      repetitions = 2
-    } else if (repetitions === 0) {
-      interval = 1
-      repetitions = 1
-    } else if (repetitions === 1) {
-      interval = 6
-      repetitions = 2
-    } else {
-      interval = Math.round(interval * ease_factor)
-      repetitions += 1
-    }
-  } else {
-    repetitions = 0
-    interval = 1
+// FSRS states
+const State = { New: 0, Learning: 1, Review: 2, Relearning: 3 }
+
+/**
+ * Calculate retrievability (probability of recall) from stability and elapsed days
+ * R = (1 + elapsed / (9 * S))^(-1)
+ */
+function retrievability(stability, elapsedDays) {
+  if (stability <= 0) return 0
+  return Math.pow(1 + elapsedDays / (9 * stability), -1)
+}
+
+/**
+ * Initial difficulty for a new card based on first rating
+ * D0(G) = w4 - e^(w5 * (G - 1)) + 1
+ * Clamped to [1, 10]
+ */
+function initDifficulty(rating, w) {
+  return Math.min(10, Math.max(1, w[4] - Math.exp(w[5] * (rating - 1)) + 1))
+}
+
+/**
+ * Initial stability for a new card based on first rating
+ * S0(G) = w[G-1]  (w[0] for Again, w[1] for Hard, w[2] for Good, w[3] for Easy)
+ */
+function initStability(rating, w) {
+  return Math.max(0.1, w[rating - 1])
+}
+
+/**
+ * Next difficulty after review
+ * D' = w7 * D0 + (1 - w7) * (D - 0.3 * (G - 3))
+ * Clamped to [1, 10]
+ */
+function nextDifficulty(d, rating, w) {
+  const d0 = initDifficulty(rating, w)
+  const delta = 0.3 * (rating - 3)
+  return Math.min(10, Math.max(1, w[7] * d0 + (1 - w[7]) * (d - delta)))
+}
+
+/**
+ * Next stability after successful recall (rating >= Hard)
+ * S' = S * (e^(w8) * (11 - D) * S^(-w9) * (e^(w10 * R) - 1) * hardPenalty * easyBonus + 1)
+ */
+function nextStabilitySuccess(d, s, r, rating, w) {
+  const hardPenalty = rating === Rating.Hard ? w[15] : 1
+  const easyBonus = rating === Rating.Easy ? w[16] : 1
+  return s * (
+    Math.exp(w[8]) *
+    (11 - d) *
+    Math.pow(s, -w[9]) *
+    (Math.exp(w[10] * r) - 1) *
+    hardPenalty *
+    easyBonus +
+    1
+  )
+}
+
+/**
+ * Next stability after forgetting (rating = Again)
+ * S' = w11 * D^(-w12) * ((S + 1)^(w13) - 1) * e^(w14 * R)
+ */
+function nextStabilityFail(d, s, r, w) {
+  return w[11] * Math.pow(d, -w[12]) * (Math.pow(s + 1, w[13]) - 1) * Math.exp(w[14] * r)
+}
+
+/**
+ * FSRS scheduling: compute the next review state after a rating
+ * Returns { difficulty, stability, state, interval, next_review, last_review, retrievability }
+ */
+function fsrs(option, card) {
+  const w = FSRS_DEFAULT.w
+  const rating = Rating[option.charAt(0).toUpperCase() + option.slice(1)] || Rating.Good
+
+  let d = Number(card.difficulty) || 0
+  let s = Number(card.stability) || 0
+  let state = Number(card.state) || State.New
+  let elapsed = 0
+
+  // Calculate elapsed days since last review
+  if (card.last_review) {
+    const lastDate = new Date(card.last_review)
+    const now = new Date()
+    elapsed = Math.max(0, (now - lastDate) / 864e5)
   }
 
-  ease_factor = Math.max(
-    1.3,
-    ease_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
-  )
+  // Current retrievability
+  const r = state === State.Review ? retrievability(s, elapsed) : 0
+
+  if (state === State.New) {
+    // First review of a new card
+    d = initDifficulty(rating, w)
+    s = initStability(rating, w)
+
+    if (rating === Rating.Again) {
+      state = State.Learning
+    } else if (rating === Rating.Hard) {
+      state = State.Learning
+    } else {
+      state = State.Review
+    }
+  } else if (state === State.Learning || state === State.Relearning) {
+    // Card is in learning/relearning (short intervals)
+    d = nextDifficulty(d, rating, w)
+
+    if (rating === Rating.Again) {
+      s = initStability(Rating.Again, w)
+      state = State.Learning
+    } else if (rating === Rating.Hard) {
+      s = Math.max(initStability(Rating.Hard, w), s)
+      state = State.Learning
+    } else if (rating === Rating.Good) {
+      s = Math.max(initStability(Rating.Good, w), s)
+      state = State.Review
+    } else {
+      // Easy
+      s = Math.max(initStability(Rating.Easy, w), s)
+      state = State.Review
+    }
+  } else if (state === State.Review) {
+    // Card is in review (long-term memory)
+    d = nextDifficulty(d, rating, w)
+
+    if (rating === Rating.Again) {
+      // Failed recall → relearning
+      const newS = nextStabilityFail(d, s, r, w)
+      s = Math.max(0.1, Math.min(newS, s))
+      state = State.Relearning
+    } else {
+      // Successful recall
+      const newS = nextStabilitySuccess(d, s, r, rating, w)
+      s = Math.max(newS, s * 1.01) // ensure stability increases
+      state = State.Review
+    }
+  }
+
+  // Calculate interval from stability and target retention
+  let interval
+  if (state === State.Learning || state === State.Relearning) {
+    // Short intervals for learning: 1min → 10min (we use minutes but store as fractional days)
+    if (rating === Rating.Again) interval = 1 / 1440  // ~1 minute
+    else if (rating === Rating.Hard) interval = 5 / 1440  // ~5 minutes
+    else if (rating === Rating.Good) interval = 10 / 1440  // ~10 minutes
+    else interval = 1  // Easy → graduate to 1 day
+  } else {
+    // Review: interval from retrievability formula
+    // I = S * 9 * (R^(-1/decay) - 1) where decay = w[10]
+    // Simplified: I = S / retention_factor
+    interval = Math.max(1, Math.round(
+      s * 9 * (Math.pow(FSRS_DEFAULT.requestRetention, -1 / w[10]) - 1)
+    ))
+    interval = Math.min(interval, FSRS_DEFAULT.maximumInterval)
+  }
 
   const nr = new Date()
-  nr.setDate(nr.getDate() + interval)
+  nr.setTime(nr.getTime() + interval * 864e5)
 
   return {
-    ease_factor,
-    interval,
-    repetitions,
+    difficulty: Math.round(d * 100) / 100,
+    stability: Math.round(s * 100) / 100,
+    state,
+    interval: Math.round(interval * 100) / 100,
     next_review: nr.toISOString(),
-    last_review: new Date().toISOString()
+    last_review: new Date().toISOString(),
+    retrievability: state === State.Review
+      ? Math.round(retrievability(s, 0) * 100) / 100
+      : 0
   }
 }
 
@@ -289,12 +435,13 @@ export default function Anki() {
   async function submitReview(option) {
     const c = queue[qIdx]
     if (!c) return
-    const u = sm2(option, c)
+    const u = fsrs(option, c)
     try {
       const r = await apiPut('/flashcards/' + c.id, {
-        ease_factor: u.ease_factor,
+        difficulty: u.difficulty,
+        stability: u.stability,
+        state: u.state,
         interval: u.interval,
-        repetitions: u.repetitions,
         next_review: u.next_review,
         last_review: u.last_review
       })
@@ -320,12 +467,13 @@ export default function Anki() {
   /* ── inline review (single card in browse view) ──────── */
 
   async function submitInlineReview(option, card) {
-    const u = sm2(option, card)
+    const u = fsrs(option, card)
     try {
       const r = await apiPut('/flashcards/' + card.id, {
-        ease_factor: u.ease_factor,
+        difficulty: u.difficulty,
+        stability: u.stability,
+        state: u.state,
         interval: u.interval,
-        repetitions: u.repetitions,
         next_review: u.next_review,
         last_review: u.last_review
       })
@@ -409,7 +557,21 @@ export default function Anki() {
   const cur = queue[qIdx]
   const getNrClass = c => {
     const st = statusInfo(c)
-    return st.l === 'Due' ? s.nr_due : st.l === 'New' ? s.nr_soon : s.nr_later
+    return st.l === 'Due' || st.l === 'Learning' || st.l === 'Relearning'
+      ? s.nr_due
+      : st.l === 'New'
+        ? s.nr_soon
+        : s.nr_later
+  }
+
+  /**
+   * Format interval for display
+   */
+  function intervalLabel(c) {
+    const iv = Number(c.interval) || 0
+    if (iv < 1) return Math.round(iv * 1440) + 'm'  // minutes
+    if (iv < 30) return Math.round(iv) + 'd'
+    return Math.round(iv / 30) + 'mo'
   }
 
   /* ── render ──────────────────────────────────────────── */
@@ -420,7 +582,7 @@ export default function Anki() {
       <div className={s.header}>
         <div>
           <h1 className={s.title}>Anki</h1>
-          <p className={s.sub}>Spaced repetition — SM-2</p>
+          <p className={s.sub}>Spaced repetition — FSRS</p>
         </div>
         <div className={s.pills}>
           {[
@@ -581,7 +743,7 @@ export default function Anki() {
                 <div key={card.id} className={s.ankiCard}>
                   <div className={s.ankiTopRow}>
                     <div className={s.badges}>
-                      <span className={`${s.badge} ${st.l === 'Due' ? s.nr_due : st.l === 'New' ? s.nr_soon : s.nr_later}`}>
+                      <span className={`${s.badge} ${st.l === 'Due' || st.l === 'Learning' || st.l === 'Relearning' ? s.nr_due : st.l === 'New' ? s.nr_soon : s.nr_later}`}>
                         {st.l}
                       </span>
                       <span className={s.badgeMaturity}>{maturityLabel(card)}</span>
@@ -607,9 +769,9 @@ export default function Anki() {
                   )}
 
                   <div className={s.ankiStats}>
-                    <span>EF: {Number(card.ease_factor || 2.5).toFixed(2)}</span>
-                    <span>Interval: {Number(card.interval) || 0}d</span>
-                    <span>Reviews: {Number(card.repetitions) || 0}</span>
+                    <span>D: {Number(card.difficulty || 0).toFixed(1)}</span>
+                    <span>S: {Number(card.stability || 0).toFixed(1)}d</span>
+                    <span>State: {['New', 'Learn', 'Review', 'Relearn'][Number(card.state) || 0]}</span>
                     <span>Next: {card.next_review ? nextReviewLabel(card).t : '--'}</span>
                   </div>
 
@@ -879,9 +1041,9 @@ export default function Anki() {
                 </div>
 
                 <div className={s.reviewMeta}>
-                  <span>EF: {Number(cur.ease_factor || 2.5).toFixed(2)}</span>
-                  <span>Interval: {Number(cur.interval) || 0}d</span>
-                  <span>Reviews: {Number(cur.repetitions) || 0}</span>
+                  <span>D: {Number(cur.difficulty || 0).toFixed(1)}</span>
+                  <span>S: {Number(cur.stability || 0).toFixed(1)}d</span>
+                  <span>State: {['New', 'Learn', 'Review', 'Relearn'][Number(cur.state) || 0]}</span>
                 </div>
 
                 <div className={s.reviewBtns}>

@@ -2,7 +2,6 @@
  * lib/fileParser.js
  * Parses .apkg, .colpkg, .csv, .tsv, .txt files into flashcard arrays.
  * .apkg files extract images from media and return base64 data URLs.
- * Reads Anki model templates to correctly identify front/back fields.
  */
 
 import JSZip from 'jszip'
@@ -171,148 +170,67 @@ async function parseApkg(file, onProgress) {
     throw new Error('Could not find fields column in notes table. Columns: ' + colNames.join(', '))
   }
 
-  // Check if notes table has mid (model id) column
-  const hasMid = colNames.includes('mid')
-
-  // Read model (template) info to determine field names
-  // This tells us which field is "front" vs "back"
-  let modelFieldNames = {}  // mid → array of field names like ["Front", "Back", "Extra"]
-  try {
-    // Anki stores models as JSON in the col table
-    const colTableInfo = db.exec("PRAGMA table_info(col)")
-    const colCols = colTableInfo.length ? colTableInfo[0].values.map(r => r[1]) : []
-    const modelsCol = colCols.includes('models') ? 'models'
-      : colCols.includes('decks') ? 'decks'  // fallback
-      : null
-
-    if (modelsCol) {
-      const modelsResult = db.exec(`SELECT ${modelsCol} FROM col LIMIT 1`)
-      if (modelsResult.length && modelsResult[0].values[0]) {
-        const models = JSON.parse(modelsResult[0].values[0][0])
-        for (const [mid, model] of Object.entries(models)) {
-          if (model.flds) {
-            modelFieldNames[mid] = model.flds.map(f => f.name)
-          }
-        }
-      }
-    }
-  } catch (e) {
-    // If we can't read models, we'll use position-based field assignment
-  }
-
-  // Also try notetypes table (newer Anki versions)
-  try {
-    const ntInfo = db.exec("PRAGMA table_info(notetypes)")
-    if (ntInfo.length) {
-      const ntResult = db.exec('SELECT id, flds FROM notetypes')
-      if (ntResult.length) {
-        for (const row of ntResult[0].values) {
-          try {
-            const fields = JSON.parse(row[1])
-            modelFieldNames[row[0]] = fields.map(f => f.name)
-          } catch (e) {}
-        }
-      }
-    }
-  } catch (e) {}
-
-  // Query notes with their mid (model id) for field name lookup
-  const noteMap = {}  // nid → { fields, mid }
-  let noteResult
-  if (hasMid) {
-    noteResult = db.exec(`SELECT id, mid, ${fldsCol} FROM notes`)
-    if (noteResult.length) {
-      for (const row of noteResult[0].values) {
-        noteMap[row[0]] = { fields: row[2], mid: String(row[1]) }
-      }
-    }
-  } else {
-    noteResult = db.exec(`SELECT id, ${fldsCol} FROM notes`)
-    if (noteResult.length) {
-      for (const row of noteResult[0].values) {
-        noteMap[row[0]] = { fields: row[1], mid: null }
-      }
+  // Query notes to get field data
+  const noteResult = db.exec(`SELECT id, ${fldsCol} FROM notes`)
+  const noteMap = {}  // nid → field string
+  if (noteResult.length) {
+    for (const row of noteResult[0].values) {
+      noteMap[row[0]] = row[1]
     }
   }
 
   // Query cards (link notes to decks)
-  const cardRows = []
-  const cardResult = db.exec(
-    `SELECT id, nid, did FROM cards`
-  )
+  const cardResult = db.exec(`SELECT id, nid, did FROM cards`)
+  const result = []
+
   if (cardResult.length) {
     for (const row of cardResult[0].values) {
-      const note = noteMap[row[1]]
-      if (note) {
-        cardRows.push({ id: row[0], nid: row[1], did: row[2], fields: note.fields, mid: note.mid })
+      const nid = row[1]
+      const fields = noteMap[nid]
+      if (!fields) continue
+
+      // Split fields by Anki's field separator \x1f
+      const fieldParts = String(fields).split('\x1f')
+      if (fieldParts.length < 2) continue
+
+      // SIMPLE RULE: In Anki, the FIRST field is always the front,
+      // the SECOND field is always the back.
+      // This is how Anki templates work — {{Front}} = field 0, {{Back}} = field 1
+      // Any extra fields (Extra, Notes, etc.) are joined to the back
+      const frontHtml = fieldParts[0]
+      const backHtml = fieldParts.length === 2
+        ? fieldParts[1]
+        : fieldParts.slice(1).join('<br>')
+
+      // Check for images in front or back HTML
+      let imageUrl = null
+      const frontImgName = extractImgSrc(frontHtml)
+      const backImgName = extractImgSrc(backHtml)
+      const imgName = frontImgName || backImgName
+
+      if (imgName && mediaUrls[imgName]) {
+        imageUrl = mediaUrls[imgName]
       }
+
+      // Also check for images stored with full media path
+      if (!imageUrl) {
+        for (const [name, url] of Object.entries(mediaUrls)) {
+          if (frontHtml.includes(name) || backHtml.includes(name)) {
+            imageUrl = url
+            break
+          }
+        }
+      }
+
+      result.push({
+        front: stripHtml(frontHtml),
+        back: stripHtml(backHtml),
+        image_url: imageUrl
+      })
     }
   }
 
   db.close()
-
-  // Parse cards into front/back + image
-  onProgress?.(`Found ${cardRows.length} cards`)
-  const result = []
-
-  for (const card of cardRows) {
-    const fieldParts = card.fields.split('\x1f')  // Anki uses \x1f as field separator
-    if (fieldParts.length < 2) continue
-
-    // Determine front and back based on field names from the model
-    let frontIdx = 0
-    let backIdx = 1
-
-    if (card.mid && modelFieldNames[card.mid]) {
-      const names = modelFieldNames[card.mid]
-      const lowerNames = names.map(n => n.toLowerCase().trim())
-      // Look for common front field names
-      const frontHint = lowerNames.findIndex(n =>
-        n === 'front' || n === 'question' || n === 'q' || n === 'term' || n === 'word' || n === 'prompt'
-      )
-      // Look for common back field names
-      const backHint = lowerNames.findIndex(n =>
-        n === 'back' || n === 'answer' || n === 'a' || n === 'definition' || n === 'meaning' || n === 'response'
-      )
-      if (frontHint >= 0) frontIdx = frontHint
-      if (backHint >= 0) backIdx = backHint
-      // If only front found, back = everything else
-      if (frontHint >= 0 && backHint < 0) backIdx = -1
-    }
-
-    const frontHtml = fieldParts[frontIdx] || fieldParts[0]
-    // Back is either the detected back field, or everything except front joined
-    const backHtml = backIdx >= 0
-      ? (fieldParts[backIdx] || fieldParts.slice(1).join('<br>'))
-      : fieldParts.filter((_, i) => i !== frontIdx).join('<br>')
-
-    // Check for images in front or back
-    let imageUrl = null
-    const frontImgName = extractImgSrc(frontHtml)
-    const backImgName = extractImgSrc(backHtml)
-    const imgName = frontImgName || backImgName
-
-    if (imgName && mediaUrls[imgName]) {
-      imageUrl = mediaUrls[imgName]
-    }
-
-    // Also check for images stored with full media path
-    if (!imageUrl) {
-      for (const [name, url] of Object.entries(mediaUrls)) {
-        if (frontHtml.includes(name) || backHtml.includes(name)) {
-          imageUrl = url
-          break
-        }
-      }
-    }
-
-    result.push({
-      front: stripHtml(frontHtml),
-      back: stripHtml(backHtml),
-      image_url: imageUrl
-    })
-  }
-
   return result
 }
 
