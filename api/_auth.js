@@ -11,7 +11,11 @@ function getJWKS() {
     let url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
     if (!url) throw new Error('Missing SUPABASE_URL')
     url = url.replace(/\/+$/, '')
-    JWKS = createRemoteJWKSet(new URL(url + '/auth/v1/.well-known/jwks.json'))
+    JWKS = createRemoteJWKSet(new URL(url + '/auth/v1/.well-known/jwks.json'), {
+  cooldownDuration: 300000,
+  timeoutDuration: 5000,
+  cacheMaxAge: 3600000,
+    })
   }
   return JWKS
 }
