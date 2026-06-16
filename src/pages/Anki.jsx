@@ -758,14 +758,15 @@ export default function Anki() {
 
                   <div className={s.ankiFront}>{card.front}</div>
 
-                  {card.image_url && (
-                    <div className={s.cardImage}>
-                      <img src={card.image_url} alt="card" loading="lazy" />
-                    </div>
-                  )}
-
                   {isReviewing && (
-                    <div className={s.ankiBack}>{card.back}</div>
+                    <div className={s.ankiBack}>
+                      {card.back}
+                      {card.image_url && (
+                        <div className={s.cardImage}>
+                          <img src={card.image_url} alt="card" loading="lazy" />
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   <div className={s.ankiStats}>
@@ -1023,12 +1024,6 @@ export default function Anki() {
             <div className={s.reviewLabel}>Question</div>
             <div className={s.reviewContent}>{cur.front}</div>
 
-            {cur.image_url && (
-              <div className={s.cardImage}>
-                <img src={cur.image_url} alt="card" loading="lazy" />
-              </div>
-            )}
-
             {!showAns ? (
               <button className={s.showAnswerBtn} onClick={() => setShowAns(true)}>
                 Show Answer
@@ -1038,6 +1033,11 @@ export default function Anki() {
                 <div className={s.reviewAnswer}>
                   <div className={s.reviewLabel}>Answer</div>
                   <div className={s.reviewContent}>{cur.back}</div>
+                  {cur.image_url && (
+                    <div className={s.cardImage}>
+                      <img src={cur.image_url} alt="card" loading="lazy" />
+                    </div>
+                  )}
                 </div>
 
                 <div className={s.reviewMeta}>
