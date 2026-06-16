@@ -339,6 +339,19 @@ export default function Anki() {
 
   async function handleFile(file) {
     if (!file) return
+
+    // If it's an image file, resize it and use as card image
+    if (file.type.startsWith('image/')) {
+      try {
+        const dataUrl = await resizeImage(file)
+        setCardImage(dataUrl)
+        setView('add')
+      } catch (err) {
+        alert('Failed to process image')
+      }
+      return
+    }
+
     setParsing(true)
     setParseErr('')
     setUploadProgress('Parsing file...')
@@ -364,7 +377,8 @@ export default function Anki() {
       const withDeck = parsed.map(c => ({
         front: c.front,
         back: c.back,
-        deck_id: uploadDeck
+        deck_id: uploadDeck,
+        image_url: c.image_url || null
       }))
       const r = await apiPost('/flashcards', { cards: withDeck })
       if (r.error) throw new Error(r.error)
@@ -797,7 +811,10 @@ export default function Anki() {
               </div>
               {parsed.slice(0, 30).map((c, i) => (
                 <div key={i} className={s.previewRow}>
-                  <span className={s.previewFront}>{c.front}</span>
+                  <span className={s.previewFront}>
+                    {c.front}
+                    {c.image_url && <img src={c.image_url} alt="" style={{ maxWidth: 40, maxHeight: 30, borderRadius: 4, marginLeft: 6, verticalAlign: 'middle' }} />}
+                  </span>
                   <span className={s.previewArrow}>{'\u2192'}</span>
                   <span className={s.previewBack}>{c.back}</span>
                 </div>
