@@ -9,6 +9,52 @@ import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url'
 
 /* ── helpers ────────────────────────────────────────────── */
 
+/**
+ * Process cloze deletions for a card.
+ * Cloze syntax: {{c1::hidden text}} or {{c1::hidden text::hint}}
+ * For the card with ord=N (0-based), c(N+1) cloze is the answer.
+ * Front: replace {{cN::text}} with [...] and keep other clozes visible
+ * Back: reveal the {{cN::text}} cloze, keep others as [...]
+ */
+function processCloze(text, ord) {
+  if (!text) return { front: '', back: '' }
+  const clozeNum = ord + 1  // ord 0 = c1, ord 1 = c2, etc.
+
+  // First strip HTML
+  let clean = stripHtml(text)
+
+  // Check if this text actually has cloze deletions
+  if (!clean.match(/\{\{c\d+::/)) {
+    return { front: clean, back: clean }
+  }
+
+  // Build front: replace THIS card's cloze with [...], reveal other clozes
+  let front = clean.replace(
+    /\{\{c(\d+)::([^:}]+?)(?:::([^}]+))?\}\}/g,
+    (match, num, hidden, hint) => {
+      if (parseInt(num) === clozeNum) {
+        return hint ? '[' + hint + ']' : '[...]'
+      } else {
+        return hidden  // reveal other clozes
+      }
+    }
+  )
+
+  // Build back: reveal THIS card's cloze, replace others with [...]
+  let back = clean.replace(
+    /\{\{c(\d+)::([^:}]+?)(?:::([^}]+))?\}\}/g,
+    (match, num, hidden, hint) => {
+      if (parseInt(num) === clozeNum) {
+        return hidden  // reveal the answer
+      } else {
+        return hint ? '[' + hint + ']' : '[...]'
+      }
+    }
+  )
+
+  return { front, back }
+}
+
 function stripHtml(html) {
   if (!html) return ''
   return html
@@ -267,58 +313,96 @@ async function parseApkg(file, onProgress) {
 
       // Split fields by Anki's field separator \x1f
       const fieldParts = String(fields).split('\x1f')
-      if (fieldParts.length < 2) continue
+      if (fieldParts.length < 1) continue
 
-      // Determine front and back based on the card template (ord)
-      let frontHtml = fieldParts[0]
-      let backHtml = fieldParts.length === 2
-        ? fieldParts[1]
-        : fieldParts.slice(1).join('<br>')
+      // Check if this is a cloze note (contains {{c1:: etc.)
+      const mainField = fieldParts[0]
+      const isCloze = mainField.match(/\{\{c\d+::/)
 
-      // If we have template info, check if this is a reversed card
-      const mid = note.mid
-      if (mid && modelTemplates[mid] && modelTemplates[mid][ord]) {
-        const tmpl = modelTemplates[mid][ord]
-        const frontTmpl = tmpl.frontTemplate
+      let frontText = ''
+      let backText = ''
+      let imageUrl = null
 
-        // Check if the front template references {{Back}} or field[1] instead of {{Front}}/field[0]
-        // Common patterns for reversed cards:
-        //   {{FrontSide}} → normal (uses front)
-        //   {{Back}} on the question side → reversed
-        //   {{field1}} on question side → reversed
-        const fieldNames = tmpl.fieldNames
+      if (isCloze) {
+        // CLOZE CARD: process {{c1::text}} syntax
+        const clozeResult = processCloze(mainField, ord)
+        frontText = clozeResult.front
+        // Back = full revealed text + any extra fields
+        backText = clozeResult.back
+        if (fieldParts.length > 1) {
+          // Extra fields (like "Extra" or "Notes") go in the back
+          const extra = fieldParts.slice(1)
+            .map(f => stripHtml(f))
+            .filter(f => f && f.length > 0 && !f.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i))
+            .join('\n')
+          if (extra) backText += '\n' + extra
+        }
 
-        // Simple heuristic: if the front template (qfmt) contains the 2nd field name but not the 1st, it's reversed
-        if (fieldNames.length >= 2) {
-          const frontUsesFirst = frontTmpl.includes('{{' + fieldNames[0]) || frontTmpl.includes('{{Front')
-          const frontUsesSecond = frontTmpl.includes('{{' + fieldNames[1]) || frontTmpl.includes('{{Back')
+        // Check for images in any field
+        for (const fp of fieldParts) {
+          const imgName = extractImgSrc(fp)
+          if (imgName && mediaUrls[imgName]) {
+            imageUrl = mediaUrls[imgName]
+            break
+          }
+        }
+      } else {
+        // BASIC CARD: field[0] = front, field[1] = back
+        if (fieldParts.length < 2) continue
 
-          if (frontUsesSecond && !frontUsesFirst) {
-            // This is a reversed card — swap front and back
-            frontHtml = fieldParts[1] || fieldParts[0]
-            backHtml = fieldParts[0] || fieldParts[1]
-            if (fieldParts.length > 2) {
-              backHtml = fieldParts[0] + '<br>' + fieldParts.slice(2).join('<br>')
+        let frontHtml = fieldParts[0]
+        let backHtml = fieldParts.length === 2
+          ? fieldParts[1]
+          : fieldParts.slice(1).join('<br>')
+
+        // If we have template info, check if this is a reversed card
+        const mid = note.mid
+        if (mid && modelTemplates[mid] && modelTemplates[mid][ord]) {
+          const tmpl = modelTemplates[mid][ord]
+          const frontTmpl = tmpl.frontTemplate
+          const fieldNames = tmpl.fieldNames
+
+          if (fieldNames.length >= 2) {
+            const frontUsesFirst = frontTmpl.includes('{{' + fieldNames[0]) || frontTmpl.includes('{{Front')
+            const frontUsesSecond = frontTmpl.includes('{{' + fieldNames[1]) || frontTmpl.includes('{{Back')
+
+            if (frontUsesSecond && !frontUsesFirst) {
+              // Reversed card — swap front and back
+              frontHtml = fieldParts[1] || fieldParts[0]
+              backHtml = fieldParts[0] || fieldParts[1]
+              if (fieldParts.length > 2) {
+                backHtml = fieldParts[0] + '<br>' + fieldParts.slice(2).join('<br>')
+              }
             }
           }
         }
-      }
 
-      // Extract images ONLY from <img> src attributes (strict matching)
-      let imageUrl = null
-      const frontImgName = extractImgSrc(frontHtml)
-      const backImgName = extractImgSrc(backHtml)
+        frontText = stripHtml(frontHtml)
+        // Filter out UUIDs and video link metadata from back
+        backText = stripHtml(backHtml)
+          .split(/\n|<br>/)
+          .map(line => line.trim())
+          .filter(line => {
+            // Skip UUIDs
+            if (line.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) return false
+            return true
+          })
+          .join('\n')
 
-      // Front image takes priority, then back image
-      if (frontImgName && mediaUrls[frontImgName]) {
-        imageUrl = mediaUrls[frontImgName]
-      } else if (backImgName && mediaUrls[backImgName]) {
-        imageUrl = mediaUrls[backImgName]
+        // Extract images ONLY from <img> src attributes (strict matching)
+        const frontImgName = extractImgSrc(frontHtml)
+        const backImgName = extractImgSrc(backHtml)
+
+        if (frontImgName && mediaUrls[frontImgName]) {
+          imageUrl = mediaUrls[frontImgName]
+        } else if (backImgName && mediaUrls[backImgName]) {
+          imageUrl = mediaUrls[backImgName]
+        }
       }
 
       result.push({
-        front: stripHtml(frontHtml),
-        back: stripHtml(backHtml),
+        front: frontText,
+        back: backText,
         image_url: imageUrl
       })
     }
