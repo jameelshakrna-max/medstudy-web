@@ -14,7 +14,7 @@ import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url'
  * Cloze syntax: {{c1::hidden text}} or {{c1::hidden text::hint}}
  * For the card with ord=N (0-based), c(N+1) cloze is the answer.
  * Front: replace {{cN::text}} with [...] and keep other clozes visible
- * Back: reveal the {{cN::text}} cloze, keep others as [...]
+ * Back: reveal ALL clozes (current one highlighted, others shown normally)
  */
 function processCloze(text, ord) {
   if (!text) return { front: '', back: '' }
