@@ -28,7 +28,7 @@ function ProtectedRoute({ children }) {
 
 function PublicRoute({ children }) {
   const { user, loading } = useAuth()
-  if (loading) return null
+  if (loading) return PAGE_LOADING
   if (user) return <Navigate to="/dashboard" replace />
   return children
 }

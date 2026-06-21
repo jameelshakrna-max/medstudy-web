@@ -289,8 +289,9 @@ export function PomodoroProvider({ children }) {
         swReadyRef.current = true
 
         // Tell SW which assets to precache for faster repeat visits
+        // (Don't include '/' — navigation handler always fetches fresh HTML)
         const precacheAssets = [
-          '/', '/icon.svg', '/favicon.png', '/apple-touch-icon.png', '/manifest.json'
+          '/icon.svg', '/favicon.png', '/apple-touch-icon.png', '/manifest.json'
         ]
 
         if (reg.active) {

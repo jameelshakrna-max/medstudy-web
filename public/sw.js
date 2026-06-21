@@ -8,8 +8,8 @@
 // ══════════════════════════════════════════════════
 
 const CACHE = 'medstudy-v2'
+// Don't precache '/' so the navigation handler always fetches fresh HTML
 const STATIC_ASSETS = [
-  '/',
   '/icon.svg',
   '/favicon.png',
   '/apple-touch-icon.png',
