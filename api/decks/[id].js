@@ -1,7 +1,7 @@
-import { createClient } from '@libsql/client'
+import { createClient } from '@libsql/client/web'
 import { getUser } from '../_auth.js'
 
-export const config = { regions: ['sin1'] }
+export const runtime = 'edge'
 
 const turso = createClient({
   url: process.env.TURSO_DATABASE_URL,
