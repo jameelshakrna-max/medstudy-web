@@ -47,7 +47,10 @@ self.addEventListener('fetch', (event) => {
   // Static assets with hash in URL (built by Vite) → cache-first (immutable)
   if (url.pathname.startsWith('/assets/') && url.pathname.match(/-[A-Za-z0-9]{8}\./)) {
     event.respondWith(
-      caches.match(request).then((cached) => cached || fetch(request))
+      caches.open(CACHE)
+        .then((cache) => cache.match(request))
+        .then((cached) => cached || fetch(request))
+        .catch(() => fetch(request))
     )
     return
   }
@@ -55,28 +58,34 @@ self.addEventListener('fetch', (event) => {
   // Navigation → stale-while-revalidate
   if (request.mode === 'navigate') {
     event.respondWith(
-      caches.match(request).then((cached) => {
-        const fetched = fetch(request).then((res) => {
-          const copy = res.clone()
-          caches.open(CACHE).then((cache) => cache.put(request, copy))
-          return res
+      caches.open(CACHE)
+        .then((cache) => cache.match(request))
+        .then((cached) => {
+          const fetched = fetch(request).then((res) => {
+            const copy = res.clone()
+            caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {})
+            return res
+          })
+          return cached || fetched
         })
-        return cached || fetched
-      })
+        .catch(() => fetch(request))
     )
     return
   }
 
   // Everything else (fonts, icons, etc.) → stale-while-revalidate
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const fetched = fetch(request).then((res) => {
-        const copy = res.clone()
-        caches.open(CACHE).then((cache) => cache.put(request, copy))
-        return res
+    caches.open(CACHE)
+      .then((cache) => cache.match(request))
+      .then((cached) => {
+        const fetched = fetch(request).then((res) => {
+          const copy = res.clone()
+          caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {})
+          return res
+        })
+        return cached || fetched
       })
-      return cached || fetched
-    })
+      .catch(() => fetch(request))
   )
 })
 
