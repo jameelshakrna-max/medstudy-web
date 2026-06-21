@@ -7,8 +7,7 @@
 //  - Handles notification clicks
 // ══════════════════════════════════════════════════
 
-const CACHE = 'medstudy-v2'
-// Don't precache '/' so the navigation handler always fetches fresh HTML
+const CACHE = 'medstudy-v3'
 const STATIC_ASSETS = [
   '/icon.svg',
   '/favicon.png',
@@ -16,7 +15,6 @@ const STATIC_ASSETS = [
   '/manifest.json',
 ]
 
-// Install — cache app shell + activate immediately
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll(STATIC_ASSETS))
@@ -24,7 +22,6 @@ self.addEventListener('install', (event) => {
   self.skipWaiting()
 })
 
-// Listen for the app to tell us about build assets to precache
 self.addEventListener('message', (event) => {
   const { type, vapidKey, assets } = event.data
 
@@ -41,7 +38,6 @@ self.addEventListener('message', (event) => {
   }
 })
 
-// Activate — claim clients + delete old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -51,18 +47,14 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim())
 })
 
-// Fetch — stale-while-revalidate for navigation, cache-first for static assets
 self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
-  // API calls → network only
   if (url.pathname.startsWith('/api/')) return
-
-  // Supabase calls → network only
   if (url.hostname.includes('supabase.co')) return
 
-  // Static assets with hash in URL (built by Vite) → cache-first (immutable)
+  // Hashed assets — cache-first (immutable after deploy)
   if (url.pathname.startsWith('/assets/') && url.pathname.match(/-[A-Za-z0-9]{8}\./)) {
     event.respondWith(
       caches.open(CACHE)
@@ -73,25 +65,19 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Navigation → stale-while-revalidate
+  // Navigation — network-first (always serve fresh HTML, cache for offline)
   if (request.mode === 'navigate') {
     event.respondWith(
-      caches.open(CACHE)
-        .then((cache) => cache.match(request))
-        .then((cached) => {
-          const fetched = fetch(request).then((res) => {
-            const copy = res.clone()
-            caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {})
-            return res
-          })
-          return cached || fetched
-        })
-        .catch(() => fetch(request))
+      fetch(request).then((res) => {
+        const copy = res.clone()
+        caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {})
+        return res
+      }).catch(() => caches.match(request).then((cached) => cached || fetch(request)))
     )
     return
   }
 
-  // Everything else (fonts, icons, etc.) → stale-while-revalidate
+  // Everything else — stale-while-revalidate
   event.respondWith(
     caches.open(CACHE)
       .then((cache) => cache.match(request))
