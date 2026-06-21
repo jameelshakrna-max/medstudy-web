@@ -305,13 +305,15 @@ export default function Pomodoro() {
 
         {/* Controls */}
         <div className={s.controls}>
-          <button className={s.ctrlBtn} onClick={resetTimer} title="Reset">&#8634;</button>
-          <button className={`${s.playBtn} ${s[modeClass]}`} onClick={togglePlay}>
-            {running ? '⏸' : '▶'}
-            {running && <span className={`${s.playBtnPulse} ${s[modeClass]}`} />}
-          </button>
-          <button className={s.ctrlBtn} onClick={skipTimer} title="Skip">⏭</button>
-          <button className={s.ctrlBtn} onClick={finishTimer} title="Finish Early">✓</button>
+          <div className={s.controlsRow}>
+            <button className={s.ctrlBtn} onClick={resetTimer} title="Reset">&#8634;</button>
+            <button className={`${s.playBtn} ${s[modeClass]}`} onClick={togglePlay}>
+              {running ? '⏸' : '▶'}
+              {running && <span className={`${s.playBtnPulse} ${s[modeClass]}`} />}
+            </button>
+            <button className={s.ctrlBtn} onClick={skipTimer} title="Skip">⏭</button>
+          </div>
+          <button className={`${s.ctrlBtn} ${s.finishBtn}`} onClick={finishTimer} title="Finish Early">✓</button>
         </div>
 
         {/* Stats */}
