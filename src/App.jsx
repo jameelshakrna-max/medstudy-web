@@ -1,23 +1,27 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { PomodoroProvider, usePomodoro } from './context/PomodoroContext'
 import FloatingTimer from './components/FloatingTimer'
-import Landing    from './pages/Landing'
-import Login      from './pages/Login'
-import Signup     from './pages/Signup'
-import ResetPassword from './pages/ResetPassword'
-import Dashboard  from './pages/Dashboard'
-import Curriculum from './pages/Curriculum'
-import Anki       from './pages/Anki'
-import UWorld     from './pages/UWorld'
-import Pomodoro   from './pages/Pomodoro'
-import Sessions   from './pages/Sessions'
-import Layout     from './components/Layout'
-import Settings from './pages/Settings'
+import Layout from './components/Layout'
+
+const Landing    = lazy(() => import('./pages/Landing'))
+const Login      = lazy(() => import('./pages/Login'))
+const Signup     = lazy(() => import('./pages/Signup'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+const Dashboard  = lazy(() => import('./pages/Dashboard'))
+const Curriculum = lazy(() => import('./pages/Curriculum'))
+const Anki       = lazy(() => import('./pages/Anki'))
+const UWorld     = lazy(() => import('./pages/UWorld'))
+const Pomodoro   = lazy(() => import('./pages/Pomodoro'))
+const Sessions   = lazy(() => import('./pages/Sessions'))
+const Settings   = lazy(() => import('./pages/Settings'))
+
+const PAGE_LOADING = <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:'var(--teal)',fontSize:'24px'}}>🏥</div>
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
-  if (loading) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:'var(--teal)',fontSize:'24px'}}>🏥</div>
+  if (loading) return PAGE_LOADING
   if (!user) return <Navigate to="/login" replace />
   return children
 }
@@ -39,7 +43,7 @@ function FloatingTimerWrapper() {
 
 function AppRoutes() {
   return (
-    <>
+    <Suspense fallback={PAGE_LOADING}>
       <Routes>
         <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
         <Route path="/login"  element={<PublicRoute><Login /></PublicRoute>} />
@@ -57,7 +61,7 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <FloatingTimerWrapper />
-    </>
+    </Suspense>
   )
 }
 

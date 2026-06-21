@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext({})
@@ -7,6 +7,12 @@ export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  const fetchProfile = useCallback(async (userId) => {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
+    setProfile(data)
+    setLoading(false)
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -22,39 +28,37 @@ export function AuthProvider({ children }) {
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [fetchProfile])
 
-  async function fetchProfile(userId) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
-    setProfile(data)
-    setLoading(false)
-  }
-
-  async function signUp(email, password, fullName) {
+  const signUp = useCallback(async (email, password, fullName) => {
     const { data, error } = await supabase.auth.signUp({
       email, password,
       options: { data: { full_name: fullName } }
     })
     return { data, error }
-  }
+  }, [])
 
-  async function signIn(email, password) {
+  const signIn = useCallback(async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     return { data, error }
-  }
+  }, [])
 
-  async function signOut() {
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut()
-  }
+  }, [])
 
-  async function resetPassword(email) {
+  const resetPassword = useCallback(async (email) => {
     return await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`
     })
-  }
+  }, [])
+
+  const value = useMemo(() => ({
+    user, profile, loading, signUp, signIn, signOut, resetPassword
+  }), [user, profile, loading, signUp, signIn, signOut, resetPassword])
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signUp, signIn, signOut, resetPassword }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )
