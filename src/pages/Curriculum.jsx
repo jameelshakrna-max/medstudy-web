@@ -22,9 +22,9 @@ export default function Curriculum() {
   async function loadData() {
     try {
       const [sysRes, subRes, topRes] = await Promise.all([
-        supabase.from('curriculum_systems').select('*').order('name'),
-        supabase.from('curriculum_subjects').select('*').order('name'),
-        supabase.from('curriculum_topics').select('*').order('name').limit(200),
+        supabase.from('curriculum_systems').select('*').eq('user_id', user.id).order('name'),
+        supabase.from('curriculum_subjects').select('*').eq('user_id', user.id).order('name'),
+        supabase.from('curriculum_topics').select('*').eq('user_id', user.id).order('name').limit(200),
       ])
       if (sysRes.error) console.error('Error loading systems:', sysRes.error)
       if (subRes.error) console.error('Error loading subjects:', subRes.error)

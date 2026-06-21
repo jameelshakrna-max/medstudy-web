@@ -155,25 +155,25 @@ export default function Settings() {
 
   // ── Forgot password ──
   const handleForgotPassword = async () => {
-  setError(null)
-  setMessage(null)
-  setLoading(true)
+    setError(null)
+    setMessage(null)
+    setLoading(true)
 
-  const { error } = await supabase.auth.resetPasswordForEmail(
-    user.email,
-    {
-      redirectTo: `${window.location.origin}/reset-password`
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+      user.email,
+      {
+        redirectTo: `${window.location.origin}/reset-password`
+      }
+    )
+
+    setLoading(false)
+
+    if (resetError) {
+      setError(resetError.message)
+    } else {
+      setMessage('Password reset link sent to your email!')
     }
-  )
-
-  setLoading(false)
-
-  if (error) {
-    setError(error.message)
-  } else {
-    setMessage('Password reset link sent to your email!')
   }
-}
   // ── Toggle handlers ──
   const handlePushToggle = async (enabled) => {
     setPushEnabled(enabled)
@@ -338,8 +338,11 @@ export default function Settings() {
           ) : (
             <div className={s.forgotSection}>
               <p className={s.forgotText}>We'll send a password reset link to your email.</p>
+              {error && <div className={`${s.statusMsg} ${s.statusError}`}>{error}</div>}
+              {message && <div className={`${s.statusMsg} ${s.statusSuccess}`}>{message}</div>}
+              {loading && <p className={s.forgotText}>Sending reset link...</p>}
               <div className={s.btnRow}>
-                <button className={`${s.btn} ${s.btnSecondary}`} onClick={handleForgotPassword}>
+                <button className={`${s.btn} ${s.btnSecondary}`} onClick={handleForgotPassword} disabled={loading}>
                   Send Reset Link
                 </button>
                 <button className={`${s.btn} ${s.btnSecondary}`} onClick={() => setShowForgotPassword(false)}>

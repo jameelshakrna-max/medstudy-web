@@ -21,7 +21,7 @@ export default function UWorld() {
 
   async function loadData() {
     try {
-      const { data, error } = await supabase.from('uworld_blocks').select('*').order('created_at', { ascending: false })
+      const { data, error } = await supabase.from('uworld_blocks').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
       if (error) console.error('Error loading blocks:', error)
       setBlocks(data || [])
     } catch (err) {

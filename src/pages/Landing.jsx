@@ -4,7 +4,7 @@ import styles from './Landing.module.css'
 const features = [
   { icon:'📚', title:'460+ AMBOSS Topics', desc:'Pre-loaded across 19 systems. Organized, flagged, and ready.' },
   { icon:'📈', title:'Auto Completion Rollup', desc:'Update a subtopic — watch it flow up through Topic, Subject, System, Year.' },
-  { icon:'🃏', title:'Anki SM-2 Tracking', desc:'Due Status, Card Maturity, Review Urgency — all calculated automatically.' },
+  { icon:'🃏', title:'Anki FSRS-5 Tracking', desc:'Due Status, Card Maturity, Review Urgency — all calculated automatically.' },
   { icon:'📊', title:'UWorld Analytics', desc:'Log every block. See your weakest systems. Track readiness in real time.' },
   { icon:'🍅', title:'Built-in Pomodoro', desc:'Real timer, never throttled. Every session saves automatically.' },
   { icon:'🎯', title:'Priority View', desc:'Always know exactly what to study next. In Progress floats to top.' },
@@ -12,8 +12,8 @@ const features = [
 
 const plans = [
   { name:'Free', price:'$0', color:'var(--sage)', features:['Daily Dashboard','Study Sessions + Pomodoro','Weekly Summary','460+ AMBOSS Topic List'], missing:['Full Curriculum','Anki System','UWorld Tracker'] },
-  { name:'Core', price:'$19', color:'var(--teal)', popular:true, features:['Everything in Free','5-Level Curriculum Hierarchy','Priority View + Gap Analysis','Topic Stats + Mastery Level'], missing:['Anki SM-2 System','UWorld Tracker'] },
-  { name:'Pro', price:'$39', color:'var(--gold)', features:['Everything in Core','Anki SM-2 Flashcard System','UWorld Question Tracker','Step Readiness Dashboard','Priority Email Support'], missing:[] },
+  { name:'Core', price:'$19', color:'var(--teal)', popular:true, features:['Everything in Free','5-Level Curriculum Hierarchy','Priority View + Gap Analysis','Topic Stats + Mastery Level'], missing:['Anki FSRS-5 System','UWorld Tracker'] },
+  { name:'Pro', price:'$39', color:'var(--gold)', features:['Everything in Core','Anki FSRS-5 Flashcard System','UWorld Question Tracker','Step Readiness Dashboard','Priority Email Support'], missing:[] },
 ]
 
 export default function Landing() {
@@ -42,7 +42,7 @@ export default function Landing() {
           <span className={styles.heroAccent}>5 different apps.</span>
         </h1>
         <p className={styles.heroSub}>
-          MedStudy OS is a complete study system — curriculum tracker, Anki SM-2, UWorld analytics, and a built-in Pomodoro timer. Everything connected. Everything automatic.
+          MedStudy OS is a complete study system — curriculum tracker, Anki FSRS-5, UWorld analytics, and a built-in Pomodoro timer. Everything connected. Everything automatic.
         </p>
         <div className={styles.heroCta}>
           <Link to="/signup" className={styles.ctaPrimary}>Start Free — No Credit Card</Link>
@@ -55,7 +55,7 @@ export default function Landing() {
           <div className={styles.statDiv} />
           <div className={styles.stat}><span className={styles.statN}>5</span><span className={styles.statL}>Levels Deep</span></div>
           <div className={styles.statDiv} />
-          <div className={styles.stat}><span className={styles.statN}>SM-2</span><span className={styles.statL}>Anki Algorithm</span></div>
+          <div className={styles.stat}><span className={styles.statN}>FSRS-5</span><span className={styles.statL}>Anki Algorithm</span></div>
         </div>
       </section>
 

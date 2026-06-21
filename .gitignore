@@ -10,3 +10,4 @@ dist
 .env.pulled
 check-turso.js
 check-turso.cjs
+medstudy-web/

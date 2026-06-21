@@ -8,26 +8,47 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ sessions: 0, pomodoros: 0, topicsInProgress: 0, cardsdue: 0 })
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => { loadStats() }, [])
+  useEffect(() => { if (user) loadStats() }, [user])
 
   async function loadStats() {
     try {
       const today = new Date().toISOString().split('T')[0]
-      const [s, p, t, a] = await Promise.all([
-        supabase.from('study_sessions').select('id', { count: 'exact', head: true }).eq('date', today),
-        supabase.from('pomodoro_sessions').select('id', { count: 'exact', head: true }).eq('date', today).eq('completed', true),
-        supabase.from('curriculum_topics').select('id', { count: 'exact', head: true }).eq('status', 'In Progress'),
-        supabase.from('anki_cards').select('id', { count: 'exact', head: true }).lte('next_review_date', today),
+
+      const [s, p, t] = await Promise.all([
+        supabase.from('study_sessions').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('date', today),
+        supabase.from('study_sessions').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('date', today).eq('session_type', 'Pomodoro'),
+        supabase.from('curriculum_topics').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'In Progress'),
       ])
+
       if (s.error) console.error('Dashboard sessions error:', s.error)
       if (p.error) console.error('Dashboard pomodoros error:', p.error)
       if (t.error) console.error('Dashboard topics error:', t.error)
-      if (a.error) console.error('Dashboard anki error:', a.error)
+
+      // Fetch Anki cards due from Turso API
+      let cardsdue = 0
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch('/api/flashcards', {
+          headers: { Authorization: 'Bearer ' + session.access_token }
+        })
+        const allCards = await res.json()
+        if (Array.isArray(allCards)) {
+          const now = new Date()
+          cardsdue = allCards.filter(c => {
+            if (!c.last_review) return true
+            if (!c.next_review) return true
+            return new Date(c.next_review) <= now
+          }).length
+        }
+      } catch (e) {
+        console.error('Dashboard anki fetch error:', e)
+      }
+
       setStats({
         sessions: s.count || 0,
         pomodoros: p.count || 0,
         topicsInProgress: t.count || 0,
-        cardsdue: a.count || 0
+        cardsdue
       })
     } catch (err) {
       console.error('loadStats error:', err)

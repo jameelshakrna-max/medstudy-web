@@ -2,7 +2,7 @@
   "name": "MedStudy OS",
   "short_name": "MedStudy",
   "description": "Your all-in-one medical study platform — Curriculum, Anki, UWorld, Pomodoro & Session Tracking",
-  "start_url": "/dashboard",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#0d0f1a",
   "theme_color": "#0A1628",

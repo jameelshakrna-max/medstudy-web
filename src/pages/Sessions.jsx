@@ -16,7 +16,7 @@ export default function Sessions() {
 
   async function loadSessions() {
     try {
-      const { data, error } = await supabase.from('study_sessions').select('*').order('date', { ascending: false }).order('created_at', { ascending: false }).limit(200)
+      const { data, error } = await supabase.from('study_sessions').select('*').eq('user_id', user.id).order('date', { ascending: false }).order('created_at', { ascending: false }).limit(200)
       if (error) console.error('Error loading sessions:', error)
       setSessions(data || [])
     } catch (err) { console.error('loadSessions error:', err) }
