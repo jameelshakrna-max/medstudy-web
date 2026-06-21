@@ -1,6 +1,7 @@
 // ══════════════════════════════════════════════════
 //  Service Worker for MedStudy OS
 //  - Precaches app shell for instant repeat visits
+//  - Precaches app JS/CSS assets for fast first load
 //  - Background notifications via Web Push
 //  - Handles push events from server
 //  - Handles notification clicks
@@ -21,6 +22,23 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE).then((cache) => cache.addAll(STATIC_ASSETS))
   )
   self.skipWaiting()
+})
+
+// Listen for the app to tell us about build assets to precache
+self.addEventListener('message', (event) => {
+  const { type, vapidKey, assets } = event.data
+
+  if (type === 'SET_VAPID_KEY') {
+    self.vapidKey = vapidKey
+  }
+
+  if (type === 'PRECACHE_ASSETS' && Array.isArray(assets)) {
+    event.waitUntil(
+      caches.open(CACHE).then((cache) => {
+        cache.addAll(assets).catch(() => {})
+      })
+    )
+  }
 })
 
 // Activate — claim clients + delete old caches
@@ -158,10 +176,4 @@ self.addEventListener('pushsubscriptionchange', (event) => {
   )
 })
 
-// ── Messages from app ──
-self.addEventListener('message', (event) => {
-  const { type, vapidKey } = event.data
-  if (type === 'SET_VAPID_KEY') {
-    self.vapidKey = vapidKey
-  }
-})
+

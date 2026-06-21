@@ -287,13 +287,20 @@ export function PomodoroProvider({ children }) {
         pushLog('SW registered OK')
         swReadyRef.current = true
 
+        // Tell SW which assets to precache for faster repeat visits
+        const precacheAssets = [
+          '/', '/icon.svg', '/favicon.png', '/apple-touch-icon.png', '/manifest.json'
+        ]
+
         if (reg.active) {
+          reg.active.postMessage({ type: 'PRECACHE_ASSETS', assets: precacheAssets })
           reg.active.postMessage({ type: 'SET_VAPID_KEY', vapidKey: VAPID_PUBLIC_KEY })
-          pushLog('VAPID key sent to active SW')
+          pushLog('VAPID key and precache list sent to active SW')
         } else {
           reg.addEventListener('activate', () => {
+            reg.active?.postMessage({ type: 'PRECACHE_ASSETS', assets: precacheAssets })
             reg.active?.postMessage({ type: 'SET_VAPID_KEY', vapidKey: VAPID_PUBLIC_KEY })
-            pushLog('VAPID key sent after SW activation')
+            pushLog('VAPID key and precache list sent after SW activation')
           })
         }
 
