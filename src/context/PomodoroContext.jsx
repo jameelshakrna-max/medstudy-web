@@ -579,6 +579,10 @@ export function PomodoroProvider({ children }) {
     totalRef.current = dur
   }, [focusMins, shortMins, longMins])
 
+  const finishTimer = useCallback(() => {
+    handleComplete()
+  }, [handleComplete])
+
   const resetTimer = useCallback(() => {
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
     if (bgTimeoutRef.current) { clearTimeout(bgTimeoutRef.current); bgTimeoutRef.current = null }
@@ -637,6 +641,7 @@ export function PomodoroProvider({ children }) {
     progress,
     togglePlay,
     skipTimer,
+    finishTimer,
     resetTimer,
   }
 

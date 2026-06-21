@@ -19,7 +19,7 @@ export default function Pomodoro() {
     // Centralized timer values & actions
     seconds, totalSec,
     displayRemaining, progress,
-    togglePlay, skipTimer, resetTimer
+    togglePlay, skipTimer, finishTimer, resetTimer
   } = usePomodoro()
 
   const [showSettings, setShowSettings] = useState(false)
@@ -311,6 +311,7 @@ export default function Pomodoro() {
             {running && <span className={`${s.playBtnPulse} ${s[modeClass]}`} />}
           </button>
           <button className={s.ctrlBtn} onClick={skipTimer} title="Skip">⏭</button>
+          <button className={s.ctrlBtn} onClick={finishTimer} title="Finish Early">✓</button>
         </div>
 
         {/* Stats */}
