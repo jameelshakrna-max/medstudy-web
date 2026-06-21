@@ -349,6 +349,7 @@ export default function Anki() {
   const [parsing, setParsing] = useState(false)
   const [uploadProgress, setUploadProgress] = useState('')
   const [dragOver, setDragOver] = useState(false)
+  const [apkgFile, setApkgFile] = useState(null)
   const fileRef = useRef(null)
 
   // review session
@@ -544,18 +545,49 @@ export default function Anki() {
 
   /* ── file upload / import ────────────────────────────── */
 
+  async function uploadApkg() {
+    if (!apkgFile || !uploadDeck) return alert('Please select a deck.')
+    setParsing(true)
+    setParseErr('')
+    setUploadProgress('Uploading to server...')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const body = new FormData()
+      body.append('file', apkgFile)
+      body.append('deck_id', uploadDeck)
+      const res = await fetch('/api/import/apkg', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + session.access_token },
+        body,
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || 'Upload failed')
+      setApkgFile(null)
+      setParsed([])
+      setUploadDeck('')
+      load()
+      setView(activeDeckId ? 'browse' : 'decks')
+    } catch (e) { setParseErr(e.message) }
+    setParsing(false)
+  }
+
   async function handleFile(file) {
     if (!file) return
 
-    // If it's an image file, resize it and use as card image
+    if (file.name.toLowerCase().endsWith('.apkg') || file.name.toLowerCase().endsWith('.colpkg')) {
+      setApkgFile(file)
+      setUploadDeck(activeDeckId || '')
+      setParseErr('')
+      setView('upload')
+      return
+    }
+
     if (file.type.startsWith('image/')) {
       try {
         const dataUrl = await resizeImage(file)
         setCardImage(dataUrl)
         setView('add')
-      } catch (err) {
-        alert('Failed to process image')
-      }
+      } catch { alert('Failed to process image') }
       return
     }
 
@@ -563,7 +595,7 @@ export default function Anki() {
     setParseErr('')
     setUploadProgress('Parsing file...')
     try {
-      const r = await parseFile(file, m => setUploadProgress(m))
+      const r = await parseFile(file)
       if (!r.length) {
         setParseErr('No cards found.')
         setParsing(false)
@@ -1011,16 +1043,18 @@ export default function Anki() {
       )}
 
       {/* ── upload preview view ─────────────────────────── */}
-      {view === 'upload' && parsed.length > 0 && (
+      {view === 'upload' && (parsed.length > 0 || apkgFile) && (
         <>
           <div className={s.breadcrumb}>
-            <button className={s.breadLink} onClick={() => { setParsed([]); setView('add') }}>
+            <button className={s.breadLink} onClick={() => { setApkgFile(null); setParsed([]); setView('add') }}>
               Back
             </button>
           </div>
 
           <div className={s.formCard}>
-            <h3 className={s.formTitle}>Import {parsed.length} Cards</h3>
+            <h3 className={s.formTitle}>
+              {apkgFile ? 'Import .apkg File' : 'Import ' + parsed.length + ' Cards'}
+            </h3>
 
             <div className={s.field}>
               <label>Deck</label>
@@ -1030,38 +1064,46 @@ export default function Anki() {
               </select>
             </div>
 
-            <div className={s.previewList}>
-              <div className={s.previewHeader}>
-                Showing {Math.min(parsed.length, 30)} of {parsed.length}
+            {apkgFile && !parsing && (
+              <div className={s.uploadActions}>
+                <button className={s.primaryBtn} onClick={uploadApkg} style={{ marginTop: 0 }}>
+                  Upload to Server
+                </button>
               </div>
-              {parsed.slice(0, 30).map((c, i) => (
-                <div key={i} className={s.previewRow}>
-                  <span className={s.previewFront}>
-                    {c.front}
-                    {c.image_url && <img src={c.image_url} alt="" style={{ maxWidth: 40, maxHeight: 30, borderRadius: 4, marginLeft: 6, verticalAlign: 'middle' }} />}
-                  </span>
-                  <span className={s.previewArrow}>{'\u2192'}</span>
-                  <span className={s.previewBack}>{c.back}</span>
-                </div>
-              ))}
-              {parsed.length > 30 && (
-                <div className={s.previewMore}>+{parsed.length - 30} more</div>
-              )}
-            </div>
+            )}
 
-            <div className={s.uploadActions}>
-              <button className={s.cancelBtn} onClick={() => { setParsed([]); setView('add') }}>
-                Cancel
-              </button>
-              <button
-                className={s.primaryBtn}
-                onClick={importCards}
-                disabled={importing}
-                style={{ marginTop: 0 }}
-              >
-                {importing ? '...' : 'Import ' + parsed.length + ' Cards'}
-              </button>
-            </div>
+            {parsing && <div className={s.parseError}>{uploadProgress}</div>}
+
+            {parseErr && <div className={s.parseError}>{parseErr}</div>}
+
+            {!apkgFile && parsed.length > 0 && (
+              <>
+                <div className={s.previewList}>
+                  <div className={s.previewHeader}>
+                    Showing {Math.min(parsed.length, 30)} of {parsed.length}
+                  </div>
+                  {parsed.slice(0, 30).map((c, i) => (
+                    <div key={i} className={s.previewRow}>
+                      <span className={s.previewFront}>
+                        {c.front}
+                        {c.image_url && <img src={c.image_url} alt="" style={{ maxWidth: 40, maxHeight: 30, borderRadius: 4, marginLeft: 6, verticalAlign: 'middle' }} />}
+                      </span>
+                      <span className={s.previewArrow}>{'\u2192'}</span>
+                      <span className={s.previewBack}>{c.back}</span>
+                    </div>
+                  ))}
+                  {parsed.length > 30 && (
+                    <div className={s.previewMore}>+{parsed.length - 30} more</div>
+                  )}
+                </div>
+
+                <div className={s.uploadActions}>
+                  <button className={s.primaryBtn} onClick={importCards} disabled={importing} style={{ marginTop: 0 }}>
+                    {importing ? '...' : 'Import ' + parsed.length + ' Cards'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </>
       )}
