@@ -40,38 +40,38 @@ export default function Curriculum() {
 
   async function addSystem() {
     if (!sysForm.name.trim()) return
-    const { error } = await supabase.from('curriculum_systems').insert({
+    const { data, error } = await supabase.from('curriculum_systems').insert({
       user_id: user.id,
       name: sysForm.name.trim(),
       high_yield: sysForm.high_yield,
       status: 'Not Started',
       priority: 1,
-    })
+    }).select()
     if (error) { alert('Error: ' + error.message); return }
+    setSystems(prev => [...prev, data[0]])
     setSysForm({ name: '', high_yield: false })
     setShowAdd(false)
-    loadData()
   }
 
   async function addSubject() {
     if (!subForm.name.trim() || !subForm.system_id) return
-    const { error } = await supabase.from('curriculum_subjects').insert({
+    const { data, error } = await supabase.from('curriculum_subjects').insert({
       user_id: user.id,
       name: subForm.name.trim(),
       system_id: subForm.system_id,
       high_yield: subForm.high_yield,
       difficulty: subForm.difficulty,
       status: 'Not Started',
-    })
+    }).select()
     if (error) { alert('Error: ' + error.message); return }
+    setSubjects(prev => [...prev, data[0]])
     setSubForm({ name: '', system_id: '', high_yield: false, difficulty: 'Medium' })
     setShowAdd(false)
-    loadData()
   }
 
   async function addTopic() {
     if (!topForm.name.trim() || !topForm.subject_id) return
-    const { error } = await supabase.from('curriculum_topics').insert({
+    const { data, error } = await supabase.from('curriculum_topics').insert({
       user_id: user.id,
       name: topForm.name.trim(),
       subject_id: topForm.subject_id,
@@ -80,18 +80,20 @@ export default function Curriculum() {
       status: 'Not Started',
       completion_pct: 0,
       confidence: 0,
-    })
+    }).select()
     if (error) { alert('Error: ' + error.message); return }
+    setTopics(prev => [...prev, data[0]])
     setTopForm({ name: '', subject_id: '', high_yield: false, difficulty: 'Medium' })
     setShowAdd(false)
-    loadData()
   }
 
   async function deleteItem(table, id) {
     if (!confirm('Delete this item?')) return
     const { error } = await supabase.from(table).delete().eq('id', id)
     if (error) { alert('Error: ' + error.message); return }
-    loadData()
+    if (table === 'curriculum_systems') setSystems(prev => prev.filter(x => x.id !== id))
+    else if (table === 'curriculum_subjects') setSubjects(prev => prev.filter(x => x.id !== id))
+    else if (table === 'curriculum_topics') setTopics(prev => prev.filter(x => x.id !== id))
   }
 
   async function updateTopicStatus(id, status) {

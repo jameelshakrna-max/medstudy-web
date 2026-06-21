@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { parseFile } from '../lib/fileParser'
 import { resizeImage } from '../lib/imageUtils'
@@ -387,11 +387,11 @@ export default function Anki() {
 
   /* ── derived data ────────────────────────────────────── */
 
-  const all = activeDeckId ? cards.filter(c => c.deck_id === activeDeckId) : cards
-  const due = all.filter(c => isDue(c))
-  const nw = all.filter(c => isNew(c))
-  const vis = filter === 'due' ? due : filter === 'new' ? nw : all
-  const dn = id => dm(decks, id)
+  const all = useMemo(() => activeDeckId ? cards.filter(c => c.deck_id === activeDeckId) : cards, [cards, activeDeckId])
+  const due = useMemo(() => all.filter(c => isDue(c)), [all])
+  const nw = useMemo(() => all.filter(c => isNew(c)), [all])
+  const vis = useMemo(() => filter === 'due' ? due : filter === 'new' ? nw : all, [filter, due, nw, all])
+  const dn = useCallback(id => dm(decks, id), [decks])
 
   /* ── deck actions ────────────────────────────────────── */
 

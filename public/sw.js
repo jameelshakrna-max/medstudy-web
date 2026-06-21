@@ -1,20 +1,83 @@
 // ══════════════════════════════════════════════════
 //  Service Worker for MedStudy OS
+//  - Precaches app shell for instant repeat visits
 //  - Background notifications via Web Push
 //  - Handles push events from server
 //  - Handles notification clicks
 // ══════════════════════════════════════════════════
 
-const CACHE_NAME = 'medstudy-v1'
+const CACHE = 'medstudy-v2'
+const STATIC_ASSETS = [
+  '/',
+  '/icon.svg',
+  '/favicon.png',
+  '/apple-touch-icon.png',
+  '/manifest.json',
+]
 
-// Install — skip waiting so SW activates immediately
-self.addEventListener('install', () => {
+// Install — cache app shell + activate immediately
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE).then((cache) => cache.addAll(STATIC_ASSETS))
+  )
   self.skipWaiting()
 })
 
-// Activate — claim all clients immediately
+// Activate — claim clients + delete old caches
 self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+    )
+  )
   event.waitUntil(self.clients.claim())
+})
+
+// Fetch — stale-while-revalidate for navigation, cache-first for static assets
+self.addEventListener('fetch', (event) => {
+  const { request } = event
+  const url = new URL(request.url)
+
+  // API calls → network only
+  if (url.pathname.startsWith('/api/')) return
+
+  // Supabase calls → network only
+  if (url.hostname.includes('supabase.co')) return
+
+  // Static assets with hash in URL (built by Vite) → cache-first (immutable)
+  if (url.pathname.startsWith('/assets/') && url.pathname.match(/-[A-Za-z0-9]{8}\./)) {
+    event.respondWith(
+      caches.match(request).then((cached) => cached || fetch(request))
+    )
+    return
+  }
+
+  // Navigation → stale-while-revalidate
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        const fetched = fetch(request).then((res) => {
+          const copy = res.clone()
+          caches.open(CACHE).then((cache) => cache.put(request, copy))
+          return res
+        })
+        return cached || fetched
+      })
+    )
+    return
+  }
+
+  // Everything else (fonts, icons, etc.) → stale-while-revalidate
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      const fetched = fetch(request).then((res) => {
+        const copy = res.clone()
+        caches.open(CACHE).then((cache) => cache.put(request, copy))
+        return res
+      })
+      return cached || fetched
+    })
+  )
 })
 
 // ── Push event: receives push from server, shows notification ──
