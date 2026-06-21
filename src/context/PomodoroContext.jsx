@@ -260,6 +260,7 @@ export function PomodoroProvider({ children }) {
   const [sessionPomodoros, setSessionPomodoros] = useState(0)
   const [sessionStart, setSessionStart] = useState(null)
   const [sessionLog, setSessionLog] = useState([])
+  const [activeStudySeconds, setActiveStudySeconds] = useState(0)
 
   const rafRef = useRef(null)
   const endTimeRef = useRef(null)
@@ -361,7 +362,7 @@ export function PomodoroProvider({ children }) {
     setSeconds(dur)
     setTotalSec(dur)
     totalRef.current = dur
-  }, [mode, focusMins, shortMins, longMins, running, getDuration])
+  }, [mode, focusMins, shortMins, longMins, getDuration])
 
   const handleComplete = useCallback(() => {
     if (completingRef.current) return
@@ -440,6 +441,9 @@ export function PomodoroProvider({ children }) {
     if (remainingSec !== lastTickRef.current) {
       lastTickRef.current = remainingSec
       setSeconds(remainingSec)
+      if (modeRef.current === 'study') {
+        setActiveStudySeconds(s => s + 1)
+      }
     }
     if (runningRef.current) { rafRef.current = requestAnimationFrame(tick) }
   }, [handleComplete])
@@ -597,6 +601,7 @@ export function PomodoroProvider({ children }) {
     setRunning(false)
     setDone(0)
     setSessionPomodoros(0)
+    setActiveStudySeconds(0)
     setSessionStart(null)
     setSessionLog([])
     setMode('study')
@@ -626,6 +631,7 @@ export function PomodoroProvider({ children }) {
     sessionPomodoros, setSessionPomodoros,
     sessionStart, setSessionStart,
     sessionLog, setSessionLog,
+    activeStudySeconds, setActiveStudySeconds,
     resetSession,
     displayRemaining,
     progress,

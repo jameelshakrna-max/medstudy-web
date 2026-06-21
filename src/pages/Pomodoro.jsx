@@ -14,8 +14,8 @@ export default function Pomodoro() {
     shortMins, setShortMins, longMins, setLongMins,
     selectedTopic, setSelectedTopic,
     sessionPomodoros, setSessionPomodoros,
-    sessionStart, setSessionStart,
-    sessionLog, resetSession,
+    sessionLog, activeStudySeconds,
+    resetSession,
     // Centralized timer values & actions
     seconds, totalSec,
     displayRemaining, progress,
@@ -77,13 +77,7 @@ export default function Pomodoro() {
   const circumference = 2 * Math.PI * 130
   const dashOffset = circumference * (1 - progress)
 
-  const elapsedMin = sessionStart ? Math.round((Date.now() - sessionStart) / 60000) : 0
-  const [liveMin, setLiveMin] = useState(0)
-  useEffect(() => {
-    if (!running) return
-    const iv = setInterval(() => setLiveMin(sessionStart ? Math.round((Date.now() - sessionStart) / 60000) : 0), 30000)
-    return () => clearInterval(iv)
-  }, [running, sessionStart])
+  const totalMin = Math.floor(activeStudySeconds / 60)
 
   // ── Stars (memoized) ──
   const stars = useMemo(() =>
@@ -154,7 +148,7 @@ export default function Pomodoro() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setSaveError('Not logged in'); setSaving(false); return }
 
-      const elapsedMinNow = sessionStart ? Math.round((Date.now() - sessionStart) / 60000) : 0
+      const elapsedMinNow = Math.floor(activeStudySeconds / 60)
       const topicName = topicInfo?.name || 'General Study'
 
       // Insert with only columns that exist in study_sessions table
@@ -189,7 +183,6 @@ export default function Pomodoro() {
 
       setShowFinish(false)
       resetSession()
-      setSessionStart(null)
     } catch (err) {
       console.error(err)
       setSaveError('Something went wrong. Please try again.')
@@ -329,7 +322,7 @@ export default function Pomodoro() {
           </div>
           <div className={s.statCard}>
             <span className={s.statIcon}>⏱</span>
-            <span className={s.statNum}>{running ? liveMin : elapsedMin}</span>
+            <span className={s.statNum}>{totalMin}</span>
             <span className={s.statLabel}>Minutes</span>
           </div>
           <div className={s.statCard}>
@@ -471,7 +464,7 @@ export default function Pomodoro() {
             <div className={s.modalTitle}>Session Complete!</div>
             <div className={s.modalSummary}>
               <div>🍅 {sessionPomodoros} Pomodoro{sessionPomodoros > 1 ? 's' : ''}</div>
-              <div>⏱ {elapsedMin} minutes ({(elapsedMin / 60).toFixed(1)} hours)</div>
+              <div>⏱ {totalMin} minutes ({(totalMin / 60).toFixed(1)} hours)</div>
               {topicInfo && <div>📚 {topicInfo.name}</div>}
             </div>
             {selectedTopic && (
