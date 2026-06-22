@@ -480,6 +480,11 @@ export default function Anki() {
     setImporting(false)
   }
 
+  /* ── render helpers ──────────────────────────────────── */
+
+  const cur = queue[qIdx]
+  const curPreviews = useMemo(() => cur ? previewIntervals(cur) : {}, [cur])
+
   /* ── early returns ───────────────────────────────────── */
 
   if (loading) return <div className={s.loading}>Loading Anki...</div>
@@ -493,11 +498,6 @@ export default function Anki() {
       </div>
     </div>
   )
-
-  /* ── render helpers ──────────────────────────────────── */
-
-  const cur = queue[qIdx]
-  const curPreviews = useMemo(() => cur ? previewIntervals(cur) : {}, [cur])
   const getNrClass = c => {
     const st = statusInfo(c)
     return st.l === 'Due' || st.l === 'Learning' || st.l === 'Relearning'
