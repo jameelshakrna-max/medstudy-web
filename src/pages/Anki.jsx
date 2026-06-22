@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { parseFile } from '../lib/fileParser'
-import { resizeImage } from '../lib/imageUtils'
+
 import s from './Anki.module.css'
 
 const API = '/api'
@@ -584,6 +583,7 @@ export default function Anki() {
 
     if (file.type.startsWith('image/')) {
       try {
+        const { resizeImage } = await import('../lib/imageUtils')
         const dataUrl = await resizeImage(file)
         setCardImage(dataUrl)
         setView('add')
@@ -595,6 +595,7 @@ export default function Anki() {
     setParseErr('')
     setUploadProgress('Parsing file...')
     try {
+      const { parseFile } = await import('../lib/fileParser')
       const r = await parseFile(file)
       if (!r.length) {
         setParseErr('No cards found.')
@@ -976,6 +977,7 @@ export default function Anki() {
                         return
                       }
                       try {
+                        const { resizeImage } = await import('../lib/imageUtils')
                         const dataUrl = await resizeImage(f)
                         setCardImage(dataUrl)
                       } catch (err) {
