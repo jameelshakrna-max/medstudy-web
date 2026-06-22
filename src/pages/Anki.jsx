@@ -14,6 +14,11 @@ function fsrs(option, card) {
   c.last_review = card.last_review ? new Date(card.last_review + 'Z') : now
   c.due = card.next_review ? new Date(card.next_review + 'Z') : now
 
+  // Normalize inconsistent data: Review/Learning/Relearning state requires positive stability
+  if (c.state !== FSRSState.New && c.stability <= 0) {
+    c.state = FSRSState.New
+  }
+
   const ratingMap = { again: FSRSRating.Again, hard: FSRSRating.Hard, good: FSRSRating.Good, easy: FSRSRating.Easy }
   const rating = ratingMap[option]
   if (rating === undefined) throw new Error('Invalid rating: ' + option)
