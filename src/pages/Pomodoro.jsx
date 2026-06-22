@@ -5,7 +5,7 @@ import s from './Pomodoro.module.css'
 
 const MODES = ['study','break','long']
 const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
-const TREE_COLORS = ['treeTeal','treeSage','treeViolet','treeGold']
+const TREE_COLORS = ['treeBlue','treeEmerald','treeIndigo','treeAmber']
 
 export default function Pomodoro() {
   const {
@@ -275,7 +275,7 @@ export default function Pomodoro() {
               {/* Tick marks */}
               {tickMarks.map(t => (
                 <line key={t.id} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2}
-                  stroke="rgba(255,255,255,0.06)" strokeWidth={t.major ? 1.5 : 0.5} />
+                  stroke="var(--card-border)" strokeWidth={t.major ? 1.5 : 0.5} />
               ))}
 
               {/* Background ring */}
@@ -485,7 +485,7 @@ export default function Pomodoro() {
               </div>
             )}
             {saveError && (
-              <div style={{ color: '#ff6b6b', fontSize: '13px', textAlign: 'center', padding: '8px', background: 'rgba(255,80,80,0.1)', borderRadius: '8px', marginTop: '8px' }}>
+              <div style={{ color: 'var(--red)', fontSize: '13px', textAlign: 'center', padding: '8px', background: 'var(--redL)', borderRadius: '8px', marginTop: '8px' }}>
                 {saveError}
               </div>
             )}
