@@ -318,6 +318,7 @@ export default function Anki() {
         difficulty: 0, stability: 0, state: 0, interval: 0, repetitions: 0,
         last_review: null, next_review: null, created_at: now
       }])
+      setView('add')
     } catch (e) { alert(e.message) }
     setSaving(false)
   }
@@ -552,7 +553,7 @@ export default function Anki() {
 
       setParsed([])
       setUploadDeck('')
-      setView(activeDeckId ? 'browse' : 'decks')
+      setView('add')
     } catch (e) { alert(e.message) }
     setImporting(false)
   }
@@ -900,8 +901,8 @@ export default function Anki() {
                   onChange={async (e) => {
                     const f = e.target.files?.[0]
                     if (f) {
-                      if (f.size > 10 * 1024 * 1024) {
-                        alert('Image too large. Max 10MB.')
+                      if (f.size > 50 * 1024 * 1024) {
+                        alert('Image too large. Max 50MB.')
                         return
                       }
                       try {
