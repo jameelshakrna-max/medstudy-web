@@ -24,24 +24,17 @@ export default function Dashboard() {
       if (p.error) console.error('Dashboard pomodoros error:', p.error)
       if (t.error) console.error('Dashboard topics error:', t.error)
 
-      // Fetch Anki cards due from Turso API
+      // Fetch due card count from server
       let cardsdue = 0
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        const res = await fetch('/api/flashcards', {
+        const res = await fetch('/api/flashcards/due-count', {
           headers: { Authorization: 'Bearer ' + session.access_token }
         })
-        const allCards = await res.json()
-        if (Array.isArray(allCards)) {
-          const now = new Date()
-          cardsdue = allCards.filter(c => {
-            if (!c.last_review) return true
-            if (!c.next_review) return true
-            return new Date(c.next_review) <= now
-          }).length
-        }
+        const data = await res.json()
+        cardsdue = data.count ?? 0
       } catch (e) {
-        console.error('Dashboard anki fetch error:', e)
+        console.error('Dashboard due-count fetch error:', e)
       }
 
       setStats({
