@@ -815,11 +815,10 @@ export default function Anki() {
 
                   {isReviewing && (
                     <div className={s.ankiBack} dangerouslySetInnerHTML={{ __html: card.back }} />
-                      {card.image_url && (
-                        <div className={s.cardImage}>
-                          <img src={card.image_url} alt="card" loading="lazy" />
-                        </div>
-                      )}
+                  )}
+                  {isReviewing && card.image_url && (
+                    <div className={s.cardImage}>
+                      <img src={card.image_url} alt="card" loading="lazy" />
                     </div>
                   )}
 
