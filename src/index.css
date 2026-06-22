@@ -1,21 +1,21 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --navy:    #0A1628;
-  --navy2:   #152236;
-  --navy3:   #1E3354;
-  --teal:    #00B5A3;
-  --teal2:   #00D4C0;
-  --tealL:   rgba(0,181,163,0.1);
-  --gold:    #E8A838;
-  --goldL:   rgba(232,168,56,0.1);
-  --sage:    #3DBE7A;
-  --sageL:   rgba(61,190,122,0.1);
-  --coral:   #F25C5C;
-  --coralL:  rgba(242,92,92,0.1);
-  --violet:  #6C63FF;
-  --violetL: rgba(108,99,255,0.1);
-  --mist:    #7A8FA6;
+  --navy:    #0F172A;
+  --navy2:   #1E293B;
+  --navy3:   #334155;
+  --blue:    #3B82F6;
+  --blue2:   #60A5FA;
+  --blueL:   rgba(59,130,246,0.1);
+  --amber:   #F59E0B;
+  --amberL:  rgba(245,158,11,0.1);
+  --emerald: #10B981;
+  --emeraldL: rgba(16,185,129,0.1);
+  --red:     #EF4444;
+  --redL:    rgba(239,68,68,0.1);
+  --indigo:  #6366F1;
+  --indigoL: rgba(99,102,241,0.1);
+  --mist:    #94A6B8;
   --cloud:   #E8EDF5;
   --white:   #FFFFFF;
   --border:  rgba(255,255,255,0.08);
@@ -23,42 +23,41 @@
 
   /* Semantic aliases (override in light theme) */
   --page-bg:         var(--navy);
-  --text-primary:    #FFFFFF;
-  --text-secondary:  #E0E8F0;
+  --text-primary:    #F8FAFC;
+  --text-secondary:  #94A6B8;
   --card-bg:         rgba(255,255,255,0.03);
   --card-border:     rgba(255,255,255,0.08);
   --nav-border:      rgba(255,255,255,0.08);
   --btn-secondary-bg: rgba(255,255,255,0.03);
   --btn-secondary-border: rgba(255,255,255,0.08);
-  --btn-secondary-color: #E0E8F0;
+  --btn-secondary-color: #94A6B8;
   --input-bg:        rgba(255,255,255,0.06);
   --input-border:    rgba(255,255,255,0.1);
-  --input-color:     #FFFFFF;
+  --input-color:     #F8FAFC;
   --toggle-bg:       rgba(255,255,255,0.12);
-  --toggle-knob:     #FFFFFF;
+  --toggle-knob:     #F8FAFC;
   --scrollbar-track: var(--navy2);
   --scrollbar-thumb: var(--navy3);
 }
 
 [data-theme="light"] {
-  --page-bg:         #F7F9FC;
-  --text-primary:    #1A2332;
-  --text-secondary:  #334155;
+  --page-bg:         #F8FAFC;
+  --text-primary:    #0F172A;
+  --text-secondary:  #64748B;
   --card-bg:         #FFFFFF;
   --card-border:     #E2E8F0;
   --nav-border:      #E2E8F0;
   --btn-secondary-bg: #FFFFFF;
   --btn-secondary-border: #E2E8F0;
-  --btn-secondary-color: #334155;
+  --btn-secondary-color: #64748B;
   --input-bg:        #FFFFFF;
   --input-border:    #D1D5DB;
-  --input-color:     #1A2332;
+  --input-color:     #0F172A;
   --toggle-bg:       #D1D5DB;
   --toggle-knob:     #FFFFFF;
   --scrollbar-track: #E2E8F0;
   --scrollbar-thumb: #CBD5E1;
 
-  /* Keep accent colors the same but adjust their containers */
   --border:  #E2E8F0;
   --card:    #FFFFFF;
   --mist:    #64748B;

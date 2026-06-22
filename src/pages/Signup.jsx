@@ -26,7 +26,7 @@ export default function Signup() {
     <AuthLayout title="Check your email 📬" sub="We sent a confirmation link to your inbox.">
       <div style={{textAlign:'center',color:'var(--mist)',fontSize:'14px',lineHeight:'1.7'}}>
         <p>Click the link in the email to activate your account.</p>
-        <p style={{marginTop:'8px'}}>Then come back and <Link to="/login" style={{color:'var(--teal)'}}>sign in →</Link></p>
+        <p style={{marginTop:'8px'}}>Then come back and <Link to="/login" style={{color:'var(--blue)'}}>sign in →</Link></p>
       </div>
     </AuthLayout>
   )

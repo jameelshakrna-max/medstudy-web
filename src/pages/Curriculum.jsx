@@ -123,7 +123,7 @@ export default function Curriculum() {
     return Math.round(total / systemTopics.length)
   }
 
-  const statusColor = s => s === 'In Progress' ? 'var(--teal)' : s === 'Complete' ? 'var(--sage)' : s === 'Reviewing' ? 'var(--violet)' : 'var(--mist)'
+  const statusColor = s => s === 'In Progress' ? 'var(--blue)' : s === 'Complete' ? 'var(--emerald)' : s === 'Reviewing' ? 'var(--indigo)' : 'var(--mist)'
 
   if (loading) return <div className={styles.loading}>Loading curriculum...</div>
 
@@ -140,7 +140,7 @@ export default function Curriculum() {
             {v === 'systems' ? '🫀 Systems' : v === 'subjects' ? '📋 Subjects' : '🔖 Topics'}
           </button>
         ))}
-        <button className={styles.tab} onClick={() => setShowAdd(!showAdd)} style={{ marginLeft: 'auto', background: 'var(--tealL)', border: '1px solid rgba(0,181,163,0.3)', color: 'var(--teal)' }}>
+        <button className={styles.tab} onClick={() => setShowAdd(!showAdd)} style={{ marginLeft: 'auto', background: 'var(--blueL)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--blue)' }}>
           {showAdd ? '✕ Close' : '+ Add New'}
         </button>
       </div>

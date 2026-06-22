@@ -11,9 +11,9 @@ const features = [
 ]
 
 const plans = [
-  { name:'Free', price:'$0', color:'var(--sage)', features:['Daily Dashboard','Study Sessions + Pomodoro','Weekly Summary','460+ AMBOSS Topic List'], missing:['Full Curriculum','Anki System','UWorld Tracker'] },
-  { name:'Core', price:'$19', color:'var(--teal)', popular:true, features:['Everything in Free','5-Level Curriculum Hierarchy','Priority View + Gap Analysis','Topic Stats + Mastery Level'], missing:['Anki FSRS-5 System','UWorld Tracker'] },
-  { name:'Pro', price:'$39', color:'var(--gold)', features:['Everything in Core','Anki FSRS-5 Flashcard System','UWorld Question Tracker','Step Readiness Dashboard','Priority Email Support'], missing:[] },
+  { name:'Free', price:'$0', color:'var(--emerald)', features:['Daily Dashboard','Study Sessions + Pomodoro','Weekly Summary','460+ AMBOSS Topic List'], missing:['Full Curriculum','Anki System','UWorld Tracker'] },
+  { name:'Core', price:'$19', color:'var(--blue)', popular:true, features:['Everything in Free','5-Level Curriculum Hierarchy','Priority View + Gap Analysis','Topic Stats + Mastery Level'], missing:['Anki FSRS-5 System','UWorld Tracker'] },
+  { name:'Pro', price:'$39', color:'var(--amber)', features:['Everything in Core','Anki FSRS-5 Flashcard System','UWorld Question Tracker','Step Readiness Dashboard','Priority Email Support'], missing:[] },
 ]
 
 export default function Landing() {

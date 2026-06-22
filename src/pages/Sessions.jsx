@@ -102,7 +102,7 @@ export default function Sessions() {
     return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
   }
 
-  const energyColor = e => e === 'High' ? 'var(--sage)' : e === 'Medium' ? 'var(--gold)' : 'var(--coral)'
+  const energyColor = e => e === 'High' ? 'var(--emerald)' : e === 'Medium' ? 'var(--amber)' : 'var(--red)'
 
   // ── Streak calculation ──
   const streak = useMemo(() => {
@@ -127,7 +127,7 @@ export default function Sessions() {
         <h1 className={styles.title}>Study Sessions</h1>
         <p className={styles.sub}>
           {totalSessions} session{totalSessions !== 1 ? 's' : ''} &middot; {(totalMin / 60).toFixed(1)}h total &middot; {avgDuration}min avg
-          {streak > 1 && <span style={{ color: 'var(--gold)', marginLeft: 8 }}>🔥 {streak} day streak</span>}
+          {streak > 1 && <span style={{ color: 'var(--amber)', marginLeft: 8 }}>🔥 {streak} day streak</span>}
         </p>
       </div>
 
@@ -176,15 +176,15 @@ export default function Sessions() {
 
           {/* ── Stats Cards ── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
-            <div style={{ background: 'linear-gradient(135deg, rgba(0,181,163,0.1), rgba(0,181,163,0.03))', border: '1px solid rgba(0,181,163,0.2)', borderRadius: '14px', padding: '14px 10px', textAlign: 'center' }}>
+            <div style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.1), rgba(59,130,246,0.03))', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '14px', padding: '14px 10px', textAlign: 'center' }}>
               <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '24px', color: '#fff' }}>{(totalMin / 60).toFixed(1)}</div>
               <div style={{ fontSize: '10px', color: 'var(--mist)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Hours</div>
             </div>
-            <div style={{ background: 'linear-gradient(135deg, rgba(61,190,122,0.1), rgba(61,190,122,0.03))', border: '1px solid rgba(61,190,122,0.2)', borderRadius: '14px', padding: '14px 10px', textAlign: 'center' }}>
+            <div style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.1), rgba(16,185,129,0.03))', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '14px', padding: '14px 10px', textAlign: 'center' }}>
               <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '24px', color: '#fff' }}>{totalSessions}</div>
               <div style={{ fontSize: '10px', color: 'var(--mist)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Sessions</div>
             </div>
-            <div style={{ background: 'linear-gradient(135deg, rgba(108,99,255,0.1), rgba(108,99,255,0.03))', border: '1px solid rgba(108,99,255,0.2)', borderRadius: '14px', padding: '14px 10px', textAlign: 'center' }}>
+            <div style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(99,102,241,0.03))', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '14px', padding: '14px 10px', textAlign: 'center' }}>
               <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '24px', color: '#fff' }}>{avgDuration}</div>
               <div style={{ fontSize: '10px', color: 'var(--mist)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Avg Min</div>
             </div>
@@ -210,7 +210,7 @@ export default function Sessions() {
                       <span className={styles.sessType}>{s.session_type}</span>
                       <span style={{ color: energyColor(s.energy_level) }}>Energy: {s.energy_level}</span>
                       <span>{s.focus_quality}</span>
-                      {s.goals_met && <span style={{ color: 'var(--sage)' }}>Goals Met</span>}
+                      {s.goals_met && <span style={{ color: 'var(--emerald)' }}>Goals Met</span>}
                     </div>
                     {s.notes && <div className={styles.sessNotes}>{s.notes}</div>}
                     <button className={styles.sessDelete} onClick={() => deleteSession(s.id)} title="Delete">✕</button>

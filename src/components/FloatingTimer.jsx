@@ -59,7 +59,7 @@ export default function FloatingTimer() {
   // ── Don't render if timer not running ──
   if (!running) return null
 
-  const modeColor = mode === 'study' ? '#00B5A3' : mode === 'break' ? '#3DBE7A' : '#6C63FF'
+  const modeColor = mode === 'study' ? '#3B82F6' : mode === 'break' ? '#10B981' : '#6366F1'
 
   // ── Minimized: tiny floating circle ──
   if (minimized) {

@@ -46,7 +46,7 @@
 }
 
 .section:hover {
-  border-color: var(--tealL);
+  border-color: var(--blueL);
 }
 
 /* ── Accordion Toggle Button ── */
@@ -103,7 +103,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 181, 163, 0.12);
+  background: rgba(59, 130, 246, 0.12);
   border-radius: 10px;
 }
 
@@ -126,7 +126,7 @@
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--teal, #00B5A3), var(--sage, #3DBE7A));
+  background: linear-gradient(135deg, var(--blue, #3B82F6), var(--emerald, #10B981));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -168,8 +168,8 @@
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 6px;
-  background: rgba(0, 181, 163, 0.15);
-  color: var(--teal, #00B5A3);
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--blue, #3B82F6);
   margin-top: 4px;
 }
 
@@ -208,7 +208,7 @@
 }
 
 .input:focus {
-  border-color: var(--teal);
+  border-color: var(--blue);
   background: var(--input-bg);
 }
 
@@ -299,7 +299,7 @@
 }
 
 .toggle input:checked + .slider {
-  background: var(--teal);
+  background: var(--blue);
 }
 
 .toggle input:checked + .slider::before {
@@ -324,12 +324,12 @@
 }
 
 .themeOption:hover {
-  border-color: var(--tealL);
+  border-color: var(--blueL);
 }
 
 .themeOptionActive {
-  border-color: var(--teal);
-  background: var(--tealL);
+  border-color: var(--blue);
+  background: var(--blueL);
 }
 
 .themePreview {
@@ -340,7 +340,7 @@
 }
 
 .themePreviewDark {
-  background: linear-gradient(135deg, #0A1628, #0D1F35);
+  background: linear-gradient(135deg, #0F172A, #1E293B);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -398,7 +398,7 @@
 }
 
 .durationInput:focus {
-  border-color: var(--teal, #00B5A3);
+  border-color: var(--blue, #3B82F6);
 }
 
 /* ── Buttons ── */
@@ -417,7 +417,7 @@
 }
 
 .btnPrimary {
-  background: linear-gradient(135deg, var(--teal, #00B5A3), #00D4B8);
+  background: linear-gradient(135deg, var(--blue, #3B82F6), #60A5FA);
   color: #fff;
 }
 
@@ -437,13 +437,13 @@
 }
 
 .btnDanger {
-  background: rgba(242, 92, 92, 0.12);
-  color: var(--coral, #F25C5C);
-  border: 1px solid rgba(242, 92, 92, 0.2);
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--red, #EF4444);
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .btnDanger:hover {
-  background: rgba(242, 92, 92, 0.2);
+  background: rgba(239, 68, 68, 0.2);
 }
 
 .btnRow {
@@ -481,7 +481,7 @@
 .fieldHint {
   font-family: 'DM Sans', sans-serif;
   font-size: 12px;
-  color: var(--gold, #E8A838);
+  color: var(--amber, #F59E0B);
   margin-top: 4px;
 }
 
@@ -491,7 +491,7 @@
   border: none;
   font-family: 'DM Sans', sans-serif;
   font-size: 13px;
-  color: var(--teal, #00B5A3);
+  color: var(--blue, #3B82F6);
   cursor: pointer;
   padding: 0;
   margin-top: 12px;
@@ -500,14 +500,14 @@
 }
 
 .forgotBtn:hover {
-  color: #00D4B8;
+  color: #60A5FA;
 }
 
 .forgotSection {
   margin-top: 16px;
   padding: 14px;
-  background: rgba(0, 181, 163, 0.06);
-  border: 1px solid rgba(0, 181, 163, 0.12);
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.12);
   border-radius: 10px;
 }
 
@@ -522,14 +522,14 @@
 .dangerZone {
   margin-top: 24px;
   padding-top: 16px;
-  border-top: 1px solid rgba(242, 92, 92, 0.12);
+  border-top: 1px solid rgba(239, 68, 68, 0.12);
 }
 
 .dangerLabel {
   font-family: 'DM Sans', sans-serif;
   font-size: 12px;
   font-weight: 600;
-  color: var(--coral, #F25C5C);
+  color: var(--red, #EF4444);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 10px;
@@ -538,7 +538,7 @@
 .dangerText {
   font-family: 'DM Sans', sans-serif;
   font-size: 13px;
-  color: var(--coral, #F25C5C);
+  color: var(--red, #EF4444);
   margin: 0 0 10px;
 }
 
@@ -559,13 +559,13 @@
 }
 
 .statusSuccess {
-  background: rgba(61, 190, 122, 0.12);
-  color: var(--sage, #3DBE7A);
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--emerald, #10B981);
 }
 
 .statusError {
-  background: rgba(242, 92, 92, 0.12);
-  color: var(--coral, #F25C5C);
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--red, #EF4444);
 }
 
 /* ── Light Mode Override (only what global vars don't cover) ── */

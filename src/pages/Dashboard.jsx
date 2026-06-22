@@ -77,10 +77,10 @@ export default function Dashboard() {
       {/* Stats */}
       <div className={styles.statsGrid}>
         {[
-          { n: stats.pomodoros, l: 'Pomodoros Today', c: 'var(--teal)', icon: '🍅' },
-          { n: stats.sessions, l: 'Sessions Today', c: 'var(--sage)', icon: '📖' },
-          { n: stats.topicsInProgress, l: 'Topics In Progress', c: 'var(--gold)', icon: '🔖' },
-          { n: stats.cardsdue, l: 'Anki Cards Due', c: 'var(--coral)', icon: '🃏' },
+          { n: stats.pomodoros, l: 'Pomodoros Today', c: 'var(--blue)', icon: '🍅' },
+          { n: stats.sessions, l: 'Sessions Today', c: 'var(--emerald)', icon: '📖' },
+          { n: stats.topicsInProgress, l: 'Topics In Progress', c: 'var(--amber)', icon: '🔖' },
+          { n: stats.cardsdue, l: 'Anki Cards Due', c: 'var(--red)', icon: '🃏' },
         ].map((s, i) => (
           <div className={styles.statCard} key={i} style={{ '--c': s.c }}>
             <div className={styles.statIcon}>{s.icon}</div>
@@ -95,10 +95,10 @@ export default function Dashboard() {
         <h2 className={styles.sectionTitle}>🌅 Daily Routine</h2>
         <div className={styles.routineGrid}>
           {[
-            { step: '1', title: 'Check Anki Cards Due', desc: 'Review all due cards before starting new material.', link: '/anki', cta: 'Open Anki →', color: 'var(--violet)' },
-            { step: '2', title: 'Pick Your Topic', desc: 'Open Curriculum → study your topics and track progress.', link: '/curriculum', cta: 'Open Curriculum →', color: 'var(--teal)' },
-            { step: '3', title: 'Start a Pomodoro', desc: '25 minutes focused study. Log each block.', link: '/pomodoro', cta: 'Open Timer →', color: 'var(--coral)' },
-            { step: '4', title: 'Log Study Session', desc: 'Record duration, energy, and focus after each block.', link: '/sessions', cta: 'Log Session →', color: 'var(--sage)' },
+            { step: '1', title: 'Check Anki Cards Due', desc: 'Review all due cards before starting new material.', link: '/anki', cta: 'Open Anki →', color: 'var(--indigo)' },
+            { step: '2', title: 'Pick Your Topic', desc: 'Open Curriculum → study your topics and track progress.', link: '/curriculum', cta: 'Open Curriculum →', color: 'var(--blue)' },
+            { step: '3', title: 'Start a Pomodoro', desc: '25 minutes focused study. Log each block.', link: '/pomodoro', cta: 'Open Timer →', color: 'var(--red)' },
+            { step: '4', title: 'Log Study Session', desc: 'Record duration, energy, and focus after each block.', link: '/sessions', cta: 'Log Session →', color: 'var(--emerald)' },
           ].map((r, i) => (
             <a href={r.link} key={i} className={styles.routineCard} style={{ '--rc': r.color }}>
               <div className={styles.routineStep}>{r.step}</div>

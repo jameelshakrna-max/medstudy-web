@@ -736,7 +736,7 @@ export default function Anki() {
                     className={s.progFill}
                     style={{
                       width: Math.round(due.length / cards.length * 100) + '%',
-                      background: 'var(--teal)'
+                      background: 'var(--blue)'
                     }}
                   />
                 </div>
@@ -778,7 +778,7 @@ export default function Anki() {
                         className={s.progFill}
                         style={{
                           width: Math.round(dd.length / dc.length * 100) + '%',
-                          background: 'var(--violet)'
+                          background: 'var(--indigo)'
                         }}
                       />
                     </div>

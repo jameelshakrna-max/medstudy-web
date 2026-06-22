@@ -256,19 +256,19 @@ export default function Pomodoro() {
             <svg className={s.ringSvg} viewBox="0 0 300 300">
               <defs>
                 <linearGradient id="timerGradientStudy" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#00B5A3" />
-                  <stop offset="50%" stopColor="#3DBE7A" />
-                  <stop offset="100%" stopColor="#00D4B8" />
+                  <stop offset="0%" stopColor="#3B82F6" />
+                  <stop offset="50%" stopColor="#60A5FA" />
+                  <stop offset="100%" stopColor="#93C5FD" />
                 </linearGradient>
                 <linearGradient id="timerGradientBreak" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#3DBE7A" />
-                  <stop offset="50%" stopColor="#50d48e" />
-                  <stop offset="100%" stopColor="#7AE8A8" />
+                  <stop offset="0%" stopColor="#10B981" />
+                  <stop offset="50%" stopColor="#34D399" />
+                  <stop offset="100%" stopColor="#6EE7B7" />
                 </linearGradient>
                 <linearGradient id="timerGradientLong" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#6C63FF" />
-                  <stop offset="50%" stopColor="#8b83ff" />
-                  <stop offset="100%" stopColor="#A89FFF" />
+                  <stop offset="0%" stopColor="#6366F1" />
+                  <stop offset="50%" stopColor="#818CF8" />
+                  <stop offset="100%" stopColor="#A5B4FC" />
                 </linearGradient>
               </defs>
 

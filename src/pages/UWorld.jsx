@@ -61,7 +61,7 @@ export default function UWorld() {
   }
 
   const avg = blocks.length ? Math.round(blocks.reduce((s, b) => s + Number(b.percent_correct || 0), 0) / blocks.length) : 0
-  const gradeColor = g => g === 'Excellent' ? 'var(--sage)' : g === 'Good' ? 'var(--teal)' : g === 'Average' ? 'var(--gold)' : 'var(--coral)'
+  const gradeColor = g => g === 'Excellent' ? 'var(--emerald)' : g === 'Good' ? 'var(--blue)' : g === 'Average' ? 'var(--amber)' : 'var(--red)'
 
   if (loading) return <div className={styles.loading}>Loading UWorld...</div>
 
@@ -93,7 +93,7 @@ export default function UWorld() {
           </div>
           <div className={styles.field}><label>Notes</label><textarea rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Weak areas, patterns noticed..." /></div>
           <div className={styles.previewScore}>
-            Predicted score: <strong style={{ color: 'var(--teal)' }}>{form.total_questions > 0 ? Math.round(form.correct / form.total_questions * 100) : 0}%</strong>
+            Predicted score: <strong style={{ color: 'var(--blue)' }}>{form.total_questions > 0 ? Math.round(form.correct / form.total_questions * 100) : 0}%</strong>
           </div>
           <button className={styles.primaryBtn} onClick={addBlock}>Log Block</button>
         </div>

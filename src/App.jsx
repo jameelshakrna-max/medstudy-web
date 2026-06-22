@@ -17,7 +17,7 @@ const Pomodoro   = lazy(() => import('./pages/Pomodoro'))
 const Sessions   = lazy(() => import('./pages/Sessions'))
 const Settings   = lazy(() => import('./pages/Settings'))
 
-const PAGE_LOADING = <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:'var(--teal)',fontSize:'24px'}}>🏥</div>
+const PAGE_LOADING = <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:'var(--blue)',fontSize:'24px'}}>🏥</div>
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
