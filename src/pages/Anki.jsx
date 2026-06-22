@@ -421,28 +421,16 @@ export default function Anki() {
     if (!apkgFile || !uploadDeck) return alert('Please select a deck.')
     setParsing(true)
     setParseErr('')
-    setUploadProgress('Uploading to server...')
+    setUploadProgress('Parsing .apkg file...')
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const body = new FormData()
-      body.append('file', apkgFile)
-      body.append('deck_id', uploadDeck)
-      const res = await fetch('/api/import/apkg', {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + session.access_token },
-        body,
-      })
-      const text = await res.text()
-      let j
-      try { j = JSON.parse(text) } catch { throw new Error(text.slice(0, 300)) }
-      if (!res.ok) throw new Error(j.error || 'Upload failed')
+      const { parseApkgFile } = await import('../lib/apkgParser')
+      const cards = await parseApkgFile(apkgFile)
+      if (!cards.length) { setParseErr('No cards found.'); setParsing(false); return }
+      setParsed(cards)
       setApkgFile(null)
-      setParsed([])
-      setUploadDeck('')
-      load()
-      setView(activeDeckId ? 'browse' : 'decks')
-    } catch (e) { setParseErr(e.message) }
-    setParsing(false)
+      // reuse the same chunked import flow as CSV/TXT
+      importCards()
+    } catch (e) { setParseErr(e.message); setParsing(false) }
   }
 
   async function handleFile(file) {
