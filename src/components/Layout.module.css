@@ -28,7 +28,7 @@
 .content { padding: 36px 40px; max-width: 1200px; }
 .overlay { display: none; }
 @media (max-width: 768px) {
-  .sidebar { transform: translateX(-100%); }
+  .sidebar { transform: translateX(-100%); border-right: none; }
   .sidebarOpen { transform: translateX(0); }
   .main { margin-left: 0; }
   .mobileHeader { display: flex; }
