@@ -9,7 +9,7 @@
   z-index: 9999;
   width: 196px;
   border-radius: 18px;
-  background: rgba(20, 22, 35, 0.88);
+  background: var(--float-bg);
   -webkit-backdrop-filter: blur(22px);
   backdrop-filter: blur(22px);
   border: 1px solid var(--card-border);
@@ -176,7 +176,7 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: rgba(20, 22, 35, 0.9);
+  background: var(--float-bg);
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
   border: 2px solid var(--card-border);
@@ -322,7 +322,7 @@
 @supports (-moz-appearance: none) {
   .floating,
   .mini {
-    background: rgba(20, 22, 35, 0.95);
+    background: var(--float-bg);
   }
 }
 

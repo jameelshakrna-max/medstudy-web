@@ -38,6 +38,7 @@
   --toggle-knob:     #F8FAFC;
   --scrollbar-track: var(--navy2);
   --scrollbar-thumb: var(--navy3);
+  --float-bg:        rgba(20,22,35,0.88);
 }
 
 [data-theme="light"] {
@@ -58,9 +59,10 @@
   --scrollbar-track: #E2E8F0;
   --scrollbar-thumb: #CBD5E1;
 
-  --border:  #E2E8F0;
-  --card:    #FFFFFF;
-  --mist:    #64748B;
+  --border:    #E2E8F0;
+  --card:      #FFFFFF;
+  --mist:      #64748B;
+  --float-bg:  rgba(255,255,255,0.85);
 }
 
 [data-theme="light"] body { font-weight: 450; }
