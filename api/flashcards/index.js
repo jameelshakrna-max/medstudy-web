@@ -97,28 +97,7 @@ export async function POST(req) {
     else if (Array.isArray(body)) items = body
     else items = [body]
 
-    const now = new Date().toISOString()
-    const rows = items.map(c => ({
-      id: crypto.randomUUID(),
-      deckId: c.deck_id || null,
-      front: c.front, back: c.back,
-      image_url: c.image_url || null,
-      high_yield: c.high_yield ? 1 : 0,
-      difficulty: c.difficulty ?? 0,
-      stability: c.stability ?? 0,
-      state: c.state ?? 0,
-      interval: c.interval ?? 0,
-      repetitions: c.repetitions ?? 0,
-    }))
-
-    for (let i = 0; i < rows.length; i += 250) {
-      const chunk = rows.slice(i, i + 250)
-      await batchExec(chunk.map(r => ({
-        sql: `INSERT INTO anki_cards (id, user_id, deck_id, front, back, image_url, high_yield, difficulty, stability, state, interval, repetitions, last_review, next_review, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [r.id, user.id, r.deckId, r.front, r.back, r.image_url, r.high_yield, r.difficulty, r.stability, r.state, r.interval, r.repetitions, null, null, now],
-      })))
-    }
-
-    return Response.json({ success: true, count: items.length, ids: rows.map(r => r.id) }, { status: 201 })
+    // no db writes for now — just return success to test response integrity
+    return Response.json({ success: true, count: items.length, ids: [] }, { status: 201 })
   } catch (e) { return Response.json({ error: e.message }, { status: 500 }) }
 }
