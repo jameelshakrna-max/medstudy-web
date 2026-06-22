@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import LoadingScreen from '../components/LoadingScreen'
 import styles from './Page.module.css'
 
 function getGrade(pct) {
@@ -63,7 +64,7 @@ export default function UWorld() {
   const avg = blocks.length ? Math.round(blocks.reduce((s, b) => s + Number(b.percent_correct || 0), 0) / blocks.length) : 0
   const gradeColor = g => g === 'Excellent' ? 'var(--emerald)' : g === 'Good' ? 'var(--blue)' : g === 'Average' ? 'var(--amber)' : 'var(--red)'
 
-  if (loading) return <div className={styles.loading}>Loading UWorld...</div>
+  if (loading) return <LoadingScreen fullPage={false} message="Loading UWorld..." />
 
   return (
     <div className={styles.page}>

@@ -1,5 +1,4 @@
 .page {}
-.loading { color: var(--mist); padding: 40px; font-size: 14px; }
 .header { margin-bottom: 28px; }
 .title { font-family: 'DM Serif Display', serif; font-size: clamp(24px, 4vw, 36px); color: var(--text-primary); margin-bottom: 6px; }
 .sub { font-size: 14px; color: var(--mist); }

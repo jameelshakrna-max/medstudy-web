@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { PomodoroProvider, usePomodoro } from './context/PomodoroContext'
 import FloatingTimer from './components/FloatingTimer'
 import Layout from './components/Layout'
+import LoadingScreen from './components/LoadingScreen'
 
 const Landing    = lazy(() => import('./pages/Landing'))
 const Login      = lazy(() => import('./pages/Login'))
@@ -17,7 +18,7 @@ const Pomodoro   = lazy(() => import('./pages/Pomodoro'))
 const Sessions   = lazy(() => import('./pages/Sessions'))
 const Settings   = lazy(() => import('./pages/Settings'))
 
-const PAGE_LOADING = <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:'var(--blue)',fontSize:'24px'}}>🏥</div>
+const PAGE_LOADING = <LoadingScreen />
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()

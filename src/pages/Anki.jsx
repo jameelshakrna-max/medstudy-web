@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { FSRS, Card as FSRSCard, State as FSRSState, Rating as FSRSRating } from 'fsrs.js'
+import LoadingScreen from '../components/LoadingScreen'
 import s from './Anki.module.css'
 
 const fsrsInstance = new FSRS()
@@ -557,7 +558,7 @@ export default function Anki() {
 
   /* ── early returns ───────────────────────────────────── */
 
-  if (loading) return <div className={s.loading}>Loading Anki...</div>
+  if (loading) return <LoadingScreen fullPage={false} message="Loading Anki..." />
 
   if (error && !cards.length && !decks.length) return (
     <div className={s.page}>

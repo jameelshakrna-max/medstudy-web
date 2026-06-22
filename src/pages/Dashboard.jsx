@@ -1,6 +1,7 @@
 import { useEffect, useState, memo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import LoadingScreen from '../components/LoadingScreen'
 import styles from './Dashboard.module.css'
 
 const DashStatCards = memo(function DashStatCards({ stats }) {
@@ -75,7 +76,7 @@ export default function Dashboard() {
     return 'Good evening'
   }
 
-  if (loading) return <div className={styles.loading}>Loading...</div>
+  if (loading) return <LoadingScreen fullPage={false} message="Loading..." />
 
   return (
     <div className={styles.page}>

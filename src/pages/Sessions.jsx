@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, memo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import LoadingScreen from '../components/LoadingScreen'
 import styles from './Page.module.css'
 
 const StatsCards = memo(function StatsCards({ totalMin, totalSessions, avgDuration, goalsMet }) {
@@ -142,7 +143,7 @@ export default function Sessions() {
     return count
   }, [sessions])
 
-  if (loading) return <div className={styles.loading}>Loading sessions...</div>
+  if (loading) return <LoadingScreen fullPage={false} message="Loading sessions..." />
 
   return (
     <div className={styles.page}>

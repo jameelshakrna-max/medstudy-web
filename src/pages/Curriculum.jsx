@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import LoadingScreen from '../components/LoadingScreen'
 import styles from './Page.module.css'
 
 export default function Curriculum() {
@@ -125,7 +126,7 @@ export default function Curriculum() {
 
   const statusColor = s => s === 'In Progress' ? 'var(--blue)' : s === 'Complete' ? 'var(--emerald)' : s === 'Reviewing' ? 'var(--indigo)' : 'var(--mist)'
 
-  if (loading) return <div className={styles.loading}>Loading curriculum...</div>
+  if (loading) return <LoadingScreen fullPage={false} message="Loading curriculum..." />
 
   return (
     <div className={styles.page}>
