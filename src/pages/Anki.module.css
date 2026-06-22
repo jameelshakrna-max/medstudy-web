@@ -591,10 +591,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .previewArrow {
   color: var(--text-secondary);
   flex-shrink: 0;
