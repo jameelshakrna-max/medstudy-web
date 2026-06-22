@@ -23,13 +23,15 @@ async function exec(sql, args) {
   })
   if (!res.ok) throw new Error('DB ' + res.status + ': ' + (await res.text()).slice(0, 200))
   const data = await res.json()
-  const result = data.results[0]
-  if (result.type === 'error') throw new Error(result.error.message)
+  const r = data.results[0]
+  if (r.type === 'error') throw new Error(r.error.message)
+  const er = r.response.result
+  const cols = er.cols || er.columns || []
   return {
-    columns: result.response.result.columns,
-    rows: result.response.result.rows.map(r => {
+    columns: cols.map(c => c.name || c),
+    rows: (er.rows || []).map(row => {
       const o = {}
-      result.response.result.columns.forEach((c, i) => { o[c] = r[i] ? r[i].value : null })
+      cols.forEach((c, i) => { o[c.name || c] = row[i] ? row[i].value : null })
       return o
     }),
   }
