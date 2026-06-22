@@ -12,7 +12,6 @@ function apiAuth() {
 
 function cast(v) {
   if (v === null || v === undefined) return { type: 'null' }
-  if (typeof v === 'number') return { type: 'integer', value: Math.round(v) }
   return { type: 'text', value: String(v) }
 }
 
