@@ -437,7 +437,7 @@ export default function Anki() {
       setParsed(cards)
       setApkgFile(null)
       setParsing(false)
-      importCards()
+      importCards(cards)
     } catch (e) { setParseErr(e.message); setParsing(false) }
   }
 
@@ -480,18 +480,19 @@ export default function Anki() {
     setParsing(false)
   }
 
-  async function importCards() {
-    if (!parsed.length) return
+  async function importCards(data) {
+    const cards = data || parsed
+    if (!cards.length) return
     if (!uploadDeck) return alert('Please select a deck.')
     setImporting(true)
-    const total = parsed.length
+    const total = cards.length
     setUploadProgress('Importing ' + total + ' cards...')
     try {
       const CHUNK = 500
       const allIds = []
       const now = new Date().toISOString()
       for (let i = 0; i < total; i += CHUNK) {
-        const chunk = parsed.slice(i, i + CHUNK)
+        const chunk = cards.slice(i, i + CHUNK)
         setUploadProgress('Importing ' + Math.min(i + CHUNK, total) + ' / ' + total + ' cards...')
         const r = await apiPost('/flashcards', {
           cards: chunk.map(c => ({
@@ -511,9 +512,9 @@ export default function Anki() {
         id,
         user_id: null,
         deck_id: uploadDeck,
-        front: parsed[idx].front,
-        back: parsed[idx].back,
-        image_url: parsed[idx].image_url || null,
+        front: cards[idx].front,
+        back: cards[idx].back,
+        image_url: cards[idx].image_url || null,
         high_yield: false,
         difficulty: 0, stability: 0, state: 0, interval: 0, repetitions: 0,
         last_review: null, next_review: null, created_at: now
@@ -1001,7 +1002,7 @@ export default function Anki() {
                 </div>
 
                 <div className={s.uploadActions}>
-                  <button className={s.primaryBtn} onClick={importCards} disabled={importing} style={{ marginTop: 0 }}>
+                  <button className={s.primaryBtn} onClick={() => importCards(parsed)} disabled={importing} style={{ marginTop: 0 }}>
                     {importing ? '...' : 'Import ' + parsed.length + ' Cards'}
                   </button>
                 </div>
