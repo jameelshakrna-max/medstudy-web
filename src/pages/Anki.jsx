@@ -1,7 +1,57 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-
+import { FSRS, Card as FSRSCard, State as FSRSState, Rating as FSRSRating } from 'fsrs.js'
 import s from './Anki.module.css'
+
+const fsrsInstance = new FSRS()
+
+function fsrs(option, card) {
+  const now = new Date()
+  const c = new FSRSCard()
+  c.stability = Number(card.stability) || 0
+  c.difficulty = Number(card.difficulty) || 0
+  c.state = Number(card.state) || FSRSState.New
+  c.last_review = card.last_review ? new Date(card.last_review + 'Z') : now
+  c.due = card.next_review ? new Date(card.next_review + 'Z') : now
+
+  const ratingMap = { again: FSRSRating.Again, hard: FSRSRating.Hard, good: FSRSRating.Good, easy: FSRSRating.Easy }
+  const rating = ratingMap[option]
+  if (rating === undefined) throw new Error('Invalid rating: ' + option)
+
+  const result = fsrsInstance.repeat(c, now)
+  const info = result[rating]
+  const interval = (info.card.due.getTime() - now.getTime()) / 864e5
+
+  return {
+    difficulty: Math.round(info.card.difficulty * 100) / 100,
+    stability: Math.round(info.card.stability * 100) / 100,
+    state: info.card.state,
+    interval: Math.round(interval * 100) / 100,
+    next_review: info.card.due.toISOString(),
+    last_review: now.toISOString(),
+    retrievability: 1
+  }
+}
+
+function formatInterval(intervalDays) {
+  if (intervalDays < 1) {
+    const mins = Math.round(intervalDays * 1440)
+    if (mins < 60) return mins + 'm'
+    const hrs = Math.round(intervalDays * 24)
+    return hrs + 'h'
+  }
+  if (intervalDays < 30) return Math.round(intervalDays) + 'd'
+  return Math.round(intervalDays / 30) + 'mo'
+}
+
+function previewIntervals(card) {
+  const labels = {}
+  for (const option of ['again', 'hard', 'good', 'easy']) {
+    const result = fsrs(option, card)
+    labels[option] = formatInterval(result.interval)
+  }
+  return labels
+}
 
 const API = '/api'
 
@@ -97,221 +147,6 @@ function maturityLabel(c) {
   if (state === 3) return 'Relearning'
   if (stability <= 21) return 'Young'
   return 'Mature'
-}
-
-/* ── FSRS-5 algorithm ──────────────────────────────────── */
-// Free Spaced Repetition Scheduler (FSRS-5)
-// Based on the open-source FSRS algorithm by open-spaced-repetition
-// https://github.com/open-spaced-repetition/fsrs4anki
-
-// FSRS default parameters (tuned for general use)
-const FSRS_DEFAULT = {
-  w: [0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01, 1.49, 0.14, 0.94, 2.18, 0.05, 0.34, 1.26, 0.29, 2.61],
-  requestRetention: 0.9,  // target 90% retention
-  maximumInterval: 36500,  // max 100 years
-  easyBonus: 1.3,
-  hardInterval: 1.2,
-}
-
-// Rating enum (matches Anki FSRS)
-const Rating = { Again: 1, Hard: 2, Good: 3, Easy: 4 }
-
-// FSRS states
-const State = { New: 0, Learning: 1, Review: 2, Relearning: 3 }
-
-/**
- * Calculate retrievability (probability of recall) from stability and elapsed days
- * R = (1 + elapsed / (9 * S))^(-1)
- */
-function retrievability(stability, elapsedDays) {
-  if (stability <= 0) return 0
-  return Math.pow(1 + elapsedDays / (9 * stability), -1)
-}
-
-/**
- * Initial difficulty for a new card based on first rating
- * D0(G) = w4 - e^(w5 * (G - 1)) + 1
- * Clamped to [1, 10]
- */
-function initDifficulty(rating, w) {
-  return Math.min(10, Math.max(1, w[4] - Math.exp(w[5] * (rating - 1)) + 1))
-}
-
-/**
- * Initial stability for a new card based on first rating
- * S0(G) = w[G-1]  (w[0] for Again, w[1] for Hard, w[2] for Good, w[3] for Easy)
- */
-function initStability(rating, w) {
-  return Math.max(0.1, w[rating - 1])
-}
-
-/**
- * Next difficulty after review
- * D' = w7 * D0 + (1 - w7) * (D - 0.3 * (G - 3))
- * Clamped to [1, 10]
- */
-function nextDifficulty(d, rating, w) {
-  const d0 = initDifficulty(rating, w)
-  const delta = 0.3 * (rating - 3)
-  return Math.min(10, Math.max(1, w[7] * d0 + (1 - w[7]) * (d - delta)))
-}
-
-/**
- * Next stability after successful recall (rating >= Hard)
- * S' = S * (e^(w8) * (11 - D) * S^(-w9) * (e^(w10 * R) - 1) * hardPenalty * easyBonus + 1)
- */
-function nextStabilitySuccess(d, s, r, rating, w) {
-  const hardPenalty = rating === Rating.Hard ? w[15] : 1
-  const easyBonus = rating === Rating.Easy ? w[16] : 1
-  return s * (
-    Math.exp(w[8]) *
-    (11 - d) *
-    Math.pow(s, -w[9]) *
-    (Math.exp(w[10] * r) - 1) *
-    hardPenalty *
-    easyBonus +
-    1
-  )
-}
-
-/**
- * Next stability after forgetting (rating = Again)
- * S' = w11 * D^(-w12) * ((S + 1)^(w13) - 1) * e^(w14 * R)
- */
-function nextStabilityFail(d, s, r, w) {
-  return w[11] * Math.pow(d, -w[12]) * (Math.pow(s + 1, w[13]) - 1) * Math.exp(w[14] * r)
-}
-
-/**
- * FSRS scheduling: compute the next review state after a rating
- * Returns { difficulty, stability, state, interval, next_review, last_review, retrievability }
- */
-function fsrs(option, card) {
-  const w = FSRS_DEFAULT.w
-  const rating = Rating[option.charAt(0).toUpperCase() + option.slice(1)] || Rating.Good
-
-  let d = Number(card.difficulty) || 0
-  let s = Number(card.stability) || 0
-  let state = Number(card.state) || State.New
-  let elapsed = 0
-
-  // Calculate elapsed days since last review
-  if (card.last_review) {
-    const lastDate = new Date(card.last_review)
-    const now = new Date()
-    elapsed = Math.max(0, (now - lastDate) / 864e5)
-  }
-
-  // Current retrievability
-  const r = state === State.Review ? retrievability(s, elapsed) : 0
-
-  if (state === State.New) {
-    // First review of a new card
-    d = initDifficulty(rating, w)
-    s = initStability(rating, w)
-
-    if (rating === Rating.Again) {
-      state = State.Learning
-    } else if (rating === Rating.Hard) {
-      state = State.Learning
-    } else {
-      state = State.Review
-    }
-  } else if (state === State.Learning || state === State.Relearning) {
-    // Card is in learning/relearning (short intervals)
-    d = nextDifficulty(d, rating, w)
-
-    if (rating === Rating.Again) {
-      s = initStability(Rating.Again, w)
-      state = State.Learning
-    } else if (rating === Rating.Hard) {
-      s = Math.max(initStability(Rating.Hard, w), s)
-      state = State.Learning
-    } else if (rating === Rating.Good) {
-      s = Math.max(initStability(Rating.Good, w), s)
-      state = State.Review
-    } else {
-      // Easy
-      s = Math.max(initStability(Rating.Easy, w), s)
-      state = State.Review
-    }
-  } else if (state === State.Review) {
-    // Card is in review (long-term memory)
-    d = nextDifficulty(d, rating, w)
-
-    if (rating === Rating.Again) {
-      // Failed recall → relearning
-      const newS = nextStabilityFail(d, s, r, w)
-      s = Math.max(0.1, Math.min(newS, s))
-      state = State.Relearning
-    } else {
-      // Successful recall
-      const newS = nextStabilitySuccess(d, s, r, rating, w)
-      s = Math.max(newS, s * 1.01) // ensure stability increases
-      state = State.Review
-    }
-  }
-
-  // Calculate interval from stability and target retention
-  let interval
-  if (state === State.Learning || state === State.Relearning) {
-    // Short intervals for learning: 1min → 10min (we use minutes but store as fractional days)
-    if (rating === Rating.Again) interval = 1 / 1440  // ~1 minute
-    else if (rating === Rating.Hard) interval = 5 / 1440  // ~5 minutes
-    else if (rating === Rating.Good) interval = 10 / 1440  // ~10 minutes
-    else interval = 1  // Easy → graduate to 1 day
-  } else {
-    // Review: interval from retrievability formula
-    // I = S * 9 * (R^(-1/decay) - 1) where decay = w[10]
-    // Simplified: I = S / retention_factor
-    interval = Math.max(1, Math.round(
-      s * 9 * (Math.pow(FSRS_DEFAULT.requestRetention, -1 / w[10]) - 1)
-    ))
-    interval = Math.min(interval, FSRS_DEFAULT.maximumInterval)
-  }
-
-  const nr = new Date()
-  nr.setTime(nr.getTime() + interval * 864e5)
-
-  return {
-    difficulty: Math.round(d * 100) / 100,
-    stability: Math.round(s * 100) / 100,
-    state,
-    interval: Math.round(interval * 100) / 100,
-    next_review: nr.toISOString(),
-    last_review: new Date().toISOString(),
-    retrievability: state === State.Review
-      ? Math.round(retrievability(s, 0) * 100) / 100
-      : 0
-  }
-}
-
-/**
- * Format an interval (in days) as a human-readable label
- * e.g. 0.0007 → "1m", 0.5 → "12h", 1 → "1d", 14 → "14d", 60 → "2mo"
- */
-function formatInterval(intervalDays) {
-  if (intervalDays < 1) {
-    const mins = Math.round(intervalDays * 1440)
-    if (mins < 60) return mins + 'm'
-    const hrs = Math.round(intervalDays * 24)
-    return hrs + 'h'
-  }
-  if (intervalDays < 30) return Math.round(intervalDays) + 'd'
-  return Math.round(intervalDays / 30) + 'mo'
-}
-
-/**
- * Preview FSRS intervals for all 4 rating options
- * Returns { again: '1m', hard: '10m', good: '4d', easy: '7d' }
- */
-function previewIntervals(card) {
-  const labels = {}
-  for (const option of ['Again', 'Hard', 'Good', 'Easy']) {
-    const result = fsrs(option, card)
-    labels[option.toLowerCase()] = formatInterval(result.interval)
-  }
-  return labels
 }
 
 /* ── component ──────────────────────────────────────────── */
