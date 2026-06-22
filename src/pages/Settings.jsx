@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { usePomodoro } from '../context/PomodoroContext'
+import { usePomodoroSettings } from '../context/PomodoroContext'
 import { supabase } from '../lib/supabase'
 import s from './Settings.module.css'
 
@@ -9,7 +9,7 @@ const NAME_CHANGE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
 export default function Settings() {
   const { user, profile, signOut } = useAuth()
-  const { focusMins, setFocusMins, shortMins, setShortMins, longMins, setLongMins } = usePomodoro()
+  const { focusMins, setFocusMins, shortMins, setShortMins, longMins, setLongMins } = usePomodoroSettings()
   const [error, setError] = useState(null)
   const [message, setMessage] = useState(null)
    const [loading, setLoading] = useState(false)

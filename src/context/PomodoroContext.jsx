@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 
-const PomodoroContext = createContext(null)
+const PomodoroTimerContext = createContext(null)
+const PomodoroSettingsContext = createContext(null)
 
 const MODES = ['study', 'break', 'long']
 
@@ -624,11 +625,21 @@ export function PomodoroProvider({ children }) {
 
   const progress = totalSec > 0 ? (totalSec - seconds) / totalSec : 0
 
-  const value = {
+  const timerValue = useMemo(() => ({
     mode, setMode,
     running, setRunning,
     done, setDone,
     seconds, totalSec,
+    displayRemaining,
+    progress,
+    togglePlay, skipTimer, finishTimer, resetTimer, resetSession,
+  }), [
+    mode, running, done, seconds, totalSec,
+    displayRemaining, progress,
+    togglePlay, skipTimer, finishTimer, resetTimer, resetSession,
+  ])
+
+  const settingsValue = useMemo(() => ({
     focusMins, setFocusMins,
     shortMins, setShortMins,
     longMins, setLongMins,
@@ -637,25 +648,30 @@ export function PomodoroProvider({ children }) {
     sessionStart, setSessionStart,
     sessionLog, setSessionLog,
     activeStudySeconds, setActiveStudySeconds,
-    resetSession,
-    displayRemaining,
-    progress,
-    togglePlay,
-    skipTimer,
-    finishTimer,
-    resetTimer,
-  }
+  }), [
+    focusMins, shortMins, longMins,
+    selectedTopic,
+    sessionPomodoros, sessionStart, sessionLog, activeStudySeconds,
+  ])
 
   return (
-    <PomodoroContext.Provider value={value}>
-      {children}
-    </PomodoroContext.Provider>
+    <PomodoroTimerContext.Provider value={timerValue}>
+      <PomodoroSettingsContext.Provider value={settingsValue}>
+        {children}
+      </PomodoroSettingsContext.Provider>
+    </PomodoroTimerContext.Provider>
   )
 }
 
 export function usePomodoro() {
-  const ctx = useContext(PomodoroContext)
+  const ctx = useContext(PomodoroTimerContext)
   if (!ctx) throw new Error('usePomodoro must be used inside PomodoroProvider')
+  return ctx
+}
+
+export function usePomodoroSettings() {
+  const ctx = useContext(PomodoroSettingsContext)
+  if (!ctx) throw new Error('usePomodoroSettings must be used inside PomodoroProvider')
   return ctx
 }
 

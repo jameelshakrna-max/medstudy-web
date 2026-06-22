@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { usePomodoro } from '../context/PomodoroContext'
+import { usePomodoro, usePomodoroSettings } from '../context/PomodoroContext'
 import { supabase } from '../lib/supabase'
 import s from './Pomodoro.module.css'
 
@@ -10,17 +10,20 @@ const TREE_COLORS = ['treeBlue','treeEmerald','treeIndigo','treeAmber']
 export default function Pomodoro() {
   const {
     mode, setMode, running, setRunning,
-    done, setDone, focusMins, setFocusMins,
+    done, setDone,
+    seconds, totalSec,
+    displayRemaining, progress,
+    togglePlay, skipTimer, finishTimer, resetTimer,
+    resetSession,
+  } = usePomodoro()
+
+  const {
+    focusMins, setFocusMins,
     shortMins, setShortMins, longMins, setLongMins,
     selectedTopic, setSelectedTopic,
     sessionPomodoros, setSessionPomodoros,
     sessionLog, activeStudySeconds,
-    resetSession,
-    // Centralized timer values & actions
-    seconds, totalSec,
-    displayRemaining, progress,
-    togglePlay, skipTimer, finishTimer, resetTimer
-  } = usePomodoro()
+  } = usePomodoroSettings()
 
   const [showSettings, setShowSettings] = useState(false)
   const [trees, setTrees] = useState([])
