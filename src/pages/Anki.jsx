@@ -423,10 +423,20 @@ export default function Anki() {
 
   /* ── file upload / import ────────────────────────────── */
 
+  function extractDataUrls(cards) {
+    const set = new Set()
+    for (const c of cards) {
+      if (c.image_url && c.image_url.startsWith('data:')) set.add(c.image_url)
+      const find = s => { if (s) { let i = -1; while ((i = s.indexOf('data:', i + 1)) !== -1) { let j = i + 5; while (j < s.length && s[j] !== '"' && s[j] !== "'" && s[j] !== ' ') j++; set.add(s.slice(i, j)) } } }
+      find(c.front); find(c.back)
+    }
+    return [...set]
+  }
+
   async function uploadImages(cards, signal) {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not logged in')
-    const uniqueUrls = [...new Set(cards.map(c => c.image_url).filter(u => u && u.startsWith('data:')))]
+    const uniqueUrls = extractDataUrls(cards)
     if (!uniqueUrls.length) return
     const mapping = {}
     const CONCURRENT = 5
@@ -437,6 +447,10 @@ export default function Anki() {
         if (signal?.aborted) return
         const res = await fetch(dataUrl)
         const blob = await res.blob()
+        if (blob.size > 3.5 * 1024 * 1024) {
+          mapping[dataUrl] = null
+          return
+        }
         const ext = blob.type.split('/')[1] || 'png'
         const file = new File([blob], 'image.' + ext, { type: blob.type })
         const form = new FormData()
@@ -455,11 +469,13 @@ export default function Anki() {
     }
     for (const c of cards) {
       if (c.image_url && mapping[c.image_url]) c.image_url = mapping[c.image_url]
+      if (c.image_url && mapping[c.image_url] === null) c.image_url = null
     }
     for (const c of cards) {
       for (const [dataUrl, storageUrl] of Object.entries(mapping)) {
-        if (c.front) c.front = c.front.replaceAll(dataUrl, storageUrl)
-        if (c.back) c.back = c.back.replaceAll(dataUrl, storageUrl)
+        const replace = storageUrl || ''
+        if (c.front) c.front = c.front.replaceAll(dataUrl, replace)
+        if (c.back) c.back = c.back.replaceAll(dataUrl, replace)
       }
     }
   }
