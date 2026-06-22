@@ -60,12 +60,19 @@ function previewIntervals(card) {
 
 const API = '/api'
 
+async function apiJson(res) {
+  const text = await res.text()
+  try { return JSON.parse(text) } catch {
+    throw new Error(text.slice(0, 300))
+  }
+}
+
 async function apiGet(path) {
   const { data: { session } } = await supabase.auth.getSession()
   const res = await fetch(API + path, {
     headers: { Authorization: 'Bearer ' + session.access_token }
   })
-  return res.json()
+  return apiJson(res)
 }
 
 async function apiPost(path, body) {
@@ -78,7 +85,7 @@ async function apiPost(path, body) {
     },
     body: JSON.stringify(body)
   })
-  return res.json()
+  return apiJson(res)
 }
 
 async function apiPut(path, body) {
@@ -91,7 +98,7 @@ async function apiPut(path, body) {
     },
     body: JSON.stringify(body)
   })
-  return res.json()
+  return apiJson(res)
 }
 
 async function apiDel(path) {
@@ -425,7 +432,9 @@ export default function Anki() {
         headers: { Authorization: 'Bearer ' + session.access_token },
         body,
       })
-      const j = await res.json()
+      const text = await res.text()
+      let j
+      try { j = JSON.parse(text) } catch { throw new Error(text.slice(0, 300)) }
       if (!res.ok) throw new Error(j.error || 'Upload failed')
       setApkgFile(null)
       setParsed([])
@@ -479,35 +488,39 @@ export default function Anki() {
     if (!parsed.length) return
     if (!uploadDeck) return alert('Please select a deck.')
     setImporting(true)
-    setUploadProgress('Importing ' + parsed.length + ' cards...')
+    const total = parsed.length
+    setUploadProgress('Importing ' + total + ' cards...')
     try {
-      const withDeck = parsed.map(c => ({
-        front: c.front,
-        back: c.back,
-        deck_id: uploadDeck,
-        image_url: c.image_url || null
-      }))
-      const r = await apiPost('/flashcards', { cards: withDeck })
-      if (r.error) throw new Error(r.error)
-
-      // build local card objects from parsed data + server-generated IDs
+      const CHUNK = 500
+      const allIds = []
       const now = new Date().toISOString()
-      const newCards = (r.ids || []).map((id, i) => ({
+      for (let i = 0; i < total; i += CHUNK) {
+        const chunk = parsed.slice(i, i + CHUNK)
+        setUploadProgress('Importing ' + Math.min(i + CHUNK, total) + ' / ' + total + ' cards...')
+        const r = await apiPost('/flashcards', {
+          cards: chunk.map(c => ({
+            front: c.front, back: c.back,
+            deck_id: uploadDeck, image_url: c.image_url || null
+          }))
+        })
+        if (r.error) throw new Error(r.error)
+        ;(r.ids || []).forEach((id, j) => {
+          const idx = i + j
+          allIds.push({ idx, id })
+        })
+      }
+
+      // build local card objects in original order
+      const newCards = allIds.map(({ idx, id }) => ({
         id,
         user_id: null,
         deck_id: uploadDeck,
-        front: parsed[i].front,
-        back: parsed[i].back,
-        image_url: parsed[i].image_url || null,
+        front: parsed[idx].front,
+        back: parsed[idx].back,
+        image_url: parsed[idx].image_url || null,
         high_yield: false,
-        difficulty: 0,
-        stability: 0,
-        state: 0,
-        interval: 0,
-        repetitions: 0,
-        last_review: null,
-        next_review: null,
-        created_at: now
+        difficulty: 0, stability: 0, state: 0, interval: 0, repetitions: 0,
+        last_review: null, next_review: null, created_at: now
       }))
       setCards(prev => [...prev, ...newCards])
 
