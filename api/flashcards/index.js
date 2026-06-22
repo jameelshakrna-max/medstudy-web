@@ -1,23 +1,58 @@
-import { createClient } from '@libsql/client'
 import { getUser } from '../_auth.js'
 
 export const runtime = 'nodejs'
 
-const turso = createClient({
-  url: process.env.TURSO_DATABASE_URL,
-  authToken: process.env.TURSO_AUTH_TOKEN,
-})
+function apiUrl() {
+  return process.env.TURSO_DATABASE_URL.replace('libsql://', 'https://') + '/v2/pipeline'
+}
+
+function apiAuth() {
+  return 'Bearer ' + process.env.TURSO_AUTH_TOKEN
+}
+
+function cast(v) {
+  if (v === null || v === undefined) return { type: 'null' }
+  if (typeof v === 'number') return { type: 'integer', value: Math.round(v) }
+  return { type: 'text', value: String(v) }
+}
+
+async function exec(sql, args) {
+  const res = await fetch(apiUrl(), {
+    method: 'POST',
+    headers: { Authorization: apiAuth(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ type: 'execute', stmt: { sql, args: args.map(cast) } }] }),
+  })
+  if (!res.ok) throw new Error('DB ' + res.status + ': ' + (await res.text()).slice(0, 200))
+  const data = await res.json()
+  const result = data.results[0]
+  if (result.type === 'error') throw new Error(result.error.message)
+  return {
+    columns: result.response.result.columns,
+    rows: result.response.result.rows.map(r => {
+      const o = {}
+      result.response.result.columns.forEach((c, i) => { o[c] = r[i] ? r[i].value : null })
+      return o
+    }),
+  }
+}
+
+async function batchExec(stmts) {
+  const res = await fetch(apiUrl(), {
+    method: 'POST',
+    headers: { Authorization: apiAuth(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: stmts.map(s => ({ type: 'execute', stmt: { sql: s.sql, args: s.args.map(cast) } })) }),
+  })
+  if (!res.ok) throw new Error('DB ' + res.status + ': ' + (await res.text()).slice(0, 200))
+  const data = await res.json()
+  data.results.forEach(r => { if (r.type === 'error') throw new Error(r.error.message) })
+}
 
 const CARD_COLS = 'id, user_id, deck_id, front, back, image_url, high_yield, difficulty, stability, state, interval, repetitions, last_review, next_review, created_at'
 
 function mapCard(r) {
   return {
-    id: r.id,
-    user_id: r.user_id,
-    deck_id: r.deck_id || null,
-    front: r.front,
-    back: r.back,
-    image_url: r.image_url || null,
+    id: r.id, user_id: r.user_id, deck_id: r.deck_id || null,
+    front: r.front, back: r.back, image_url: r.image_url || null,
     high_yield: Boolean(r.high_yield),
     difficulty: Number(r.difficulty) || 0,
     stability: Number(r.stability) || 0,
@@ -26,7 +61,7 @@ function mapCard(r) {
     repetitions: Number(r.repetitions) || 0,
     last_review: r.last_review || null,
     next_review: r.next_review || null,
-    created_at: r.created_at
+    created_at: r.created_at,
   }
 }
 
@@ -46,7 +81,7 @@ export async function GET(req) {
       sql = `SELECT ${CARD_COLS} FROM anki_cards WHERE user_id = ? ORDER BY CASE WHEN next_review IS NULL THEN 1 ELSE 0 END, next_review ASC, created_at DESC LIMIT ? OFFSET ?`
       args = [user.id, limit, offset]
     }
-    const result = await turso.execute({ sql, args })
+    const result = await exec(sql, args)
     return Response.json(result.rows.map(mapCard))
   } catch (e) { return Response.json({ error: e.message }, { status: 500 }) }
 }
@@ -57,26 +92,27 @@ export async function POST(req) {
   try {
     const body = await req.json()
     let items
-    if (Array.isArray(body.cards)) { items = body.cards }
-    else if (Array.isArray(body)) { items = body }
-    else { items = [body] }
+    if (Array.isArray(body.cards)) items = body.cards
+    else if (Array.isArray(body)) items = body
+    else items = [body]
 
     const now = new Date().toISOString()
-    const rows = items.map(c => {
-      const id = crypto.randomUUID()
-      return {
-        id, deckId: c.deck_id || null, front: c.front, back: c.back,
-        image_url: c.image_url || null, high_yield: c.high_yield ? 1 : 0,
-        difficulty: c.difficulty ?? 0, stability: c.stability ?? 0,
-        state: c.state ?? 0, interval: c.interval ?? 0,
-        repetitions: c.repetitions ?? 0,
-      }
-    })
+    const rows = items.map(c => ({
+      id: crypto.randomUUID(),
+      deckId: c.deck_id || null,
+      front: c.front, back: c.back,
+      image_url: c.image_url || null,
+      high_yield: c.high_yield ? 1 : 0,
+      difficulty: c.difficulty ?? 0,
+      stability: c.stability ?? 0,
+      state: c.state ?? 0,
+      interval: c.interval ?? 0,
+      repetitions: c.repetitions ?? 0,
+    }))
 
-    const chunkSize = 250
-    for (let i = 0; i < rows.length; i += chunkSize) {
-      const chunk = rows.slice(i, i + chunkSize)
-      await turso.batch(chunk.map(r => ({
+    for (let i = 0; i < rows.length; i += 250) {
+      const chunk = rows.slice(i, i + 250)
+      await batchExec(chunk.map(r => ({
         sql: `INSERT INTO anki_cards (id, user_id, deck_id, front, back, image_url, high_yield, difficulty, stability, state, interval, repetitions, last_review, next_review, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [r.id, user.id, r.deckId, r.front, r.back, r.image_url, r.high_yield, r.difficulty, r.stability, r.state, r.interval, r.repetitions, null, null, now],
       })))
