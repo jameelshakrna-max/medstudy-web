@@ -36,7 +36,7 @@ export async function GET(req) {
   try {
     const url = new URL(req.url)
     const deckId = url.searchParams.get('deck_id')
-    const limit = Math.min(Number(url.searchParams.get('limit')) || 500, 5000)
+    const limit = Math.min(Number(url.searchParams.get('limit')) || 10000, 100000)
     const offset = Math.max(Number(url.searchParams.get('offset')) || 0, 0)
     let sql, args
     if (deckId) {
@@ -60,23 +60,28 @@ export async function POST(req) {
     if (Array.isArray(body.cards)) { items = body.cards }
     else if (Array.isArray(body)) { items = body }
     else { items = [body] }
-    const inserted = []
-    for (const c of items) {
+
+    const now = new Date().toISOString()
+    const rows = items.map(c => {
       const id = crypto.randomUUID()
-      const now = new Date().toISOString()
-      await turso.execute({
+      return {
+        id, deckId: c.deck_id || null, front: c.front, back: c.back,
+        image_url: c.image_url || null, high_yield: c.high_yield ? 1 : 0,
+        difficulty: c.difficulty ?? 0, stability: c.stability ?? 0,
+        state: c.state ?? 0, interval: c.interval ?? 0,
+        repetitions: c.repetitions ?? 0,
+      }
+    })
+
+    const chunkSize = 250
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize)
+      await turso.batch(chunk.map(r => ({
         sql: `INSERT INTO anki_cards (id, user_id, deck_id, front, back, image_url, high_yield, difficulty, stability, state, interval, repetitions, last_review, next_review, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [id, user.id, c.deck_id || null, c.front, c.back, c.image_url || null, c.high_yield ? 1 : 0, c.difficulty ?? 0, c.stability ?? 0, c.state ?? 0, c.interval ?? 0, c.repetitions ?? 0, null, null, now],
-      })
-      inserted.push({
-        id, user_id: user.id, deck_id: c.deck_id || null, front: c.front, back: c.back,
-        image_url: c.image_url || null, high_yield: Boolean(c.high_yield),
-        difficulty: Number(c.difficulty) || 0, stability: Number(c.stability) || 0,
-        state: Number(c.state) || 0, interval: Number(c.interval) || 0,
-        repetitions: Number(c.repetitions) || 0,
-        last_review: null, next_review: null, created_at: now
-      })
+        args: [r.id, user.id, r.deckId, r.front, r.back, r.image_url, r.high_yield, r.difficulty, r.stability, r.state, r.interval, r.repetitions, null, null, now],
+      })))
     }
-    return Response.json(inserted.length === 1 ? inserted[0] : inserted, { status: 201 })
+
+    return Response.json({ success: true, count: items.length, ids: rows.map(r => r.id) }, { status: 201 })
   } catch (e) { return Response.json({ error: e.message }, { status: 500 }) }
 }

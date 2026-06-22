@@ -298,7 +298,18 @@ export default function Anki() {
       setBack('')
       setHighYield(false)
       setCardImage(null)
-      setCards(prev => [...prev, r])
+      const now = new Date().toISOString()
+      setCards(prev => [...prev, {
+        id: r.ids?.[0] || crypto.randomUUID(),
+        user_id: null,
+        deck_id: formDeckId,
+        front: front.trim(),
+        back: back.trim(),
+        image_url: cardImage || null,
+        high_yield: highYield,
+        difficulty: 0, stability: 0, state: 0, interval: 0, repetitions: 0,
+        last_review: null, next_review: null, created_at: now
+      }])
     } catch (e) { alert(e.message) }
     setSaving(false)
   }
@@ -468,6 +479,7 @@ export default function Anki() {
     if (!parsed.length) return
     if (!uploadDeck) return alert('Please select a deck.')
     setImporting(true)
+    setUploadProgress('Importing ' + parsed.length + ' cards...')
     try {
       const withDeck = parsed.map(c => ({
         front: c.front,
@@ -477,9 +489,30 @@ export default function Anki() {
       }))
       const r = await apiPost('/flashcards', { cards: withDeck })
       if (r.error) throw new Error(r.error)
+
+      // build local card objects from parsed data + server-generated IDs
+      const now = new Date().toISOString()
+      const newCards = (r.ids || []).map((id, i) => ({
+        id,
+        user_id: null,
+        deck_id: uploadDeck,
+        front: parsed[i].front,
+        back: parsed[i].back,
+        image_url: parsed[i].image_url || null,
+        high_yield: false,
+        difficulty: 0,
+        stability: 0,
+        state: 0,
+        interval: 0,
+        repetitions: 0,
+        last_review: null,
+        next_review: null,
+        created_at: now
+      }))
+      setCards(prev => [...prev, ...newCards])
+
       setParsed([])
       setUploadDeck('')
-      load()
       setView(activeDeckId ? 'browse' : 'decks')
     } catch (e) { alert(e.message) }
     setImporting(false)
