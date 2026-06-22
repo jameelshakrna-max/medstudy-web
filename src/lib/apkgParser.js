@@ -50,7 +50,14 @@ export async function parseApkgFile(file) {
   if (!dbFile) throw new Error('No database found in .apkg')
 
   const { default: initSqlJs } = await import('sql.js')
-  const SQL = await initSqlJs({ locateFile: f => 'https://sql.js.org/dist/' + f })
+  let wasmBinary
+  try {
+    const wasmResp = await fetch('https://unpkg.com/sql.js@1.14.1/dist/sql-wasm.wasm')
+    wasmBinary = new Uint8Array(await wasmResp.arrayBuffer())
+  } catch (e) {
+    throw new Error('Failed to load sql.js WASM binary: ' + e.message)
+  }
+  const SQL = await initSqlJs({ wasmBinary })
 
   const dbBuffer = await dbFile.async('arraybuffer')
   const db = new SQL.Database(new Uint8Array(dbBuffer))
