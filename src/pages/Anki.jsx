@@ -76,7 +76,7 @@ async function apiGet(path) {
   return apiJson(res)
 }
 
-async function apiPost(path, body) {
+async function apiPost(path, body, signal) {
   const { data: { session } } = await supabase.auth.getSession()
   const res = await fetch(API + path, {
     method: 'POST',
@@ -84,7 +84,8 @@ async function apiPost(path, body) {
       'Content-Type': 'application/json',
       Authorization: 'Bearer ' + session.access_token
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal,
   })
   return apiJson(res)
 }
@@ -197,6 +198,7 @@ export default function Anki() {
   const [parseErr, setParseErr] = useState('')
   const [parsing, setParsing] = useState(false)
   const [uploadProgress, setUploadProgress] = useState('')
+  const abortRef = useRef(null)
   const [dragOver, setDragOver] = useState(false)
   const [apkgFile, setApkgFile] = useState(null)
   const fileRef = useRef(null)
@@ -484,6 +486,8 @@ export default function Anki() {
     const cards = data || parsed
     if (!cards.length) return
     if (!uploadDeck) return alert('Please select a deck.')
+    const controller = new AbortController()
+    abortRef.current = controller
     setImporting(true)
     const total = cards.length
     setUploadProgress('Importing ' + total + ' cards...')
@@ -499,7 +503,7 @@ export default function Anki() {
             front: c.front, back: c.back,
             deck_id: uploadDeck, image_url: c.image_url || null
           }))
-        })
+        }, controller.signal)
         if (r.error) throw new Error(r.error)
         ;(r.ids || []).forEach((id, j) => {
           const idx = i + j
@@ -507,7 +511,6 @@ export default function Anki() {
         })
       }
 
-      // build local card objects in original order
       const newCards = allIds.map(({ idx, id }) => ({
         id,
         user_id: null,
@@ -523,9 +526,27 @@ export default function Anki() {
 
       setParsed([])
       setUploadDeck('')
-      setUploadProgress('Import complete. Drop another file to import.')
-    } catch (e) { alert(e.message) }
+      const deck = uploadDeck
+      setUploadProgress('Import complete.')
+      setActiveDeckId(deck)
+      setFilter('all')
+      setView('browse')
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        setUploadProgress('Import cancelled.')
+      } else {
+        alert(e.message)
+      }
+    }
     setImporting(false)
+    abortRef.current = null
+  }
+
+  function cancelImport() {
+    if (abortRef.current) {
+      abortRef.current.abort()
+      abortRef.current = null
+    }
   }
 
   /* ── render helpers ──────────────────────────────────── */
@@ -998,6 +1019,7 @@ export default function Anki() {
                     <div className={s.progressFill} style={{ width: pct + '%' }} />
                   </div>
                   <div className={s.progressText}>{uploadProgress}</div>
+                  <button className={s.cancelImportBtn} onClick={cancelImport}>Cancel</button>
                 </div>
               )
             })()}
