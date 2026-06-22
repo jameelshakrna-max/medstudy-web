@@ -99,6 +99,25 @@ export async function GET(req) {
   } catch (e) { return resp({ error: e.message }, 500) }
 }
 
-export async function POST() {
-  return resp({ success: true, count: 0, ids: [], debug: 'phase1' }, 201)
+export async function POST(req) {
+  const user = await getUser(req)
+  if (!user) return resp({ error: 'Unauthorized' }, 401)
+  try {
+    const body = await req.json()
+    let items
+    if (Array.isArray(body.cards)) items = body.cards
+    else if (Array.isArray(body)) items = body
+    else items = [body]
+
+    const now = new Date().toISOString()
+    const ids = items.map(() => crypto.randomUUID())
+    const stmts = items.map((c, i) => ({
+      sql: `INSERT INTO anki_cards (id, user_id, deck_id, front, back, image_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [ids[i], user.id, c.deck_id, c.front, c.back, c.image_url || null, now],
+    }))
+
+    await batchExec(stmts)
+
+    return resp({ success: true, count: items.length, ids }, 201)
+  } catch (e) { return resp({ error: e.message }, 500) }
 }
