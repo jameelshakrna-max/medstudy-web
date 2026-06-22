@@ -52,7 +52,7 @@ export async function parseApkgFile(file) {
   const { default: initSqlJs } = await import('sql.js')
   let wasmBinary
   try {
-    const wasmResp = await fetch('https://unpkg.com/sql.js@1.14.1/dist/sql-wasm.wasm')
+    const wasmResp = await fetch('/sql-wasm.wasm')
     wasmBinary = new Uint8Array(await wasmResp.arrayBuffer())
   } catch (e) {
     throw new Error('Failed to load sql.js WASM binary: ' + e.message)

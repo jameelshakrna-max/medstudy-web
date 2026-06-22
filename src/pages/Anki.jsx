@@ -63,6 +63,7 @@ const API = '/api'
 async function apiJson(res) {
   const text = await res.text()
   try { return JSON.parse(text) } catch {
+    console.error('API response not JSON:', res.status, res.headers.get('content-type'), text.slice(0, 500))
     throw new Error(text.slice(0, 300))
   }
 }
