@@ -5,6 +5,8 @@
 
 /* ─── Base ─── */
 .page { position: relative; min-height: 100vh; }
+.expanded { display: flex; flex-direction: column; }
+.cardExpanded { max-width: none !important; flex: 1; }
 .loading { color: var(--mist); padding: 40px; font-size: 14px; }
 
 /* ─── Header ─── */
@@ -44,6 +46,18 @@
   color: var(--text-primary);
   font-weight: 600;
 }
+.viewToggle {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  padding: 5px 10px;
+  font-size: 14px;
+  color: var(--mist);
+  cursor: pointer;
+  line-height: 1;
+  transition: all 0.2s;
+}
+.viewToggle:hover { border-color: var(--blue); color: var(--blue); }
 
 /* ─── Error Screen ─── */
 .errorBox {
@@ -432,6 +446,7 @@
   padding: 28px;
   max-width: 600px;
 }
+.cardExpanded.formCard { max-width: 800px; }
 .formTitle {
   font-family: 'DM Serif Display', serif;
   font-size: 20px;
@@ -464,6 +479,9 @@
   resize: none;
   box-sizing: border-box;
 }
+.cardExpanded .field textarea { font-size: 16px; padding: 14px 18px; min-height: 120px; }
+.cardExpanded .field input,
+.cardExpanded .field select { font-size: 15px; padding: 12px 16px; }
 .field input:focus,
 .field textarea:focus,
 .field select:focus { border-color: var(--blue); }
@@ -704,6 +722,14 @@
   border-radius: 20px;
   padding: 32px;
 }
+.cardExpanded.reviewCard {
+  display: flex;
+  flex-direction: column;
+  max-width: 960px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
 .reviewDeckLabel {
   font-size: 12px;
   color: var(--indigo);
@@ -714,6 +740,7 @@
   margin-bottom: 20px;
   font-weight: 500;
 }
+.cardExpanded .reviewDeckLabel { font-size: 14px; }
 .reviewLabel {
   font-size: 10px;
   font-weight: 700;
@@ -728,11 +755,14 @@
   line-height: 1.6;
   margin-bottom: 20px;
 }
+.cardExpanded .reviewContent { font-size: 22px; line-height: 1.7; flex: 1; display: flex; align-items: center; }
 .reviewAnswer {
   padding-top: 16px;
   border-top: 1px solid var(--border);
   margin-bottom: 20px;
 }
+.cardExpanded .reviewAnswer { padding-top: 24px; flex: 1; display: flex; flex-direction: column; }
+.cardExpanded .reviewAnswer .reviewContent { flex: 1; }
 .reviewMeta {
   display: flex;
   gap: 16px;
@@ -769,6 +799,8 @@
   max-height: 280px;
   object-fit: contain;
   border-radius: 8px;
+}
+.cardExpanded .cardImage img { max-height: 400px; }
 }
 .imageUploadRow {
   display: flex;
@@ -863,6 +895,10 @@
 }
 
 /* ─── Responsive ─── */
+@media (max-width: 768px) {
+  .cardExpanded.reviewCard { max-width: 100%; margin: 0; border-radius: 12px; }
+  .cardExpanded .reviewContent { font-size: 18px; }
+}
 @media (max-width: 480px) {
   .header { flex-direction: column; align-items: flex-start; }
   .pills { width: 100%; }
@@ -883,6 +919,7 @@
 @media (max-width: 640px) and (orientation: landscape) {
   .reviewCard { padding: 20px; }
   .reviewContent { font-size: 14px; }
+  .cardExpanded .reviewContent { font-size: 16px; }
   .header { flex-direction: column; align-items: flex-start; }
   .pills { width: 100%; }
 }

@@ -199,6 +199,7 @@ export default function Anki() {
   const [parsing, setParsing] = useState(false)
   const [uploadProgress, setUploadProgress] = useState('')
   const abortRef = useRef(null)
+  const [compact, setCompact] = useState(true)
   const [dragOver, setDragOver] = useState(false)
   const [apkgFile, setApkgFile] = useState(null)
   const fileRef = useRef(null)
@@ -589,7 +590,7 @@ export default function Anki() {
   /* ── render ──────────────────────────────────────────── */
 
   return (
-    <div className={s.page}>
+    <div className={`${s.page}${compact ? '' : ' ' + s.expanded}`}>
       {/* header */}
       <div className={s.header}>
         <div>
@@ -607,6 +608,9 @@ export default function Anki() {
               <strong>{t.n}</strong> {t.l}
             </span>
           ))}
+          <button className={s.viewToggle} onClick={() => setCompact(v => !v)} title={compact ? 'Expand view' : 'Compact view'}>
+            {compact ? '⛶' : '⊞'}
+          </button>
         </div>
       </div>
 
@@ -828,7 +832,7 @@ export default function Anki() {
             </button>
           </div>
 
-          <div className={s.formCard}>
+          <div className={`${s.formCard}${compact ? '' : ' ' + s.cardExpanded}`}>
             <h3 className={s.formTitle}>Add Flashcard</h3>
 
             <div className={s.field}>
@@ -973,7 +977,7 @@ export default function Anki() {
             </button>
           </div>
 
-          <div className={s.formCard}>
+          <div className={`${s.formCard}${compact ? '' : ' ' + s.cardExpanded}`}>
             {parsed.length > 0 || apkgFile ? (
               <>
             <h3 className={s.formTitle}>
@@ -1078,7 +1082,7 @@ export default function Anki() {
             </div>
           </div>
 
-          <div className={s.reviewCard}>
+          <div className={`${s.reviewCard}${compact ? '' : ' ' + s.cardExpanded}`}>
             <span className={s.reviewDeckLabel}>{dn(cur.deck_id)}</span>
 
             <div className={s.reviewLabel}>Question</div>
