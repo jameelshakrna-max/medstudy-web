@@ -13,7 +13,7 @@ export async function GET(req) {
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const result = await turso.execute({
-      sql: `SELECT COUNT(*) as count FROM anki_cards WHERE user_id = ? AND (next_review_date IS NULL OR next_review_date <= date('now'))`,
+      sql: `SELECT COUNT(*) as count FROM anki_cards WHERE user_id = ? AND (next_review IS NULL OR next_review <= date('now'))`,
       args: [user.id],
     })
     return Response.json({ count: Number(result.rows[0].count) })

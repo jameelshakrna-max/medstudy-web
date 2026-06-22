@@ -100,6 +100,8 @@ async function apiDel(path) {
 
 /* ── helpers ────────────────────────────────────────────── */
 
+const nowRef = { current: new Date() }
+
 const dm = (dks, id) => {
   if (!id) return 'Unassigned'
   const d = dks.find(x => x.id === id)
@@ -109,7 +111,7 @@ const dm = (dks, id) => {
 function isDue(c) {
   if (!c.last_review) return true
   if (!c.next_review) return true
-  return new Date(c.next_review) <= new Date()
+  return c.next_review <= nowRef.current.toISOString()
 }
 
 function isNew(c) {
@@ -220,7 +222,23 @@ export default function Anki() {
 
   useEffect(() => { load() }, [load])
 
+  // keep nowRef current for isDue checks
+  useEffect(() => {
+    const t = setInterval(() => { nowRef.current = new Date() }, 60000)
+    return () => clearInterval(t)
+  }, [])
+
   /* ── derived data ────────────────────────────────────── */
+
+  const deckCardsMap = useMemo(() => {
+    const map = new Map()
+    for (const card of cards) {
+      const list = map.get(card.deck_id)
+      if (list) list.push(card)
+      else map.set(card.deck_id, [card])
+    }
+    return map
+  }, [cards])
 
   const all = useMemo(() => activeDeckId ? cards.filter(c => c.deck_id === activeDeckId) : cards, [cards, activeDeckId])
   const due = useMemo(() => all.filter(c => isDue(c)), [all])
@@ -237,7 +255,7 @@ export default function Anki() {
       const r = await apiPost('/decks', { name: deckName.trim() })
       if (r.error) throw new Error(r.error)
       setDeckName('')
-      load()
+      setDecks(prev => [...prev, r])
     } catch (e) { alert(e.message) }
     setSavingDeck(false)
   }
@@ -247,11 +265,12 @@ export default function Anki() {
     try {
       const r = await apiDel('/decks/' + id)
       if (r.error) throw new Error(r.error)
+      setDecks(prev => prev.filter(d => d.id !== id))
+      setCards(prev => prev.filter(c => c.deck_id !== id))
       if (activeDeckId === id) {
         setActiveDeckId(null)
         setView('decks')
       }
-      load()
     } catch (e) { alert(e.message) }
   }
 
@@ -267,14 +286,14 @@ export default function Anki() {
         front: front.trim(),
         back: back.trim(),
         high_yield: highYield,
-        image_url: cardImage || null  // base64 data URL goes straight to Turso
+        image_url: cardImage || null
       })
       if (r.error) throw new Error(r.error)
       setFront('')
       setBack('')
       setHighYield(false)
       setCardImage(null)
-      load()
+      setCards(prev => [...prev, r])
     } catch (e) { alert(e.message) }
     setSaving(false)
   }
@@ -284,7 +303,7 @@ export default function Anki() {
     try {
       const r = await apiDel('/flashcards/' + id)
       if (r.error) throw new Error(r.error)
-      load()
+      setCards(prev => prev.filter(c => c.id !== id))
     } catch (e) { alert(e.message) }
   }
 
@@ -304,7 +323,7 @@ export default function Anki() {
     if (!c) return
     const u = fsrs(option, c)
 
-    // ── OPTIMISTIC: advance UI immediately ──
+    // advance UI immediately
     const nextIdx = qIdx + 1
     const isLast = nextIdx >= queue.length
 
@@ -316,7 +335,9 @@ export default function Anki() {
     }
     setSubmitting(true)
 
-    // ── BACKGROUND: save to server ──
+    // update local state optimistically
+    setCards(prev => prev.map(card => card.id === c.id ? { ...card, ...u } : card))
+
     try {
       const r = await apiPut('/flashcards/' + c.id, {
         difficulty: u.difficulty,
@@ -327,10 +348,7 @@ export default function Anki() {
         last_review: u.last_review
       })
       if (r.error) throw new Error(r.error)
-      // success — reload data silently to sync DB state
-      if (isLast) load()
     } catch (e) {
-      // failed — show toast, don't block the user
       setToast({ msg: 'Save failed: ' + e.message, type: 'error' })
       setTimeout(() => setToast(null), 4000)
     }
@@ -350,11 +368,12 @@ export default function Anki() {
   async function submitInlineReview(option, card) {
     const u = fsrs(option, card)
 
-    // ── OPTIMISTIC: close the review UI immediately ──
     setReviewingCardId(null)
     setSubmitting(true)
 
-    // ── BACKGROUND: save to server ──
+    // update local state optimistically
+    setCards(prev => prev.map(c => c.id === card.id ? { ...c, ...u } : c))
+
     try {
       const r = await apiPut('/flashcards/' + card.id, {
         difficulty: u.difficulty,
@@ -365,13 +384,9 @@ export default function Anki() {
         last_review: u.last_review
       })
       if (r.error) throw new Error(r.error)
-      // success — reload silently
-      load()
     } catch (e) {
-      // failed — show toast
       setToast({ msg: 'Save failed: ' + e.message, type: 'error' })
       setTimeout(() => setToast(null), 4000)
-      // restore the review state so user can retry
       setReviewingCardId(card.id)
     }
     setSubmitting(false)
@@ -482,6 +497,7 @@ export default function Anki() {
   /* ── render helpers ──────────────────────────────────── */
 
   const cur = queue[qIdx]
+  const curPreviews = useMemo(() => cur ? previewIntervals(cur) : {}, [cur])
   const getNrClass = c => {
     const st = statusInfo(c)
     return st.l === 'Due' || st.l === 'Learning' || st.l === 'Relearning'
@@ -586,7 +602,7 @@ export default function Anki() {
             )}
 
             {decks.map(d => {
-              const dc = cards.filter(c => c.deck_id === d.id)
+              const dc = deckCardsMap.get(d.id) || []
               const dd = dc.filter(c => isDue(c))
               return (
                 <div
@@ -700,7 +716,7 @@ export default function Anki() {
                     <span>D: {Number(card.difficulty || 0).toFixed(1)}</span>
                     <span>S: {Number(card.stability || 0).toFixed(1)}d</span>
                     <span>State: {['New', 'Learn', 'Review', 'Relearn'][Number(card.state) || 0]}</span>
-                    <span>Next: {card.next_review ? nextReviewLabel(card).t : '--'}</span>
+                    <span>Next: {card.next_review ? r.t : '--'}</span>
                   </div>
 
                   {isReviewing ? (
@@ -989,16 +1005,16 @@ export default function Anki() {
 
                 <div className={s.reviewBtns}>
                   <button className={`${s.revBtn} ${s.rev_again}`} onClick={() => submitReview('again')}>
-                    Again<span className={s.revInterval}>{previewIntervals(cur).again}</span>
+                    Again<span className={s.revInterval}>{curPreviews.again}</span>
                   </button>
                   <button className={`${s.revBtn} ${s.rev_hard}`} onClick={() => submitReview('hard')}>
-                    Hard<span className={s.revInterval}>{previewIntervals(cur).hard}</span>
+                    Hard<span className={s.revInterval}>{curPreviews.hard}</span>
                   </button>
                   <button className={`${s.revBtn} ${s.rev_good}`} onClick={() => submitReview('good')}>
-                    Good<span className={s.revInterval}>{previewIntervals(cur).good}</span>
+                    Good<span className={s.revInterval}>{curPreviews.good}</span>
                   </button>
                   <button className={`${s.revBtn} ${s.rev_easy}`} onClick={() => submitReview('easy')}>
-                    Easy<span className={s.revInterval}>{previewIntervals(cur).easy}</span>
+                    Easy<span className={s.revInterval}>{curPreviews.easy}</span>
                   </button>
                 </div>
               </>

@@ -22,14 +22,18 @@ function mapCard(r) {
     back: r.back,
     image_url: r.image_url || null,
     high_yield: Boolean(r.high_yield),
-    ease_factor: Number(r.ease_factor),
-    interval: Number(r.interval_days),
-    repetitions: Number(r.times_reviewed),
-    last_review: r.last_reviewed || null,
-    next_review: r.next_review_date || null,
+    difficulty: Number(r.difficulty) || 0,
+    stability: Number(r.stability) || 0,
+    state: Number(r.state) || 0,
+    interval: Number(r.interval) || 0,
+    repetitions: Number(r.repetitions) || 0,
+    last_review: r.last_review || null,
+    next_review: r.next_review || null,
     created_at: r.created_at,
   }
 }
+
+const CARD_COLS = 'id, user_id, deck_id, front, back, image_url, high_yield, difficulty, stability, state, interval, repetitions, last_review, next_review, created_at'
 
 export async function PUT(req) {
   const user = await getUser(req)
@@ -37,18 +41,13 @@ export async function PUT(req) {
   try {
     const id = extractId(req.url)
     const body = await req.json()
-    const ease_factor = body.ease_factor ?? 2.5
-    const interval_days = body.interval ?? body.interval_days ?? 0
-    const times_reviewed = body.repetitions ?? body.times_reviewed ?? 0
-    const next_review_date = (body.next_review ?? body.next_review_date) || null
-    const last_reviewed = (body.last_review ?? body.last_reviewed) || null
     const image_url = body.image_url || null
     await turso.execute({
-      sql: `UPDATE anki_cards SET ease_factor = ?, interval_days = ?, times_reviewed = ?, next_review_date = ?, last_reviewed = ?, image_url = ? WHERE id = ? AND user_id = ?`,
-      args: [ease_factor, interval_days, times_reviewed, next_review_date, last_reviewed, image_url, id, user.id],
+      sql: `UPDATE anki_cards SET difficulty = ?, stability = ?, state = ?, interval = ?, next_review = ?, last_review = ?, image_url = ? WHERE id = ? AND user_id = ?`,
+      args: [body.difficulty ?? 0, body.stability ?? 0, body.state ?? 0, body.interval ?? 0, body.next_review || null, body.last_review || null, image_url, id, user.id],
     })
     const result = await turso.execute({
-      sql: 'SELECT id, user_id, deck_id, front, back, image_url, high_yield, ease_factor, interval_days, times_reviewed, last_reviewed, next_review_date, created_at FROM anki_cards WHERE id = ? AND user_id = ?',
+      sql: `SELECT ${CARD_COLS} FROM anki_cards WHERE id = ? AND user_id = ?`,
       args: [id, user.id],
     })
     if (result.rows.length) return Response.json(mapCard(result.rows[0]))
