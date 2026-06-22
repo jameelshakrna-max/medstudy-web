@@ -427,9 +427,46 @@ export default function Anki() {
       const { parseApkgFile } = await import('../lib/apkgParser')
       const cards = await parseApkgFile(apkgFile)
       if (!cards.length) { setParseErr('No cards found.'); setParsing(false); return }
+
+      // collect unique data URLs and upload to Supabase Storage
+      const uniqueUrls = [...new Set(cards.map(c => c.image_url).filter(Boolean))]
+      const urlMap = new Map()
+
+      if (uniqueUrls.length) {
+        setUploadProgress('Uploading ' + uniqueUrls.length + ' images...')
+        // upload with limited concurrency
+        const uploadOne = async (dataUrl, i) => {
+          const res = await fetch(dataUrl)
+          const blob = await res.blob()
+          const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/jpeg' ? 'jpg' : 'png'
+          const body = new FormData()
+          body.append('image', blob, 'img.' + ext)
+          const { data: { session } } = await supabase.auth.getSession()
+          const r = await fetch(API + '/upload-image', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + session.access_token },
+            body,
+          })
+          const j = await r.json()
+          if (j.error) throw new Error(j.error)
+          return j.url
+        }
+        const concurrency = 3
+        for (let i = 0; i < uniqueUrls.length; i += concurrency) {
+          const batch = uniqueUrls.slice(i, i + concurrency)
+          const results = await Promise.all(batch.map((url, idx) => uploadOne(url, i + idx)))
+          batch.forEach((url, idx) => urlMap.set(url, results[idx]))
+          setUploadProgress('Uploaded ' + Math.min(i + concurrency, uniqueUrls.length) + ' / ' + uniqueUrls.length + ' images...')
+        }
+      }
+
+      // replace data URLs with storage URLs
+      for (const c of cards) {
+        if (c.image_url && urlMap.has(c.image_url)) c.image_url = urlMap.get(c.image_url)
+      }
+
       setParsed(cards)
       setApkgFile(null)
-      // reuse the same chunked import flow as CSV/TXT
       importCards()
     } catch (e) { setParseErr(e.message); setParsing(false) }
   }
