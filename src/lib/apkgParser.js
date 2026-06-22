@@ -11,6 +11,14 @@ function extractImgSrc(html) {
   return m ? m[1] : null
 }
 
+function replaceMediaRefs(html, mediaUrls) {
+  if (!html) return html
+  return html.replace(/<img[^>]+src=["']([^"']+)["']/gi, (match, src) => {
+    const url = mediaUrls[src]
+    return url ? match.replace(src, url) : match
+  })
+}
+
 function processCloze(text, ord) {
   if (!text) return { front: '', back: '' }
   const clozeNum = ord + 1
@@ -147,8 +155,9 @@ export async function parseApkgFile(file) {
             if (fieldParts.length > 2) backHtml = fieldParts[0] + '<br>' + fieldParts.slice(2).join('<br>')
           }
         }
-        frontText = stripHtml(frontHtml)
-        backText = stripHtml(backHtml).split(/\n|<br>/).map(l => l.trim()).filter(l => !l.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)).join('\n')
+        frontText = replaceMediaRefs(frontHtml, mediaUrls).replace(/\n/g, '<br>')
+        const br = backHtml.split(/\n|<br>/i).map(l => l.trim()).filter(l => !l.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i))
+        backText = replaceMediaRefs(br.join('<br>'), mediaUrls)
         const fi = extractImgSrc(frontHtml) || extractImgSrc(backHtml)
         if (fi && mediaUrls[fi]) imageUrl = mediaUrls[fi]
       }

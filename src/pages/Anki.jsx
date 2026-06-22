@@ -456,6 +456,12 @@ export default function Anki() {
     for (const c of cards) {
       if (c.image_url && mapping[c.image_url]) c.image_url = mapping[c.image_url]
     }
+    for (const c of cards) {
+      for (const [dataUrl, storageUrl] of Object.entries(mapping)) {
+        if (c.front) c.front = c.front.replaceAll(dataUrl, storageUrl)
+        if (c.back) c.back = c.back.replaceAll(dataUrl, storageUrl)
+      }
+    }
   }
 
   async function uploadApkg() {
@@ -805,11 +811,10 @@ export default function Anki() {
                     <button className={s.delBtn} onClick={() => deleteCard(card.id)}>x</button>
                   </div>
 
-                  <div className={s.ankiFront}>{card.front}</div>
+                  <div className={s.ankiFront} dangerouslySetInnerHTML={{ __html: card.front }} />
 
                   {isReviewing && (
-                    <div className={s.ankiBack}>
-                      {card.back}
+                    <div className={s.ankiBack} dangerouslySetInnerHTML={{ __html: card.back }} />
                       {card.image_url && (
                         <div className={s.cardImage}>
                           <img src={card.image_url} alt="card" loading="lazy" />
@@ -1071,12 +1076,9 @@ export default function Anki() {
                   </div>
                   {parsed.slice(0, 30).map((c, i) => (
                     <div key={i} className={s.previewRow}>
-                      <span className={s.previewFront}>
-                        {c.front}
-                        {c.image_url && <img src={c.image_url} alt="" style={{ maxWidth: 40, maxHeight: 30, borderRadius: 4, marginLeft: 6, verticalAlign: 'middle' }} />}
-                      </span>
+                      <span className={s.previewFront}>{c.front.replace(/<[^>]+>/g, '').trim()}</span>
                       <span className={s.previewArrow}>{'\u2192'}</span>
-                      <span className={s.previewBack}>{c.back}</span>
+                      <span className={s.previewBack}>{c.back.replace(/<[^>]+>/g, '').trim()}</span>
                     </div>
                   ))}
                   {parsed.length > 30 && (
@@ -1119,7 +1121,7 @@ export default function Anki() {
             <span className={s.reviewDeckLabel}>{dn(cur.deck_id)}</span>
 
             <div className={s.reviewLabel}>Question</div>
-            <div className={s.reviewContent}>{cur.front}</div>
+            <div className={s.reviewContent} dangerouslySetInnerHTML={{ __html: cur.front }} />
 
             {!showAns ? (
               <button className={s.showAnswerBtn} onClick={() => setShowAns(true)}>
@@ -1129,7 +1131,7 @@ export default function Anki() {
               <>
                 <div className={s.reviewAnswer}>
                   <div className={s.reviewLabel}>Answer</div>
-                  <div className={s.reviewContent}>{cur.back}</div>
+                  <div className={s.reviewContent} dangerouslySetInnerHTML={{ __html: cur.back }} />
                   {cur.image_url && (
                     <div className={s.cardImage}>
                       <img src={cur.image_url} alt="card" loading="lazy" />

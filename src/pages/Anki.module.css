@@ -389,12 +389,14 @@
   margin-bottom: 8px;
   line-height: 1.4;
 }
+.ankiFront img { max-height: 80px; border-radius: 4px; margin: 4px 0; }
 .ankiBack {
   font-size: 14px;
   color: var(--mist);
   margin-bottom: 14px;
   line-height: 1.6;
 }
+.ankiBack img { max-width: 100%; border-radius: 6px; margin: 6px 0; }
 
 /* SM-2 stats row */
 .ankiStats {
@@ -589,6 +591,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .previewArrow {
   color: var(--text-secondary);
   flex-shrink: 0;
@@ -753,7 +759,9 @@
   line-height: 1.6;
   margin-bottom: 20px;
 }
+.reviewContent img { max-width: 100%; border-radius: 8px; margin: 8px 0; }
 .cardExpanded .reviewContent { font-size: 22px; line-height: 1.7; flex: 1; display: flex; align-items: center; }
+.cardExpanded .reviewContent img { max-height: 60vh; object-fit: contain; }
 .reviewAnswer {
   padding-top: 16px;
   border-top: 1px solid var(--border);
