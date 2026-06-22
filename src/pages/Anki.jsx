@@ -429,45 +429,48 @@ export default function Anki() {
       const cards = await parseApkgFile(apkgFile)
       if (!cards.length) { setParseErr('No cards found.'); setParsing(false); return }
 
-      // collect unique data URLs and upload to Supabase Storage
+      // upload images directly to Supabase Storage (bypasses Vercel body limit)
+      const { supabase } = await import('../lib/supabase')
       const uniqueUrls = [...new Set(cards.map(c => c.image_url).filter(Boolean))]
       const urlMap = new Map()
-
       if (uniqueUrls.length) {
         setUploadProgress('Uploading ' + uniqueUrls.length + ' images...')
-        // upload with limited concurrency
-        const uploadOne = async (dataUrl, i) => {
+        const uploadOne = async (dataUrl) => {
           const res = await fetch(dataUrl)
           const blob = await res.blob()
           const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/jpeg' ? 'jpg' : 'png'
-          const body = new FormData()
-          body.append('image', blob, 'img.' + ext)
-          const { data: { session } } = await supabase.auth.getSession()
-          const r = await fetch(API + '/upload-image', {
-            method: 'POST',
-            headers: { Authorization: 'Bearer ' + session.access_token },
-            body,
-          })
-          const j = await r.json()
-          if (j.error) throw new Error(j.error)
-          return j.url
+          const fileName = crypto.randomUUID() + '.' + ext
+          const { error } = await supabase.storage.from('card-images').upload(fileName, blob, { contentType: blob.type || 'image/png', upsert: false })
+          if (error?.message?.includes('bucket') || error?.message?.includes('not found')) {
+            // ensure bucket exists via server call, then retry once
+            const { data: { session } } = await supabase.auth.getSession()
+            await fetch(API + '/upload-image', {
+              method: 'POST', headers: { Authorization: 'Bearer ' + session.access_token },
+              body: (() => { const f = new FormData(); f.append('image', new Blob(['iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='], { type: 'image/png' }), 'pixel.png'); return f })(),
+            })
+            const { error: e2 } = await supabase.storage.from('card-images').upload(fileName, blob, { contentType: blob.type || 'image/png', upsert: false })
+            if (e2) throw new Error(e2.message)
+          } else if (error) {
+            throw new Error(error.message)
+          }
+          const { data: { publicUrl } } = supabase.storage.from('card-images').getPublicUrl(fileName)
+          return publicUrl
         }
         const concurrency = 3
         for (let i = 0; i < uniqueUrls.length; i += concurrency) {
           const batch = uniqueUrls.slice(i, i + concurrency)
-          const results = await Promise.all(batch.map((url, idx) => uploadOne(url, i + idx)))
+          const results = await Promise.all(batch.map(uploadOne))
           batch.forEach((url, idx) => urlMap.set(url, results[idx]))
           setUploadProgress('Uploaded ' + Math.min(i + concurrency, uniqueUrls.length) + ' / ' + uniqueUrls.length + ' images...')
         }
       }
-
-      // replace data URLs with storage URLs
       for (const c of cards) {
         if (c.image_url && urlMap.has(c.image_url)) c.image_url = urlMap.get(c.image_url)
       }
 
       setParsed(cards)
       setApkgFile(null)
+      setParsing(false)
       importCards()
     } catch (e) { setParseErr(e.message); setParsing(false) }
   }
@@ -553,7 +556,7 @@ export default function Anki() {
 
       setParsed([])
       setUploadDeck('')
-      setView('add')
+      setUploadProgress('Import complete. Drop another file to import.')
     } catch (e) { alert(e.message) }
     setImporting(false)
   }
@@ -974,7 +977,7 @@ export default function Anki() {
       )}
 
       {/* ── upload preview view ─────────────────────────── */}
-      {view === 'upload' && (parsed.length > 0 || apkgFile) && (
+      {view === 'upload' && (
         <>
           <div className={s.breadcrumb}>
             <button className={s.breadLink} onClick={() => { setApkgFile(null); setParsed([]); setView('add') }}>
@@ -983,6 +986,8 @@ export default function Anki() {
           </div>
 
           <div className={s.formCard}>
+            {parsed.length > 0 || apkgFile ? (
+              <>
             <h3 className={s.formTitle}>
               {apkgFile ? 'Import .apkg File' : 'Import ' + parsed.length + ' Cards'}
             </h3>
@@ -995,7 +1000,7 @@ export default function Anki() {
               </select>
             </div>
 
-            {apkgFile && !parsing && (
+            {apkgFile && !parsing && !importing && parsed.length === 0 && (
               <div className={s.uploadActions}>
                 <button className={s.primaryBtn} onClick={uploadApkg} style={{ marginTop: 0 }}>
                   Upload to Server
@@ -1004,6 +1009,7 @@ export default function Anki() {
             )}
 
             {parsing && <div className={s.parseError}>{uploadProgress}</div>}
+            {importing && <div className={s.parseError}>{uploadProgress}</div>}
 
             {parseErr && <div className={s.parseError}>{parseErr}</div>}
 
@@ -1034,6 +1040,12 @@ export default function Anki() {
                   </button>
                 </div>
               </>
+            )}
+            </>
+            ) : (
+              <div className={s.uploadReady}>
+                <p style={{ margin: 0, opacity: 0.7 }}>{uploadProgress || 'Drop a .apkg, .csv, .tsv, or .txt file to import.'}</p>
+              </div>
             )}
           </div>
         </>
