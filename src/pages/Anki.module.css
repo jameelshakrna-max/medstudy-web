@@ -801,7 +801,6 @@
   border-radius: 8px;
 }
 .cardExpanded .cardImage img { max-height: 400px; }
-}
 .imageUploadRow {
   display: flex;
   gap: 0.5rem;
