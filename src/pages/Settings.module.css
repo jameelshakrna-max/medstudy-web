@@ -23,21 +23,20 @@
 .title {
   font-family: 'DM Serif Display', serif;
   font-size: 28px;
-  color: #fff;
+  color: var(--text-primary);
   margin: 0 0 4px;
 }
 
 .subtitle {
   font-family: 'DM Sans', sans-serif;
   font-size: 14px;
-  color: var(--mist, #8B95A5);
+  color: var(--mist);
   margin: 0;
 }
 
-/* ── Section Card ── */
 .section {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
   border-radius: 16px;
   padding: 0;
   margin-bottom: 12px;
@@ -47,7 +46,7 @@
 }
 
 .section:hover {
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: var(--tealL);
 }
 
 /* ── Accordion Toggle Button ── */
@@ -111,7 +110,7 @@
 .sectionTitle {
   font-family: 'DM Serif Display', serif;
   font-size: 18px;
-  color: #fff;
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -146,7 +145,7 @@
   font-family: 'DM Sans', sans-serif;
   font-size: 16px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary);
   margin: 0 0 2px;
   white-space: nowrap;
   overflow: hidden;
@@ -156,7 +155,7 @@
 .profileEmail {
   font-family: 'DM Sans', sans-serif;
   font-size: 13px;
-  color: var(--mist, #8B95A5);
+  color: var(--mist);
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -199,9 +198,9 @@
   padding: 10px 14px;
   font-family: 'DM Sans', sans-serif;
   font-size: 14px;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--input-color);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
   border-radius: 10px;
   outline: none;
   transition: border-color 0.2s, background 0.2s;
@@ -209,8 +208,8 @@
 }
 
 .input:focus {
-  border-color: var(--teal, #00B5A3);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--teal);
+  background: var(--input-bg);
 }
 
 .input:disabled {
@@ -249,14 +248,14 @@
   font-family: 'DM Sans', sans-serif;
   font-size: 14px;
   font-weight: 500;
-  color: #fff;
+  color: var(--text-primary);
   margin: 0 0 2px;
 }
 
 .toggleDesc {
   font-family: 'DM Sans', sans-serif;
   font-size: 12px;
-  color: var(--mist, #8B95A5);
+  color: var(--mist);
   margin: 0;
 }
 
@@ -282,7 +281,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--toggle-bg);
   border-radius: 12px;
   transition: background 0.3s;
 }
@@ -294,13 +293,13 @@
   height: 18px;
   left: 3px;
   bottom: 3px;
-  background: #fff;
+  background: var(--toggle-knob);
   border-radius: 50%;
   transition: transform 0.3s;
 }
 
 .toggle input:checked + .slider {
-  background: var(--teal, #00B5A3);
+  background: var(--teal);
 }
 
 .toggle input:checked + .slider::before {
@@ -317,20 +316,20 @@
   flex: 1;
   padding: 16px;
   border-radius: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid var(--card-border);
+  background: var(--card-bg);
   cursor: pointer;
   transition: all 0.2s;
   text-align: center;
 }
 
 .themeOption:hover {
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: var(--tealL);
 }
 
 .themeOptionActive {
-  border-color: var(--teal, #00B5A3);
-  background: rgba(0, 181, 163, 0.08);
+  border-color: var(--teal);
+  background: var(--tealL);
 }
 
 .themePreview {
@@ -354,7 +353,7 @@
   font-family: 'DM Sans', sans-serif;
   font-size: 13px;
   font-weight: 500;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 /* ── Timer Duration Grid ── */
@@ -381,10 +380,10 @@
   padding: 10px 8px;
   font-family: 'DM Mono', monospace;
   font-size: 18px;
-  color: #fff;
+  color: var(--input-color);
   text-align: center;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
   border-radius: 10px;
   outline: none;
   transition: border-color 0.2s;
@@ -428,13 +427,13 @@
 }
 
 .btnSecondary {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-color);
+  border: 1px solid var(--btn-secondary-border);
 }
 
 .btnSecondary:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--input-bg);
 }
 
 .btnDanger {
@@ -475,7 +474,7 @@
 .aboutValue {
   font-family: 'DM Mono', monospace;
   font-size: 13px;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 /* ── Field Hint ── */
@@ -569,92 +568,8 @@
   color: var(--coral, #F25C5C);
 }
 
-/* ── Light Mode Override ── */
+/* ── Light Mode Override (only what global vars don't cover) ── */
 .pageLight {
-  color: #1a1a2e;
-}
-
-.pageLight .title {
-  color: #1a1a2e;
-}
-
-.pageLight .subtitle {
-  color: #64748b;
-}
-
-.pageLight .section {
-  background: rgba(255, 255, 255, 0.8);
-  border-color: rgba(0, 0, 0, 0.08);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-}
-
-.pageLight .sectionTitle {
-  color: #1a1a2e;
-}
-
-.pageLight .sectionIcon {
-  background: rgba(0, 181, 163, 0.1);
-}
-
-.pageLight .profileName {
-  color: #1a1a2e;
-}
-
-.pageLight .profileEmail {
-  color: #64748b;
-}
-
-.pageLight .input,
-.pageLight .durationInput {
-  color: #1a1a2e;
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.12);
-}
-
-.pageLight .input:focus,
-.pageLight .durationInput:focus {
-  border-color: var(--teal, #00B5A3);
-  background: #fff;
-}
-
-.pageLight .toggleLabel {
-  color: #1a1a2e;
-}
-
-.pageLight .toggleDesc {
-  color: #64748b;
-}
-
-.pageLight .slider {
-  background: rgba(0, 0, 0, 0.15);
-}
-
-.pageLight .slider::before {
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
-
-.pageLight .themeOption {
-  background: rgba(0, 0, 0, 0.03);
-  border-color: rgba(0, 0, 0, 0.08);
-}
-
-.pageLight .themeLabel {
-  color: #1a1a2e;
-}
-
-.pageLight .aboutLabel {
-  color: #64748b;
-}
-
-.pageLight .aboutValue {
-  color: #1a1a2e;
-}
-
-.pageLight .btnSecondary {
-  background: rgba(0, 0, 0, 0.06);
-  color: #1a1a2e;
-  border-color: rgba(0, 0, 0, 0.1);
 }
 
 /* ── Mobile Responsive ── */

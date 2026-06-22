@@ -1,31 +1,30 @@
 .layout { display: flex; min-height: 100vh; }
 .sidebar {
   width: 260px; flex-shrink: 0;
-  background: rgba(255,255,255,0.02);
-  border-right: 1px solid rgba(255,255,255,0.06);
+  background: var(--card-bg);
+  border-right: 1px solid var(--card-border);
   display: flex; flex-direction: column;
   position: fixed; left: 0; top: 0; bottom: 0; z-index: 50;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   backdrop-filter: blur(16px);
 }
-.sidebarTop { padding: 24px 20px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); }
-.logo { font-family: 'DM Serif Display', serif; font-size: 18px; color: #fff; margin-bottom: 14px; }
+.sidebarTop { padding: 24px 20px 16px; border-bottom: 1px solid var(--card-border); }
 .userChip { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--mist); }
 .userDot { width: 8px; height: 8px; border-radius: 50%; background: var(--sage); flex-shrink: 0; box-shadow: 0 0 8px rgba(61,190,122,0.4); }
 .nav { flex: 1; padding: 14px 14px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
 .navItem { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 12px; font-size: 14px; font-weight: 500; color: var(--mist); transition: all 0.3s; }
-.navItem:hover { background: rgba(255,255,255,0.04); color: #E0E8F0; }
-.navActive { background: rgba(0,181,163,0.1) !important; color: var(--teal) !important; box-shadow: inset 0 0 0 1px rgba(0,181,163,0.2); }
+.navItem:hover { background: var(--input-bg); color: var(--text-primary); }
+.navActive { background: var(--tealL) !important; color: var(--teal) !important; box-shadow: inset 0 0 0 1px rgba(0,181,163,0.2); }
 .navIcon { font-size: 18px; flex-shrink: 0; width: 24px; text-align: center; }
 .navLabel { flex: 1; }
-.sidebarBottom { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.06); }
+.sidebarBottom { padding: 16px 20px; border-top: 1px solid var(--card-border); }
 .planBadge { font-size: 12px; font-weight: 700; color: var(--teal); margin-bottom: 12px; }
-.signOutBtn { width: 100%; padding: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; color: var(--mist); font-size: 13px; cursor: pointer; transition: all 0.3s; }
-.signOutBtn:hover { border-color: var(--coral); color: var(--coral); background: rgba(242,92,92,0.06); }
+.signOutBtn { width: 100%; padding: 10px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 10px; color: var(--mist); font-size: 13px; cursor: pointer; transition: all 0.3s; }
+.signOutBtn:hover { border-color: var(--coral); color: var(--coral); background: var(--coralL); }
 .main { flex: 1; margin-left: 260px; min-height: 100vh; }
-.mobileHeader { display: none; align-items: center; gap: 14px; padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.06); background: var(--navy); position: sticky; top: 0; z-index: 40; backdrop-filter: blur(16px); }
-.menuBtn { background: none; border: none; color: #E0E8F0; font-size: 22px; cursor: pointer; padding: 4px; }
-.mobileLogo { font-family: 'DM Serif Display', serif; font-size: 18px; color: #fff; }
+.mobileHeader { display: none; align-items: center; gap: 14px; padding: 16px 20px; border-bottom: 1px solid var(--card-border); background: var(--page-bg); position: sticky; top: 0; z-index: 40; backdrop-filter: blur(16px); }
+.menuBtn { background: none; border: none; color: var(--text-secondary); font-size: 22px; cursor: pointer; padding: 4px; }
+.mobileLogo { font-family: 'DM Serif Display', serif; font-size: 18px; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
 .content { padding: 36px 40px; max-width: 1200px; }
 .overlay { display: none; }
 @media (max-width: 768px) {
@@ -66,7 +65,7 @@
 .logoText {
   font-family: 'DM Serif Display', serif;
   font-size: 18px;
-  color: #fff;
+  color: var(--text-primary);
   letter-spacing: -0.02em;
   white-space: nowrap;
 }

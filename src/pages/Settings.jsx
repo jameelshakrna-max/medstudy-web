@@ -54,7 +54,10 @@ export default function Settings() {
 
   useEffect(() => {
     const saved = localStorage.getItem('medstudy-theme')
-    if (saved) setTheme(saved)
+    if (saved) {
+      setTheme(saved)
+      document.documentElement.setAttribute('data-theme', saved)
+    }
   }, [])
 
   useEffect(() => {
