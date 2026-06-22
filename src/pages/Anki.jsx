@@ -975,8 +975,32 @@ export default function Anki() {
               </div>
             )}
 
-            {parsing && <div className={s.parseError}>{uploadProgress}</div>}
-            {importing && <div className={s.parseError}>{uploadProgress}</div>}
+            {parsing && (
+              <div className={s.uploadProgressBlock}>
+                <div className={s.progressBar}>
+                  <div className={s.progressFill} style={{ width: '30%' }}>
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)',
+                      animation: 'shimmer 1.5s ease-in-out infinite',
+                    }} />
+                  </div>
+                </div>
+                <div className={s.progressText}>{uploadProgress}</div>
+              </div>
+            )}
+            {importing && (() => {
+              const m = uploadProgress.match(/Importing\s+(\d+)\s*\/\s*(\d+)/)
+              const pct = m ? Math.round(Number(m[1]) / Number(m[2]) * 100) : 0
+              return (
+                <div className={s.uploadProgressBlock}>
+                  <div className={s.progressBar}>
+                    <div className={s.progressFill} style={{ width: pct + '%' }} />
+                  </div>
+                  <div className={s.progressText}>{uploadProgress}</div>
+                </div>
+              )
+            })()}
 
             {parseErr && <div className={s.parseError}>{parseErr}</div>}
 

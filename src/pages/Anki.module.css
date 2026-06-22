@@ -606,6 +606,40 @@
   cursor: pointer;
   transition: all 0.2s;
 }
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+.uploadProgressBlock {
+  background: rgba(59,130,246,0.06);
+  border: 1px solid rgba(59,130,246,0.15);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.progressBar {
+  background: var(--card-border);
+  border-radius: 8px;
+  height: 8px;
+  overflow: hidden;
+  margin: 0 0 8px;
+}
+.progressFill {
+  position: relative;
+  height: 100%;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--blue), #60a5fa);
+  transition: width 0.3s ease;
+  min-width: 4%;
+  overflow: hidden;
+}
+.progressText {
+  font-size: 12px;
+  color: var(--mist);
+  text-align: center;
+  font-weight: 500;
+}
 .cancelBtn:hover { border-color: var(--red); color: var(--red); }
 
 /* ─── Review Mode ─── */
