@@ -1,7 +1,26 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, memo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import styles from './Dashboard.module.css'
+
+const DashStatCards = memo(function DashStatCards({ stats }) {
+  return (
+    <div className={styles.statsGrid}>
+      {[
+        { n: stats.pomodoros, l: 'Pomodoros Today', c: 'var(--blue)', icon: '🍅' },
+        { n: stats.sessions, l: 'Sessions Today', c: 'var(--emerald)', icon: '📖' },
+        { n: stats.topicsInProgress, l: 'Topics In Progress', c: 'var(--amber)', icon: '🔖' },
+        { n: stats.cardsdue, l: 'Anki Cards Due', c: 'var(--red)', icon: '🃏' },
+      ].map((s, i) => (
+        <div className={styles.statCard} key={i} style={{ '--c': s.c }}>
+          <div className={styles.statIcon}>{s.icon}</div>
+          <div className={styles.statNum}>{s.n}</div>
+          <div className={styles.statLabel}>{s.l}</div>
+        </div>
+      ))}
+    </div>
+  )
+})
 
 export default function Dashboard() {
   const { profile, user } = useAuth()
@@ -67,21 +86,7 @@ export default function Dashboard() {
         <p className={styles.sub}>Here is your study command centre for today.</p>
       </div>
 
-      {/* Stats */}
-      <div className={styles.statsGrid}>
-        {[
-          { n: stats.pomodoros, l: 'Pomodoros Today', c: 'var(--blue)', icon: '🍅' },
-          { n: stats.sessions, l: 'Sessions Today', c: 'var(--emerald)', icon: '📖' },
-          { n: stats.topicsInProgress, l: 'Topics In Progress', c: 'var(--amber)', icon: '🔖' },
-          { n: stats.cardsdue, l: 'Anki Cards Due', c: 'var(--red)', icon: '🃏' },
-        ].map((s, i) => (
-          <div className={styles.statCard} key={i} style={{ '--c': s.c }}>
-            <div className={styles.statIcon}>{s.icon}</div>
-            <div className={styles.statNum}>{s.n}</div>
-            <div className={styles.statLabel}>{s.l}</div>
-          </div>
-        ))}
-      </div>
+      <DashStatCards stats={stats} />
 
       {/* Daily Routine */}
       <div className={styles.section}>

@@ -1,7 +1,30 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, memo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import styles from './Page.module.css'
+
+const StatsCards = memo(function StatsCards({ totalMin, totalSessions, avgDuration, goalsMet }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
+      <div style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.1), rgba(59,130,246,0.03))', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '14px', padding: '14px 10px', textAlign: 'center' }}>
+        <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '24px', color: 'var(--text-primary)' }}>{(totalMin / 60).toFixed(1)}</div>
+        <div style={{ fontSize: '10px', color: 'var(--mist)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Hours</div>
+      </div>
+      <div style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.1), rgba(16,185,129,0.03))', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '14px', padding: '14px 10px', textAlign: 'center' }}>
+        <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '24px', color: 'var(--text-primary)' }}>{totalSessions}</div>
+        <div style={{ fontSize: '10px', color: 'var(--mist)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Sessions</div>
+      </div>
+      <div style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(99,102,241,0.03))', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '14px', padding: '14px 10px', textAlign: 'center' }}>
+        <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '24px', color: 'var(--text-primary)' }}>{avgDuration}</div>
+        <div style={{ fontSize: '10px', color: 'var(--mist)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Avg Min</div>
+      </div>
+      <div style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.1), rgba(245,158,11,0.03))', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '14px', padding: '14px 10px', textAlign: 'center' }}>
+        <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '24px', color: 'var(--text-primary)' }}>{goalsMet}</div>
+        <div style={{ fontSize: '10px', color: 'var(--mist)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Goals Met</div>
+      </div>
+    </div>
+  )
+})
 
 export default function Sessions() {
   const { user } = useAuth()
@@ -174,25 +197,7 @@ export default function Sessions() {
             </div>
           )}
 
-          {/* ── Stats Cards ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
-            <div style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.1), rgba(59,130,246,0.03))', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '14px', padding: '14px 10px', textAlign: 'center' }}>
-              <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '24px', color: 'var(--text-primary)' }}>{(totalMin / 60).toFixed(1)}</div>
-              <div style={{ fontSize: '10px', color: 'var(--mist)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Hours</div>
-            </div>
-            <div style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.1), rgba(16,185,129,0.03))', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '14px', padding: '14px 10px', textAlign: 'center' }}>
-              <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '24px', color: 'var(--text-primary)' }}>{totalSessions}</div>
-              <div style={{ fontSize: '10px', color: 'var(--mist)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Sessions</div>
-            </div>
-            <div style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(99,102,241,0.03))', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '14px', padding: '14px 10px', textAlign: 'center' }}>
-              <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '24px', color: 'var(--text-primary)' }}>{avgDuration}</div>
-              <div style={{ fontSize: '10px', color: 'var(--mist)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Avg Min</div>
-            </div>
-            <div style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.1), rgba(212,175,55,0.03))', border: '1px solid rgba(212,175,55,0.2)', borderRadius: '14px', padding: '14px 10px', textAlign: 'center' }}>
-              <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '24px', color: 'var(--text-primary)' }}>{goalsMet}</div>
-              <div style={{ fontSize: '10px', color: 'var(--mist)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Goals Met</div>
-            </div>
-          </div>
+          <StatsCards totalMin={totalMin} totalSessions={totalSessions} avgDuration={avgDuration} goalsMet={goalsMet} />
 
           {/* ── Session List (grouped by date) ── */}
           <div className={styles.cardList}>
