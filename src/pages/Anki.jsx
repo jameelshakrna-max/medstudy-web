@@ -429,43 +429,9 @@ export default function Anki() {
       const cards = await parseApkgFile(apkgFile)
       if (!cards.length) { setParseErr('No cards found.'); setParsing(false); return }
 
-      // upload images directly to Supabase Storage (bypasses Vercel body limit)
-      const { supabase } = await import('../lib/supabase')
-      const uniqueUrls = [...new Set(cards.map(c => c.image_url).filter(Boolean))]
-      const urlMap = new Map()
-      if (uniqueUrls.length) {
-        setUploadProgress('Uploading ' + uniqueUrls.length + ' images...')
-        const uploadOne = async (dataUrl) => {
-          const res = await fetch(dataUrl)
-          const blob = await res.blob()
-          const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/jpeg' ? 'jpg' : 'png'
-          const fileName = crypto.randomUUID() + '.' + ext
-          const { error } = await supabase.storage.from('card-images').upload(fileName, blob, { contentType: blob.type || 'image/png', upsert: false })
-          if (error?.message?.includes('bucket') || error?.message?.includes('not found')) {
-            // ensure bucket exists via server call, then retry once
-            const { data: { session } } = await supabase.auth.getSession()
-            await fetch(API + '/upload-image', {
-              method: 'POST', headers: { Authorization: 'Bearer ' + session.access_token },
-              body: (() => { const f = new FormData(); f.append('image', new Blob(['iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='], { type: 'image/png' }), 'pixel.png'); return f })(),
-            })
-            const { error: e2 } = await supabase.storage.from('card-images').upload(fileName, blob, { contentType: blob.type || 'image/png', upsert: false })
-            if (e2) throw new Error(e2.message)
-          } else if (error) {
-            throw new Error(error.message)
-          }
-          const { data: { publicUrl } } = supabase.storage.from('card-images').getPublicUrl(fileName)
-          return publicUrl
-        }
-        const concurrency = 3
-        for (let i = 0; i < uniqueUrls.length; i += concurrency) {
-          const batch = uniqueUrls.slice(i, i + concurrency)
-          const results = await Promise.all(batch.map(uploadOne))
-          batch.forEach((url, idx) => urlMap.set(url, results[idx]))
-          setUploadProgress('Uploaded ' + Math.min(i + concurrency, uniqueUrls.length) + ' / ' + uniqueUrls.length + ' images...')
-        }
-      }
+      // strip embedded image data URLs (too large for Vercel POST body)
       for (const c of cards) {
-        if (c.image_url && urlMap.has(c.image_url)) c.image_url = urlMap.get(c.image_url)
+        if (c.image_url && c.image_url.startsWith('data:')) c.image_url = null
       }
 
       setParsed(cards)
