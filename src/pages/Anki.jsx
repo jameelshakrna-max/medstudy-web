@@ -11,8 +11,8 @@ function fsrs(option, card) {
   c.stability = Number(card.stability) || 0
   c.difficulty = Number(card.difficulty) || 0
   c.state = Number(card.state) || FSRSState.New
-  c.last_review = card.last_review ? new Date(card.last_review + 'Z') : now
-  c.due = card.next_review ? new Date(card.next_review + 'Z') : now
+  c.last_review = card.last_review ? new Date(card.last_review) : now
+  c.due = card.next_review ? new Date(card.next_review) : now
 
   // Normalize inconsistent data: Review/Learning/Relearning state requires positive stability
   if (c.state !== FSRSState.New && c.stability <= 0) {
