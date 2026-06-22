@@ -5,7 +5,7 @@ export default function LoadingScreen({ message, fullPage = true }) {
     <div className={`${styles.loader} ${fullPage ? styles.fullPage : styles.inline}`}>
       <div className={styles.pulse}>
         <div className={styles.ring} />
-        <div className={styles.icon}>🏥</div>
+        <img src="/icon.svg" alt="MedStudy OS" className={styles.icon} />
       </div>
       <div className={styles.dots}>
         <span className={styles.dot} />

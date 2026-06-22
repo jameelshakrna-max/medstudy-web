@@ -55,10 +55,10 @@
 }
 
 .icon {
-  font-size: 36px;
+  width: 44px;
+  height: 44px;
   animation: breathe 2s ease-in-out infinite;
   filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.3));
-  line-height: 1;
 }
 
 .dots {
