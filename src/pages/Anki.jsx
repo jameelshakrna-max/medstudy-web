@@ -423,6 +423,41 @@ export default function Anki() {
 
   /* ── file upload / import ────────────────────────────── */
 
+  async function uploadImages(cards, signal) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not logged in')
+    const uniqueUrls = [...new Set(cards.map(c => c.image_url).filter(u => u && u.startsWith('data:')))]
+    if (!uniqueUrls.length) return
+    const mapping = {}
+    const CONCURRENT = 5
+    for (let i = 0; i < uniqueUrls.length; i += CONCURRENT) {
+      const batch = uniqueUrls.slice(i, i + CONCURRENT)
+      setUploadProgress('Uploading images ' + Math.min(i + CONCURRENT, uniqueUrls.length) + ' / ' + uniqueUrls.length + '...')
+      await Promise.all(batch.map(async (dataUrl) => {
+        if (signal?.aborted) return
+        const res = await fetch(dataUrl)
+        const blob = await res.blob()
+        const ext = blob.type.split('/')[1] || 'png'
+        const file = new File([blob], 'image.' + ext, { type: blob.type })
+        const form = new FormData()
+        form.append('image', file)
+        const r = await fetch(API + '/upload-image', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + session.access_token },
+          body: form,
+          signal,
+        })
+        if (!r.ok) throw new Error('Image upload failed: ' + (await r.text()).slice(0, 100))
+        const result = await r.json()
+        if (result.error) throw new Error(result.error)
+        mapping[dataUrl] = result.url
+      }))
+    }
+    for (const c of cards) {
+      if (c.image_url && mapping[c.image_url]) c.image_url = mapping[c.image_url]
+    }
+  }
+
   async function uploadApkg() {
     if (!apkgFile || !uploadDeck) return alert('Please select a deck.')
     setParsing(true)
@@ -433,10 +468,7 @@ export default function Anki() {
       const cards = await parseApkgFile(apkgFile)
       if (!cards.length) { setParseErr('No cards found.'); setParsing(false); return }
 
-      // strip embedded image data URLs (too large for Vercel POST body)
-      for (const c of cards) {
-        if (c.image_url && c.image_url.startsWith('data:')) c.image_url = null
-      }
+      await uploadImages(cards)
 
       setParsed(cards)
       setApkgFile(null)
