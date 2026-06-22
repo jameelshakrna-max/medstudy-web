@@ -1,7 +1,7 @@
-import { createClient } from '@libsql/client/web'
+import { createClient } from '@libsql/client'
 import { getUser } from '../_auth.js'
 
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 
 const turso = createClient({
   url: process.env.TURSO_DATABASE_URL,
