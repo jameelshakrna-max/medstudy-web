@@ -1,6 +1,10 @@
 import JSZip from 'jszip'
 import initSqlJs from 'sql.js'
 
+function wasmLocate(file) {
+  return 'https://sql.js.org/dist/' + file
+}
+
 function stripHtml(html) {
   if (!html) return ''
   return html.replace(/<img[^>]*>/gi, '').replace(/<[^>]+>/g, '').replace(/&nbsp;/gi, ' ')
@@ -51,7 +55,7 @@ export async function parseApkg(buffer) {
   if (!dbFile) throw new Error('No database found in .apkg')
 
   const dbBuffer = await dbFile.async('arraybuffer')
-  const SQL = await initSqlJs()
+  const SQL = await initSqlJs({ locateFile: wasmLocate })
   const db = new SQL.Database(new Uint8Array(dbBuffer))
 
   const tableInfo = db.exec("PRAGMA table_info(notes)")
