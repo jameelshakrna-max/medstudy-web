@@ -64,7 +64,7 @@
 }
 
 .sectionToggle:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--card-bg);
 }
 
 .chevron {
@@ -132,7 +132,7 @@
   justify-content: center;
   font-family: 'DM Serif Display', serif;
   font-size: 24px;
-  color: #fff;
+  color: var(--text-primary);
   flex-shrink: 0;
 }
 
@@ -227,7 +227,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--card-border);
 }
 
 .toggleRow:last-child {
@@ -341,7 +341,7 @@
 
 .themePreviewDark {
   background: linear-gradient(135deg, #0F172A, #1E293B);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--card-border);
 }
 
 .themePreviewLight {
@@ -418,7 +418,7 @@
 
 .btnPrimary {
   background: linear-gradient(135deg, var(--blue, #3B82F6), #60A5FA);
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .btnPrimary:hover {
@@ -546,7 +546,7 @@
 .logoutSection {
   margin-top: 8px;
   padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--card-border);
 }
 
 /* ── Status Message ── */

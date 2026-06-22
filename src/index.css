@@ -63,6 +63,8 @@
   --mist:    #64748B;
 }
 
+[data-theme="light"] body { font-weight: 450; }
+
 html { scroll-behavior: smooth; }
 
 body {

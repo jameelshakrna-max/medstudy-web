@@ -14,7 +14,7 @@
 .name {
   font-family: 'DM Serif Display', serif;
   font-size: clamp(30px, 5vw, 44px);
-  color: #fff;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 .sub {
@@ -32,8 +32,8 @@
   z-index: 1;
 }
 .statCard {
-  background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
   border-radius: 20px;
   padding: 24px 16px 20px;
   text-align: center;
@@ -55,13 +55,13 @@
 .statCard:hover {
   transform: translateY(-4px);
   box-shadow: 0 16px 48px rgba(0,0,0,0.25);
-  border-color: rgba(255,255,255,0.14);
+  border-color: var(--card-border);
 }
 .statIcon { font-size: 28px; margin-bottom: 10px; display: block; }
 .statNum {
   font-family: 'DM Serif Display', serif;
   font-size: 40px;
-  color: #fff;
+  color: var(--text-primary);
   line-height: 1;
   margin-bottom: 6px;
   text-shadow: 0 2px 6px rgba(0,0,0,0.3);
@@ -82,7 +82,7 @@
 .sectionTitle {
   font-family: 'DM Serif Display', serif;
   font-size: 24px;
-  color: #fff;
+  color: var(--text-primary);
   margin-bottom: 20px;
 }
 
@@ -92,8 +92,8 @@
   gap: 16px;
 }
 .routineCard {
-  background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
   border-radius: 20px;
   padding: 24px;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -105,7 +105,7 @@
 .routineCard:hover {
   transform: translateY(-4px);
   box-shadow: 0 16px 48px rgba(0,0,0,0.25);
-  border-color: rgba(255,255,255,0.14);
+  border-color: var(--card-border);
   border-left-color: var(--rc);
 }
 .routineStep {
@@ -125,7 +125,7 @@
 .routineTitle {
   font-size: 15px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 .routineDesc {

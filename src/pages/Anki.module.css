@@ -20,7 +20,7 @@
 .title {
   font-family: 'DM Serif Display', serif;
   font-size: clamp(24px, 4vw, 36px);
-  color: #fff;
+  color: var(--text-primary);
   margin-bottom: 4px;
 }
 .sub {
@@ -32,7 +32,7 @@
 .pills { display: flex; gap: 8px; flex-wrap: wrap; }
 .pill {
   display: flex; align-items: center; gap: 5px;
-  background: rgba(255,255,255,0.04);
+  background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 100px;
   padding: 5px 14px;
@@ -41,7 +41,7 @@
 }
 .pill strong {
   font-family: 'DM Mono', monospace;
-  color: #fff;
+  color: var(--text-primary);
   font-weight: 600;
 }
 
@@ -92,8 +92,8 @@
   transition: color 0.2s;
 }
 .breadLink:hover { color: var(--blue); }
-.breadSep { color: rgba(255,255,255,0.15); }
-.breadCurrent { color: #E0E8F0; font-weight: 600; }
+.breadSep { color: var(--text-secondary); }
+.breadCurrent { color: var(--text-secondary); font-weight: 600; }
 
 /* ─── Tabs ─── */
 .tabs {
@@ -106,7 +106,7 @@
 .tab {
   padding: 7px 16px;
   border-radius: 100px;
-  background: rgba(255,255,255,0.03);
+  background: var(--card-bg);
   border: 1px solid var(--border);
   color: var(--mist);
   font-size: 13px;
@@ -114,7 +114,7 @@
   cursor: pointer;
   transition: all 0.2s;
 }
-.tab:hover { color: #E0E8F0; background: rgba(255,255,255,0.05); }
+.tab:hover { color: var(--text-secondary); background: var(--card-bg); }
 .tabOn {
   background: rgba(59,130,246,0.1);
   border-color: rgba(59,130,246,0.3);
@@ -152,7 +152,7 @@
   gap: 14px;
 }
 .deckCard {
-  background: rgba(255,255,255,0.03);
+  background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 20px;
@@ -173,7 +173,7 @@
 .deckName {
   font-size: 15px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary);
 }
 .deckMeta {
   display: flex;
@@ -184,7 +184,7 @@
 }
 .deckMeta strong {
   font-family: 'DM Mono', monospace;
-  color: #E0E8F0;
+  color: var(--text-secondary);
 }
 .deckDelBtn {
   position: absolute;
@@ -215,10 +215,10 @@
 }
 .createDeckInput {
   flex: 1;
-  background: rgba(255,255,255,0.06);
+  background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 10px;
-  color: #E0E8F0;
+  color: var(--text-secondary);
   font-family: 'DM Sans', sans-serif;
   font-size: 14px;
   padding: 10px 14px;
@@ -226,7 +226,7 @@
   transition: border-color 0.2s;
 }
 .createDeckInput:focus { border-color: var(--blue); }
-.createDeckInput::placeholder { color: rgba(255,255,255,0.2); }
+.createDeckInput::placeholder { color: var(--text-secondary); }
 .createDeckBtn {
   padding: 10px 18px;
   background: var(--blue);
@@ -249,7 +249,7 @@
   background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(245,158,11,0.12));
   border: 1px solid rgba(239,68,68,0.2);
   border-radius: 12px;
-  color: #E0E8F0;
+  color: var(--text-secondary);
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
@@ -262,7 +262,7 @@
 /* Progress bar */
 .progBar {
   height: 4px;
-  background: rgba(255,255,255,0.06);
+  background: var(--input-bg);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -279,7 +279,7 @@
   font-size: 14px;
   padding: 40px;
   text-align: center;
-  background: rgba(255,255,255,0.02);
+  background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 14px;
   grid-column: 1 / -1;
@@ -294,14 +294,14 @@
 
 /* ─── Anki Card ─── */
 .ankiCard {
-  background: rgba(255,255,255,0.03);
+  background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 20px;
   position: relative;
   transition: border-color 0.2s;
 }
-.ankiCard:hover { border-color: rgba(255,255,255,0.12); }
+.ankiCard:hover { border-color: var(--card-border); }
 
 /* Top row: badges + delete */
 .ankiTopRow {
@@ -324,7 +324,7 @@
 .badgeMaturity {
   font-size: 11px;
   color: var(--mist);
-  background: rgba(255,255,255,0.06);
+  background: var(--input-bg);
   padding: 2px 8px;
   border-radius: 100px;
 }
@@ -373,7 +373,7 @@
 .ankiFront {
   font-size: 15px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary);
   margin-bottom: 8px;
   line-height: 1.4;
 }
@@ -426,7 +426,7 @@
 
 /* ─── Form ─── */
 .formCard {
-  background: rgba(255,255,255,0.03);
+  background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 28px;
@@ -435,7 +435,7 @@
 .formTitle {
   font-family: 'DM Serif Display', serif;
   font-size: 20px;
-  color: #fff;
+  color: var(--text-primary);
   margin-bottom: 20px;
 }
 .field { margin-bottom: 14px; }
@@ -452,10 +452,10 @@
 .field textarea,
 .field select {
   width: 100%;
-  background: rgba(255,255,255,0.06);
+  background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 10px;
-  color: #E0E8F0;
+  color: var(--text-secondary);
   font-family: 'DM Sans', sans-serif;
   font-size: 14px;
   padding: 10px 14px;
@@ -468,7 +468,7 @@
 .field textarea:focus,
 .field select:focus { border-color: var(--blue); }
 .field input::placeholder,
-.field textarea::placeholder { color: rgba(255,255,255,0.2); }
+.field textarea::placeholder { color: var(--text-secondary); }
 .field select option { background: var(--navy2); }
 .checkRow {
   display: flex;
@@ -505,7 +505,7 @@
 .uploadTitle {
   font-size: 16px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
   margin-bottom: 6px;
 }
 .uploadDesc {
@@ -524,7 +524,7 @@
   margin-bottom: 12px;
 }
 .dropZone {
-  border: 2px dashed rgba(255,255,255,0.1);
+  border: 2px dashed var(--card-border);
   border-radius: 16px;
   padding: 32px 24px;
   text-align: center;
@@ -535,11 +535,11 @@
 .dragOver { border-color: var(--blue) !important; background: rgba(59,130,246,0.06) !important; }
 .dropIcon { font-size: 32px; margin-bottom: 8px; }
 .dropText { font-size: 14px; color: var(--mist); margin-bottom: 4px; }
-.dropFormats { font-size: 11px; color: rgba(255,255,255,0.25); }
+.dropFormats { font-size: 11px; color: var(--text-secondary); }
 
 /* ─── Upload Preview ─── */
 .previewList {
-  background: rgba(255,255,255,0.03);
+  background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px;
@@ -559,14 +559,14 @@
   display: flex;
   gap: 10px;
   padding: 7px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid var(--card-border);
   font-size: 12px;
   align-items: baseline;
 }
 .previewRow:last-child { border-bottom: none; }
 .previewFront {
   flex: 1;
-  color: #E0E8F0;
+  color: var(--text-secondary);
   font-weight: 500;
   min-width: 0;
   overflow: hidden;
@@ -574,7 +574,7 @@
   white-space: nowrap;
 }
 .previewArrow {
-  color: rgba(255,255,255,0.2);
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 .previewBack {
@@ -634,7 +634,7 @@
 .reviewProgBar {
   flex: 1;
   height: 4px;
-  background: rgba(255,255,255,0.06);
+  background: var(--input-bg);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -647,7 +647,7 @@
 
 .reviewCard {
   max-width: 600px;
-  background: rgba(255,255,255,0.03);
+  background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 32px;
@@ -672,7 +672,7 @@
 }
 .reviewContent {
   font-size: 16px;
-  color: #fff;
+  color: var(--text-primary);
   line-height: 1.6;
   margin-bottom: 20px;
 }
@@ -708,7 +708,7 @@
   margin: 0.5rem 0;
   border-radius: 8px;
   overflow: hidden;
-  background: rgba(255,255,255,0.03);
+  background: var(--card-bg);
   display: flex;
   justify-content: center;
 }
@@ -727,14 +727,14 @@
   padding: 0.4rem 0.8rem;
   border-radius: 6px;
   border: 1px solid var(--border);
-  background: rgba(255,255,255,0.06);
+  background: var(--input-bg);
   cursor: pointer;
   font-size: 0.85rem;
   color: var(--mist);
   transition: background 0.2s;
 }
 .secondaryBtn:hover {
-  background: rgba(255,255,255,0.1);
+  background: var(--card-bg);
 }
 .secondaryBtn:disabled {
   opacity: 0.6;
@@ -757,7 +757,7 @@
   margin-top: 0.5rem;
   border-radius: 8px;
   overflow: hidden;
-  border: 2px dashed rgba(255,255,255,0.1);
+  border: 2px dashed var(--card-border);
   padding: 0.25rem;
 }
 .imagePreview img {
