@@ -253,7 +253,8 @@ export default function Resources() {
               key={isAll ? 'all' : cat.id}
               className={`${s.tab} ${active ? s.tabActive : ''}`}
               style={{
-                background: active ? undefined : 'var(--navy3)',
+                background: active ? undefined : '#FFFFFF',
+                color: active ? undefined : '#0B1120',
                 ...(active ? { '--tab-color': isAll ? 'var(--blue)' : CATEGORY_COLORS[cat.id] || 'var(--blue)' } : {})
               }}
               onClick={() => setSelectedCategory(id)}
