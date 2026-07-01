@@ -66,6 +66,7 @@
 .cardTitle { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .cardMeta { display: flex; gap: 10px; font-size: 12px; color: var(--mist); flex-wrap: wrap; margin-bottom: 8px; }
 .cardCategory { font-weight: 600; }
+.cardType { font-size: 11px; padding: 1px 8px; background: var(--blueL); color: var(--blue); border-radius: 6px; }
 .cardTags { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
 .tag { font-size: 11px; padding: 2px 8px; background: var(--input-bg); border-radius: 6px; color: var(--mist); }
 .tagMore { font-size: 11px; padding: 2px 6px; color: var(--mist); }

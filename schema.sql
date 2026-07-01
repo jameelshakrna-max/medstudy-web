@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS resources (
   category TEXT NOT NULL,
   description TEXT DEFAULT '',
   tags TEXT DEFAULT '[]',
+  type TEXT NOT NULL DEFAULT '',
   file_name TEXT NOT NULL,
   file_key TEXT NOT NULL,
   file_size INTEGER NOT NULL,

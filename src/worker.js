@@ -357,6 +357,7 @@ async function handleCreateResource(request, env, user) {
   const description = formData.get('description') || ''
   const tags = formData.get('tags') || '[]'
   const userName = formData.get('user_name') || user.email?.split('@')[0] || 'User'
+  const resourceType = formData.get('type') || ''
   const file = formData.get('file')
   const image = formData.get('image')
 
@@ -382,9 +383,9 @@ async function handleCreateResource(request, env, user) {
   const id = uuid()
   const now = new Date().toISOString()
   await env.DB.prepare(
-    `INSERT INTO resources (id, title, category, description, tags, file_name, file_key, file_size, mime_type, image_key, user_id, user_name, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(id, title.trim(), category, description, tags, file.name, fileKey, file.size, file.type || '', imageKey, user.sub, userName, now).run()
+    `INSERT INTO resources (id, title, category, description, tags, type, file_name, file_key, file_size, mime_type, image_key, user_id, user_name, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(id, title.trim(), category, description, tags, resourceType, file.name, fileKey, file.size, file.type || '', imageKey, user.sub, userName, now).run()
 
   const { results } = await env.DB.prepare('SELECT * FROM resources WHERE id = ?').bind(id).all()
   return json(mapResource(results[0]), 201)
@@ -397,8 +398,8 @@ async function handleUpdateResource(request, env, user) {
   if (!resource.results.length) return json({ error: 'Not found or not yours' }, 404)
 
   await env.DB.prepare(
-    `UPDATE resources SET title = COALESCE(?, title), description = COALESCE(?, description), tags = COALESCE(?, tags), updated_at = datetime('now') WHERE id = ?`
-  ).bind(body.title || null, body.description ?? null, body.tags || null, id).run()
+    `UPDATE resources SET title = COALESCE(?, title), description = COALESCE(?, description), tags = COALESCE(?, tags), type = COALESCE(?, type), updated_at = datetime('now') WHERE id = ?`
+  ).bind(body.title || null, body.description ?? null, body.tags || null, body.type || null, id).run()
 
   const { results } = await env.DB.prepare('SELECT * FROM resources WHERE id = ?').bind(id).all()
   return json(mapResource(results[0]))
@@ -555,6 +556,7 @@ function mapResource(r) {
     category: r.category,
     description: r.description || '',
     tags: JSON.parse(r.tags || '[]'),
+    type: r.type || '',
     file_name: r.file_name,
     file_key: r.file_key,
     file_size: Number(r.file_size) || 0,

@@ -17,6 +17,24 @@ const MIME_ICONS = {
   'text/': '📝',
 }
 
+const RESOURCE_TYPES = [
+  { value: '', label: 'Select type...' },
+  { value: 'book', label: '📖 Book' },
+  { value: 'questions', label: '❓ Questions' },
+  { value: 'summary', label: '📝 Summary' },
+  { value: 'lecture_notes', label: '📋 Lecture Notes' },
+  { value: 'anki_deck', label: '🃏 Anki Deck' },
+  { value: 'cheat_sheet', label: '📌 Cheat Sheet' },
+  { value: 'reference', label: '📚 Reference' },
+  { value: 'practice_test', label: '✍️ Practice Test' },
+  { value: 'flashcards', label: '🔖 Flashcards' },
+  { value: 'video', label: '🎬 Video' },
+  { value: 'audio', label: '🎧 Audio' },
+  { value: 'other', label: '📁 Other' },
+]
+
+const TYPE_LABELS = Object.fromEntries(RESOURCE_TYPES.filter(t => t.value).map(t => [t.value, t.label]))
+
 function fileIcon(mime, name) {
   for (const [prefix, icon] of Object.entries(MIME_ICONS)) {
     if (mime.startsWith(prefix)) return icon
@@ -75,6 +93,7 @@ export default function Resources() {
 
   const [formTitle, setFormTitle] = useState('')
   const [formCategory, setFormCategory] = useState('')
+  const [formType, setFormType] = useState('')
   const [formDescription, setFormDescription] = useState('')
   const [formTags, setFormTags] = useState('')
   const [formFile, setFormFile] = useState(null)
@@ -148,6 +167,7 @@ export default function Resources() {
     const fd = new FormData()
     fd.append('title', formTitle.trim())
     fd.append('category', formCategory)
+    fd.append('type', formType)
     fd.append('description', formDescription)
     fd.append('tags', JSON.stringify(formTags.split(',').map(t => t.trim()).filter(Boolean)))
     fd.append('user_name', profile?.full_name || 'User')
@@ -186,6 +206,7 @@ export default function Resources() {
   const resetForm = () => {
     setFormTitle('')
     setFormCategory('')
+    setFormType('')
     setFormDescription('')
     setFormTags('')
     setFormFile(null)
@@ -295,6 +316,7 @@ export default function Resources() {
                   <span className={s.cardCategory} style={{ color: CATEGORY_COLORS[r.category] || 'var(--blue)' }}>
                     {categories.find(c => c.id === r.category)?.name || r.category}
                   </span>
+                  {r.type && <span className={s.cardType}>{TYPE_LABELS[r.type] || r.type}</span>}
                   <span className={s.cardSize}>{formatSize(r.file_size)}</span>
                   <span className={s.cardDate}>{formatDate(r.created_at)}</span>
                 </div>
@@ -364,6 +386,13 @@ export default function Resources() {
                     </button>
                   </div>
                 )}
+              </div>
+
+              <div className={s.field}>
+                <label>Type</label>
+                <select value={formType} onChange={e => setFormType(e.target.value)} disabled={uploading}>
+                  {RESOURCE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
               </div>
 
               <div className={s.field}>
