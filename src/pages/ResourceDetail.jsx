@@ -35,6 +35,21 @@ const CATEGORY_COLORS = {
   other: 'var(--indigo)',
 }
 
+const TYPE_LABELS = {
+  book: '📖 Book',
+  questions: '❓ Questions',
+  summary: '📝 Summary',
+  lecture_notes: '📋 Lecture Notes',
+  anki_deck: '🃏 Anki Deck',
+  cheat_sheet: '📌 Cheat Sheet',
+  reference: '📚 Reference',
+  practice_test: '✍️ Practice Test',
+  flashcards: '🔖 Flashcards',
+  video: '🎬 Video',
+  audio: '🎧 Audio',
+  other: '📁 Other',
+}
+
 export default function ResourceDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -252,6 +267,12 @@ export default function ResourceDetail() {
                 {categories.find(c => c.id === resource.category)?.name || resource.category}
               </span>
             </div>
+            {resource.type && (
+              <div className={s.metaRow}>
+                <span className={s.metaLabel}>Type</span>
+                <span className={s.metaValue}>{TYPE_LABELS[resource.type] || resource.type}</span>
+              </div>
+            )}
             <div className={s.metaRow}>
               <span className={s.metaLabel}>Uploaded by</span>
               <span className={s.metaValue}>{resource.user_name}</span>
