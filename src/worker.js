@@ -312,6 +312,7 @@ async function handleCreateCategory(request, env, user) {
 async function handleGetResources(request, env) {
   const url = new URL(request.url)
   const category = url.searchParams.get('category')
+  const type = url.searchParams.get('type')
   const search = url.searchParams.get('search')
   const sort = url.searchParams.get('sort') || 'created_at'
 
@@ -322,6 +323,10 @@ async function handleGetResources(request, env) {
   if (category) {
     conditions.push('category = ?')
     binds.push(category)
+  }
+  if (type) {
+    conditions.push('type = ?')
+    binds.push(type)
   }
   if (search) {
     conditions.push('title LIKE ?')

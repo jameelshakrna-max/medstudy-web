@@ -35,6 +35,18 @@ const RESOURCE_TYPES = [
 
 const TYPE_LABELS = Object.fromEntries(RESOURCE_TYPES.filter(t => t.value).map(t => [t.value, t.label]))
 
+const TYPE_FILTERS = [
+  { value: '', label: 'All' },
+  { value: 'book', label: '📖 Book' },
+  { value: 'questions', label: '❓ Questions' },
+  { value: 'summary', label: '📝 Summary' },
+  { value: 'lecture_notes', label: '📋 Notes' },
+  { value: 'anki_deck', label: '🃏 Anki' },
+  { value: 'video', label: '🎬 Video' },
+  { value: 'audio', label: '🎧 Audio' },
+  { value: 'other', label: '📁 Other' },
+]
+
 function fileIcon(mime, name) {
   for (const [prefix, icon] of Object.entries(MIME_ICONS)) {
     if (mime.startsWith(prefix)) return icon
@@ -83,6 +95,7 @@ export default function Resources() {
   const [resources, setResources] = useState([])
   const [categories, setCategories] = useState([])
   const [selectedCategory, setSelectedCategory] = useState('')
+  const [selectedType, setSelectedType] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [sort, setSort] = useState('created_at')
   const [loading, setLoading] = useState(true)
@@ -124,6 +137,7 @@ export default function Resources() {
       if (!session) return
       const params = new URLSearchParams()
       if (selectedCategory) params.set('category', selectedCategory)
+      if (selectedType) params.set('type', selectedType)
       if (searchQuery) params.set('search', searchQuery)
       params.set('sort', sort)
       const res = await fetch(API + '/resources?' + params, {
@@ -132,7 +146,7 @@ export default function Resources() {
       if (res.ok) setResources(await apiJson(res))
     } catch {} // silently fail
     setLoading(false)
-  }, [selectedCategory, searchQuery, sort])
+  }, [selectedCategory, selectedType, searchQuery, sort])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -282,6 +296,21 @@ export default function Resources() {
             >{name}</button>
           )
         })}
+      </div>
+
+      <div className={s.typeTabs}>
+        {TYPE_FILTERS.map(t => (
+          <button
+            key={t.value}
+            className={`${s.tab} ${selectedType === t.value ? s.tabActive : ''}`}
+            style={{
+              background: selectedType === t.value ? undefined : '#FFFFFF',
+              color: selectedType === t.value ? undefined : '#0B1120',
+              ...(selectedType === t.value ? { '--tab-color': 'var(--blue)' } : {})
+            }}
+            onClick={() => setSelectedType(t.value)}
+          >{t.label}</button>
+        ))}
       </div>
 
       {loading ? (
