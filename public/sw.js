@@ -7,7 +7,7 @@
 //  - Handles notification clicks
 // ══════════════════════════════════════════════════
 
-const CACHE = 'medstudy-v3'
+const CACHE = 'medstudy-v4'
 const STATIC_ASSETS = [
   '/icon.svg',
   '/favicon.png',
@@ -53,6 +53,9 @@ self.addEventListener('fetch', (event) => {
 
   if (url.pathname.startsWith('/api/')) return
   if (url.hostname.includes('supabase.co')) return
+  if (url.pathname.startsWith('/@')) return
+  if (url.pathname.startsWith('/src/')) return
+  if (url.pathname === '/@react-refresh') return
 
   // Hashed assets — cache-first (immutable after deploy)
   if (url.pathname.startsWith('/assets/') && url.pathname.match(/-[A-Za-z0-9]{8}\./)) {

@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { FSRS, Card as FSRSCard, State as FSRSState, Rating as FSRSRating } from 'fsrs.js'
+import { Maximize2, Minimize2 } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
 import s from './Anki.module.css'
 
@@ -59,7 +60,7 @@ function previewIntervals(card) {
   return labels
 }
 
-const API = '/api'
+const API = import.meta.env.VITE_API_URL || '/api'
 
 async function apiJson(res) {
   const text = await res.text()
@@ -617,8 +618,8 @@ export default function Anki() {
   if (error && !cards.length && !decks.length) return (
     <div className={s.page}>
       <div className={s.errorBox}>
-        <h3>Setup Required</h3>
-        <p>Make sure your Turso database has anki_decks and anki_cards tables.</p>
+        <h3>Connection Error</h3>
+        <p>Could not load data from server.</p>
         <p className={s.errorDetail}>{error}</p>
       </div>
     </div>
@@ -664,7 +665,7 @@ export default function Anki() {
             </span>
           ))}
           <button className={s.viewToggle} onClick={() => setCompact(v => !v)} title={compact ? 'Expand view' : 'Compact view'}>
-            {compact ? '⛶' : '⊞'}
+            {compact ? <Maximize2 size={16} strokeWidth={1.5} /> : <Minimize2 size={16} strokeWidth={1.5} />}
           </button>
         </div>
       </div>

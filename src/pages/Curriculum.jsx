@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { Trash2, Star, Plus, X } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
 import styles from './Page.module.css'
 
@@ -131,34 +132,34 @@ export default function Curriculum() {
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <h1 className={styles.title}>📚 Curriculum</h1>
+        <h1 className={styles.title}>Curriculum</h1>
         <p className={styles.sub}>Your complete medical curriculum — add, organize, and track progress.</p>
       </div>
 
       <div className={styles.tabs}>
         {['systems', 'subjects', 'topics'].map(v => (
           <button key={v} className={`${styles.tab} ${view === v ? styles.tabActive : ''}`} onClick={() => { setView(v); setShowAdd(false) }}>
-            {v === 'systems' ? '🫀 Systems' : v === 'subjects' ? '📋 Subjects' : '🔖 Topics'}
+            {v === 'systems' ? 'Systems' : v === 'subjects' ? 'Subjects' : 'Topics'}
           </button>
         ))}
         <button className={styles.tab} onClick={() => setShowAdd(!showAdd)} style={{ marginLeft: 'auto', background: 'var(--blueL)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--blue)' }}>
-          {showAdd ? '✕ Close' : '+ Add New'}
+          {showAdd ? <><X size={14} strokeWidth={2} /> Close</> : <><Plus size={14} strokeWidth={2} /> Add New</>}
         </button>
       </div>
 
       {/* ADD FORMS */}
       {showAdd && view === 'systems' && (
         <div className={styles.formCard}>
-          <h3 className={styles.formTitle}>➕ Add New System</h3>
+          <h3 className={styles.formTitle}>Add New System</h3>
           <div className={styles.field}><label>System Name</label><input value={sysForm.name} onChange={e => setSysForm({ ...sysForm, name: e.target.value })} placeholder="e.g. Cardiovascular System" /></div>
-          <label className={styles.checkRow}><input type="checkbox" checked={sysForm.high_yield} onChange={e => setSysForm({ ...sysForm, high_yield: e.target.checked })} /> ⭐ High Yield</label>
+          <label className={styles.checkRow}><input type="checkbox" checked={sysForm.high_yield} onChange={e => setSysForm({ ...sysForm, high_yield: e.target.checked })} /> <Star size={14} strokeWidth={1.5} /> High Yield</label>
           <button className={styles.primaryBtn} onClick={addSystem}>Add System</button>
         </div>
       )}
 
       {showAdd && view === 'subjects' && (
         <div className={styles.formCard}>
-          <h3 className={styles.formTitle}>➕ Add New Subject</h3>
+          <h3 className={styles.formTitle}>Add New Subject</h3>
           <div className={styles.field}><label>Parent System</label>
             <select value={subForm.system_id} onChange={e => setSubForm({ ...subForm, system_id: e.target.value })}>
               <option value="">Select system...</option>
@@ -173,7 +174,7 @@ export default function Curriculum() {
               </select>
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '14px' }}>
-              <label className={styles.checkRow}><input type="checkbox" checked={subForm.high_yield} onChange={e => setSubForm({ ...subForm, high_yield: e.target.checked })} /> ⭐ High Yield</label>
+              <label className={styles.checkRow}><input type="checkbox" checked={subForm.high_yield} onChange={e => setSubForm({ ...subForm, high_yield: e.target.checked })} /> <Star size={14} strokeWidth={1.5} /> High Yield</label>
             </div>
           </div>
           <button className={styles.primaryBtn} onClick={addSubject}>Add Subject</button>
@@ -182,7 +183,7 @@ export default function Curriculum() {
 
       {showAdd && view === 'topics' && (
         <div className={styles.formCard}>
-          <h3 className={styles.formTitle}>➕ Add New Topic</h3>
+          <h3 className={styles.formTitle}>Add New Topic</h3>
           <div className={styles.field}><label>Parent Subject</label>
             <select value={topForm.subject_id} onChange={e => setTopForm({ ...topForm, subject_id: e.target.value })}>
               <option value="">Select subject...</option>
@@ -216,7 +217,7 @@ export default function Curriculum() {
                   <span className={styles.cardName}>{s.name}</span>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     {s.high_yield && <span className={styles.hyBadge}>⭐ HY</span>}
-                    <button onClick={() => deleteItem('curriculum_systems', s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', opacity: 0.4, padding: '2px' }} title="Delete">🗑</button>
+                    <button onClick={() => deleteItem('curriculum_systems', s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.4, padding: '2px' }} title="Delete"><Trash2 size={14} strokeWidth={1.5} /></button>
                   </div>
                 </div>
                 <div className={styles.statusDot} style={{ background: statusColor(s.status) }} />
@@ -243,7 +244,7 @@ export default function Curriculum() {
                   <span className={styles.cardName}>{s.name}</span>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     {s.high_yield && <span className={styles.hyBadge}>⭐ HY</span>}
-                    <button onClick={() => deleteItem('curriculum_subjects', s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', opacity: 0.4, padding: '2px' }} title="Delete">🗑</button>
+                    <button onClick={() => deleteItem('curriculum_subjects', s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.4, padding: '2px' }} title="Delete"><Trash2 size={14} strokeWidth={1.5} /></button>
                   </div>
                 </div>
                 <div className={styles.cardStatus}>{parentSystem ? parentSystem.name : ''} · {s.difficulty || '—'}</div>
@@ -283,9 +284,9 @@ export default function Curriculum() {
                       <div className={styles.progBar}><div className={styles.progFill} style={{ width: `${t.completion_pct || 0}%`, background: statusColor(t.status) }} /></div>
                       <span className={styles.progNum}>{t.completion_pct || 0}%</span>
                     </td>
-                    <td>{t.high_yield ? '⭐' : '—'}</td>
+                    <td>{t.high_yield ? <Star size={14} strokeWidth={1.5} /> : '—'}</td>
                     <td>
-                      <button onClick={() => deleteItem('curriculum_topics', t.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', opacity: 0.3 }} title="Delete">🗑</button>
+                      <button onClick={() => deleteItem('curriculum_topics', t.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.3, padding: '2px' }} title="Delete"><Trash2 size={14} strokeWidth={1.5} /></button>
                     </td>
                   </tr>
                 )

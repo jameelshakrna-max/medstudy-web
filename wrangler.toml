@@ -1,0 +1,15 @@
+name = "medstudy-api"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "medstudy-db"
+database_id = "6aee6015-9759-495a-8e3c-61e02e746c67"
+
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "card-images"
+
+[vars]
+SUPABASE_URL = "https://undakhccjrbcpzryfmot.supabase.co"

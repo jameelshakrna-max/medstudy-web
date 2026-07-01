@@ -7,11 +7,11 @@
         "preview": "vite preview"
     },
     "dependencies": {
-        "@libsql/client": "^0.17.3",
         "@supabase/supabase-js": "^2.39.0",
         "fsrs.js": "^1.2.2",
         "jose": "^6.2.3",
         "jszip": "^3.10.1",
+        "lucide-react": "^1.22.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "react-router-dom": "^6.20.0",

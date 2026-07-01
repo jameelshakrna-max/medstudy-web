@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { usePomodoro, usePomodoroSettings } from '../context/PomodoroContext'
+import { Timer, Coffee, Moon, Play, Pause, Leaf, BookOpen, SkipForward, Check, RefreshCw } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import s from './Pomodoro.module.css'
 
@@ -309,20 +310,20 @@ export default function Pomodoro() {
         {/* Controls */}
         <div className={s.controls}>
           <div className={s.controlsRow}>
-            <button className={s.ctrlBtn} onClick={resetTimer} title="Reset">&#8634;</button>
+            <button className={s.ctrlBtn} onClick={resetTimer} title="Reset"><RefreshCw size={18} strokeWidth={1.5} /></button>
             <button className={`${s.playBtn} ${s[modeClass]}`} onClick={togglePlay}>
-              {running ? '⏸' : '▶'}
+              {running ? <Pause size={20} strokeWidth={1.5} /> : <Play size={20} strokeWidth={1.5} />}
               {running && <span className={`${s.playBtnPulse} ${s[modeClass]}`} />}
             </button>
-            <button className={s.ctrlBtn} onClick={skipTimer} title="Skip">⏭</button>
+            <button className={s.ctrlBtn} onClick={skipTimer} title="Skip"><SkipForward size={18} strokeWidth={1.5} /></button>
           </div>
-          <button className={`${s.ctrlBtn} ${s.finishBtn}`} onClick={finishTimer} title="Finish Early">✓</button>
+          <button className={`${s.ctrlBtn} ${s.finishBtn}`} onClick={finishTimer} title="Finish Early"><Check size={18} strokeWidth={1.5} /></button>
         </div>
 
         {/* Stats */}
         <div className={s.statsGrid}>
           <div className={s.statCard}>
-            <span className={s.statIcon}>🍅</span>
+            <span className={s.statIcon}><Timer size={14} strokeWidth={1.5} /></span>
             <span className={s.statNum}>{sessionPomodoros}</span>
             <span className={s.statLabel}>Pomodoros</span>
           </div>
@@ -332,7 +333,7 @@ export default function Pomodoro() {
             <span className={s.statLabel}>Minutes</span>
           </div>
           <div className={s.statCard}>
-            <span className={s.statIcon}>🌿</span>
+            <span className={s.statIcon}><Leaf size={14} strokeWidth={1.5} /></span>
             <span className={s.statNum}>{trees.length}</span>
             <span className={s.statLabel}>Trees</span>
           </div>
@@ -452,7 +453,7 @@ export default function Pomodoro() {
               {sessionLog.map((entry, i) => (
                 <div key={i} className={s.logItem}>
                   <span className={s.logEmoji}>
-                    {entry.type === 'study' ? '🍅' : entry.type === 'break' ? '☕' : '🌙'}
+                    {entry.type === 'study' ? <Timer size={14} strokeWidth={1.5} /> : entry.type === 'break' ? <Coffee size={14} strokeWidth={1.5} /> : <Moon size={14} strokeWidth={1.5} />}
                   </span>
                   <span className={s.logLabel}>{entry.label}</span>
                   <span className={s.logTime}>{entry.time}</span>
@@ -469,9 +470,9 @@ export default function Pomodoro() {
           <div className={s.modal}>
             <div className={s.modalTitle}>Session Complete!</div>
             <div className={s.modalSummary}>
-              <div>🍅 {sessionPomodoros} Pomodoro{sessionPomodoros > 1 ? 's' : ''}</div>
+              <div><Timer size={14} strokeWidth={1.5} /> {sessionPomodoros} Pomodoro{sessionPomodoros > 1 ? 's' : ''}</div>
               <div>⏱ {totalMin} minutes ({(totalMin / 60).toFixed(1)} hours)</div>
-              {topicInfo && <div>📚 {topicInfo.name}</div>}
+              {topicInfo && <div><BookOpen size={14} strokeWidth={1.5} /> {topicInfo.name}</div>}
             </div>
             {selectedTopic && (
               <div className={s.modalField}>

@@ -1,24 +1,32 @@
 import { useEffect, useState, memo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { Timer, BookOpen, BrainCircuit, Target, Lightbulb, ArrowRight } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
 import styles from './Dashboard.module.css'
+
+const STAT_ICONS = [Timer, BookOpen, BrainCircuit, Target]
 
 const DashStatCards = memo(function DashStatCards({ stats }) {
   return (
     <div className={styles.statsGrid}>
       {[
-        { n: stats.pomodoros, l: 'Pomodoros Today', c: 'var(--blue)', icon: '🍅' },
-        { n: stats.sessions, l: 'Sessions Today', c: 'var(--emerald)', icon: '📖' },
-        { n: stats.topicsInProgress, l: 'Topics In Progress', c: 'var(--amber)', icon: '🔖' },
-        { n: stats.cardsdue, l: 'Anki Cards Due', c: 'var(--red)', icon: '🃏' },
-      ].map((s, i) => (
-        <div className={styles.statCard} key={i} style={{ '--c': s.c }}>
-          <div className={styles.statIcon}>{s.icon}</div>
-          <div className={styles.statNum}>{s.n}</div>
-          <div className={styles.statLabel}>{s.l}</div>
-        </div>
-      ))}
+        { n: stats.pomodoros, l: 'Pomodoros Today', c: 'var(--blue)' },
+        { n: stats.sessions, l: 'Sessions Today', c: 'var(--emerald)' },
+        { n: stats.topicsInProgress, l: 'Topics In Progress', c: 'var(--amber)' },
+        { n: stats.cardsdue, l: 'Anki Cards Due', c: 'var(--indigo)' },
+      ].map((s, i) => {
+        const Icon = STAT_ICONS[i]
+        return (
+          <div className={styles.statCard} key={i} style={{ '--c': s.c }}>
+            <div className={styles.statIconWrap}>
+              <Icon size={22} strokeWidth={1.5} />
+            </div>
+            <div className={styles.statNum}>{s.n}</div>
+            <div className={styles.statLabel}>{s.l}</div>
+          </div>
+        )
+      })}
     </div>
   )
 })
@@ -44,7 +52,6 @@ export default function Dashboard() {
       if (p.error) console.error('Dashboard pomodoros error:', p.error)
       if (t.error) console.error('Dashboard topics error:', t.error)
 
-      // Fetch due card count from server
       let cardsdue = 0
       try {
         const { data: { session } } = await supabase.auth.getSession()
@@ -80,40 +87,40 @@ export default function Dashboard() {
 
   return (
     <div className={styles.page}>
-      {/* Header */}
       <div className={styles.header}>
-        <div className={styles.greeting}>{greeting()},</div>
-        <h1 className={styles.name}>{profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'Doctor'} 👋</h1>
+        <div className={styles.greeting}>{greeting()}</div>
+        <h1 className={styles.name}>{profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'Doctor'}</h1>
         <p className={styles.sub}>Here is your study command centre for today.</p>
       </div>
 
       <DashStatCards stats={stats} />
 
-      {/* Daily Routine */}
       <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>🌅 Daily Routine</h2>
+        <h2 className={styles.sectionTitle}>Daily Routine</h2>
         <div className={styles.routineGrid}>
           {[
-            { step: '1', title: 'Check Anki Cards Due', desc: 'Review all due cards before starting new material.', link: '/anki', cta: 'Open Anki →', color: 'var(--indigo)' },
-            { step: '2', title: 'Pick Your Topic', desc: 'Open Curriculum → study your topics and track progress.', link: '/curriculum', cta: 'Open Curriculum →', color: 'var(--blue)' },
-            { step: '3', title: 'Start a Pomodoro', desc: '25 minutes focused study. Log each block.', link: '/pomodoro', cta: 'Open Timer →', color: 'var(--red)' },
-            { step: '4', title: 'Log Study Session', desc: 'Record duration, energy, and focus after each block.', link: '/sessions', cta: 'Log Session →', color: 'var(--emerald)' },
+            { step: '01', title: 'Check Anki Cards Due', desc: 'Review all due cards before starting new material.', link: '/anki', cta: 'Open Anki', color: 'var(--indigo)' },
+            { step: '02', title: 'Pick Your Topic', desc: 'Open Curriculum, study your topics, and track progress.', link: '/curriculum', cta: 'Open Curriculum', color: 'var(--blue)' },
+            { step: '03', title: 'Start a Pomodoro', desc: '25 minutes focused study. Log each block.', link: '/pomodoro', cta: 'Open Timer', color: 'var(--red)' },
+            { step: '04', title: 'Log Study Session', desc: 'Record duration, energy, and focus after each block.', link: '/sessions', cta: 'Log Session', color: 'var(--emerald)' },
           ].map((r, i) => (
             <a href={r.link} key={i} className={styles.routineCard} style={{ '--rc': r.color }}>
               <div className={styles.routineStep}>{r.step}</div>
               <div className={styles.routineTitle}>{r.title}</div>
               <div className={styles.routineDesc}>{r.desc}</div>
-              <div className={styles.routineCta}>{r.cta}</div>
+              <div className={styles.routineCta}>
+                {r.cta}
+                <ArrowRight size={12} strokeWidth={2} />
+              </div>
             </a>
           ))}
         </div>
       </div>
 
-      {/* Quick tip */}
       <div className={styles.tip}>
-        <span className={styles.tipIcon}>💡</span>
+        <Lightbulb size={18} strokeWidth={1.5} className={styles.tipIcon} />
         <div>
-          <strong>Golden Rule:</strong> Update topic completion using the dropdown in Curriculum → Topics. Your progress is tracked automatically.
+          <strong>Golden Rule:</strong> Update topic completion using the dropdown in Curriculum &rarr; Topics. Your progress is tracked automatically.
         </div>
       </div>
     </div>

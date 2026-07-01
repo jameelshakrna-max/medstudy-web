@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { usePomodoroSettings } from '../context/PomodoroContext'
 import { supabase } from '../lib/supabase'
+import { User, Lock, Bell, Palette, Clock, ShieldAlert } from 'lucide-react'
 import s from './Settings.module.css'
 
 const APP_VERSION = '1.0.0'
@@ -234,7 +235,7 @@ export default function Settings() {
   const sections = [
     {
       key: 'profile',
-      icon: '👤',
+      icon: User,
       title: 'Profile',
       content: (
         <>
@@ -244,7 +245,7 @@ export default function Settings() {
               <div className={s.profileName}>{profile?.full_name || 'Student'}</div>
               <div className={s.profileEmail}>{user?.email}</div>
               <div className={s.profilePlan}>
-                {profile?.plan === 'pro' ? '🏆 Pro' : profile?.plan === 'core' ? '🎓 Core' : '🆓 Free'}
+                {profile?.plan === 'pro' ? 'Pro' : profile?.plan === 'core' ? 'Core' : 'Free'}
               </div>
             </div>
           </div>
@@ -285,7 +286,7 @@ export default function Settings() {
     },
     {
       key: 'account',
-      icon: '🔐',
+      icon: Lock,
       title: 'Account',
       content: (
         <>
@@ -382,7 +383,7 @@ export default function Settings() {
     },
     {
       key: 'notifications',
-      icon: '🔔',
+      icon: Bell,
       title: 'Notifications',
       content: (
         <>
@@ -412,7 +413,7 @@ export default function Settings() {
     },
     {
       key: 'appearance',
-      icon: '🎨',
+      icon: Palette,
       title: 'Appearance',
       content: (
         <div className={s.themePicker}>
@@ -435,7 +436,7 @@ export default function Settings() {
     },
     {
       key: 'timer',
-      icon: '⏱',
+      icon: Clock,
       title: 'Timer Defaults',
       content: (
         <div className={s.durationsGrid}>
@@ -515,11 +516,11 @@ export default function Settings() {
       </div>
 
       {/* Accordion Sections */}
-      {sections.map(({ key, icon, title, content }) => (
+      {sections.map(({ key, icon: Icon, title, content }) => (
         <div key={key} className={s.section}>
           <button className={s.sectionToggle} onClick={() => toggleSection(key)}>
             <div className={s.sectionHeader}>
-              <div className={s.sectionIcon}>{icon}</div>
+              <div className={s.sectionIcon}><Icon size={18} strokeWidth={1.5} /></div>
               <h2 className={s.sectionTitle}>{title}</h2>
             </div>
             <span className={`${s.chevron} ${openSection === key ? s.chevronOpen : ''}`}>

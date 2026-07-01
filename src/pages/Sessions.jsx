@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, memo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { Flame, X } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
 import styles from './Page.module.css'
 
@@ -151,7 +152,7 @@ export default function Sessions() {
         <h1 className={styles.title}>Study Sessions</h1>
         <p className={styles.sub}>
           {totalSessions} session{totalSessions !== 1 ? 's' : ''} &middot; {(totalMin / 60).toFixed(1)}h total &middot; {avgDuration}min avg
-          {streak > 1 && <span style={{ color: 'var(--amber)', marginLeft: 8 }}>🔥 {streak} day streak</span>}
+          {streak > 1 && <span style={{ color: 'var(--amber)', marginLeft: 8, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Flame size={14} strokeWidth={1.5} /> {streak} day streak</span>}
         </p>
       </div>
 
@@ -219,7 +220,7 @@ export default function Sessions() {
                       {s.goals_met && <span style={{ color: 'var(--emerald)' }}>Goals Met</span>}
                     </div>
                     {s.notes && <div className={styles.sessNotes}>{s.notes}</div>}
-                    <button className={styles.sessDelete} onClick={() => deleteSession(s.id)} title="Delete">✕</button>
+                    <button className={styles.sessDelete} onClick={() => deleteSession(s.id)} title="Delete"><X size={12} strokeWidth={2} /></button>
                   </div>
                 ))}
               </div>

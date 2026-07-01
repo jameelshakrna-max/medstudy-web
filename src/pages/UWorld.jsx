@@ -69,7 +69,7 @@ export default function UWorld() {
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <h1 className={styles.title}>📊 UWorld Tracker</h1>
+        <h1 className={styles.title}>UWorld Tracker</h1>
         <p className={styles.sub}>{blocks.length} blocks logged · Average: {avg}%</p>
       </div>
 

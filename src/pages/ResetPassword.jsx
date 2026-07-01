@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
+import { AlertCircle, CheckCircle } from 'lucide-react'
 import styles from './ResetPassword.module.css'
 
 export default function ResetPassword() {
@@ -12,8 +13,6 @@ export default function ResetPassword() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    // Supabase puts the recovery token in the URL hash
-    // The Supabase client automatically detects it on page load
     const hash = window.location.hash
     if (!hash || !hash.includes('type=recovery')) {
       setError('Invalid or expired reset link. Please request a new one.')
@@ -55,14 +54,10 @@ export default function ResetPassword() {
     return (
       <div className={styles.container}>
         <div className={styles.card}>
-          <h2>❌ Invalid Link</h2>
-          <p>{error}</p>
-          <button 
-            className={styles.button} 
-            onClick={() => navigate('/login')}
-          >
-            Go to Login
-          </button>
+          <AlertCircle size={28} strokeWidth={1.5} className={styles.errorIcon} />
+          <h2>Invalid Link</h2>
+          <p className={styles.subtitle}>{error}</p>
+          <Link to="/login" className={styles.button}>Go to Login</Link>
         </div>
       </div>
     )
@@ -97,8 +92,18 @@ export default function ResetPassword() {
             />
           </div>
 
-          {error && <p className={styles.error}>{error}</p>}
-          {message && <p className={styles.success}>{message}</p>}
+          {error && (
+            <p className={styles.errorText}>
+              <AlertCircle size={14} strokeWidth={1.5} />
+              {error}
+            </p>
+          )}
+          {message && (
+            <p className={styles.successText}>
+              <CheckCircle size={14} strokeWidth={1.5} />
+              {message}
+            </p>
+          )}
 
           <button className={styles.button} type="submit" disabled={loading}>
             {loading ? 'Updating...' : 'Update Password'}

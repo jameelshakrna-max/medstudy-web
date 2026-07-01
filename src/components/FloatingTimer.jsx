@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { usePomodoro } from '../context/PomodoroContext'
+import { Pause, Play } from 'lucide-react'
 import s from './FloatingTimer.module.css'
 
 export default function FloatingTimer() {
@@ -123,7 +124,7 @@ export default function FloatingTimer() {
             ↺
           </button>
           <button className={`${s.fPlay} ${s.noDrag}`} style={{ backgroundColor: modeColor }} onClick={togglePlay}>
-            {running ? '⏸' : '▶'}
+            {running ? <Pause size={16} strokeWidth={1.5} /> : <Play size={16} strokeWidth={1.5} />}
           </button>
           <button className={`${s.fBtn} ${s.noDrag}`} onClick={skipTimer} title="Skip">
             ⏭

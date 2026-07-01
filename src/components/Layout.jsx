@@ -1,17 +1,24 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useState } from 'react'
+import {
+  LayoutDashboard, BookOpen, BrainCircuit,
+  BarChart3, Timer, ClipboardList, Settings,
+  LogOut, Menu, ChevronRight
+} from 'lucide-react'
 import styles from './Layout.module.css'
 
 const NAV = [
-  { to: '/dashboard',  icon: '🏠', label: 'Dashboard' },
-  { to: '/curriculum', icon: '📚', label: 'Curriculum' },
-  { to: '/anki',       icon: '🃏', label: 'Anki' },
-  { to: '/uworld',     icon: '📊', label: 'UWorld' },
-  { to: '/pomodoro',   icon: '🍅', label: 'Pomodoro' },
-  { to: '/sessions',   icon: '📖', label: 'Sessions' },
-  { to: '/settings', icon: '⚙️', label: 'Settings' }
+  { to: '/dashboard',  icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/curriculum', icon: BookOpen, label: 'Curriculum' },
+  { to: '/anki',       icon: BrainCircuit,  label: 'Anki' },
+  { to: '/uworld',     icon: BarChart3,     label: 'UWorld' },
+  { to: '/pomodoro',   icon: Timer,         label: 'Pomodoro' },
+  { to: '/sessions',   icon: ClipboardList, label: 'Sessions' },
+  { to: '/settings',   icon: Settings,      label: 'Settings' }
 ]
+
+const PLAN_ICONS = { pro: 'Pro', core: 'Core', free: 'Free' }
 
 export default function Layout() {
   const { profile, signOut } = useAuth()
@@ -39,23 +46,27 @@ export default function Layout() {
         </div>
 
         <nav className={styles.nav}>
-          {NAV.map(({ to, icon, label }) => (
+          {NAV.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to} to={to}
               className={({ isActive }) => `${styles.navItem} ${isActive ? styles.navActive : ''}`}
               onClick={() => setMobileOpen(false)}
             >
-              <span className={styles.navIcon}>{icon}</span>
+              <Icon size={18} strokeWidth={1.5} className={styles.navIcon} />
               <span className={styles.navLabel}>{label}</span>
+              <ChevronRight size={14} strokeWidth={1.5} className={styles.navChevron} />
             </NavLink>
           ))}
         </nav>
 
         <div className={styles.sidebarBottom}>
           <div className={styles.planBadge}>
-            {profile?.plan === 'pro' ? '🏆 Pro' : profile?.plan === 'core' ? '🎓 Core' : '🆓 Free'}
+            {PLAN_ICONS[profile?.plan] || 'Free'}
           </div>
-          <button className={styles.signOutBtn} onClick={handleSignOut}>Sign Out</button>
+          <button className={styles.signOutBtn} onClick={handleSignOut}>
+            <LogOut size={14} strokeWidth={1.5} />
+            Sign Out
+          </button>
         </div>
       </aside>
 
@@ -65,7 +76,9 @@ export default function Layout() {
       {/* Main */}
       <main className={styles.main}>
         <div className={styles.mobileHeader}>
-          <button className={styles.menuBtn} onClick={() => setMobileOpen(!mobileOpen)}>☰</button>
+          <button className={styles.menuBtn} onClick={() => setMobileOpen(!mobileOpen)}>
+            <Menu size={20} strokeWidth={1.5} />
+          </button>
           <div className={styles.mobileLogo}>
             <img src="/icon.svg" alt="MedStudy" className={styles.logoIconMobile} />
             <span>MedStudy OS</span>
