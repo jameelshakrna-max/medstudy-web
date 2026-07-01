@@ -40,6 +40,7 @@
   --scrollbar-track: var(--navy2);
   --scrollbar-thumb: var(--navy3);
   --float-bg:        rgba(11,17,32,0.92);
+  --tab-bg:          var(--navy3);
 }
 
 [data-theme="light"] {
@@ -65,6 +66,7 @@
   --card:      #FFFFFF;
   --mist:      #64748B;
   --float-bg:  rgba(255,255,255,0.88);
+  --tab-bg:    #FFFFFF;
 }
 
 [data-theme="light"] body { font-weight: 450; }
