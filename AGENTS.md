@@ -2,7 +2,7 @@
 
 ## RESPONSES
 
-- Keep responses concise and to the point - unless the user asks othe
+- Keep responses concise and to the point - unless the user asks otherwise
 
 ## PLANNING MODE
 
@@ -17,27 +17,31 @@
 - Identify changes from the plan that can be implemented in parallel, and use sub-agents to implement the features efficiently
 - When using sub-agents to implement features, act as a coordinator only
 - Use the best model for the task - premium models for complex tasks (like coding) and mid-tier models for simpler tasks, like documentation
-- After completing features (large or small), always run commands like lint,type check and next build to check code quality
-
-## DATABASE SCHEMA CHANGES
-
-- Whenever you make changes to the database schema, ALWAYS run the drizzle generate and migrate commands
-- NEVER run drizzle push!
-
-## TESTING
-
-- Use any testing tools, ilibraries available to the project for testing your changes
-- Never assume your changes simply work, always test!
-- If the project does not have any testing tools, scripts, MCP tools, skills, etc. available for testing, ask the user whether testing should be skipped.
+- After completing features (large or small), run `npm run build` to verify the build succeeds (this repo has no lint or typecheck commands)
 
 ## DEPLOYMENT
 
 - **Deploy target: Cloudflare Pages** (NOT Vercel)
-- The API is a Cloudflare Worker (`medstudy-api`) deployed via wrangler
+- The API is a Cloudflare Worker (`medstudy-api`, `main = "src/worker.js"`) deployed via `wrangler deploy`
 - The frontend is deployed to Cloudflare Pages via `wrangler pages deploy`
-- For cloudflare-related work, use the cloudflare skill
+- D1 database binding: `DB` (medstudy-db)
+- R2 bucket binding: `IMAGES` (card-images)
+- For Cloudflare-related work, load the cloudflare skill
+
+## DATABASE SCHEMA CHANGES
+
+- Schema is in `schema.sql` (SQLite-compatible for D1)
+- Apply locally: `wrangler d1 execute medstudy-db --file=./schema.sql`
+- Apply to production: `wrangler d1 execute medstudy-db --remote --file=./schema.sql`
+- No ORM — D1 accessed via `env.DB.prepare()` (see `src/worker.js` for patterns)
+
+## TESTING
+
+- Use any testing tools and libraries available to the project for testing your changes
+- Never assume your changes simply work, always test!
+- If the project does not have any testing tools, scripts, MCP tools, skills, etc. available for testing, ask the user whether testing should be skipped.
 
 ## UI DESIGN
 
-- Always follow the UI design system when creating or reviewing components or pages.
-- Design System: @DESIGN.md
+- There is no settled design system yet. Do not assume or enforce visual conventions.
+- Design tokens and CSS custom properties are in `src/index.css`, but patterns may change.

@@ -90,12 +90,13 @@ export default function Resources() {
   const fetchCategories = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
+      if (!session) { console.warn('fetchCategories: no session'); return }
       const res = await fetch(API + '/categories', {
         headers: { Authorization: 'Bearer ' + session.access_token }
       })
       if (res.ok) setCategories(await apiJson(res))
-    } catch {} // silently fail
+      else console.error('fetchCategories failed:', res.status, await res.text().catch(() => ''))
+    } catch (e) { console.error('fetchCategories error:', e) }
   }, [])
 
   const fetchResources = useCallback(async () => {
@@ -242,18 +243,23 @@ export default function Resources() {
       </div>
 
       <div className={s.tabs}>
-        <button
-          className={`${s.tab} ${!selectedCategory ? s.tabActive : ''}`}
-          onClick={() => setSelectedCategory('')}
-        >All</button>
-        {categories.map(c => (
-          <button
-            key={c.id}
-            className={`${s.tab} ${selectedCategory === c.id ? s.tabActive : ''}`}
-            style={selectedCategory === c.id ? { '--tab-color': CATEGORY_COLORS[c.id] || 'var(--blue)' } : {}}
-            onClick={() => setSelectedCategory(c.id)}
-          >{c.name}</button>
-        ))}
+        {['', ...categories].map(cat => {
+          const isAll = cat === ''
+          const id = isAll ? '' : cat.id
+          const name = isAll ? 'All' : cat.name
+          const active = isAll ? !selectedCategory : selectedCategory === id
+          return (
+            <button
+              key={isAll ? 'all' : cat.id}
+              className={`${s.tab} ${active ? s.tabActive : ''}`}
+              style={{
+                background: active ? undefined : 'var(--navy3)',
+                ...(active ? { '--tab-color': isAll ? 'var(--blue)' : CATEGORY_COLORS[cat.id] || 'var(--blue)' } : {})
+              }}
+              onClick={() => setSelectedCategory(id)}
+            >{name}</button>
+          )
+        })}
       </div>
 
       {loading ? (
