@@ -33,10 +33,10 @@
 .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
 .tab {
   padding: 8px 18px; border-radius: 100px; background: var(--card-bg);
-  border: 1px solid var(--input-bg); color: var(--text-primary); font-size: 13px; font-weight: 500;
+  border: 1px solid var(--card-border); color: var(--text-primary); font-size: 13px; font-weight: 500;
   cursor: pointer; transition: all 0.3s; font-family: 'DM Sans', sans-serif;
 }
-.tab:hover { color: var(--text-secondary); background: var(--input-bg); }
+.tab:hover { color: var(--text-primary); background: var(--input-bg); }
 .tabActive {
   background: rgba(79, 140, 255, 0.1); border-color: rgba(79, 140, 255, 0.3);
   color: var(--tab-color, var(--blue)); font-weight: 600;
