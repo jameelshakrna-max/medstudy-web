@@ -7,7 +7,7 @@
 //  - Handles notification clicks
 // ══════════════════════════════════════════════════
 
-const CACHE = 'medstudy-v4'
+const CACHE = 'medstudy-v5'
 const STATIC_ASSETS = [
   '/icon.svg',
   '/favicon.png',
@@ -75,7 +75,7 @@ self.addEventListener('fetch', (event) => {
         const copy = res.clone()
         caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {})
         return res
-      }).catch(() => caches.match(request).then((cached) => cached || fetch(request)))
+      }).catch(() => caches.match(request))
     )
     return
   }
@@ -89,10 +89,9 @@ self.addEventListener('fetch', (event) => {
           const copy = res.clone()
           caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {})
           return res
-        })
+        }).catch(() => {})
         return cached || fetched
       })
-      .catch(() => fetch(request))
   )
 })
 
