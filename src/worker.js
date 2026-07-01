@@ -40,8 +40,8 @@ export default {
     try {
       const verifyAuth = createAuth(env)
       const auth = request.headers.get('Authorization')
-      if (!auth || !auth.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401)
-      const token = auth.replace('Bearer ', '')
+      const token = (auth?.startsWith('Bearer ') ? auth.replace('Bearer ', '') : null) || url.searchParams.get('token')
+      if (!token) return json({ error: 'Unauthorized' }, 401)
       const user = await verifyAuth(token)
       if (!user) return json({ error: 'Unauthorized' }, 401)
 
@@ -80,6 +80,53 @@ export default {
       }
       if (path === '/api/fsrs/save' && request.method === 'POST') {
         return handleSaveFsrs(request, env, user)
+      }
+
+      if (path === '/api/categories' && request.method === 'GET') {
+        return handleGetCategories(request, env)
+      }
+      if (path === '/api/categories' && request.method === 'POST') {
+        return handleCreateCategory(request, env, user)
+      }
+
+      if (path === '/api/resources' && request.method === 'GET') {
+        return handleGetResources(request, env)
+      }
+      if (path === '/api/resources' && request.method === 'POST') {
+        return handleCreateResource(request, env, user)
+      }
+      if (path.match(/^\/api\/resources\/[^\/]+$/) && request.method === 'GET') {
+        return handleGetResource(request, env)
+      }
+      if (path.match(/^\/api\/resources\/[^\/]+$/) && request.method === 'PUT') {
+        return handleUpdateResource(request, env, user)
+      }
+      if (path.match(/^\/api\/resources\/[^\/]+$/) && request.method === 'DELETE') {
+        return handleDeleteResource(request, env, user)
+      }
+
+      if (path.match(/^\/api\/resources\/[^\/]+\/file$/) && request.method === 'GET') {
+        return handleGetResourceFile(request, env)
+      }
+      if (path.match(/^\/api\/resources\/[^\/]+\/image$/) && request.method === 'GET') {
+        return handleGetResourceImage(request, env)
+      }
+      if (path.match(/^\/api\/resources\/[^\/]+\/download$/) && request.method === 'GET') {
+        return handleDownloadResourceFile(request, env)
+      }
+
+      if (path.match(/^\/api\/resources\/[^\/]+\/comments$/) && request.method === 'GET') {
+        return handleGetComments(request, env)
+      }
+      if (path.match(/^\/api\/resources\/[^\/]+\/comments$/) && request.method === 'POST') {
+        return handleCreateComment(request, env, user)
+      }
+
+      if (path.match(/^\/api\/comments\/[^\/]+$/) && request.method === 'DELETE') {
+        return handleDeleteComment(request, env, user)
+      }
+      if (path.match(/^\/api\/comments\/[^\/]+\/vote$/) && request.method === 'POST') {
+        return handleVoteComment(request, env, user)
       }
 
       return json({ error: 'Not found' }, 404)
@@ -242,6 +289,282 @@ async function handleSaveFsrs(request, env, user) {
   ).bind(user.sub, params, params).run()
 
   return json({ success: true })
+}
+
+async function handleGetCategories(request, env) {
+  const { results } = await env.DB.prepare('SELECT * FROM categories ORDER BY CASE WHEN name = \'Other\' THEN 1 ELSE 0 END, name ASC').all()
+  return json(results)
+}
+
+async function handleCreateCategory(request, env, user) {
+  const body = await request.json()
+  if (!body.name || !body.name.trim()) return json({ error: 'Name required' }, 400)
+  const id = body.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+  try {
+    await env.DB.prepare('INSERT INTO categories (id, name, user_id) VALUES (?, ?, ?)').bind(id, body.name.trim(), user.sub).run()
+    return json({ id, name: body.name.trim() }, 201)
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) return json({ error: 'Category already exists' }, 409)
+    throw e
+  }
+}
+
+async function handleGetResources(request, env) {
+  const url = new URL(request.url)
+  const category = url.searchParams.get('category')
+  const search = url.searchParams.get('search')
+  const sort = url.searchParams.get('sort') || 'created_at'
+
+  let sql = 'SELECT * FROM resources'
+  const binds = []
+  const conditions = []
+
+  if (category) {
+    conditions.push('category = ?')
+    binds.push(category)
+  }
+  if (search) {
+    conditions.push('title LIKE ?')
+    binds.push(`%${search}%`)
+  }
+
+  if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ')
+
+  const sortMap = { created_at: 'created_at DESC', oldest: 'created_at ASC', name: 'title ASC', largest: 'file_size DESC', smallest: 'file_size ASC' }
+  sql += ' ORDER BY ' + (sortMap[sort] || 'created_at DESC')
+  sql += ' LIMIT 100'
+
+  const { results } = await env.DB.prepare(sql).bind(...binds).all()
+  return json(results.map(mapResource))
+}
+
+async function handleGetResource(request, env) {
+  const id = extractId(request.url)
+  const { results } = await env.DB.prepare('SELECT * FROM resources WHERE id = ?').bind(id).all()
+  if (!results.length) return json({ error: 'Not found' }, 404)
+  return json(mapResource(results[0]))
+}
+
+function extractResourceIdFromPath(url) {
+  const parts = new URL(url).pathname.split('/')
+  return parts[3]
+}
+
+async function handleCreateResource(request, env, user) {
+  const formData = await request.formData()
+  const title = formData.get('title')
+  const category = formData.get('category')
+  const description = formData.get('description') || ''
+  const tags = formData.get('tags') || '[]'
+  const userName = formData.get('user_name') || user.email?.split('@')[0] || 'User'
+  const file = formData.get('file')
+  const image = formData.get('image')
+
+  if (!title || !title.trim()) return json({ error: 'Title required' }, 400)
+  if (!category) return json({ error: 'Category required' }, 400)
+  if (!file) return json({ error: 'File required' }, 400)
+
+  const ext = file.name?.split('.').pop() || 'bin'
+  const fileKey = `resources/${uuid()}.${ext}`
+  await env.IMAGES.put(fileKey, await file.arrayBuffer(), {
+    httpMetadata: { contentType: file.type || 'application/octet-stream' }
+  })
+
+  let imageKey = null
+  if (image && image.size > 0) {
+    const imgExt = image.name?.split('.').pop() || 'png'
+    imageKey = `resources/${uuid()}.${imgExt}`
+    await env.IMAGES.put(imageKey, await image.arrayBuffer(), {
+      httpMetadata: { contentType: image.type || 'image/png' }
+    })
+  }
+
+  const id = uuid()
+  const now = new Date().toISOString()
+  await env.DB.prepare(
+    `INSERT INTO resources (id, title, category, description, tags, file_name, file_key, file_size, mime_type, image_key, user_id, user_name, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(id, title.trim(), category, description, tags, file.name, fileKey, file.size, file.type || '', imageKey, user.sub, userName, now).run()
+
+  const { results } = await env.DB.prepare('SELECT * FROM resources WHERE id = ?').bind(id).all()
+  return json(mapResource(results[0]), 201)
+}
+
+async function handleUpdateResource(request, env, user) {
+  const id = extractId(request.url)
+  const body = await request.json()
+  const resource = await env.DB.prepare('SELECT * FROM resources WHERE id = ? AND user_id = ?').bind(id, user.sub).all()
+  if (!resource.results.length) return json({ error: 'Not found or not yours' }, 404)
+
+  await env.DB.prepare(
+    `UPDATE resources SET title = COALESCE(?, title), description = COALESCE(?, description), tags = COALESCE(?, tags), updated_at = datetime('now') WHERE id = ?`
+  ).bind(body.title || null, body.description ?? null, body.tags || null, id).run()
+
+  const { results } = await env.DB.prepare('SELECT * FROM resources WHERE id = ?').bind(id).all()
+  return json(mapResource(results[0]))
+}
+
+async function handleDeleteResource(request, env, user) {
+  const id = extractId(request.url)
+  const { results } = await env.DB.prepare('SELECT * FROM resources WHERE id = ? AND user_id = ?').bind(id, user.sub).all()
+  if (!results.length) return json({ error: 'Not found or not yours' }, 404)
+
+  await env.IMAGES.delete(results[0].file_key)
+  if (results[0].image_key) await env.IMAGES.delete(results[0].image_key)
+  await env.DB.prepare('DELETE FROM resources WHERE id = ?').bind(id).run()
+  await env.DB.prepare('DELETE FROM resource_comments WHERE resource_id = ?').bind(id).run()
+  await env.DB.prepare('DELETE FROM comment_votes WHERE comment_id IN (SELECT id FROM resource_comments WHERE resource_id = ?)').bind(id).run()
+  return json({ success: true })
+}
+
+async function handleGetResourceFile(request, env) {
+  const id = extractResourceIdFromPath(request.url)
+  const { results } = await env.DB.prepare('SELECT * FROM resources WHERE id = ?').bind(id).all()
+  if (!results.length) return new Response('Not found', { status: 404 })
+
+  const object = await env.IMAGES.get(results[0].file_key)
+  if (!object) return new Response('Not found', { status: 404 })
+
+  const headers = { 'content-type': results[0].mime_type || 'application/octet-stream', 'cache-control': 'public, max-age=31536000' }
+  return new Response(object.body, { headers })
+}
+
+async function handleGetResourceImage(request, env) {
+  const id = extractResourceIdFromPath(request.url)
+  const { results } = await env.DB.prepare('SELECT * FROM resources WHERE id = ?').bind(id).all()
+  if (!results.length || !results[0].image_key) return new Response('Not found', { status: 404 })
+
+  const object = await env.IMAGES.get(results[0].image_key)
+  if (!object) return new Response('Not found', { status: 404 })
+
+  const headers = { 'cache-control': 'public, max-age=31536000' }
+  return new Response(object.body, { headers })
+}
+
+async function handleDownloadResourceFile(request, env) {
+  const id = extractResourceIdFromPath(request.url)
+  const { results } = await env.DB.prepare('SELECT * FROM resources WHERE id = ?').bind(id).all()
+  if (!results.length) return new Response('Not found', { status: 404 })
+
+  const object = await env.IMAGES.get(results[0].file_key)
+  if (!object) return new Response('Not found', { status: 404 })
+
+  const fileName = encodeURIComponent(results[0].file_name)
+  const headers = {
+    'content-type': results[0].mime_type || 'application/octet-stream',
+    'content-disposition': `attachment; filename*=UTF-8''${fileName}`,
+    'cache-control': 'public, max-age=31536000'
+  }
+  return new Response(object.body, { headers })
+}
+
+async function handleGetComments(request, env) {
+  const id = extractResourceIdFromPath(request.url)
+  const url = new URL(request.url)
+  const userId = url.searchParams.get('user_id')
+
+  const { results } = await env.DB.prepare(
+    `SELECT c.*,
+       COALESCE((SELECT SUM(vote) FROM comment_votes WHERE comment_id = c.id), 0) as net_votes,
+       COALESCE((SELECT SUM(CASE WHEN vote = 1 THEN 1 ELSE 0 END) FROM comment_votes WHERE comment_id = c.id), 0) as upvotes,
+       COALESCE((SELECT SUM(CASE WHEN vote = -1 THEN 1 ELSE 0 END) FROM comment_votes WHERE comment_id = c.id), 0) as downvotes
+     FROM resource_comments c WHERE c.resource_id = ? ORDER BY net_votes DESC, c.created_at ASC`
+  ).bind(id).all()
+
+  const comments = []
+  for (const r of results) {
+    let userVote = 0
+    if (userId) {
+      const voteRes = await env.DB.prepare('SELECT vote FROM comment_votes WHERE comment_id = ? AND user_id = ?').bind(r.id, userId).all()
+      if (voteRes.results.length) userVote = voteRes.results[0].vote
+    }
+    comments.push({
+      id: r.id, resource_id: r.resource_id, parent_id: r.parent_id,
+      user_id: r.user_id, user_name: r.user_name,
+      content: r.removed ? 'This comment was automatically removed for receiving too many downvotes.' : r.content,
+      removed: !!r.removed,
+      upvotes: Number(r.upvotes) || 0, downvotes: Number(r.downvotes) || 0,
+      net_votes: Number(r.net_votes) || 0,
+      user_vote: userVote,
+      created_at: r.created_at
+    })
+  }
+  return json(comments)
+}
+
+async function handleCreateComment(request, env, user) {
+  const resourceId = extractResourceIdFromPath(request.url)
+  const body = await request.json()
+  if (!body.content || !body.content.trim()) return json({ error: 'Content required' }, 400)
+
+  const { results } = await env.DB.prepare('SELECT * FROM resources WHERE id = ?').bind(resourceId).all()
+  if (!results.length) return json({ error: 'Resource not found' }, 404)
+
+  const id = uuid()
+  await env.DB.prepare(
+    'INSERT INTO resource_comments (id, resource_id, parent_id, user_id, user_name, content) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(id, resourceId, body.parent_id || null, user.sub, body.user_name || user.email?.split('@')[0] || 'User', body.content.trim()).run()
+
+  return json({ id, success: true }, 201)
+}
+
+async function handleDeleteComment(request, env, user) {
+  const id = extractId(request.url)
+  const { results } = await env.DB.prepare('SELECT * FROM resource_comments WHERE id = ? AND user_id = ?').bind(id, user.sub).all()
+  if (!results.length) return json({ error: 'Not found or not yours' }, 404)
+
+  await env.DB.prepare('DELETE FROM resource_comments WHERE id = ?').bind(id).run()
+  await env.DB.prepare('DELETE FROM comment_votes WHERE comment_id = ?').bind(id).run()
+  return json({ success: true })
+}
+
+async function handleVoteComment(request, env, user) {
+  const parts = new URL(request.url).pathname.split('/')
+  const commentId = parts[parts.length - 2]
+  const body = await request.json()
+  const vote = body.vote
+
+  if (![1, -1, 0].includes(vote)) return json({ error: 'Invalid vote' }, 400)
+
+  const { results } = await env.DB.prepare('SELECT * FROM resource_comments WHERE id = ?').bind(commentId).all()
+  if (!results.length) return json({ error: 'Comment not found' }, 404)
+
+  if (vote === 0) {
+    await env.DB.prepare('DELETE FROM comment_votes WHERE comment_id = ? AND user_id = ?').bind(commentId, user.sub).run()
+  } else {
+    await env.DB.prepare(
+      'INSERT INTO comment_votes (id, comment_id, user_id, vote) VALUES (?, ?, ?, ?) ON CONFLICT(comment_id, user_id) DO UPDATE SET vote = ?'
+    ).bind(uuid(), commentId, user.sub, vote, vote).run()
+  }
+
+  const { results: downCount } = await env.DB.prepare(
+    'SELECT COUNT(*) as cnt FROM comment_votes WHERE comment_id = ? AND vote = -1'
+  ).bind(commentId).all()
+
+  if (Number(downCount[0].cnt) > 10 && !results[0].removed) {
+    await env.DB.prepare('UPDATE resource_comments SET removed = 1 WHERE id = ?').bind(commentId).run()
+  }
+
+  return json({ success: true })
+}
+
+function mapResource(r) {
+  return {
+    id: r.id,
+    title: r.title,
+    category: r.category,
+    description: r.description || '',
+    tags: JSON.parse(r.tags || '[]'),
+    file_name: r.file_name,
+    file_key: r.file_key,
+    file_size: Number(r.file_size) || 0,
+    mime_type: r.mime_type || '',
+    image_key: r.image_key || null,
+    user_id: r.user_id,
+    user_name: r.user_name || '',
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  }
 }
 
 function mapCard(r) {
