@@ -21,19 +21,19 @@
 .searchInput {
   width: 100%; padding: 10px 36px 10px 36px;
   background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 12px;
-  color: #000000; font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; transition: border-color 0.3s;
+  color: var(--text-primary); font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; transition: border-color 0.3s;
 }
 .searchInput:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
 .clearBtn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--mist); cursor: pointer; }
 .sortWrap { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 10px; color: var(--mist); }
-.sortSelect { background: none; border: none; color: #000000; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; cursor: pointer; }
-.sortSelect option { color: #000000; }
+.sortSelect { background: none; border: none; color: var(--text-primary); font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; cursor: pointer; }
+.sortSelect option { color: var(--text-primary); }
 
 /* ── Tabs ── */
 .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
 .tab {
   padding: 8px 18px; border-radius: 100px; background: var(--card-bg);
-  border: 1px solid var(--input-bg); color: var(--mist); font-size: 13px; font-weight: 500;
+  border: 1px solid var(--input-bg); color: var(--text-primary); font-size: 13px; font-weight: 500;
   cursor: pointer; transition: all 0.3s; font-family: 'DM Sans', sans-serif;
 }
 .tab:hover { color: var(--text-secondary); background: var(--input-bg); }
