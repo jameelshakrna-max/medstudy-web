@@ -163,19 +163,33 @@ export default function ResourceDetail() {
           <div className={s.preview}>
             {isPdf ? (
               <>
-                <embed
-                  src={API + '/resources/' + id + '/file?token=' + sessionToken}
-                  className={s.previewFrame}
-                  type="application/pdf"
-                />
-                <div className={s.pdfOpenLink}>
+                <div className={s.pdfDesktop}>
+                  <iframe
+                    src={API + '/resources/' + id + '/file?token=' + sessionToken}
+                    className={s.previewFrame}
+                    title={resource.title}
+                  />
+                  <div className={s.pdfOpenLink}>
+                    <a
+                      href={API + '/resources/' + id + '/file?token=' + sessionToken}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={s.openPdfBtn}
+                    >
+                      <ExternalLink size={14} strokeWidth={1.5} /> Open in new tab
+                    </a>
+                  </div>
+                </div>
+                <div className={s.pdfMobile}>
+                  <FileText size={64} strokeWidth={1} />
+                  <p>Open PDF to view full content</p>
                   <a
                     href={API + '/resources/' + id + '/file?token=' + sessionToken}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={s.openPdfBtn}
+                    className={s.openPdfBig}
                   >
-                    <ExternalLink size={14} strokeWidth={1.5} /> Open in new tab
+                    <ExternalLink size={18} strokeWidth={1.5} /> Open PDF
                   </a>
                 </div>
               </>
