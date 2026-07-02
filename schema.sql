@@ -126,11 +126,24 @@ INSERT OR IGNORE INTO study_subjects (id, name, category, display_order) VALUES
   ('other',             'Other',                   'other',     18);
 
 -- ════════════════════════════════════════════════════════════
--- UWORLD BLOCKS — add structured subject_id
+-- UWORLD BLOCKS — full table definition with new subject_id/time
 -- ════════════════════════════════════════════════════════════
 
-ALTER TABLE uworld_blocks ADD COLUMN subject_id TEXT REFERENCES study_subjects(id);
-ALTER TABLE uworld_blocks ADD COLUMN time_minutes INTEGER DEFAULT 0;
+CREATE TABLE IF NOT EXISTS uworld_blocks (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  block_name TEXT NOT NULL,
+  total_questions INTEGER DEFAULT 40,
+  correct INTEGER DEFAULT 0,
+  percent_correct INTEGER DEFAULT 0,
+  grade TEXT DEFAULT '',
+  mode TEXT DEFAULT 'Tutor',
+  subject_id TEXT,
+  time_minutes INTEGER DEFAULT 0,
+  notes TEXT,
+  date_completed TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
 
 -- ════════════════════════════════════════════════════════════
 -- MRCP SYLLABUS
