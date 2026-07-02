@@ -1,10 +1,10 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
   ArrowLeft, Download, ChevronUp, ChevronDown,
-  Trash2, MessageCircle, Reply, Loader2, FileText, ExternalLink
+  Trash2, MessageCircle, Reply, Loader2, FileText, ExternalLink, Maximize2
 } from 'lucide-react'
 import s from './ResourceDetail.module.css'
 
@@ -63,6 +63,7 @@ export default function ResourceDetail() {
   const [commentText, setCommentText] = useState('')
   const [replyTo, setReplyTo] = useState(null)
   const [sending, setSending] = useState(false)
+  const pdfRef = useRef(null)
 
   const fetchResource = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -164,11 +165,21 @@ export default function ResourceDetail() {
             {isPdf ? (
               <>
                 <div className={s.pdfDesktop}>
-                  <iframe
-                    src={API + '/resources/' + id + '/file?token=' + sessionToken}
-                    className={s.previewFrame}
-                    title={resource.title}
-                  />
+                  <div className={s.pdfWrap}>
+                    <iframe
+                      ref={pdfRef}
+                      src={API + '/resources/' + id + '/file?token=' + sessionToken}
+                      className={s.previewFrame}
+                      title={resource.title}
+                    />
+                    <button
+                      className={s.fullscreenBtn}
+                      onClick={() => pdfRef.current?.requestFullscreen()}
+                      title="Fullscreen"
+                    >
+                      <Maximize2 size={14} strokeWidth={1.5} />
+                    </button>
+                  </div>
                   <div className={s.pdfOpenLink}>
                     <a
                       href={API + '/resources/' + id + '/file?token=' + sessionToken}
