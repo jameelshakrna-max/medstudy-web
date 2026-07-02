@@ -1,0 +1,155 @@
+.page {
+  position: relative;
+  min-height: 100vh;
+}
+
+/* ── Sticky Segmented Bar ── */
+
+.stickyBar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--float-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--card-border);
+  margin: -36px -40px 28px;
+  padding: 12px 40px;
+}
+
+.segmentRow {
+  display: flex;
+  gap: 4px;
+  background: var(--input-bg);
+  border-radius: 12px;
+  padding: 4px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.segment {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--mist);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  text-align: center;
+}
+
+.segment:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.segmentActive {
+  background: var(--navy3) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="light"] .segmentActive {
+  background: var(--white) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Content area ── */
+
+.content {
+  /* spacing handled by child components */
+}
+
+/* ── Inline FAB ── */
+
+.fabRow {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0 20px;
+  border-top: 1px solid var(--card-border);
+  margin-top: 40px;
+}
+
+.fabBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 32px;
+  background: linear-gradient(135deg, var(--blue), var(--blue2));
+  color: #0B1120;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 24px var(--accent-glow);
+}
+
+.fabBtn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 36px var(--accent-glow);
+}
+
+.fabBtn:active {
+  transform: translateY(-1px);
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 768px) {
+  .stickyBar {
+    margin: -24px -20px 20px;
+    padding: 10px 20px;
+  }
+
+  .segment {
+    font-size: 12px;
+    padding: 9px 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .stickyBar {
+    margin: -20px -16px 16px;
+    padding: 8px 12px;
+  }
+
+  .segment {
+    font-size: 11px;
+    padding: 8px 8px;
+  }
+
+  .segmentRow {
+    gap: 3px;
+    padding: 3px;
+    border-radius: 10px;
+  }
+
+  .segment:first-child {
+    min-width: 60px;
+  }
+
+  .fabBtn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .segment,
+  .fabBtn {
+    transition: none;
+  }
+  .fabBtn:hover {
+    transform: none;
+  }
+}

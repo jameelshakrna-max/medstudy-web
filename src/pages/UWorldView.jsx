@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { FolderOpen } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
+import EmptyState from '../components/EmptyState'
+import { getSubjectColor, getSubjectName } from '../lib/subjectColors'
 import styles from './Page.module.css'
 
 function getGrade(pct) {
@@ -11,10 +14,32 @@ function getGrade(pct) {
   return 'Needs Improvement'
 }
 
-export default function UWorld() {
+const SUBJECTS = [
+  { id: '', name: 'None' },
+  { id: 'cardiology', name: 'Cardiology' },
+  { id: 'respiratory', name: 'Respiratory' },
+  { id: 'gastroenterology', name: 'Gastroenterology' },
+  { id: 'nephrology', name: 'Nephrology' },
+  { id: 'neurology', name: 'Neurology' },
+  { id: 'endocrinology', name: 'Endocrinology' },
+  { id: 'infectious', name: 'Infectious Disease' },
+  { id: 'hematology', name: 'Hematology' },
+  { id: 'oncology', name: 'Oncology' },
+  { id: 'rheumatology', name: 'Rheumatology' },
+  { id: 'dermatology', name: 'Dermatology' },
+  { id: 'psychiatry', name: 'Psychiatry' },
+  { id: 'obgyn', name: 'Obstetrics & Gynecology' },
+  { id: 'pediatrics', name: 'Pediatrics' },
+  { id: 'emergency', name: 'Emergency Medicine' },
+  { id: 'mixed', name: 'Mixed' },
+  { id: 'self_assessment', name: 'Self Assessment' },
+  { id: 'other', name: 'Other' },
+]
+
+export default function UWorldView({ onActivity }) {
   const { user } = useAuth()
   const [blocks, setBlocks] = useState([])
-  const [form, setForm] = useState({ block_name: '', total_questions: 40, correct: 0, mode: 'Tutor', notes: '' })
+  const [form, setForm] = useState({ block_name: '', total_questions: 40, correct: 0, mode: 'Tutor', subject_id: '', time_minutes: '', notes: '' })
   const [view, setView] = useState('blocks')
   const [loading, setLoading] = useState(true)
 
@@ -37,7 +62,8 @@ export default function UWorld() {
       const pct = form.total_questions > 0 ? Math.round((form.correct / form.total_questions) * 100) : 0
       const grade = getGrade(pct)
       const today = new Date().toISOString().split('T')[0]
-      const { error } = await supabase.from('uworld_blocks').insert({
+
+      const { data, error } = await supabase.from('uworld_blocks').insert({
         user_id: user.id,
         block_name: form.block_name,
         total_questions: form.total_questions,
@@ -45,15 +71,29 @@ export default function UWorld() {
         percent_correct: pct,
         grade: grade,
         mode: form.mode,
+        subject_id: form.subject_id || null,
+        time_minutes: form.time_minutes ? parseInt(form.time_minutes) : 0,
         notes: form.notes,
-        date_completed: today
-      })
+        date_completed: today,
+      }).select()
+
       if (error) {
         console.error('Error adding block:', error)
         alert('Error logging block: ' + error.message)
         return
       }
-      setForm({ block_name: '', total_questions: 40, correct: 0, mode: 'Tutor', notes: '' })
+
+      if (onActivity && data?.[0]) {
+        await onActivity({
+          module: 'UWorld',
+          action: 'block_logged',
+          entity_id: data[0].id,
+          summary: `Completed UWorld block "${form.block_name}" · ${pct}% · ${form.subject_id ? getSubjectName(form.subject_id) : 'No subject'}`,
+          metadata: JSON.stringify({ block_name: form.block_name, score: pct, subject_id: form.subject_id }),
+        })
+      }
+
+      setForm({ block_name: '', total_questions: 40, correct: 0, mode: 'Tutor', subject_id: '', time_minutes: '', notes: '' })
       setView('blocks')
       loadData()
     } catch (err) {
@@ -67,9 +107,9 @@ export default function UWorld() {
   if (loading) return <LoadingScreen fullPage={false} message="Loading UWorld..." />
 
   return (
-    <div className={styles.page}>
-      <div className={styles.header}>
-        <h1 className={styles.title}>UWorld Tracker</h1>
+    <div>
+      <div className={styles.header} style={{ marginBottom: 16 }}>
+        <h2 className={styles.title} style={{ fontSize: 'clamp(20px, 3vw, 28px)' }}>UWorld Tracker</h2>
         <p className={styles.sub}>{blocks.length} blocks logged · Average: {avg}%</p>
       </div>
 
@@ -83,14 +123,22 @@ export default function UWorld() {
         <div className={styles.formCard}>
           <h3 className={styles.formTitle}>Log Question Block</h3>
           <div className={styles.field}><label>Block Name</label><input value={form.block_name} onChange={e => setForm({ ...form, block_name: e.target.value })} placeholder="e.g. Cardiology Block 1" /></div>
+          <div className={styles.field}><label>Subject</label>
+            <select value={form.subject_id} onChange={e => setForm({ ...form, subject_id: e.target.value })}>
+              {SUBJECTS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
           <div className={styles.row2}>
             <div className={styles.field}><label>Total Questions</label><input type="number" value={form.total_questions} onChange={e => setForm({ ...form, total_questions: +e.target.value })} /></div>
             <div className={styles.field}><label>Correct</label><input type="number" value={form.correct} onChange={e => setForm({ ...form, correct: +e.target.value })} /></div>
           </div>
-          <div className={styles.field}><label>Mode</label>
-            <select value={form.mode} onChange={e => setForm({ ...form, mode: e.target.value })}>
-              {['Tutor', 'Timed', 'Custom'].map(m => <option key={m}>{m}</option>)}
-            </select>
+          <div className={styles.row2}>
+            <div className={styles.field}><label>Mode</label>
+              <select value={form.mode} onChange={e => setForm({ ...form, mode: e.target.value })}>
+                {['Tutor', 'Timed', 'Custom'].map(m => <option key={m}>{m}</option>)}
+              </select>
+            </div>
+            <div className={styles.field}><label>Time (min)</label><input type="number" value={form.time_minutes} onChange={e => setForm({ ...form, time_minutes: e.target.value })} placeholder="Optional" /></div>
           </div>
           <div className={styles.field}><label>Notes</label><textarea rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Weak areas, patterns noticed..." /></div>
           <div className={styles.previewScore}>
@@ -100,7 +148,9 @@ export default function UWorld() {
         </div>
       ) : (
         <div className={styles.cardList}>
-          {blocks.length === 0 && <div className={styles.empty}>No blocks logged yet. Log your first UWorld block!</div>}
+          {blocks.length === 0 && (
+            <EmptyState icon={FolderOpen} message="No blocks logged yet. Log your first UWorld block!" action="+ Log Block" onAction={() => setView('add')} />
+          )}
           {blocks.map(b => {
             const pct = b.percent_correct || (b.total_questions > 0 ? Math.round((b.correct / b.total_questions) * 100) : 0)
             const grade = b.grade || getGrade(pct)
@@ -110,11 +160,17 @@ export default function UWorld() {
                   <span className={styles.uwName}>{b.block_name}</span>
                   <span className={styles.uwGrade} style={{ color: gradeColor(grade) }}>{grade}</span>
                 </div>
+                {b.subject_id && (
+                  <div style={{ fontSize: 12, color: getSubjectColor(b.subject_id), fontWeight: 600, marginBottom: 4 }}>
+                    {getSubjectName(b.subject_id)}
+                  </div>
+                )}
                 <div className={styles.uwScore}>{pct}%</div>
                 <div className={styles.progBar}><div className={styles.progFill} style={{ width: `${pct}%`, background: gradeColor(grade) }} /></div>
                 <div className={styles.uwMeta}>
                   <span>{b.correct}/{b.total_questions} correct</span>
                   <span>{b.mode}</span>
+                  {b.time_minutes > 0 && <span>{b.time_minutes} min</span>}
                   <span>{b.date_completed || b.created_at?.split('T')[0]}</span>
                 </div>
                 {b.notes && <div className={styles.uwNotes}>{b.notes}</div>}

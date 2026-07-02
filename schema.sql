@@ -93,3 +93,108 @@ CREATE INDEX IF NOT EXISTS idx_resources_category ON resources(category);
 CREATE INDEX IF NOT EXISTS idx_resources_user ON resources(user_id);
 CREATE INDEX IF NOT EXISTS idx_comments_resource ON resource_comments(resource_id);
 CREATE INDEX IF NOT EXISTS idx_votes_comment ON comment_votes(comment_id);
+
+-- ════════════════════════════════════════════════════════════
+-- STUDY SUBJECTS (lookup table, no colors — colors are frontend)
+-- ════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS study_subjects (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  category TEXT DEFAULT 'other',
+  display_order INTEGER DEFAULT 0
+);
+
+INSERT OR IGNORE INTO study_subjects (id, name, category, display_order) VALUES
+  ('cardiology',        'Cardiology',              'medical',    1),
+  ('respiratory',       'Respiratory',             'medical',    2),
+  ('gastroenterology',  'Gastroenterology',        'medical',    3),
+  ('nephrology',        'Nephrology',              'medical',    4),
+  ('neurology',         'Neurology',               'medical',    5),
+  ('endocrinology',     'Endocrinology',           'medical',    6),
+  ('infectious',        'Infectious Disease',      'medical',    7),
+  ('hematology',        'Hematology',              'medical',    8),
+  ('oncology',          'Oncology',                'medical',    9),
+  ('rheumatology',      'Rheumatology',            'medical',   10),
+  ('dermatology',       'Dermatology',             'medical',   11),
+  ('psychiatry',        'Psychiatry',              'medical',   12),
+  ('obgyn',             'Obstetrics & Gynecology', 'medical',   13),
+  ('pediatrics',        'Pediatrics',              'medical',   14),
+  ('emergency',         'Emergency Medicine',      'medical',   15),
+  ('mixed',             'Mixed',                   'mixed',     16),
+  ('self_assessment',   'Self Assessment',         'mixed',     17),
+  ('other',             'Other',                   'other',     18);
+
+-- ════════════════════════════════════════════════════════════
+-- UWORLD BLOCKS — add structured subject_id
+-- ════════════════════════════════════════════════════════════
+
+ALTER TABLE uworld_blocks ADD COLUMN subject_id TEXT REFERENCES study_subjects(id);
+ALTER TABLE uworld_blocks ADD COLUMN time_minutes INTEGER DEFAULT 0;
+
+-- ════════════════════════════════════════════════════════════
+-- MRCP SYLLABUS
+-- ════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS mrcp_syllabus (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  status TEXT DEFAULT 'Not Started',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_mrcp_syllabus_user ON mrcp_syllabus(user_id);
+
+CREATE TABLE IF NOT EXISTS mrcp_topics (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  syllabus_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  status TEXT DEFAULT 'Not Started',
+  confidence INTEGER DEFAULT 0,
+  repetitions INTEGER DEFAULT 0,
+  notes TEXT,
+  last_reviewed TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_mrcp_topics_user ON mrcp_topics(user_id);
+CREATE INDEX IF NOT EXISTS idx_mrcp_topics_syllabus ON mrcp_topics(syllabus_id);
+
+-- ════════════════════════════════════════════════════════════
+-- LOCAL BOARD CASES
+-- ════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS local_board_cases (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  case_name TEXT NOT NULL,
+  subject_id TEXT REFERENCES study_subjects(id),
+  past_paper_year TEXT,
+  repetition_count INTEGER DEFAULT 0,
+  mastery_level TEXT DEFAULT 'Started',
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_board_cases_user ON local_board_cases(user_id);
+
+-- ════════════════════════════════════════════════════════════
+-- STUDY ACTIVITY (unified event log)
+-- ════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS study_activity (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  module TEXT NOT NULL,
+  action TEXT NOT NULL,
+  entity_id TEXT,
+  summary TEXT,
+  metadata TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_activity_user ON study_activity(user_id);
+CREATE INDEX IF NOT EXISTS idx_activity_user_created ON study_activity(user_id, created_at);

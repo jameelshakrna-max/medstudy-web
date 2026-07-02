@@ -13,7 +13,7 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const Dashboard  = lazy(() => import('./pages/Dashboard'))
 const Curriculum = lazy(() => import('./pages/Curriculum'))
 const Anki       = lazy(() => import('./pages/Anki'))
-const UWorld     = lazy(() => import('./pages/UWorld'))
+const TrackingHub = lazy(() => import('./pages/TrackingHub'))
 const Pomodoro   = lazy(() => import('./pages/Pomodoro'))
 const Sessions   = lazy(() => import('./pages/Sessions'))
 const Settings   = lazy(() => import('./pages/Settings'))
@@ -56,7 +56,7 @@ function AppRoutes() {
           <Route path="dashboard"  element={<Dashboard />} />
           <Route path="curriculum" element={<Curriculum />} />
           <Route path="anki"       element={<Anki />} />
-          <Route path="uworld"     element={<UWorld />} />
+          <Route path="uworld"     element={<TrackingHub />} />
           <Route path="pomodoro"   element={<Pomodoro />} />
           <Route path="resources" element={<Resources />} />
           <Route path="resources/:id" element={<ResourceDetail />} />
