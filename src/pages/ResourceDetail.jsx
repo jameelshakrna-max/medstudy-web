@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
   ArrowLeft, Download, ChevronUp, ChevronDown,
-  Trash2, MessageCircle, Reply, Loader2, FileText
+  Trash2, MessageCircle, Reply, Loader2, FileText, ExternalLink
 } from 'lucide-react'
 import s from './ResourceDetail.module.css'
 
@@ -162,11 +162,23 @@ export default function ResourceDetail() {
         <div className={s.previewSection}>
           <div className={s.preview}>
             {isPdf ? (
-              <iframe
-                src={API + '/resources/' + id + '/file?token=' + sessionToken}
-                className={s.previewFrame}
-                title={resource.title}
-              />
+              <>
+                <embed
+                  src={API + '/resources/' + id + '/file?token=' + sessionToken}
+                  className={s.previewFrame}
+                  type="application/pdf"
+                />
+                <div className={s.pdfOpenLink}>
+                  <a
+                    href={API + '/resources/' + id + '/file?token=' + sessionToken}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={s.openPdfBtn}
+                  >
+                    <ExternalLink size={14} strokeWidth={1.5} /> Open in new tab
+                  </a>
+                </div>
+              </>
             ) : isImage ? (
               <img
                 src={API + '/resources/' + id + '/file?token=' + sessionToken}

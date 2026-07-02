@@ -43,6 +43,16 @@
 }
 .downloadBtn:hover { transform: translateY(-2px); box-shadow: 0 8px 32px var(--accent-glow); }
 
+.pdfOpenLink { text-align: center; padding: 0 0 16px; }
+.openPdfBtn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 18px; background: var(--blueL); color: var(--blue);
+  border: 1px solid rgba(79,140,255,0.3); border-radius: 10px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  text-decoration: none; transition: all 0.2s; font-family: 'DM Sans', sans-serif;
+}
+.openPdfBtn:hover { background: rgba(79,140,255,0.2); }
+
 /* ── Sidebar ── */
 .sideSection {
   width: 320px; flex-shrink: 0; position: sticky; top: 24px;
@@ -173,7 +183,7 @@
   .previewFrame { height: 60vh; min-height: 300px; }
 }
 @media (max-width: 480px) {
-  .previewFrame { height: 40vh; min-height: 250px; }
+  .previewFrame { height: 60vh; min-height: 350px; }
   .commentsSection { padding: 16px; }
   .replyThread { margin-left: 20px; }
 }

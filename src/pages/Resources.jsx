@@ -288,8 +288,6 @@ export default function Resources() {
               key={isAll ? 'all' : cat.id}
               className={`${s.tab} ${active ? s.tabActive : ''}`}
               style={{
-                background: active ? undefined : '#FFFFFF',
-                color: active ? undefined : '#0B1120',
                 ...(active ? { '--tab-color': isAll ? 'var(--blue)' : CATEGORY_COLORS[cat.id] || 'var(--blue)' } : {})
               }}
               onClick={() => setSelectedCategory(id)}
@@ -304,8 +302,6 @@ export default function Resources() {
             key={t.value}
             className={`${s.tab} ${selectedType === t.value ? s.tabActive : ''}`}
             style={{
-              background: selectedType === t.value ? undefined : '#FFFFFF',
-              color: selectedType === t.value ? undefined : '#0B1120',
               ...(selectedType === t.value ? { '--tab-color': 'var(--blue)' } : {})
             }}
             onClick={() => setSelectedType(t.value)}
