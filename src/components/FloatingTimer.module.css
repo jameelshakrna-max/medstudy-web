@@ -326,6 +326,29 @@
   }
 }
 
+/* ── Light mode: lighter shadows ── */
+[data-theme="light"] .floating {
+  box-shadow: 0 8px 32px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.03) inset;
+}
+[data-theme="light"] .floating:active {
+  box-shadow: 0 12px 40px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.04) inset;
+}
+[data-theme="light"] .fPlay {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+[data-theme="light"] .fPlay:hover {
+  box-shadow: 0 6px 22px rgba(0,0,0,0.10);
+}
+[data-theme="light"] .mini {
+  box-shadow: 0 6px 24px rgba(0,0,0,0.07);
+}
+[data-theme="light"] .mini:active {
+  box-shadow: 0 8px 30px rgba(0,0,0,0.10);
+}
+[data-theme="light"] .mini.study  { box-shadow: 0 6px 24px rgba(79,140,255,0.10); }
+[data-theme="light"] .mini.break  { box-shadow: 0 6px 24px rgba(16,185,129,0.10); }
+[data-theme="light"] .mini.long   { box-shadow: 0 6px 24px rgba(129,140,248,0.10); }
+
 /* ── Retina: sharper borders ── */
 @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
   .floating,

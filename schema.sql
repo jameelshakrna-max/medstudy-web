@@ -211,3 +211,158 @@ CREATE TABLE IF NOT EXISTS study_activity (
 
 CREATE INDEX IF NOT EXISTS idx_activity_user ON study_activity(user_id);
 CREATE INDEX IF NOT EXISTS idx_activity_user_created ON study_activity(user_id, created_at);
+
+-- ── Goals ──────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS goals (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  goal_type TEXT NOT NULL,
+  target_value REAL NOT NULL,
+  subject_id TEXT,
+  module TEXT,
+  category TEXT DEFAULT 'long_term',
+  deadline TEXT,
+  sort_order INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_goals_user ON goals(user_id);
+
+-- ════════════════════════════════════════════════════════════
+-- SUPABASE / POSTGRESQL SECTION
+-- Run these statements in the Supabase SQL Editor (Dashboard → SQL Editor)
+-- ════════════════════════════════════════════════════════════
+
+-- CREATE SEQUENCE IF NOT EXISTS public.global_id_seq START 1;
+
+CREATE TABLE IF NOT EXISTS public.study_subjects (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  category TEXT DEFAULT 'other',
+  display_order INTEGER DEFAULT 0
+);
+
+INSERT INTO public.study_subjects (id, name, category, display_order) VALUES
+  ('cardiology',        'Cardiology',              'medical',    1),
+  ('respiratory',       'Respiratory',             'medical',    2),
+  ('gastroenterology',  'Gastroenterology',        'medical',    3),
+  ('nephrology',        'Nephrology',              'medical',    4),
+  ('neurology',         'Neurology',               'medical',    5),
+  ('endocrinology',     'Endocrinology',           'medical',    6),
+  ('infectious',        'Infectious Disease',      'medical',    7),
+  ('hematology',        'Hematology',              'medical',    8),
+  ('oncology',          'Oncology',                'medical',    9),
+  ('rheumatology',      'Rheumatology',            'medical',   10),
+  ('dermatology',       'Dermatology',             'medical',   11),
+  ('psychiatry',        'Psychiatry',              'medical',   12),
+  ('obgyn',             'Obstetrics & Gynecology', 'medical',   13),
+  ('pediatrics',        'Pediatrics',              'medical',   14),
+  ('emergency',         'Emergency Medicine',      'medical',   15),
+  ('mixed',             'Mixed',                   'mixed',     16),
+  ('self_assessment',   'Self Assessment',         'mixed',     17),
+  ('other',             'Other',                   'other',     18)
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS public.uworld_blocks (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  block_name TEXT NOT NULL,
+  total_questions INTEGER DEFAULT 40,
+  correct INTEGER DEFAULT 0,
+  percent_correct INTEGER DEFAULT 0,
+  grade TEXT DEFAULT '',
+  mode TEXT DEFAULT 'Tutor',
+  subject_id TEXT,
+  time_minutes INTEGER DEFAULT 0,
+  notes TEXT,
+  date_completed TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_uworld_blocks_user ON public.uworld_blocks(user_id);
+
+CREATE TABLE IF NOT EXISTS public.mrcp_syllabus (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  status TEXT DEFAULT 'Not Started',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_mrcp_syllabus_user ON public.mrcp_syllabus(user_id);
+
+CREATE TABLE IF NOT EXISTS public.mrcp_topics (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  syllabus_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  status TEXT DEFAULT 'Not Started',
+  confidence INTEGER DEFAULT 0,
+  repetitions INTEGER DEFAULT 0,
+  notes TEXT,
+  last_reviewed TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_mrcp_topics_user ON public.mrcp_topics(user_id);
+CREATE INDEX IF NOT EXISTS idx_mrcp_topics_syllabus ON public.mrcp_topics(syllabus_id);
+
+CREATE TABLE IF NOT EXISTS public.local_board_cases (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  case_name TEXT NOT NULL,
+  subject_id TEXT,
+  past_paper_year TEXT,
+  repetition_count INTEGER DEFAULT 0,
+  mastery_level TEXT DEFAULT 'Started',
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_board_cases_user ON public.local_board_cases(user_id);
+
+CREATE TABLE IF NOT EXISTS public.study_activity (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  module TEXT NOT NULL,
+  action TEXT NOT NULL,
+  entity_id TEXT,
+  summary TEXT,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_activity_user ON public.study_activity(user_id);
+CREATE INDEX IF NOT EXISTS idx_activity_user_created ON public.study_activity(user_id, created_at);
+
+-- ── Goals ──────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS public.goals (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  goal_type TEXT NOT NULL,
+  target_value REAL NOT NULL,
+  subject_id TEXT,
+  module TEXT,
+  category TEXT DEFAULT 'long_term',
+  deadline TIMESTAMPTZ,
+  sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_goals_user ON public.goals(user_id);
+
+ALTER TABLE public.goals ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY goal_user_isolation ON public.goals
+  USING (user_id = auth.jwt() ->> 'sub')
+  WITH CHECK (user_id = auth.jwt() ->> 'sub');
+
+-- After running the above, run this to refresh PostgREST schema cache:
+-- NOTIFY pgrst, 'reload schema';
