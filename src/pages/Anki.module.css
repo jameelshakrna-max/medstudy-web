@@ -487,7 +487,7 @@
 .field select:focus { border-color: var(--blue); }
 .field input::placeholder,
 .field textarea::placeholder { color: var(--text-secondary); }
-.field select option { background: var(--input-bg); }
+.field select option { color: #0B1120; background: #FFFFFF; }
 .checkRow {
   display: flex;
   align-items: center;

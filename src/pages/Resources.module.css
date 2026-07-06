@@ -27,7 +27,7 @@
 .clearBtn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--mist); cursor: pointer; }
 .sortWrap { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 10px; color: var(--mist); }
 .sortSelect { background: none; border: none; color: var(--text-primary); font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; cursor: pointer; }
-.sortSelect option { color: var(--text-primary); background: var(--input-bg); }
+.sortSelect option { color: #0B1120; background: #FFFFFF; }
 
 /* ── Tabs ── */
 .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
@@ -133,7 +133,7 @@
 }
 .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--accent-glow); }
 .field select { cursor: pointer; }
-.field select option { background: var(--input-bg); color: var(--text-primary); }
+.field select option { color: #0B1120; background: #FFFFFF; }
 
 .categoryRow { display: flex; gap: 8px; }
 .categoryRow select { flex: 1; }

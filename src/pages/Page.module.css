@@ -47,7 +47,7 @@
 .field input, .field textarea, .field select { width: 100%; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text-secondary); font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 12px 16px; outline: none; transition: all 0.3s; resize: none; box-sizing: border-box; }
 .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blueL); }
 .field input::placeholder, .field textarea::placeholder { color: var(--text-secondary); }
-.field select option { background: var(--input-bg); color: var(--text-primary); }
+.field select option { color: #0B1120; background: #FFFFFF; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .checkRow { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--mist); cursor: pointer; margin-bottom: 20px; }
 .primaryBtn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--blue), var(--blue2));   color: var(--navy); font-size: 15px; font-weight: 700; border: none; border-radius: 14px; cursor: pointer; transition: all 0.3s; margin-top: 10px; box-shadow: 0 4px 20px var(--accent-glow); font-family: 'DM Sans', sans-serif; }

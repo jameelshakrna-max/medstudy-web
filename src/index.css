@@ -1,6 +1,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  color-scheme: dark;
   --navy:    #0B1120;
   --navy2:   #172032;
   --navy3:   #2A3448;
@@ -47,6 +48,7 @@
 }
 
 [data-theme="light"] {
+  color-scheme: light;
   --page-bg:         #F4F6F9;
   --text-primary:    #0B1120;
   --text-secondary:  #475569;
@@ -90,7 +92,7 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
 
 input, textarea, select, button { font-family: inherit; }
-select option { background: var(--input-bg); color: var(--text-primary); }
+select option { color: #0B1120; background: #FFFFFF; }
 
 a { color: inherit; text-decoration: none; }
 
