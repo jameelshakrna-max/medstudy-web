@@ -19,6 +19,7 @@ const Sessions   = lazy(() => import('./pages/Sessions'))
 const Settings   = lazy(() => import('./pages/Settings'))
 const Resources  = lazy(() => import('./pages/Resources'))
 const ResourceDetail = lazy(() => import('./pages/ResourceDetail'))
+const Goals      = lazy(() => import('./pages/Goals'))
 
 const PAGE_LOADING = <LoadingScreen />
 
@@ -61,6 +62,7 @@ function AppRoutes() {
           <Route path="resources" element={<Resources />} />
           <Route path="resources/:id" element={<ResourceDetail />} />
           <Route path="sessions"   element={<Sessions />} />
+          <Route path="goals"     element={<Goals />} />
           <Route path="settings"   element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

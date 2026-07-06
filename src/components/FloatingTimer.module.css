@@ -198,9 +198,9 @@
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
 }
 
-.mini.study  { border-color: rgba(59, 130, 246, 0.5); box-shadow: 0 6px 24px rgba(59, 130, 246, 0.15); }
+.mini.study  { border-color: rgba(79, 140, 255, 0.5); box-shadow: 0 6px 24px rgba(79, 140, 255, 0.15); }
 .mini.break  { border-color: rgba(16, 185, 129, 0.5); box-shadow: 0 6px 24px rgba(16, 185, 129, 0.15); }
-.mini.long   { border-color: rgba(99, 102, 241, 0.5); box-shadow: 0 6px 24px rgba(99, 102, 241, 0.15); }
+.mini.long   { border-color: rgba(129, 140, 248, 0.5); box-shadow: 0 6px 24px rgba(129, 140, 248, 0.15); }
 
 .miniTime {
   font-family: 'DM Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;

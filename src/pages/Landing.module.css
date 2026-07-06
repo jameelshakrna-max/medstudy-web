@@ -11,7 +11,7 @@
 .navLinks { display: flex; gap: 10px; }
 .navBtn { padding: 8px 20px; border-radius: 100px; font-size: 14px; font-weight: 500; color: var(--mist); border: 1px solid var(--btn-secondary-border); background: none; cursor: pointer; transition: all 0.2s; }
 .navBtn:hover { color: var(--text-primary); background: var(--card-bg); }
-.navBtnPrimary { background: var(--blue) !important; color: #0B1120 !important; border-color: var(--blue) !important; font-weight: 700; }
+.navBtnPrimary { background: var(--blue) !important;   color: var(--navy) !important; border-color: var(--blue) !important; font-weight: 700; }
 .navBtnPrimary:hover { background: var(--blue2) !important; }
 
 .hero { position: relative; z-index: 1; text-align: center; padding: 100px 24px 80px; max-width: 800px; margin: 0 auto; }
@@ -20,7 +20,7 @@
 .heroAccent { color: var(--blue); }
 .heroSub { font-size: clamp(16px, 2vw, 18px); color: var(--mist); line-height: 1.7; max-width: 580px; margin: 0 auto 36px; }
 .heroCta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 48px; }
-.ctaPrimary { display: inline-flex; align-items: center; gap: 8px; padding: 14px 32px; background: var(--blue); color: #0B1120; font-size: 16px; font-weight: 700; border-radius: 100px; border: none; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 24px rgba(79,140,255,0.3); }
+.ctaPrimary { display: inline-flex; align-items: center; gap: 8px; padding: 14px 32px; background: var(--blue); color: var(--navy); font-size: 16px; font-weight: 700; border-radius: 100px; border: none; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 24px rgba(79,140,255,0.3); }
 .ctaPrimary:hover { background: var(--blue2); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(79,140,255,0.45); }
 .ctaSecondary { padding: 14px 28px; background: var(--btn-secondary-bg); border: 1px solid var(--btn-secondary-border); color: var(--btn-secondary-color); font-size: 15px; font-weight: 500; border-radius: 100px; cursor: pointer; transition: all 0.2s; }
 .ctaSecondary:hover { background: var(--card-bg); color: var(--text-primary); }
@@ -56,7 +56,7 @@
 .planCard { position: relative; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 24px; padding: 32px 28px; transition: all 0.3s; }
 .planCard:hover { border-color: var(--plan-color); transform: translateY(-4px); box-shadow: 0 16px 48px rgba(0,0,0,0.15); }
 .planPopular { border-color: var(--blue); background: rgba(79,140,255,0.04); }
-.popularBadge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--blue); color: #0B1120; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 14px; border-radius: 100px; white-space: nowrap; }
+.popularBadge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--blue); color: var(--navy); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 14px; border-radius: 100px; white-space: nowrap; }
 .planName { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--plan-color); margin-bottom: 8px; }
 .planPrice { font-family: 'DM Serif Display', serif; font-size: 48px; color: var(--text-primary); line-height: 1; margin-bottom: 4px; }
 .planPriceSub { font-size: 11px; color: var(--mist); margin-bottom: 24px; }
@@ -65,7 +65,7 @@
 .planMissing { color: var(--mist); opacity: 0.5; }
 .checkIcon { color: var(--blue); flex-shrink: 0; margin-top: 1px; }
 .missingDash { color: var(--mist); flex-shrink: 0; }
-.planCta { display: block; text-align: center; padding: 12px; background: var(--plan-color); color: #0B1120; font-size: 14px; font-weight: 700; border-radius: 12px; transition: all 0.2s; }
+.planCta { display: block; text-align: center; padding: 12px; background: var(--plan-color); color: var(--navy); font-size: 14px; font-weight: 700; border-radius: 12px; transition: all 0.2s; }
 .planCta:hover { opacity: 0.9; transform: translateY(-1px); }
 
 .finalCta { position: relative; z-index: 1; text-align: center; padding: 80px 24px; }

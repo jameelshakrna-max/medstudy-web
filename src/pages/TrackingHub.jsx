@@ -7,6 +7,7 @@ import DashboardView from './DashboardView'
 import UWorldView from './UWorldView'
 import MRCPView from './MRCPView'
 import LocalBoardView from './LocalBoardView'
+import Goals from './Goals'
 import ResourcesModal from '../components/ResourcesModal'
 import { generate } from '../services/PerformanceEngine'
 import styles from './TrackingHub.module.css'
@@ -16,6 +17,7 @@ const TABS = [
   { id: 'uworld', label: 'UWorld Tracker' },
   { id: 'mrcp', label: 'MRCP Progress' },
   { id: 'board', label: 'Local Board Tracker' },
+  { id: 'goals', label: 'Goals' },
 ]
 
 export default function TrackingHub() {
@@ -28,11 +30,12 @@ export default function TrackingHub() {
   const loadReport = useCallback(async () => {
     if (!user) return
     try {
-      const [blocksRes, mrcpRes, boardRes, activityRes] = await Promise.all([
+      const [blocksRes, mrcpRes, boardRes, activityRes, goalsRes] = await Promise.all([
         supabase.from('uworld_blocks').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
         supabase.from('mrcp_topics').select('*').eq('user_id', user.id),
         supabase.from('local_board_cases').select('*').eq('user_id', user.id),
-        supabase.from('study_activity').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
+        supabase.from('study_activity').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(500),
+        supabase.from('goals').select('*').eq('user_id', user.id),
       ])
 
       const perfReport = generate({
@@ -40,6 +43,7 @@ export default function TrackingHub() {
         mrcp: mrcpRes.data || [],
         board: boardRes.data || [],
         activity: activityRes.data || [],
+        goals: goalsRes.data || [],
       })
 
       setReport(perfReport)
@@ -54,6 +58,7 @@ export default function TrackingHub() {
   const handleActivity = useCallback(async ({ module, action, entity_id, summary, metadata }) => {
     try {
       await supabase.from('study_activity').insert({
+        id: crypto.randomUUID(),
         user_id: user.id,
         module,
         action,
@@ -97,6 +102,9 @@ export default function TrackingHub() {
         )}
         {activeTab === 'board' && (
           <LocalBoardView onActivity={handleActivity} />
+        )}
+        {activeTab === 'goals' && (
+          <Goals />
         )}
       </div>
 

@@ -128,22 +128,22 @@
 }
 .tab:hover { color: var(--text-secondary); background: var(--card-bg); }
 .tabOn {
-  background: rgba(59,130,246,0.1);
-  border-color: rgba(59,130,246,0.3);
+  background: rgba(79, 140, 255,0.1);
+  border-color: rgba(79, 140, 255,0.3);
   color: var(--blue);
 }
 .tabReview {
   padding: 7px 16px;
   border-radius: 100px;
-  background: rgba(59,130,246,0.1);
-  border: 1px solid rgba(59,130,246,0.3);
+  background: rgba(79, 140, 255,0.1);
+  border: 1px solid rgba(79, 140, 255,0.3);
   color: var(--blue);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
 }
-.tabReview:hover { background: rgba(59,130,246,0.15); }
+.tabReview:hover { background: rgba(79, 140, 255,0.15); }
 .tabAdd {
   padding: 7px 16px;
   border-radius: 100px;
@@ -173,7 +173,7 @@
   position: relative;
 }
 .deckCard:hover {
-  border-color: rgba(59,130,246,0.3);
+  border-color: rgba(79, 140, 255,0.3);
   transform: translateY(-2px);
 }
 .deckTop {
@@ -487,7 +487,7 @@
 .field select:focus { border-color: var(--blue); }
 .field input::placeholder,
 .field textarea::placeholder { color: var(--text-secondary); }
-.field select option { background: var(--navy2); }
+.field select option { background: var(--input-bg); }
 .checkRow {
   display: flex;
   align-items: center;
@@ -549,8 +549,8 @@
   cursor: pointer;
   transition: all 0.2s;
 }
-.dropZone:hover { border-color: rgba(59,130,246,0.4); background: rgba(59,130,246,0.03); }
-.dragOver { border-color: var(--blue) !important; background: rgba(59,130,246,0.06) !important; }
+.dropZone:hover { border-color: rgba(79, 140, 255,0.4); background: rgba(79, 140, 255,0.03); }
+.dragOver { border-color: var(--blue) !important; background: rgba(79, 140, 255,0.06) !important; }
 .dropIcon { font-size: 32px; margin-bottom: 8px; }
 .dropText { font-size: 14px; color: var(--mist); margin-bottom: 4px; }
 .dropFormats { font-size: 11px; color: var(--text-secondary); }
@@ -630,8 +630,8 @@
   100% { transform: translateX(400%); }
 }
 .uploadProgressBlock {
-  background: rgba(59,130,246,0.06);
-  border: 1px solid rgba(59,130,246,0.15);
+  background: rgba(79, 140, 255,0.06);
+  border: 1px solid rgba(79, 140, 255,0.15);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 12px;
@@ -647,7 +647,7 @@
   position: relative;
   height: 100%;
   border-radius: 8px;
-  background: linear-gradient(90deg, var(--blue), #60a5fa);
+  background: linear-gradient(90deg, var(--blue), var(--blue2));
   transition: width 0.3s ease;
   min-width: 4%;
   overflow: hidden;
@@ -945,7 +945,7 @@
   display: flex;
   gap: 0;
   margin-bottom: 1.5rem;
-  border-bottom: 2px solid var(--border, #e2e8f0);
+  border-bottom: 2px solid var(--border, #CBD5E1);
 }
 .mainTab {
   padding: 0.6rem 1.2rem;
@@ -953,21 +953,21 @@
   background: none;
   font-size: 0.95rem;
   font-weight: 500;
-  color: var(--muted, #64748b);
+  color: var(--mist, #64748b);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
   transition: all 0.2s;
 }
-.mainTab:hover { color: var(--fg, #1e293b); }
+.mainTab:hover { color: var(--text-primary, #0B1120); }
 .mainTabOn {
-  color: var(--indigo, #6366F1);
-  border-bottom-color: var(--indigo, #6366F1);
+  color: var(--indigo);
+  border-bottom-color: var(--indigo);
 }
 
 /* -- Share badges and buttons -- */
 .sharedBadge {
-  background: var(--blue, #3B82F6);
+  background: var(--blue);
   color: white;
   font-size: 0.65rem;
   padding: 0.15rem 0.4rem;
@@ -979,25 +979,25 @@
   margin-top: 0.5rem;
   width: 100%;
   padding: 0.35rem;
-  border: 1px solid var(--indigo, #6366F1);
+  border: 1px solid var(--indigo);
   background: none;
-  color: var(--indigo, #6366F1);
+  color: var(--indigo);
   border-radius: 6px;
   font-size: 0.8rem;
   cursor: pointer;
   transition: all 0.2s;
 }
-.shareBtn:hover { background: var(--indigo, #6366F1); color: white; }
+.shareBtn:hover { background: var(--indigo); color: white; }
 .shareBtnOn {
-  background: var(--blue, #3B82F6);
-  border-color: var(--blue, #3B82F6);
+  background: var(--blue);
+  border-color: var(--blue);
   color: white;
 }
-.shareBtnOn:hover { background: #ef4444; border-color: #ef4444; }
+.shareBtnOn:hover { background: var(--red); border-color: var(--red); }
 .shareLink {
   text-align: center;
   font-size: 0.7rem;
-  color: var(--blue, #3B82F6);
+  color: var(--blue);
   cursor: pointer;
   margin-top: 0.3rem;
   text-decoration: underline;
@@ -1012,17 +1012,17 @@
 .sharedSearchInput {
   flex: 1;
   padding: 0.6rem 1rem;
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--border, #CBD5E1);
   border-radius: 8px;
   font-size: 0.9rem;
-  background: var(--card, white);
-  color: white !important;
+  background: var(--card-bg, #ffffff);
+  color: var(--input-color);
 }
-.sharedSearchInput::placeholder { color: #94a3b8; }
-.sharedSearchInput:focus { outline: none; border-color: var(--indigo, #6366F1); }
+.sharedSearchInput::placeholder { color: var(--mist); }
+.sharedSearchInput:focus { outline: none; border-color: var(--indigo); }
 .sharedSearchBtn {
   padding: 0.6rem 1.2rem;
-  background: var(--indigo, #6366F1);
+  background: var(--indigo);
   color: white;
   border: none;
   border-radius: 8px;
@@ -1035,27 +1035,27 @@
   font-size: 1rem;
   font-weight: 600;
   margin-bottom: 0.8rem;
-  color: var(--fg, #1e293b);
+  color: var(--text-primary, #0B1120);
 }
 .copyBtn {
   margin-top: 0.5rem;
   width: 100%;
   padding: 0.35rem;
-  border: 1px solid var(--blue, #3B82F6);
+  border: 1px solid var(--blue);
   background: none;
-  color: var(--blue, #3B82F6);
+  color: var(--blue);
   border-radius: 6px;
   font-size: 0.8rem;
   cursor: pointer;
   transition: all 0.2s;
 }
-.copyBtn:hover { background: var(--blue, #3B82F6); color: white; }
+.copyBtn:hover { background: var(--blue); color: white; }
 .copyBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 .ownLabel {
   margin-top: 0.5rem;
   text-align: center;
   font-size: 0.75rem;
-  color: var(--muted, #64748b);
+  color: var(--mist, #64748b);
   font-style: italic;
 }
 
@@ -1072,23 +1072,23 @@
   flex: 1;
   min-width: 120px;
   padding: 0.3rem 0.5rem;
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--border, #CBD5E1);
   border-radius: 6px;
   font-size: 0.8rem;
-  background: var(--card, white);
-  color: white !important;
+  background: var(--card-bg, #ffffff);
+  color: var(--input-color);
   cursor: pointer;
 }
 .copyCardBtn {
   padding: 0.3rem 0.7rem;
-  border: 1px solid var(--blue, #3B82F6);
+  border: 1px solid var(--blue);
   background: none;
-  color: var(--blue, #3B82F6);
+  color: var(--blue);
   border-radius: 6px;
   font-size: 0.8rem;
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
 }
-.copyCardBtn:hover { background: var(--blue, #3B82F6); color: white; }
+.copyCardBtn:hover { background: var(--blue); color: white; }
 .copyCardBtn:disabled { opacity: 0.5; cursor: not-allowed; }

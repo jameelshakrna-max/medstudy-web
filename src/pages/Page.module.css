@@ -45,12 +45,12 @@
 .field { margin-bottom: 16px; }
 .field label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mist); margin-bottom: 8px; }
 .field input, .field textarea, .field select { width: 100%; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text-secondary); font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 12px 16px; outline: none; transition: all 0.3s; resize: none; box-sizing: border-box; }
-.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blueL); }
 .field input::placeholder, .field textarea::placeholder { color: var(--text-secondary); }
-.field select option { background: var(--navy2); color: var(--text-primary); }
+.field select option { background: var(--input-bg); color: var(--text-primary); }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .checkRow { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--mist); cursor: pointer; margin-bottom: 20px; }
-.primaryBtn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--blue), var(--blue2)); color: #0B1120; font-size: 15px; font-weight: 700; border: none; border-radius: 14px; cursor: pointer; transition: all 0.3s; margin-top: 10px; box-shadow: 0 4px 20px var(--accent-glow); font-family: 'DM Sans', sans-serif; }
+.primaryBtn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--blue), var(--blue2));   color: var(--navy); font-size: 15px; font-weight: 700; border: none; border-radius: 14px; cursor: pointer; transition: all 0.3s; margin-top: 10px; box-shadow: 0 4px 20px var(--accent-glow); font-family: 'DM Sans', sans-serif; }
 .primaryBtn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 32px var(--accent-glow); }
 .primaryBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 .previewScore { font-size: 14px; color: var(--mist); margin-bottom: 10px; padding: 10px 14px; background: var(--card-bg); border-radius: 12px; }
@@ -150,9 +150,9 @@
 }
 
 .filterBtnSmActive {
-  background: rgba(99, 102, 241, 0.12);
-  border-color: rgba(99, 102, 241, 0.3);
-  color: #A89FFF;
+  background: var(--indigoL);
+  border-color: rgba(129, 140, 248, 0.3);
+  color: var(--indigo);
   font-weight: 600;
 }
 
@@ -174,8 +174,8 @@
 
 /* ── Session type badge ── */
 .sessType {
-  background: rgba(99, 102, 241, 0.12);
-  color: #A89FFF;
+  background: var(--indigoL);
+  color: var(--indigo);
   padding: 2px 8px;
   border-radius: 6px;
   font-size: 11px;
@@ -213,8 +213,8 @@
 }
 
 .sessDelete:hover {
-  background: rgba(255, 80, 80, 0.2);
-  color: #ff6b6b;
+  background: var(--redL);
+  color: var(--red);
 }
 
 /* ── Responsive ── */

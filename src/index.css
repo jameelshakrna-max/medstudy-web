@@ -41,14 +41,17 @@
   --scrollbar-thumb: var(--navy3);
   --float-bg:        rgba(11,17,32,0.92);
   --tab-bg:          var(--navy3);
+  --shadow-sm:       0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md:       0 4px 16px rgba(0,0,0,0.25);
+  --shadow-lg:       0 12px 40px rgba(0,0,0,0.2);
 }
 
 [data-theme="light"] {
-  --page-bg:         #F8FAFC;
+  --page-bg:         #F4F6F9;
   --text-primary:    #0B1120;
-  --text-secondary:  #64748B;
+  --text-secondary:  #475569;
   --card-bg:         #FFFFFF;
-  --card-border:     #E2E8F0;
+  --card-border:     #CBD5E1;
   --accent-glow:     rgba(79,140,255,0.1);
   --nav-border:      #E2E8F0;
   --btn-secondary-bg: #FFFFFF;
@@ -62,14 +65,15 @@
   --scrollbar-track: #E2E8F0;
   --scrollbar-thumb: #CBD5E1;
 
-  --border:    #E2E8F0;
+  --border:    #CBD5E1;
   --card:      #FFFFFF;
-  --mist:      #64748B;
+  --mist:      #475569;
   --float-bg:  rgba(255,255,255,0.88);
   --tab-bg:    #FFFFFF;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.05);
 }
-
-[data-theme="light"] body { font-weight: 450; }
 
 html { scroll-behavior: smooth; }
 
@@ -86,7 +90,7 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
 
 input, textarea, select, button { font-family: inherit; }
-select option { background: var(--navy2); color: var(--text-primary); }
+select option { background: var(--input-bg); color: var(--text-primary); }
 
 a { color: inherit; text-decoration: none; }
 

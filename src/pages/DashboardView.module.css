@@ -1,0 +1,358 @@
+/* Current Goal Highlight */
+.currentGoal {
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, rgba(79,140,255,0.08), rgba(79,140,255,0.02));
+  border: 1px solid rgba(79,140,255,0.2);
+  border-radius: 16px;
+  padding: 20px 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.currentGoalAccent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--blue);
+  border-radius: 2px 0 0 2px;
+}
+
+.currentGoalLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.currentGoalIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--blue);
+  opacity: 0.85;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.currentGoalChip {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--blue);
+}
+
+.currentGoalTitle {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.currentGoalTrack {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--input-bg);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.currentGoalFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--blue), var(--blue2));
+  border-radius: 5px;
+  transition: width 0.5s ease;
+}
+
+.currentGoalMeta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.currentGoalMetaText {
+  color: var(--text-secondary);
+}
+
+.currentGoalMetaBold {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.currentGoalMetaMist {
+  color: var(--mist);
+}
+
+.currentGoalPct {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'DM Serif Display', serif;
+  color: var(--blue);
+}
+
+.currentGoalMetaSmall {
+  font-size: 11px;
+  color: var(--mist);
+}
+
+.currentGoalMetaSmallBold {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+/* Section sub-headers */
+.subHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.subHeaderGreen {
+  color: var(--emerald);
+}
+
+/* Lists */
+.goalList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+/* Grid layouts */
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.grid4 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 32px;
+}
+
+.toggles {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.toggleLabel {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--mist);
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 32px;
+}
+
+/* Subject rankings / recommendations */
+.formCard {
+  margin-bottom: 28px;
+}
+
+.cardTitle {
+  font-family: 'DM Serif Display', serif;
+  font-size: 18px;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.sectionChip {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.sectionChipGreen {
+  color: var(--emerald);
+}
+
+.sectionChipRed {
+  color: var(--red);
+}
+
+.subjectRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--input-bg);
+  font-size: 13px;
+}
+
+.subjectName {
+  color: var(--text-primary);
+}
+
+.subjectScore {
+  font-weight: 600;
+}
+
+.subjectScoreGreen {
+  color: var(--emerald);
+}
+
+.subjectScoreRed {
+  color: var(--red);
+}
+
+.recommendation {
+  padding: 12px 16px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.recommendationHigh {
+  background: var(--blueL);
+  border: 1px solid rgba(79,140,255,0.2);
+}
+
+.recommendationLow {
+  background: var(--amberL);
+  border: 1px solid rgba(245,158,11,0.2);
+}
+
+.confidenceBadge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 6px;
+  align-self: flex-start;
+}
+
+.confidenceBadgeHigh {
+  color: var(--blue);
+  background: rgba(79,140,255,0.1);
+}
+
+.confidenceBadgeLow {
+  color: var(--amber);
+  background: rgba(245,158,11,0.1);
+}
+
+.recommendationText {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+/* Recent Activity */
+.recentSection {
+  margin-bottom: 32px;
+}
+
+.recentList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.recentItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--card-bg);
+  border-radius: 10px;
+  border: 1px solid var(--card-border);
+  font-size: 13px;
+}
+
+.recentBadge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 6px;
+  color: var(--blue);
+  background: var(--blueL);
+  flex-shrink: 0;
+}
+
+.recentSummary {
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.recentDate {
+  font-size: 11px;
+  color: var(--mist);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Activity Calendar */
+.calendarSection {
+  margin-bottom: 28px;
+}
+
+.calendarTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 16px;
+  font-family: 'DM Serif Display', serif;
+  color: var(--text-primary);
+}
+
+.calendarWrap {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+/* Chart Section */
+.chartTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-top: 8px;
+  font-size: 16px;
+  font-family: 'DM Serif Display', serif;
+  color: var(--text-primary);
+}
+
+.chartGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .chartGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Subject rankings section */
+.subjectSection {
+  margin-bottom: 16px;
+}

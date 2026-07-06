@@ -53,7 +53,7 @@
 .downloadBtn {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 10px 24px; background: linear-gradient(135deg, var(--blue), var(--blue2));
-  color: #0B1120; font-weight: 700; border-radius: 12px; text-decoration: none;
+  color: var(--navy); font-weight: 700; border-radius: 12px; text-decoration: none;
   font-size: 14px; transition: all 0.3s;
 }
 .downloadBtn:hover { transform: translateY(-2px); box-shadow: 0 8px 32px var(--accent-glow); }
@@ -74,7 +74,7 @@
 .openPdfBig {
   display: inline-flex; align-items: center; gap: 10px;
   padding: 14px 32px; background: linear-gradient(135deg, var(--blue), var(--blue2));
-  color: #0B1120; font-size: 16px; font-weight: 700; border-radius: 14px;
+  color: var(--navy); font-size: 16px; font-weight: 700; border-radius: 14px;
   text-decoration: none; transition: all 0.3s;
   box-shadow: 0 4px 20px var(--accent-glow);
 }
@@ -120,7 +120,7 @@
 .downloadBig {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%; padding: 14px; background: linear-gradient(135deg, var(--blue), var(--blue2));
-  color: #0B1120; font-size: 15px; font-weight: 700; border: none; border-radius: 14px;
+  color: var(--navy); font-size: 15px; font-weight: 700; border: none; border-radius: 14px;
   cursor: pointer; text-decoration: none; transition: all 0.3s;
   box-shadow: 0 4px 20px var(--accent-glow); font-family: 'DM Sans', sans-serif;
 }
@@ -152,12 +152,12 @@
   font-size: 14px; padding: 12px 14px; outline: none; resize: vertical;
   transition: border-color 0.3s; box-sizing: border-box;
 }
-.commentInput:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+.commentInput:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--accent-glow); }
 .commentInputActions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
 .commentHint { font-size: 12px; color: var(--mist); }
 .commentSend {
   padding: 8px 20px; background: linear-gradient(135deg, var(--blue), var(--blue2));
-  color: #0B1120; font-size: 13px; font-weight: 700; border: none; border-radius: 10px;
+  color: var(--navy); font-size: 13px; font-weight: 700; border: none; border-radius: 10px;
   cursor: pointer; transition: all 0.3s; font-family: 'DM Sans', sans-serif;
 }
 .commentSend:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 16px var(--accent-glow); }

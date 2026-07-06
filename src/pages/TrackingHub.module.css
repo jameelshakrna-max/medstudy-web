@@ -20,7 +20,7 @@
 .segmentRow {
   display: flex;
   gap: 4px;
-  background: var(--input-bg);
+  background: var(--input-border);
   border-radius: 12px;
   padding: 4px;
   overflow-x: auto;
@@ -82,7 +82,7 @@
   gap: 10px;
   padding: 14px 32px;
   background: linear-gradient(135deg, var(--blue), var(--blue2));
-  color: #0B1120;
+  color: var(--navy);
   font-family: 'DM Sans', sans-serif;
   font-size: 15px;
   font-weight: 700;

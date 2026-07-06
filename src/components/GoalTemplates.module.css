@@ -1,0 +1,59 @@
+.toggleBtn {
+  background: none;
+  border: 1px dashed var(--card-border);
+  border-radius: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  color: var(--mist);
+  font-size: 13px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+
+.toggleBtn:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: var(--blueL);
+}
+
+.panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+}
+
+.templateBtn {
+  background: var(--btn-secondary-bg);
+  border: 1px solid var(--btn-secondary-border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.templateBtn:hover {
+  border-color: var(--blue);
+  background: var(--blueL);
+}
+
+.templateTitle {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.templateMeta {
+  font-size: 11px;
+  color: var(--mist);
+}

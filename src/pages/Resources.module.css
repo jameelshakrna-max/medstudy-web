@@ -7,7 +7,7 @@
 .uploadBtn {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 20px; background: linear-gradient(135deg, var(--blue), var(--blue2));
-  color: #0B1120; font-size: 14px; font-weight: 700; border: none; border-radius: 12px;
+  color: var(--navy); font-size: 14px; font-weight: 700; border: none; border-radius: 12px;
   cursor: pointer; transition: all 0.3s; font-family: 'DM Sans', sans-serif;
   box-shadow: 0 4px 20px var(--accent-glow);
 }
@@ -23,11 +23,11 @@
   background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 12px;
   color: var(--text-primary); font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; transition: border-color 0.3s;
 }
-.searchInput:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+.searchInput:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--accent-glow); }
 .clearBtn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--mist); cursor: pointer; }
 .sortWrap { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 10px; color: var(--mist); }
 .sortSelect { background: none; border: none; color: var(--text-primary); font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; cursor: pointer; }
-.sortSelect option { color: var(--text-primary); background: var(--navy2); }
+.sortSelect option { color: var(--text-primary); background: var(--input-bg); }
 
 /* ── Tabs ── */
 .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
@@ -131,9 +131,9 @@
   border-radius: 10px; color: var(--text-primary); font-family: 'DM Sans', sans-serif;
   font-size: 14px; padding: 10px 14px; outline: none; transition: border-color 0.3s; box-sizing: border-box;
 }
-.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--accent-glow); }
 .field select { cursor: pointer; }
-.field select option { background: var(--navy2); color: var(--text-primary); }
+.field select option { background: var(--input-bg); color: var(--text-primary); }
 
 .categoryRow { display: flex; gap: 8px; }
 .categoryRow select { flex: 1; }
@@ -176,7 +176,7 @@
 .cancelBtn:hover:not(:disabled) { border-color: var(--text-secondary); color: var(--text-primary); }
 .submitBtn {
   flex: 2; padding: 12px; background: linear-gradient(135deg, var(--blue), var(--blue2));
-  color: #0B1120; font-size: 14px; font-weight: 700; border: none; border-radius: 12px;
+  color: var(--navy); font-size: 14px; font-weight: 700; border: none; border-radius: 12px;
   cursor: pointer; transition: all 0.3s; font-family: 'DM Sans', sans-serif;
   box-shadow: 0 4px 20px var(--accent-glow);
 }

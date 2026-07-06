@@ -46,7 +46,7 @@ export default function MRCPView({ onActivity }) {
   async function addSystemFn() {
     if (!addSystem.trim()) return
     const { data, error } = await supabase.from('mrcp_syllabus').insert({
-      user_id: user.id, name: addSystem.trim(), status: 'Not Started',
+      id: crypto.randomUUID(), user_id: user.id, name: addSystem.trim(), status: 'Not Started',
     }).select()
     if (error) { alert('Error: ' + error.message); return }
     setSystems(prev => [...prev, data[0]])
@@ -57,7 +57,7 @@ export default function MRCPView({ onActivity }) {
   async function addTopicFn() {
     if (!addTopic.name.trim() || !addTopic.syllabus_id) return
     const { data, error } = await supabase.from('mrcp_topics').insert({
-      user_id: user.id, syllabus_id: addTopic.syllabus_id, name: addTopic.name.trim(),
+      id: crypto.randomUUID(), user_id: user.id, syllabus_id: addTopic.syllabus_id, name: addTopic.name.trim(),
       status: 'Not Started', confidence: 0, repetitions: 0,
     }).select()
     if (error) { alert('Error: ' + error.message); return }

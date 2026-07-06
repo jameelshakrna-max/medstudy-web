@@ -51,6 +51,7 @@ export default function LocalBoardView({ onActivity }) {
     if (!form.case_name.trim()) return
     try {
       const { data, error } = await supabase.from('local_board_cases').insert({
+        id: crypto.randomUUID(),
         user_id: user.id,
         case_name: form.case_name.trim(),
         subject_id: form.subject_id || null,

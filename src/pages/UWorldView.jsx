@@ -64,6 +64,7 @@ export default function UWorldView({ onActivity }) {
       const today = new Date().toISOString().split('T')[0]
 
       const { data, error } = await supabase.from('uworld_blocks').insert({
+        id: crypto.randomUUID(),
         user_id: user.id,
         block_name: form.block_name,
         total_questions: form.total_questions,

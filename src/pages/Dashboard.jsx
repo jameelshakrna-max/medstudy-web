@@ -1,8 +1,9 @@
 import { useEffect, useState, memo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { Timer, BookOpen, BrainCircuit, Target, Lightbulb, ArrowRight } from 'lucide-react'
+import { Timer, BookOpen, BrainCircuit, Target, Lightbulb, ArrowRight, Check, ChevronRight } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
+import { calculateGoalProgress } from '../services/goalProgress'
 import styles from './Dashboard.module.css'
 
 const STAT_ICONS = [Timer, BookOpen, BrainCircuit, Target]
@@ -34,6 +35,7 @@ const DashStatCards = memo(function DashStatCards({ stats }) {
 export default function Dashboard() {
   const { profile, user } = useAuth()
   const [stats, setStats] = useState({ sessions: 0, pomodoros: 0, topicsInProgress: 0, cardsdue: 0 })
+  const [goalSummaries, setGoalSummaries] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { if (user) loadStats() }, [user])
@@ -42,10 +44,14 @@ export default function Dashboard() {
     try {
       const today = new Date().toISOString().split('T')[0]
 
-      const [s, p, t] = await Promise.all([
+      const [s, p, t, goalsRes, blocksRes, mrcpRes, boardRes] = await Promise.all([
         supabase.from('study_sessions').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('date', today),
         supabase.from('study_sessions').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('date', today).eq('session_type', 'Pomodoro'),
         supabase.from('curriculum_topics').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'In Progress'),
+        supabase.from('goals').select('*').eq('user_id', user.id),
+        supabase.from('uworld_blocks').select('total_questions,correct,time_minutes,subject_id,created_at').eq('user_id', user.id),
+        supabase.from('mrcp_topics').select('status').eq('user_id', user.id),
+        supabase.from('local_board_cases').select('id').eq('user_id', user.id),
       ])
 
       if (s.error) console.error('Dashboard sessions error:', s.error)
@@ -70,6 +76,51 @@ export default function Dashboard() {
         topicsInProgress: t.count || 0,
         cardsdue
       })
+
+      const goals = goalsRes.data || []
+      if (goals.length > 0) {
+        const blocks = blocksRes.data || []
+        const mrcpTopics = mrcpRes.data || []
+        const boardCases = boardRes.data || []
+
+        const totalQuestions = blocks.reduce((sum, b) => sum + (b.total_questions || 0), 0)
+        const totalMinutes = blocks.reduce((sum, b) => sum + (b.time_minutes || 0), 0)
+        const currentStreak = 0
+
+        const perf = { overallScore: 0 }
+        const subjectsRankings = []
+        const bySubject = {}
+        for (const b of blocks) {
+          if (b.subject_id && b.total_questions > 0 && b.correct != null) {
+            if (!bySubject[b.subject_id]) bySubject[b.subject_id] = { scores: [], blocks: 0 }
+            bySubject[b.subject_id].scores.push((b.correct / b.total_questions) * 100)
+            bySubject[b.subject_id].blocks++
+          }
+        }
+        for (const [subject, data] of Object.entries(bySubject)) {
+          subjectsRankings.push({
+            subject,
+            avgScore: Math.round(data.scores.reduce((s, v) => s + v, 0) / data.scores.length),
+            blocks: data.blocks,
+          })
+        }
+
+        const report = {
+          analytics: {
+            totalQuestions,
+            totalBlocks: blocks.length,
+            totalMrcpTopics: mrcpTopics.length,
+            totalMrcpMastered: mrcpTopics.filter(t => t.status === 'Mastered').length,
+            totalCases: boardCases.length,
+            currentStreak,
+            totalStudyMinutes: totalMinutes,
+          },
+          subjects: { rankings: subjectsRankings },
+          performance: perf,
+        }
+
+        setGoalSummaries(goals.map(g => calculateGoalProgress(g, report)).filter(g => g.status !== 'expired'))
+      }
     } catch (err) {
       console.error('loadStats error:', err)
     }
@@ -94,6 +145,42 @@ export default function Dashboard() {
       </div>
 
       <DashStatCards stats={stats} />
+
+      {/* Goal Summary */}
+      {goalSummaries.length > 0 && (
+        <div className={styles.section}>
+          <div className={styles.goalSectionHeader}>
+            <h2 className={styles.goalSectionTitle}>Study Goals</h2>
+            <a href="/goals" className={styles.goalViewAll}>
+              View All <ChevronRight size={12} />
+            </a>
+          </div>
+          <div className={styles.goalList}>
+            {goalSummaries.filter(g => g.status === 'active' || !g.status).slice(0, 3).map(g => (
+              <div key={g.id} className={styles.goalItem}>
+                <div className={styles.goalIcon} style={{ background: g.pct >= 100 ? 'var(--emerald)' : 'var(--blue)' }}>
+                  {g.pct >= 100 ? <Check size={14} color="#0B1120" /> : <Target size={14} color="#0B1120" />}
+                </div>
+                <div className={styles.goalBody}>
+                  <div className={styles.goalTitle}>{g.title}</div>
+                  <div className={styles.goalTrack}>
+                    <div className={styles.goalFill} style={{
+                      width: `${Math.min(100, g.pct)}%`,
+                      background: g.pct >= 100 ? 'var(--emerald)' : 'var(--blue)',
+                    }} />
+                  </div>
+                  <div className={styles.goalMeta}>
+                    {Math.round(g.current)} / {Math.round(g.target_value)} · {g.pct}%
+                  </div>
+                </div>
+                <div className={styles.goalPct} style={{ color: g.pct >= 100 ? 'var(--emerald)' : 'var(--blue)' }}>
+                  {g.pct}%
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className={styles.section}>
         <h2 className={styles.sectionTitle}>Daily Routine</h2>
