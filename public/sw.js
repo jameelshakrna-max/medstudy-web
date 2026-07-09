@@ -7,7 +7,7 @@
 //  - Handles notification clicks
 // ══════════════════════════════════════════════════
 
-const CACHE = 'medstudy-v5'
+const CACHE = 'medstudy-v6'
 const STATIC_ASSETS = [
   '/icon.svg',
   '/favicon.png',

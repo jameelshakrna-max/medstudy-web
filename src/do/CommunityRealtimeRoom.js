@@ -16,7 +16,6 @@ export class CommunityRealtimeRoom {
 
       this.state.acceptWebSocket(server)
 
-      server.accept()
       server.send(JSON.stringify({ type: 'connected', payload: {} }))
 
       server.addEventListener('close', () => {})
