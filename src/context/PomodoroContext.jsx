@@ -10,6 +10,7 @@ const MODES = ['study', 'break', 'long']
 //  VAPID PUBLIC KEY — REPLACE WITH YOUR OWN KEY
 // ══════════════════════════════════════════════════
 
+const PUSH_ENABLED = false
 const VAPID_PUBLIC_KEY = 'BKbcMQDt4fIvsxpU5j1mWFBsMNIyy-N3xMlOldlLkzpEUzmKtKNoxkI_s_lvl1_IsjX74bqNB5E9Xf8lhmYTtkE'
 
 // Convert base64 string to Uint8Array for push subscription
@@ -145,6 +146,7 @@ async function showLocalNotification(mode) {
 
 // Subscribe to push and send subscription to server
 async function subscribeToPush(userId) {
+  if (!PUSH_ENABLED) return
   pushLog('subscribeToPush called for: ' + userId?.substring(0, 8) + '...')
 
   if (!('serviceWorker' in navigator)) {
@@ -218,6 +220,7 @@ async function subscribeToPush(userId) {
 
 // Schedule a server-side push notification for when timer ends
 async function schedulePushNotification(userId, endTime, mode) {
+  if (!PUSH_ENABLED) return
   pushLog('Scheduling push for ' + mode + ' at ' + new Date(endTime).toLocaleTimeString())
 
   try {

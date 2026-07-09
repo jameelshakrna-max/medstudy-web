@@ -232,6 +232,229 @@ CREATE TABLE IF NOT EXISTS goals (
 CREATE INDEX IF NOT EXISTS idx_goals_user ON goals(user_id);
 
 -- ════════════════════════════════════════════════════════════
+-- COMMUNITIES
+-- ════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS communities (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  avatar_url TEXT,
+  banner_url TEXT,
+  visibility TEXT NOT NULL DEFAULT 'public',
+  join_type TEXT NOT NULL DEFAULT 'anyone',
+  invite_code TEXT UNIQUE,
+  member_count INTEGER DEFAULT 0,
+  total_study_hours REAL DEFAULT 0,
+  created_by TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS community_members (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'member',
+  level_id TEXT,
+  total_study_hours REAL DEFAULT 0,
+  joined_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(community_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_cm_user ON community_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_cm_community ON community_members(community_id);
+
+CREATE TABLE IF NOT EXISTS community_bans (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  reason TEXT DEFAULT '',
+  banned_by TEXT NOT NULL,
+  expires_at TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(community_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_cb_community ON community_bans(community_id);
+
+CREATE TABLE IF NOT EXISTS member_levels (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  level_name TEXT NOT NULL,
+  level_number INTEGER NOT NULL,
+  min_hours REAL DEFAULT 0,
+  can_invite INTEGER DEFAULT 0,
+  can_create_competition INTEGER DEFAULT 0,
+  can_pin_messages INTEGER DEFAULT 0,
+  can_upload_files INTEGER DEFAULT 1,
+  can_remove_members INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(community_id, level_number)
+);
+
+CREATE TABLE IF NOT EXISTS community_settings (
+  community_id TEXT PRIMARY KEY REFERENCES communities(id) ON DELETE CASCADE,
+  allow_file_uploads INTEGER DEFAULT 1,
+  allow_flashcards INTEGER DEFAULT 1,
+  allow_competitions INTEGER DEFAULT 1,
+  allow_member_invites INTEGER DEFAULT 1,
+  allow_announcements INTEGER DEFAULT 1,
+  max_file_size_mb INTEGER DEFAULT 50,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS community_rules (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  rule TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS community_join_requests (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(community_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_cjr_community ON community_join_requests(community_id);
+
+-- ═══════════════════════════════════════════
+-- CHAT
+-- ═══════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS community_messages (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  user_name TEXT NOT NULL,
+  content TEXT,
+  message_type TEXT NOT NULL DEFAULT 'text',
+  file_key TEXT,
+  file_name TEXT,
+  file_size INTEGER,
+  mime_type TEXT,
+  is_edited INTEGER DEFAULT 0,
+  deleted_at TEXT,
+  deleted_by TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_msg_community_created ON community_messages(community_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_msg_community_id ON community_messages(community_id, id);
+
+CREATE TABLE IF NOT EXISTS community_message_flashcards (
+  id TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL REFERENCES community_messages(id) ON DELETE CASCADE,
+  front TEXT NOT NULL,
+  back TEXT NOT NULL,
+  image_url TEXT,
+  tags TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS community_message_reactions (
+  id TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL REFERENCES community_messages(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  emoji TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(message_id, user_id, emoji)
+);
+CREATE INDEX IF NOT EXISTS idx_reactions_message ON community_message_reactions(message_id);
+
+CREATE TABLE IF NOT EXISTS community_pins (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  message_id TEXT NOT NULL REFERENCES community_messages(id) ON DELETE CASCADE,
+  pinned_by TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS community_announcements (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS community_member_state (
+  member_id TEXT PRIMARY KEY REFERENCES community_members(id) ON DELETE CASCADE,
+  last_read_message_id TEXT,
+  last_seen_at TEXT DEFAULT (datetime('now'))
+);
+
+-- ═══════════════════════════════════════════
+-- COMPETITIONS
+-- ═══════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS competitions (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  duration TEXT NOT NULL,
+  starts_at TEXT NOT NULL,
+  ends_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_by TEXT NOT NULL,
+  is_admin_created INTEGER DEFAULT 1,
+  approved INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  reviewed_by TEXT,
+  reviewed_at TEXT,
+  rejection_reason TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_comp_community ON competitions(community_id);
+
+CREATE TABLE IF NOT EXISTS competition_participants (
+  id TEXT PRIMARY KEY,
+  competition_id TEXT NOT NULL REFERENCES competitions(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  total_hours REAL DEFAULT 0,
+  joined_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(competition_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_cp_competition ON competition_participants(competition_id);
+
+-- ═══════════════════════════════════════════
+-- ROLE CHANGE AUDIT LOG
+-- ═══════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS role_audit_log (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  target_user_id TEXT NOT NULL,
+  changed_by_user_id TEXT NOT NULL,
+  old_role TEXT,
+  new_role TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_ral_community ON role_audit_log(community_id);
+CREATE INDEX IF NOT EXISTS idx_ral_target ON role_audit_log(target_user_id);
+
+-- ═══════════════════════════════════════════
+-- FUTURE: Voice/Video rooms (schema only)
+-- ═══════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS community_rooms (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  room_name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  provider TEXT DEFAULT 'livekit',
+  status TEXT DEFAULT 'inactive',
+  created_by TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  ended_at TEXT
+);
+
+-- ════════════════════════════════════════════════════════════
 -- SUPABASE / POSTGRESQL SECTION
 -- Run these statements in the Supabase SQL Editor (Dashboard → SQL Editor)
 -- ════════════════════════════════════════════════════════════
@@ -366,3 +589,19 @@ CREATE POLICY goal_user_isolation ON public.goals
 
 -- After running the above, run this to refresh PostgREST schema cache:
 -- NOTIFY pgrst, 'reload schema';
+
+-- ═══════════════════════════════════════════
+-- NOTIFICATIONS
+-- ═══════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT,
+  data TEXT,
+  read INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at);

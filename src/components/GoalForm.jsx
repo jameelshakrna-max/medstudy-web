@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { GOAL_TYPE_OPTIONS, CATEGORY_OPTIONS, SUBJECT_OPTIONS, MODULE_OPTIONS } from '../data/goalTemplates'
+import FormSelect from './ui/Select'
 import styles from './GoalForm.module.css'
 
 const TYPE_NEEDS_DEADLINE = ['subject_avg', 'performance']
@@ -66,11 +67,7 @@ export default function GoalForm({ initial, onSubmit, onCancel }) {
 
         <div>
           <label className={styles.label}>Goal Type</label>
-          <select className={styles.select} value={goalType} onChange={e => setGoalType(e.target.value)}>
-            {GOAL_TYPE_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+          <FormSelect value={goalType} onChange={setGoalType} options={GOAL_TYPE_OPTIONS} placeholder="Select type..." />
           <div className={styles.fieldDesc}>{getTargetHint(goalType)}</div>
         </div>
 
@@ -85,34 +82,20 @@ export default function GoalForm({ initial, onSubmit, onCancel }) {
 
         <div>
           <label className={styles.label}>Category</label>
-          <select className={styles.select} value={category} onChange={e => setCategory(e.target.value)}>
-            {CATEGORY_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+          <FormSelect value={category} onChange={setCategory} options={CATEGORY_OPTIONS} placeholder="Select category..." />
         </div>
 
         {needsSubject && (
           <div>
             <label className={styles.label}>Subject <span className={styles.required}>*</span></label>
-            <select className={styles.select} value={subjectId} onChange={e => setSubjectId(e.target.value)}>
-              <option value="">Select subject</option>
-              {SUBJECT_OPTIONS.map(s => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
+            <FormSelect value={subjectId} onChange={setSubjectId} options={[{ value: '', label: 'Select subject' }, ...SUBJECT_OPTIONS]} placeholder="Select subject..." />
           </div>
         )}
 
         {needsModule && (
           <div>
             <label className={styles.label}>Module</label>
-            <select className={styles.select} value={module} onChange={e => setModule(e.target.value)}>
-              <option value="">All modules</option>
-              {MODULE_OPTIONS.map(m => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
-            </select>
+            <FormSelect value={module} onChange={setModule} options={[{ value: '', label: 'All modules' }, ...MODULE_OPTIONS]} placeholder="Select module..." />
           </div>
         )}
 

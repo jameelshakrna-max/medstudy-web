@@ -175,6 +175,14 @@ export default function Pomodoro() {
         return
       }
 
+      const API = import.meta.env.VITE_API_URL || '/api'
+      const { data: { session } } = await supabase.auth.getSession()
+      fetch(API + '/study-hours/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+        body: JSON.stringify({ total_hours: 0 }),
+      }).catch(() => {})
+
       if (selectedTopic && topicStatus) {
         const pct = topicStatus === 'Complete' ? 100 : topicStatus === 'Reviewing' ? 75 : 40
         const { error: topicError } = await supabase.from('curriculum_topics').update({

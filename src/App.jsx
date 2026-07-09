@@ -20,6 +20,8 @@ const Settings   = lazy(() => import('./pages/Settings'))
 const Resources  = lazy(() => import('./pages/Resources'))
 const ResourceDetail = lazy(() => import('./pages/ResourceDetail'))
 const Goals      = lazy(() => import('./pages/Goals'))
+const Communities = lazy(() => import('./pages/Communities'))
+const CommunityDetail = lazy(() => import('./pages/CommunityDetail'))
 
 const PAGE_LOADING = <LoadingScreen />
 
@@ -63,6 +65,8 @@ function AppRoutes() {
           <Route path="resources/:id" element={<ResourceDetail />} />
           <Route path="sessions"   element={<Sessions />} />
           <Route path="goals"     element={<Goals />} />
+          <Route path="communities" element={<Communities />} />
+          <Route path="communities/:id" element={<CommunityDetail />} />
           <Route path="settings"   element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

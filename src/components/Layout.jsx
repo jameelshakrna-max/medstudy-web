@@ -4,8 +4,9 @@ import { useState } from 'react'
 import {
   LayoutDashboard, BookOpen, BrainCircuit,
   BarChart3, Timer, ClipboardList, Settings,
-  FolderOpen, LogOut, Menu, ChevronRight, Target,
+  FolderOpen, LogOut, Menu, ChevronRight, Target, Users,
 } from 'lucide-react'
+import NotificationBell from './NotificationBell'
 import styles from './Layout.module.css'
 
 const NAV = [
@@ -15,6 +16,7 @@ const NAV = [
   { to: '/uworld',     icon: BarChart3,     label: 'Tracking Hub' },
   { to: '/goals',      icon: Target,        label: 'Goals' },
   { to: '/pomodoro',   icon: Timer,         label: 'Pomodoro' },
+  { to: '/communities', icon: Users,        label: 'Communities' },
   { to: '/resources',  icon: FolderOpen,    label: 'Resources' },
   { to: '/sessions',   icon: ClipboardList, label: 'Sessions' },
   { to: '/settings',   icon: Settings,      label: 'Settings' }
@@ -23,7 +25,7 @@ const NAV = [
 const PLAN_ICONS = { pro: 'Pro', core: 'Core', free: 'Free' }
 
 export default function Layout() {
-  const { profile, signOut } = useAuth()
+  const { user, profile, signOut } = useAuth()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -41,9 +43,12 @@ export default function Layout() {
             <img src="/icon.svg" alt="MedStudy" className={styles.logoIcon} />
             <span className={styles.logoText}>MedStudy OS</span>
           </div>
-          <div className={styles.userChip}>
-            <div className={styles.userDot} />
-            <span>{profile?.full_name || profile?.email?.split('@')[0] || 'Student'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+            <NotificationBell user={user} />
+            <div className={styles.userChip}>
+              <div className={styles.userDot} />
+              <span>{profile?.full_name || profile?.email?.split('@')[0] || 'Student'}</span>
+            </div>
           </div>
         </div>
 

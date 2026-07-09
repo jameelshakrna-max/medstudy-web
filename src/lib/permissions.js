@@ -1,0 +1,104 @@
+export const ROLES = {
+  MEMBER: 'member',
+  SCHOLAR: 'scholar',
+  MENTOR: 'mentor',
+  MODERATOR: 'moderator',
+  ADMINISTRATOR: 'administrator',
+}
+
+export const ROLE_TYPES = {
+  member: 'progression',
+  scholar: 'progression',
+  mentor: 'progression',
+  moderator: 'authority',
+  administrator: 'authority',
+}
+
+export const ROLE_HIERARCHY = {
+  member: 0,
+  scholar: 1,
+  mentor: 2,
+  moderator: 3,
+  administrator: 4,
+}
+
+export const PERM = {
+  // Member
+  VIEW_CONTENT: 'VIEW_CONTENT',
+  SEND_MESSAGE: 'SEND_MESSAGE',
+  CREATE_POST: 'CREATE_POST',
+  COMMENT_REACT: 'COMMENT_REACT',
+  REPORT_CONTENT: 'REPORT_CONTENT',
+
+  // Scholar
+  UPLOAD_FILES: 'UPLOAD_FILES',
+  UPLOAD_IMAGES: 'UPLOAD_IMAGES',
+  CREATE_FLASHCARD: 'CREATE_FLASHCARD',
+  CREATE_QUIZ: 'CREATE_QUIZ',
+  CREATE_STUDY_GROUP: 'CREATE_STUDY_GROUP',
+  CREATE_COMPETITION: 'CREATE_COMPETITION',
+  CREATE_POLL: 'CREATE_POLL',
+
+  // Mentor
+  VERIFY_ANSWER: 'VERIFY_ANSWER',
+  CREATE_EVENT: 'CREATE_EVENT',
+  HIGHLIGHT_RESOURCE: 'HIGHLIGHT_RESOURCE',
+
+  // Moderator
+  APPROVE_COMPETITION: 'APPROVE_COMPETITION',
+  MODERATE_CONTENT: 'MODERATE_CONTENT',
+  DELETE_POST: 'DELETE_POST',
+  DELETE_COMMENT: 'DELETE_COMMENT',
+  MUTE_MEMBER: 'MUTE_MEMBER',
+  MANAGE_REPORTS: 'MANAGE_REPORTS',
+  PIN_POST: 'PIN_POST',
+
+  // Administrator
+  EDIT_COMMUNITY: 'EDIT_COMMUNITY',
+  MANAGE_MEMBERS: 'MANAGE_MEMBERS',
+  MANAGE_LEVELS: 'MANAGE_LEVELS',
+  MANAGE_COMPETITIONS: 'MANAGE_COMPETITIONS',
+  DELETE_COMMUNITY: 'DELETE_COMMUNITY',
+  ASSIGN_ROLES: 'ASSIGN_ROLES',
+}
+
+const MEMBER_PERMS = [
+  PERM.VIEW_CONTENT, PERM.SEND_MESSAGE, PERM.CREATE_POST,
+  PERM.COMMENT_REACT, PERM.REPORT_CONTENT,
+]
+
+const SCHOLAR_PERMS = [
+  ...MEMBER_PERMS,
+  PERM.UPLOAD_FILES, PERM.UPLOAD_IMAGES, PERM.CREATE_FLASHCARD,
+  PERM.CREATE_QUIZ, PERM.CREATE_STUDY_GROUP, PERM.CREATE_COMPETITION, PERM.CREATE_POLL,
+]
+
+const MENTOR_PERMS = [
+  ...SCHOLAR_PERMS,
+  PERM.VERIFY_ANSWER, PERM.CREATE_EVENT, PERM.HIGHLIGHT_RESOURCE,
+]
+
+const MODERATOR_PERMS = [
+  ...MENTOR_PERMS,
+  PERM.APPROVE_COMPETITION, PERM.MODERATE_CONTENT, PERM.DELETE_POST,
+  PERM.DELETE_COMMENT, PERM.MUTE_MEMBER, PERM.MANAGE_REPORTS, PERM.PIN_POST,
+]
+
+export const ROLE_PERMISSIONS = {
+  member: MEMBER_PERMS,
+  scholar: SCHOLAR_PERMS,
+  mentor: MENTOR_PERMS,
+  moderator: MODERATOR_PERMS,
+  administrator: ['*'],
+}
+
+export function hasPermission(role, permission) {
+  if (!role) return false
+  const perms = ROLE_PERMISSIONS[role]
+  if (!perms) return false
+  return perms.includes('*') || perms.includes(permission)
+}
+
+export function hasMinimumRole(currentRole, minRole) {
+  return (ROLE_HIERARCHY[currentRole] ?? -1) >= (ROLE_HIERARCHY[minRole] ?? Infinity)
+}

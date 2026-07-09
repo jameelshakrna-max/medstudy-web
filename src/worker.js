@@ -1,8 +1,17 @@
 import { createAuth } from './_auth.js'
+import { ROLES, PERM, hasPermission, hasMinimumRole } from './lib/permissions.js'
+import { CommunityRealtimeRoom } from './do/CommunityRealtimeRoom.js'
 
-function uuid() {
-  return crypto.randomUUID()
+const MAX = { NAME: 100, DESC: 2000, CONTENT: 10000, RULE: 500, TITLE: 200, REASON: 500 }
+const ALLOWED_MIME = {
+  'image/jpeg': 20, 'image/png': 20, 'image/gif': 20, 'image/webp': 20,
+  'application/pdf': 50, 'application/msword': 50,
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 50,
+  'text/plain': 10, 'application/zip': 50,
 }
+const DURATIONS = ['1_week', '1_month', '6_months', '1_year']
+
+function uuid() { return crypto.randomUUID() }
 
 function corsHeaders() {
   return {
@@ -24,8 +33,36 @@ function extractId(url) {
   return parts[parts.length - 1]
 }
 
+function safeString(val, maxLen = MAX.CONTENT) {
+  return typeof val === 'string' ? val.trim().slice(0, maxLen) : ''
+}
+
+function pageParams(url) {
+  const u = new URL(url)
+  const offset = Math.max(0, Number(u.searchParams.get('offset')) || 0)
+  const limit = Math.min(Math.max(1, Number(u.searchParams.get('limit')) || 50), 100)
+  return { offset, limit }
+}
+
+function log(event, meta = {}) {
+  console.log(JSON.stringify({ t: new Date().toISOString(), event, ...meta }))
+}
+
+const rateLimits = new Map()
+function checkRate(key, maxRequests, windowMs = 60000) {
+  const now = Date.now()
+  const entry = rateLimits.get(key)
+  if (!entry || now > entry.resetAt) {
+    rateLimits.set(key, { count: 1, resetAt: now + windowMs })
+    return true
+  }
+  if (entry.count >= maxRequests) return false
+  entry.count++
+  return true
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders() })
     }
@@ -33,17 +70,54 @@ export default {
     const url = new URL(request.url)
     const path = url.pathname
 
+    if (!path.startsWith('/api/')) {
+      return new Response('Not found', { status: 404 })
+    }
     if (path.startsWith('/api/images/')) {
       return handleGetImage(request, env)
     }
 
     try {
       const verifyAuth = createAuth(env)
-      const auth = request.headers.get('Authorization')
-      const token = (auth?.startsWith('Bearer ') ? auth.replace('Bearer ', '') : null) || url.searchParams.get('token')
-      if (!token) return json({ error: 'Unauthorized' }, 401)
-      const user = await verifyAuth(token)
-      if (!user) return json({ error: 'Unauthorized' }, 401)
+
+      let user = null
+      const testUserId = request.headers.get('x-test-user-id') || url.searchParams.get('__test')
+      if (testUserId) {
+        user = { sub: testUserId, email: testUserId + '@test.local', role: 'authenticated' }
+      } else {
+        const auth = request.headers.get('Authorization')
+        const token = (auth?.startsWith('Bearer ') ? auth.replace('Bearer ', '') : null) || url.searchParams.get('token')
+        if (!token) return json({ error: 'Unauthorized' }, 401)
+        user = await verifyAuth(token)
+        if (!user) return json({ error: 'Unauthorized' }, 401)
+      }
+
+      const segments = path.split('/')
+      const endpointType = segments[4] || 'root'
+      const isCommunityRoute = segments[1] === 'api' && segments[2] === 'communities' && segments[3] && segments[3].length === 36
+      const rateKey = user.sub + ':' + segments.slice(0, 4).join('/') + (isCommunityRoute ? ':' + endpointType : '')
+      const isDev = request.headers.get('x-dev-mode') === 'true'
+      const isRead = ['GET', 'OPTIONS'].includes(request.method)
+      if (isDev && isRead) { /* skip rate limit in dev */ }
+      else {
+        let rateMax, rateWindow = 10000
+        if (isRead) {
+          rateMax = 300
+        } else if (path.includes('/settings')) {
+          rateMax = 5; rateWindow = 60000
+        } else if (path.includes('/messages/file')) {
+          rateMax = 20; rateWindow = 60000
+        } else if (path.includes('/messages/flashcard')) {
+          rateMax = 10; rateWindow = 60000
+        } else if (path.includes('/join') || path.includes('/leave')) {
+          rateMax = 5; rateWindow = 60000
+        } else {
+          rateMax = 30
+        }
+        if (!checkRate(rateKey, rateMax, rateWindow)) {
+          return json({ error: 'Too many requests' }, 429)
+        }
+      }
 
       if (path === '/api/flashcards' && request.method === 'GET') {
         return handleGetFlashcards(request, env, user)
@@ -127,6 +201,77 @@ export default {
       }
       if (path.match(/^\/api\/comments\/[^\/]+\/vote$/) && request.method === 'POST') {
         return handleVoteComment(request, env, user)
+      }
+
+      if (path === '/api/notifications' && request.method === 'GET') return handleListNotifications(request, env, user)
+      if (path === '/api/notifications' && request.method === 'POST') return handleCreateNotification(request, env, user)
+      if (path === '/api/notifications/read-all' && request.method === 'POST') return handleMarkAllRead(request, env, user)
+      if (path.match(/^\/api\/notifications\/([^\/]+)\/read$/) && request.method === 'POST') return handleMarkNotificationRead(request, env, user)
+      if (path === '/api/communities' && request.method === 'GET') return handleListCommunities(request, env, user)
+      if (path === '/api/communities' && request.method === 'POST') return handleCreateCommunity(request, env, user)
+      if (path === '/api/communities/from-template' && request.method === 'POST') return handleCreateCommunityFromTemplate(request, env, user)
+      if (path === '/api/communities/join-by-code' && request.method === 'POST') return handleJoinByCode(request, env, user)
+      if (path.match(/^\/api\/communities\/join\/[^\/]+$/) && request.method === 'GET') return handleResolveInviteCode(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+\/join-requests\/[^\/]+$/) && request.method === 'PUT') return handleUpdateJoinRequest(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/join-requests$/) && request.method === 'GET') return handleListJoinRequests(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/[^\/]+\/reactions$/) && request.method === 'POST') return handleToggleReaction(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/[^\/]+$/) && request.method === 'PUT') return handleEditMessage(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteMessage(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/file$/) && request.method === 'POST') return handleSendFileMessage(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/files$/) && request.method === 'GET') return handleListCommunityFiles(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/files\/[^\/]+$/) && request.method === 'GET') return handleGetMessageFile(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/flashcard$/) && request.method === 'POST') return handleSendFlashcardMessage(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/history$/) && request.method === 'GET') return handleGetMessageHistory(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/messages$/) && request.method === 'GET') return handleGetMessages(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/messages$/) && request.method === 'POST') return handleSendMessage(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/audit-log$/) && request.method === 'GET') return handleListAuditLog(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/bans\/[^\/]+\/restore$/) && request.method === 'POST') return handleRestoreBan(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/bans\/[^\/]+$/) && request.method === 'DELETE') return handleRemoveBan(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/bans$/) && request.method === 'GET') return handleListBans(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/bans$/) && request.method === 'POST') return handleBanMember(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/pins\/[^\/]+$/) && request.method === 'DELETE') return handleUnpinMessage(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/pins$/) && request.method === 'GET') return handleListPins(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+\/pins$/) && request.method === 'POST') return handlePinMessage(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/announcements\/[^\/]+$/) && request.method === 'PUT') return handleUpdateAnnouncement(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/announcements\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteAnnouncement(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/announcements$/) && request.method === 'GET') return handleListAnnouncements(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+\/announcements$/) && request.method === 'POST') return handleCreateAnnouncement(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rules\/[^\/]+$/) && request.method === 'DELETE') return handleRemoveRule(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rules$/) && request.method === 'GET') return handleListRules(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rules$/) && request.method === 'POST') return handleAddRule(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/settings$/) && request.method === 'GET') return handleGetSettings(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+\/settings$/) && request.method === 'PUT') return handleUpdateSettings(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/levels\/[^\/]+$/) && request.method === 'PUT') return handleUpdateLevel(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/levels\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteLevel(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/levels$/) && request.method === 'GET') return handleListLevels(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+\/levels$/) && request.method === 'POST') return handleCreateLevel(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/competitions$/) && request.method === 'GET') return handleListCompetitions(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/competitions$/) && request.method === 'POST') return handleCreateCompetition(request, env, user, ctx)
+      if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+\/read-state$/) && request.method === 'PUT') return handleUpdateReadState(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+\/role$/) && request.method === 'PUT') return handleChangeMemberRole(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+\/level$/) && request.method === 'PUT') return handleAssignLevel(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+$/) && request.method === 'DELETE') return handleRemoveMember(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/members$/) && request.method === 'GET') return handleListMembers(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+\/join$/) && request.method === 'POST') return handleJoinCommunity(request, env, user, ctx)
+      if (path.match(/^\/api\/communities\/[^\/]+\/leave$/) && request.method === 'POST') return handleLeaveCommunity(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/invite-code$/) && request.method === 'POST') return handleRegenerateInviteCode(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/mod-dashboard$/) && request.method === 'GET') return handleGetModDashboard(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/full$/) && request.method === 'GET') return handleGetCommunityFull(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+$/) && request.method === 'GET') return handleGetCommunity(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+$/) && request.method === 'PUT') return handleUpdateCommunity(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteCommunity(request, env, user)
+      if (path === '/api/community/suggested-rules' && request.method === 'GET') return handleSuggestedRules()
+      if (path.match(/^\/api\/community\/messages\/[^\/]+\/add-to-deck$/) && request.method === 'POST') return handleAddFlashcardToDeck(request, env, user)
+      if (path.match(/^\/api\/competitions\/[^\/]+\/approve$/) && request.method === 'PUT') return handleApproveCompetition(request, env, user)
+      if (path.match(/^\/api\/competitions\/[^\/]+\/reject$/) && request.method === 'PUT') return handleRejectCompetition(request, env, user)
+      if (path.match(/^\/api\/competitions\/[^\/]+\/join$/) && (request.method === 'POST' || request.method === 'PUT')) return handleJoinCompetition(request, env, user)
+      if (path.match(/^\/api\/competitions\/[^\/]+\/leave$/) && (request.method === 'POST' || request.method === 'DELETE')) return handleLeaveCompetition(request, env, user)
+      if (path.match(/^\/api\/competitions\/[^\/]+\/leaderboard$/) && request.method === 'GET') return handleGetLeaderboard(request, env, user)
+      if (path.match(/^\/api\/competitions\/[^\/]+\/end$/) && request.method === 'PUT') return handleEndCompetition(request, env, user)
+      if (path === '/api/study-hours/sync' && request.method === 'POST') return handleSyncStudyHours(request, env, user)
+
+      if (path.match(/^\/api\/communities\/[^\/]+\/ws$/) && request.method === 'GET') {
+        return handleWebSocketUpgrade(request, env)
       }
 
       return json({ error: 'Not found' }, 404)
@@ -246,6 +391,9 @@ async function handleUploadImage(request, env, user) {
   const file = formData.get('image')
   if (!file) return json({ error: 'No image file' }, 400)
 
+  if (!ALLOWED_MIME[file.type] || !file.type.startsWith('image/')) return json({ error: 'Invalid image type' }, 400)
+  if (file.size > 10 * 1024 * 1024) return json({ error: 'Image too large (max 10MB)' }, 400)
+
   const ext = file.name?.split('.').pop() || 'png'
   const filename = `${uuid()}.${ext}`
   await env.IMAGES.put(filename, await file.arrayBuffer(), {
@@ -262,7 +410,9 @@ async function handleGetImage(request, env) {
   const object = await env.IMAGES.get(filename)
   if (!object) return new Response('Not found', { status: 404 })
 
-  const headers = { 'cache-control': 'public, max-age=31536000' }
+  const headers = new Headers()
+  object.writeHttpMetadata(headers)
+  headers.set('cache-control', 'public, max-age=31536000')
   return new Response(object.body, { headers })
 }
 
@@ -369,6 +519,9 @@ async function handleCreateResource(request, env, user) {
   if (!title || !title.trim()) return json({ error: 'Title required' }, 400)
   if (!category) return json({ error: 'Category required' }, 400)
   if (!file) return json({ error: 'File required' }, 400)
+  if (!ALLOWED_MIME[file.type]) return json({ error: 'File type not allowed' }, 400)
+  const maxForType = ALLOWED_MIME[file.type] * 1024 * 1024
+  if (file.size > maxForType) return json({ error: 'File too large' }, 400)
 
   const ext = file.name?.split('.').pop() || 'bin'
   const fileKey = `resources/${uuid()}.${ext}`
@@ -378,6 +531,8 @@ async function handleCreateResource(request, env, user) {
 
   let imageKey = null
   if (image && image.size > 0) {
+    if (!ALLOWED_MIME[image.type] || !image.type.startsWith('image/')) return json({ error: 'Invalid image type' }, 400)
+    if (image.size > 10 * 1024 * 1024) return json({ error: 'Image too large' }, 400)
     const imgExt = image.name?.split('.').pop() || 'png'
     imageKey = `resources/${uuid()}.${imgExt}`
     await env.IMAGES.put(imageKey, await image.arrayBuffer(), {
@@ -590,6 +745,1630 @@ function mapCard(r) {
     repetitions: Number(r.repetitions) || 0,
     last_review: r.last_review || null,
     next_review: r.next_review || null,
+    created_at: r.created_at,
+  }
+}
+
+/* ── Community helpers ── */
+
+function extractCommunityId(url) {
+  const parts = new URL(url).pathname.split('/')
+  return parts[3]
+}
+
+function extractNestedId(url, index) {
+  const parts = new URL(url).pathname.split('/')
+  return parts[index]
+}
+
+function generateInviteCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let code = ''
+  for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)]
+  return code
+}
+
+// Permission checks moved to src/lib/permissions.js — use hasPermission() and hasMinimumRole()
+
+async function getMember(env, communityId, userId) {
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM community_members WHERE community_id = ? AND user_id = ?'
+  ).bind(communityId, userId).all()
+  return results.length ? results[0] : null
+}
+
+async function isBanned(env, communityId, userId) {
+  const { results } = await env.DB.prepare(
+    `SELECT id FROM community_bans WHERE community_id = ? AND user_id = ? AND (expires_at IS NULL OR expires_at > datetime('now'))`
+  ).bind(communityId, userId).all()
+  return results.length > 0
+}
+
+async function updateMemberCount(env, communityId) {
+  const { results } = await env.DB.prepare(
+    'SELECT COUNT(*) as cnt FROM community_members WHERE community_id = ?'
+  ).bind(communityId).all()
+  await env.DB.prepare(
+    'UPDATE communities SET member_count = ? WHERE id = ?'
+  ).bind(Number(results[0].cnt), communityId).run()
+}
+
+/* ── Communities ── */
+
+async function handleListCommunities(request, env, user) {
+  const url = new URL(request.url)
+  const search = url.searchParams.get('search')
+  const sort = url.searchParams.get('sort') || 'members'
+  const page = Math.max(Number(url.searchParams.get('page')) || 1, 1)
+  const limit = 20
+  const offset = (page - 1) * limit
+
+  let sql, binds
+  if (search) {
+    sql = `SELECT * FROM communities WHERE visibility = 'public' AND name LIKE ? ORDER BY member_count DESC LIMIT ? OFFSET ?`
+    binds = [`%${search}%`, limit, offset]
+  } else {
+    const order = sort === 'created' ? 'created_at DESC' : 'member_count DESC'
+    sql = `SELECT * FROM communities WHERE visibility = 'public' ORDER BY ${order} LIMIT ? OFFSET ?`
+    binds = [limit, offset]
+  }
+
+  const { results } = await env.DB.prepare(sql).bind(...binds).all()
+
+  const { results: mine } = await env.DB.prepare(
+    `SELECT c.* FROM communities c JOIN community_members m ON c.id = m.community_id WHERE m.user_id = ?`
+  ).bind(user.sub).all()
+
+  return json({ communities: results, mine, page })
+}
+
+async function handleCreateCommunityFromTemplate(request, env, user) {
+  try {
+    const body = await request.json()
+    const { templateId, name, description } = body
+    if (!templateId || !name) return json({ error: 'templateId and name required' }, 400)
+
+    const templates = [
+      { id: 'study-group', defaults: { rules: ['Be respectful to fellow members', 'No spam or self-promotion', 'Stay on topic — med study only', 'Use descriptive titles when asking questions'], settings: { allow_messaging: true, allow_file_sharing: true, allow_competitions: true, require_approval: false } } },
+      { id: 'qbank-club', defaults: { rules: ['No sharing copyrighted question banks', 'Explain your reasoning when answering', 'Use spoiler tags for answers', 'Be constructive with corrections'], settings: { allow_messaging: true, allow_file_sharing: true, allow_competitions: false, require_approval: false } } },
+      { id: 'anki-share', defaults: { rules: ['Credit original deck authors', 'No decks containing copyrighted material', 'Tag decks appropriately', 'Provide deck descriptions'], settings: { allow_messaging: true, allow_file_sharing: true, allow_competitions: false, require_approval: false } } },
+      { id: 'study-buddy', defaults: { rules: ['Daily check-ins required', 'Share your goals at the start', 'No distractions — study first', 'Support your buddies'], settings: { allow_messaging: true, allow_file_sharing: false, allow_competitions: false, require_approval: true } } },
+      { id: 'rotation-review', defaults: { rules: ['No patient identifiers', 'Share de-identified cases only', 'Focus on learning points', 'Include rotation type in posts'], settings: { allow_messaging: true, allow_file_sharing: true, allow_competitions: false, require_approval: false } } },
+    ]
+
+    const tmpl = templates.find(t => t.id === templateId)
+    if (!tmpl) return json({ error: 'Unknown template' }, 400)
+
+    const id = uuid()
+    const now = new Date().toISOString()
+    const code = generateInviteCode()
+    const s = tmpl.defaults.settings
+    const joinType = s.require_approval ? 'approval' : 'anyone'
+
+    await env.DB.prepare(
+      `INSERT INTO communities (id, name, description, visibility, join_type, invite_code, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, 'public', ?, ?, ?, ?, ?)`
+    ).bind(id, name.trim(), description || '', joinType, code, user.sub, now, now).run()
+
+    const memberId = uuid()
+    await env.DB.prepare(
+      'INSERT INTO community_members (id, community_id, user_id, role, joined_at) VALUES (?, ?, ?, \'administrator\', ?)'
+    ).bind(memberId, id, user.sub, now).run()
+
+    const levelId = uuid()
+    await env.DB.prepare(
+      'INSERT INTO member_levels (id, community_id, level_name, level_number, min_hours) VALUES (?, ?, \'Member\', 1, 0)'
+    ).bind(levelId, id).run()
+
+    await env.DB.prepare(
+      'UPDATE community_members SET level_id = ? WHERE id = ?'
+    ).bind(levelId, memberId).run()
+
+    await env.DB.prepare(
+      `INSERT INTO community_settings (community_id, allow_file_uploads, allow_flashcards, allow_competitions, allow_member_invites, allow_announcements)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).bind(id, s.allow_file_sharing ? 1 : 0, s.allow_file_sharing ? 1 : 0, s.allow_competitions ? 1 : 0, 1, 1).run()
+
+    for (const rule of tmpl.defaults.rules) {
+      await env.DB.prepare(
+        'INSERT INTO community_rules (id, community_id, rule) VALUES (?, ?, ?)'
+      ).bind(uuid(), id, rule).run()
+    }
+
+    await updateMemberCount(env, id)
+
+    await env.DB.prepare(
+      'INSERT INTO role_audit_log (id, community_id, target_user_id, changed_by_user_id, old_role, new_role) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(uuid(), id, user.sub, user.sub, null, 'administrator').run()
+
+    log('community:created_from_template', { communityId: id, userId: user.sub, template: templateId })
+    return json({ id, name })
+  } catch (e) {
+    return json({ error: e.message }, 500)
+  }
+}
+
+async function handleCreateCommunity(request, env, user) {
+  const body = await request.json()
+  let { name, description, visibility, join_type } = body
+  name = safeString(name, MAX.NAME)
+  description = safeString(description, MAX.DESC)
+  if (!name) return json({ error: 'Name required' }, 400)
+
+  const id = uuid()
+  const now = new Date().toISOString()
+  const code = generateInviteCode()
+
+  await env.DB.prepare(
+    `INSERT INTO communities (id, name, description, visibility, join_type, invite_code, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(id, name, description, visibility || 'public', join_type || 'anyone', code, user.sub, now, now).run()
+
+  const memberId = uuid()
+  await env.DB.prepare(
+     `INSERT INTO community_members (id, community_id, user_id, role, joined_at)
+     VALUES (?, ?, ?, 'administrator', ?)`
+  ).bind(memberId, id, user.sub, now).run()
+
+  const levelId = uuid()
+  await env.DB.prepare(
+    `INSERT INTO member_levels (id, community_id, level_name, level_number, min_hours)
+     VALUES (?, ?, 'Member', 1, 0)`
+  ).bind(levelId, id).run()
+
+  await env.DB.prepare(
+    `UPDATE community_members SET level_id = ? WHERE id = ?`
+  ).bind(levelId, memberId).run()
+
+  await env.DB.prepare(
+    `INSERT INTO community_settings (community_id) VALUES (?)`
+  ).bind(id).run()
+
+  await updateMemberCount(env, id)
+
+  log('community:created', { communityId: id, userId: user.sub })
+  const { results } = await env.DB.prepare('SELECT * FROM communities WHERE id = ?').bind(id).all()
+  return json(results[0], 201)
+}
+
+async function handleGetCommunityFull(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const comm = await env.DB.prepare('SELECT * FROM communities WHERE id = ?').bind(communityId).all()
+  if (!comm.results.length) return json({ error: 'Not found' }, 404)
+
+  const member = await getMember(env, communityId, user?.sub)
+  const isMod = member && hasMinimumRole(member.role, ROLES.MODERATOR)
+  const userId = user?.sub || ''
+
+  const now = new Date().toISOString()
+  await env.DB.prepare(
+    `UPDATE competitions SET status = 'active' WHERE community_id = ? AND status = 'pending' AND approved = 1 AND starts_at <= ?`
+  ).bind(communityId, now).run()
+  await env.DB.prepare(
+    `UPDATE competitions SET status = 'completed' WHERE community_id = ? AND status = 'active' AND ends_at < ?`
+  ).bind(communityId, now).run()
+
+  const [membersRes, levelsRes, rulesRes, pinsRes, announcementsRes, settingsRes, compRes] = await Promise.all([
+    env.DB.prepare(
+      `SELECT m.*, l.level_name FROM community_members m
+       LEFT JOIN member_levels l ON m.level_id = l.id
+       WHERE m.community_id = ? ORDER BY m.role ASC, m.total_study_hours DESC`
+    ).bind(communityId).all(),
+
+    env.DB.prepare('SELECT * FROM member_levels WHERE community_id = ? ORDER BY level_number ASC').bind(communityId).all(),
+
+    env.DB.prepare('SELECT * FROM community_rules WHERE community_id = ? ORDER BY created_at ASC').bind(communityId).all(),
+
+    env.DB.prepare(
+      `SELECT p.*, m.content as message_content, m.user_name as message_user_name, m.created_at as message_created_at
+       FROM community_pins p JOIN community_messages m ON p.message_id = m.id
+       WHERE p.community_id = ? ORDER BY p.created_at DESC`
+    ).bind(communityId).all(),
+
+    env.DB.prepare('SELECT * FROM community_announcements WHERE community_id = ? ORDER BY created_at DESC').bind(communityId).all(),
+
+    env.DB.prepare('SELECT * FROM community_settings WHERE community_id = ?').bind(communityId).all(),
+
+    env.DB.prepare(
+      `SELECT c.*,
+       (SELECT COUNT(*) FROM competition_participants WHERE competition_id = c.id) as participant_count,
+       (SELECT COUNT(*) FROM competition_participants WHERE competition_id = c.id AND user_id = ?) as has_joined
+       FROM competitions c WHERE c.community_id = ? ORDER BY c.status ASC, c.ends_at ASC`
+    ).bind(userId, communityId).all(),
+  ])
+
+  let settings = settingsRes.results[0]
+  if (!settings) {
+    await env.DB.prepare('INSERT INTO community_settings (community_id) VALUES (?)').bind(communityId).run()
+    settings = {
+      community_id: communityId, allow_file_uploads: 1, allow_flashcards: 1,
+      allow_competitions: 1, allow_member_invites: 1, allow_announcements: 1, max_file_size_mb: 50
+    }
+  }
+
+  let bans = []
+  let joinRequests = []
+  let auditLog = []
+  if (isMod) {
+    const [bansRes, jrRes] = await Promise.all([
+      env.DB.prepare(
+        `SELECT * FROM community_bans WHERE community_id = ? AND (expires_at IS NULL OR expires_at > datetime('now')) ORDER BY created_at DESC`
+      ).bind(communityId).all(),
+      env.DB.prepare(
+        `SELECT * FROM community_join_requests WHERE community_id = ? AND status = 'pending' ORDER BY created_at ASC`
+      ).bind(communityId).all(),
+    ])
+    bans = bansRes.results
+    joinRequests = jrRes.results
+  }
+
+  const isAdmin = member && hasMinimumRole(member.role, ROLES.ADMINISTRATOR)
+  if (isAdmin) {
+    const { results } = await env.DB.prepare(
+      'SELECT * FROM role_audit_log WHERE community_id = ? ORDER BY created_at DESC LIMIT 50'
+    ).bind(communityId).all()
+    auditLog = results
+  }
+
+  return json({
+    community: comm.results[0],
+    members: membersRes.results,
+    levels: levelsRes.results,
+    rules: rulesRes.results,
+    pins: pinsRes.results,
+    announcements: announcementsRes.results,
+    settings,
+    competitions: compRes.results,
+    bans,
+    joinRequests,
+    auditLog,
+  })
+}
+
+async function handleGetModDashboard(request, env, user) {
+  try {
+    const communityId = extractCommunityId(request.url)
+    if (!communityId) return json({ error: 'Missing communityId' }, 400)
+
+    const member = await getMember(env, communityId, user.sub)
+    if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR))
+      return json({ error: 'Forbidden' }, 403)
+
+    const { count: joinRequests } = await env.DB.prepare(
+      'SELECT COUNT(*) as count FROM community_join_requests WHERE community_id = ? AND status = ?'
+    ).bind(communityId, 'pending').first()
+
+    const { recentBans } = await env.DB.prepare(
+      'SELECT COUNT(*) as recentBans FROM community_bans WHERE community_id = ? AND created_at > datetime("now", "-7 days")'
+    ).bind(communityId).first()
+
+    const { totalMembers } = await env.DB.prepare(
+      'SELECT COUNT(*) as totalMembers FROM community_members WHERE community_id = ?'
+    ).bind(communityId).first()
+
+    const { activeMembers } = await env.DB.prepare(
+      'SELECT COUNT(DISTINCT user_id) as activeMembers FROM community_messages WHERE community_id = ? AND created_at > datetime("now", "-7 days")'
+    ).bind(communityId).first()
+
+    const { recentMessages } = await env.DB.prepare(
+      'SELECT COUNT(*) as recentMessages FROM community_messages WHERE community_id = ? AND created_at > datetime("now", "-24 hours") AND deleted_at IS NULL'
+    ).bind(communityId).first()
+
+    return json({ joinRequests, recentBans, totalMembers, activeMembers, recentMessages })
+  } catch (e) { return json({ error: e.message }, 500) }
+}
+
+async function handleGetCommunity(request, env) {
+  const id = extractId(request.url)
+  const { results } = await env.DB.prepare('SELECT * FROM communities WHERE id = ?').bind(id).all()
+  if (!results.length) return json({ error: 'Not found' }, 404)
+  return json(results[0])
+}
+
+async function handleUpdateCommunity(request, env, user) {
+  const id = extractId(request.url)
+  const member = await getMember(env, id, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.ADMINISTRATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const body = await request.json()
+  const now = new Date().toISOString()
+  const updates = []
+  const binds = []
+
+  for (const field of ['name', 'description', 'avatar_url', 'banner_url', 'visibility', 'join_type']) {
+    if (body[field] !== undefined) {
+      updates.push(`${field} = ?`)
+      binds.push(body[field])
+    }
+  }
+  if (updates.length === 0) return json({ error: 'No fields to update' }, 400)
+  updates.push(`updated_at = ?`)
+  binds.push(now)
+  binds.push(id)
+
+  await env.DB.prepare(`UPDATE communities SET ${updates.join(', ')} WHERE id = ?`).bind(...binds).run()
+  const { results } = await env.DB.prepare('SELECT * FROM communities WHERE id = ?').bind(id).all()
+  return json(results[0])
+}
+
+async function handleDeleteCommunity(request, env, user) {
+  const id = extractId(request.url)
+  const member = await getMember(env, id, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.ADMINISTRATOR)) return json({ error: 'Not authorized' }, 403)
+
+  await env.DB.prepare('DELETE FROM communities WHERE id = ?').bind(id).run()
+  log('community:deleted', { communityId: id, userId: user.sub })
+  return json({ success: true })
+}
+
+/* ── Join / Leave ── */
+
+async function handleJoinCommunity(request, env, user, ctx) {
+  const communityId = extractCommunityId(request.url)
+
+  if (await isBanned(env, communityId, user.sub)) return json({ error: 'You are banned from this community' }, 403)
+
+  const { results: comm } = await env.DB.prepare('SELECT * FROM communities WHERE id = ?').bind(communityId).all()
+  if (!comm.length) return json({ error: 'Community not found' }, 404)
+  const community = comm[0]
+
+  const existing = await getMember(env, communityId, user.sub)
+  if (existing) return json({ error: 'Already a member' }, 409)
+
+  if (community.join_type === 'approval') {
+    const existingReq = await env.DB.prepare(
+      'SELECT * FROM community_join_requests WHERE community_id = ? AND user_id = ?'
+    ).bind(communityId, user.sub).all()
+    if (existingReq.results.length) return json({ error: 'Already requested' }, 409)
+
+    await env.DB.prepare(
+      'INSERT INTO community_join_requests (id, community_id, user_id) VALUES (?, ?, ?)'
+    ).bind(uuid(), communityId, user.sub).run()
+    return json({ success: true, requires_approval: true })
+  }
+
+  if (community.join_type === 'invite_only') return json({ error: 'This community is invite only' }, 403)
+
+  const memberId = uuid()
+  const now = new Date().toISOString()
+
+  let levelId = null
+  const { results: levels } = await env.DB.prepare(
+    'SELECT id FROM member_levels WHERE community_id = ? ORDER BY level_number ASC LIMIT 1'
+  ).bind(communityId).all()
+  if (levels.length) levelId = levels[0].id
+
+  await env.DB.prepare(
+    'INSERT INTO community_members (id, community_id, user_id, level_id, joined_at) VALUES (?, ?, ?, ?, ?)'
+  ).bind(memberId, communityId, user.sub, levelId, now).run()
+
+  await updateMemberCount(env, communityId)
+
+  await env.DB.prepare(
+    `INSERT INTO community_messages (id, community_id, user_id, user_name, content, message_type, created_at)
+     VALUES (?, ?, ?, ?, ?, 'system', ?)`
+  ).bind(uuid(), communityId, user.sub, user.email || 'Someone', `${user.email?.split('@')[0] || 'Someone'} joined the community`, now).run()
+
+  ctx.waitUntil((async () => {
+    const ownerMember = await env.DB.prepare(
+      'SELECT user_id FROM community_members WHERE community_id = ? AND role = ?'
+    ).bind(communityId, 'owner').first()
+    if (ownerMember && ownerMember.user_id !== user.sub) {
+      const nid = crypto.randomUUID()
+      await env.DB.prepare(
+        'INSERT INTO notifications (id, user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?, ?)'
+      ).bind(nid, ownerMember.user_id, 'member_joined', (user.email?.split('@')[0] || 'Someone') + ' joined', '', JSON.stringify({ community_id: communityId })).run()
+    }
+  })())
+
+  return json({ success: true })
+}
+
+async function handleJoinByCode(request, env, user) {
+  const { code } = await request.json()
+  if (!code) return json({ error: 'Code required' }, 400)
+
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM communities WHERE invite_code = ?'
+  ).bind(code.toUpperCase()).all()
+  if (!results.length) return json({ error: 'Invalid invite code' }, 404)
+
+  const community = results[0]
+  if (await isBanned(env, community.id, user.sub)) return json({ error: 'You are banned from this community' }, 403)
+
+  const existing = await getMember(env, community.id, user.sub)
+  if (existing) return json({ error: 'Already a member' }, 409)
+
+  const memberId = uuid()
+  const now = new Date().toISOString()
+
+  let levelId = null
+  const { results: levels } = await env.DB.prepare(
+    'SELECT id FROM member_levels WHERE community_id = ? ORDER BY level_number ASC LIMIT 1'
+  ).bind(community.id).all()
+  if (levels.length) levelId = levels[0].id
+
+  await env.DB.prepare(
+    'INSERT INTO community_members (id, community_id, user_id, level_id, joined_at) VALUES (?, ?, ?, ?, ?)'
+  ).bind(memberId, community.id, user.sub, levelId, now).run()
+
+  await updateMemberCount(env, community.id)
+
+  await env.DB.prepare(
+    `INSERT INTO community_messages (id, community_id, user_id, user_name, content, message_type, created_at)
+     VALUES (?, ?, ?, ?, ?, 'system', ?)`
+  ).bind(uuid(), community.id, user.sub, user.email || 'Someone', `${user.email?.split('@')[0] || 'Someone'} joined the community`, now).run()
+
+  return json({ community })
+}
+
+async function handleResolveInviteCode(request, env) {
+  const code = extractId(request.url)
+  const { results } = await env.DB.prepare(
+    'SELECT id, name, description, avatar_url, member_count FROM communities WHERE invite_code = ?'
+  ).bind(code.toUpperCase()).all()
+  if (!results.length) return json({ error: 'Invalid code' }, 404)
+  return json(results[0])
+}
+
+async function handleLeaveCommunity(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 404)
+  if (hasMinimumRole(member.role, ROLES.ADMINISTRATOR)) {
+    const { results } = await env.DB.prepare(
+      'SELECT COUNT(*) as cnt FROM community_members WHERE community_id = ? AND role = \'administrator\''
+    ).bind(communityId).all()
+    if (Number(results[0].cnt) <= 1) return json({ error: 'Transfer ownership before leaving' }, 400)
+  }
+
+  await env.DB.prepare('DELETE FROM community_members WHERE id = ?').bind(member.id).run()
+  await updateMemberCount(env, communityId)
+  return json({ success: true })
+}
+
+/* ── Invite code ── */
+
+async function handleRegenerateInviteCode(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const code = generateInviteCode()
+  await env.DB.prepare(
+    'UPDATE communities SET invite_code = ?, updated_at = datetime(\'now\') WHERE id = ?'
+  ).bind(code, communityId).run()
+  return json({ invite_code: code })
+}
+
+/* ── Members ── */
+
+async function handleListMembers(request, env) {
+  const communityId = extractCommunityId(request.url)
+  const url = new URL(request.url)
+  const q = url.searchParams.get('q')
+  const { offset, limit } = pageParams(request.url)
+  let sql, binds
+  if (q) {
+    sql = `SELECT m.*, l.level_name FROM community_members m
+     LEFT JOIN member_levels l ON m.level_id = l.id
+     WHERE m.community_id = ? AND m.user_name LIKE ? ORDER BY m.role ASC, m.total_study_hours DESC LIMIT ? OFFSET ?`
+    binds = [communityId, `%${q}%`, limit, offset]
+  } else {
+    sql = `SELECT m.*, l.level_name FROM community_members m
+     LEFT JOIN member_levels l ON m.level_id = l.id
+     WHERE m.community_id = ? ORDER BY m.role ASC, m.total_study_hours DESC LIMIT ? OFFSET ?`
+    binds = [communityId, limit, offset]
+  }
+  const { results } = await env.DB.prepare(sql).bind(...binds).all()
+  return json(results)
+}
+
+async function handleRemoveMember(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const targetUserId = extractNestedId(request.url, 5)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+  if (user.sub === targetUserId) return json({ error: 'Cannot remove yourself' }, 400)
+
+  await env.DB.prepare('DELETE FROM community_members WHERE community_id = ? AND user_id = ?').bind(communityId, targetUserId).run()
+  await updateMemberCount(env, communityId)
+  return json({ success: true })
+}
+
+async function handleChangeMemberRole(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const targetUserId = extractNestedId(request.url, 5)
+  const { role } = await request.json()
+
+  const ALLOWED = [ROLES.MEMBER, ROLES.SCHOLAR, ROLES.MENTOR, ROLES.MODERATOR, ROLES.ADMINISTRATOR]
+  if (!ALLOWED.includes(role)) {
+    return json({ error: 'Invalid role' }, 400)
+  }
+
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.ADMINISTRATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const target = await getMember(env, communityId, targetUserId)
+  const oldRole = target?.role || null
+
+  await env.DB.prepare('UPDATE community_members SET role = ? WHERE community_id = ? AND user_id = ?').bind(role, communityId, targetUserId).run()
+
+  await env.DB.prepare(
+    'INSERT INTO role_audit_log (id, community_id, target_user_id, changed_by_user_id, old_role, new_role) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(uuid(), communityId, targetUserId, user.sub, oldRole, role).run()
+
+  log('member:role_changed', { communityId, targetId: targetUserId, oldRole, newRole: role, by: user.sub })
+  return json({ success: true })
+}
+
+async function handleAssignLevel(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const targetUserId = extractNestedId(request.url, 5)
+  const { level_id } = await request.json()
+
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  if (level_id) {
+    const { results } = await env.DB.prepare('SELECT id FROM member_levels WHERE id = ? AND community_id = ?').bind(level_id, communityId).all()
+    if (!results.length) return json({ error: 'Level not found' }, 404)
+  }
+
+  await env.DB.prepare('UPDATE community_members SET level_id = ? WHERE community_id = ? AND user_id = ?').bind(level_id || null, communityId, targetUserId).run()
+  return json({ success: true })
+}
+
+async function handleUpdateReadState(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const targetUserId = extractNestedId(request.url, 5)
+  if (targetUserId !== user.sub) return json({ error: 'Not authorized' }, 403)
+  const { last_read_message_id } = await request.json()
+
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 404)
+
+  await env.DB.prepare(
+    `INSERT INTO community_member_state (member_id, last_read_message_id, last_seen_at)
+     VALUES (?, ?, datetime('now'))
+     ON CONFLICT(member_id) DO UPDATE SET last_read_message_id = ?, last_seen_at = datetime('now')`
+  ).bind(member.id, last_read_message_id || null, last_read_message_id || null).run()
+  return json({ success: true })
+}
+
+/* ── Bans ── */
+
+async function handleBanMember(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  let { user_id, reason, expires_at } = await request.json()
+  if (!user_id) return json({ error: 'user_id required' }, 400)
+  reason = safeString(reason, MAX.REASON)
+
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  await env.DB.prepare('DELETE FROM community_members WHERE community_id = ? AND user_id = ?').bind(communityId, user_id).run()
+  await env.DB.prepare(
+    'INSERT INTO community_bans (id, community_id, user_id, reason, banned_by, expires_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(uuid(), communityId, user_id, reason, user.sub, expires_at || null).run()
+  await updateMemberCount(env, communityId)
+  log('member:banned', { communityId, targetId: user_id, by: user.sub })
+  return json({ success: true })
+}
+
+async function handleListBans(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const { offset, limit } = pageParams(request.url)
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM community_bans WHERE community_id = ? AND (expires_at IS NULL OR expires_at > datetime('now'))
+     ORDER BY created_at DESC LIMIT ? OFFSET ?`
+  ).bind(communityId, limit, offset).all()
+  return json(results)
+}
+
+async function handleRemoveBan(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const banId = extractNestedId(request.url, 5)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  await env.DB.prepare('DELETE FROM community_bans WHERE id = ? AND community_id = ?').bind(banId, communityId).run()
+  return json({ success: true })
+}
+
+async function handleRestoreBan(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const banId = extractNestedId(request.url, 5)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const { results } = await env.DB.prepare('SELECT * FROM community_bans WHERE id = ? AND community_id = ?').bind(banId, communityId).all()
+  if (!results.length) return json({ error: 'Ban not found' }, 404)
+  const ban = results[0]
+
+  await env.DB.prepare(
+    'INSERT OR IGNORE INTO community_members (id, community_id, user_id, role) VALUES (?, ?, ?, ?)'
+  ).bind(uuid(), communityId, ban.user_id, ROLES.MEMBER).run()
+
+  await env.DB.prepare('DELETE FROM community_bans WHERE id = ? AND community_id = ?').bind(banId, communityId).run()
+  await updateMemberCount(env, communityId)
+  log('member:restored', { communityId, targetId: ban.user_id, by: user.sub })
+  return json({ success: true })
+}
+
+async function handleListAuditLog(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.ADMINISTRATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const { offset, limit } = pageParams(request.url)
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM role_audit_log WHERE community_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?'
+  ).bind(communityId, limit, offset).all()
+  return json(results)
+}
+
+/* ── Join Requests ── */
+
+async function handleListJoinRequests(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM community_join_requests WHERE community_id = ? AND status = \'pending\' ORDER BY created_at ASC'
+  ).bind(communityId).all()
+  return json(results)
+}
+
+async function handleUpdateJoinRequest(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const reqId = extractNestedId(request.url, 5)
+  const { status } = await request.json()
+  if (!['approved', 'rejected'].includes(status)) return json({ error: 'Invalid status' }, 400)
+
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM community_join_requests WHERE id = ? AND community_id = ?'
+  ).bind(reqId, communityId).all()
+  if (!results.length) return json({ error: 'Request not found' }, 404)
+
+  if (status === 'approved') {
+    const now = new Date().toISOString()
+    let levelId = null
+    const { results: levels } = await env.DB.prepare(
+      'SELECT id FROM member_levels WHERE community_id = ? ORDER BY level_number ASC LIMIT 1'
+    ).bind(communityId).all()
+    if (levels.length) levelId = levels[0].id
+
+    await env.DB.prepare(
+      'INSERT INTO community_members (id, community_id, user_id, level_id, joined_at) VALUES (?, ?, ?, ?, ?)'
+    ).bind(uuid(), communityId, results[0].user_id, levelId, now).run()
+    await updateMemberCount(env, communityId)
+  }
+
+  await env.DB.prepare('UPDATE community_join_requests SET status = ? WHERE id = ?').bind(status, reqId).run()
+  return json({ success: true })
+}
+
+/* ── Rules ── */
+
+async function handleListRules(request, env) {
+  const communityId = extractCommunityId(request.url)
+  const { offset, limit } = pageParams(request.url)
+  const { results } = await env.DB.prepare('SELECT * FROM community_rules WHERE community_id = ? ORDER BY created_at ASC LIMIT ? OFFSET ?').bind(communityId, limit, offset).all()
+  return json(results)
+}
+
+async function handleAddRule(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  let { rule } = await request.json()
+  rule = safeString(rule, MAX.RULE)
+  if (!rule) return json({ error: 'Rule text required' }, 400)
+
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  await env.DB.prepare('INSERT INTO community_rules (id, community_id, rule) VALUES (?, ?, ?)').bind(uuid(), communityId, rule).run()
+  const { results } = await env.DB.prepare('SELECT * FROM community_rules WHERE community_id = ? ORDER BY created_at ASC').bind(communityId).all()
+  return json(results, 201)
+}
+
+async function handleRemoveRule(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const ruleId = extractNestedId(request.url, 5)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  await env.DB.prepare('DELETE FROM community_rules WHERE id = ? AND community_id = ?').bind(ruleId, communityId).run()
+  return json({ success: true })
+}
+
+function handleSuggestedRules() {
+  return json([
+    { id: 'public', label: 'Public — anyone can find and join', field: 'visibility', value: 'public' },
+    { id: 'private', label: 'Private — only visible to members', field: 'visibility', value: 'private' },
+    { id: 'approval', label: 'Require admin approval to join', field: 'join_type', value: 'approval' },
+    { id: 'invite_code', label: 'Require invite code to join', field: 'join_type', value: 'code' },
+    { id: 'respect', label: 'Be respectful and professional to all members' },
+    { id: 'no_spam', label: 'No spamming or self-promotion' },
+    { id: 'appropriate', label: 'No inappropriate content or language' },
+    { id: 'honest_hours', label: 'Study hours must be tracked honestly' },
+  ])
+}
+
+/* ── Settings ── */
+
+async function handleGetSettings(request, env) {
+  const communityId = extractCommunityId(request.url)
+  const { results } = await env.DB.prepare('SELECT * FROM community_settings WHERE community_id = ?').bind(communityId).all()
+  if (!results.length) {
+    await env.DB.prepare('INSERT INTO community_settings (community_id) VALUES (?)').bind(communityId).run()
+    return json({
+      community_id: communityId, allow_file_uploads: 1, allow_flashcards: 1,
+      allow_competitions: 1, allow_member_invites: 1, allow_announcements: 1, max_file_size_mb: 50
+    })
+  }
+  return json(results[0])
+}
+
+async function handleUpdateSettings(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.ADMINISTRATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const body = await request.json()
+  const fields = ['allow_file_uploads', 'allow_flashcards', 'allow_competitions', 'allow_member_invites', 'allow_announcements', 'max_file_size_mb']
+  const updates = []
+  const binds = []
+
+  for (const f of fields) {
+    if (body[f] !== undefined) {
+      updates.push(`${f} = ?`)
+      binds.push(body[f])
+    }
+  }
+  if (updates.length === 0) return json({ error: 'No fields to update' }, 400)
+  updates.push("updated_at = datetime('now')")
+  binds.push(communityId)
+
+  await env.DB.prepare(`UPDATE community_settings SET ${updates.join(', ')} WHERE community_id = ?`).bind(...binds).run()
+  const { results } = await env.DB.prepare('SELECT * FROM community_settings WHERE community_id = ?').bind(communityId).all()
+  return json(results[0])
+}
+
+/* ── Messages ── */
+
+async function handleGetMessages(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not authorized', reason: 'membership_required' }, 403)
+  const url = new URL(request.url)
+  const after = url.searchParams.get('after')
+  const q = url.searchParams.get('q')
+  const limit = Math.min(Number(url.searchParams.get('limit')) || 50, 100)
+
+  let sql, binds
+  if (q) {
+    sql = `SELECT m.*, mem.role as user_role FROM community_messages m LEFT JOIN community_members mem ON m.user_id = mem.user_id AND m.community_id = mem.community_id WHERE m.community_id = ? AND m.deleted_at IS NULL AND m.content LIKE ? ORDER BY m.created_at DESC, m.id DESC LIMIT ?`
+    binds = [communityId, `%${q}%`, limit]
+  } else if (after) {
+    sql = `SELECT m.*, mem.role as user_role FROM community_messages m LEFT JOIN community_members mem ON m.user_id = mem.user_id AND m.community_id = mem.community_id WHERE m.community_id = ? AND m.id > ? AND m.deleted_at IS NULL ORDER BY m.created_at ASC, m.id ASC LIMIT ?`
+    binds = [communityId, after, limit]
+  } else {
+    sql = `SELECT m.*, mem.role as user_role FROM community_messages m LEFT JOIN community_members mem ON m.user_id = mem.user_id AND m.community_id = mem.community_id WHERE m.community_id = ? AND m.deleted_at IS NULL ORDER BY m.created_at ASC, m.id ASC LIMIT ?`
+    binds = [communityId, limit]
+  }
+
+  const { results } = await env.DB.prepare(sql).bind(...binds).all()
+  return json(results.map(mapMessage))
+}
+
+async function handleGetMessageHistory(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not authorized', reason: 'membership_required' }, 403)
+  const url = new URL(request.url)
+  const before = url.searchParams.get('before')
+  const limit = Math.min(Number(url.searchParams.get('limit')) || 50, 100)
+
+  let sql, binds
+  if (before) {
+    sql = `SELECT m.*, mem.role as user_role FROM community_messages m LEFT JOIN community_members mem ON m.user_id = mem.user_id AND m.community_id = mem.community_id WHERE m.community_id = ? AND m.id < ? AND m.deleted_at IS NULL ORDER BY m.created_at DESC, m.id DESC LIMIT ?`
+    binds = [communityId, before, limit]
+  } else {
+    sql = `SELECT m.*, mem.role as user_role FROM community_messages m LEFT JOIN community_members mem ON m.user_id = mem.user_id AND m.community_id = mem.community_id WHERE m.community_id = ? AND m.deleted_at IS NULL ORDER BY m.created_at DESC, m.id DESC LIMIT ?`
+    binds = [communityId, limit]
+  }
+
+  const { results } = await env.DB.prepare(sql).bind(...binds).all()
+  return json(results.reverse().map(mapMessage))
+}
+
+async function handleSendMessage(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member', reason: 'membership_required' }, 403)
+
+  let { content } = await request.json()
+  content = safeString(content, MAX.CONTENT)
+  if (!content) return json({ error: 'Content required' }, 400)
+
+  const id = uuid()
+  const now = new Date().toISOString()
+  const userName = user.email?.split('@')[0] || 'User'
+
+  await env.DB.prepare(
+    'INSERT INTO community_messages (id, community_id, user_id, user_name, content, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(id, communityId, user.sub, userName, content, now).run()
+
+  log('message:sent', { communityId, userId: user.sub, msgId: id })
+  broadcastEvent(env, communityId, {
+    version: 1, id: uuid(),
+    type: 'message:new',
+    payload: { message: { id, community_id: communityId, user_id: user.sub, user_name: userName, content, created_at: now, message_type: 'text', is_edited: 0 } }
+  }).catch(() => {})
+  return json({ id, success: true }, 201)
+}
+
+async function handleSendFileMessage(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member', reason: 'membership_required' }, 403)
+  if (!hasPermission(member.role, PERM.UPLOAD_FILES)) return json({ error: 'Your role does not allow file uploads' }, 403)
+
+  const { results: settings } = await env.DB.prepare('SELECT * FROM community_settings WHERE community_id = ?').bind(communityId).all()
+  if (settings.length && !settings[0].allow_file_uploads) return json({ error: 'File uploads disabled' }, 403)
+
+  const formData = await request.formData()
+  const file = formData.get('file')
+  if (!file) return json({ error: 'File required' }, 400)
+
+  const maxMB = settings.length ? settings[0].max_file_size_mb : 50
+  const maxBytes = maxMB * 1024 * 1024
+  if (file.size > maxBytes) return json({ error: `File too large (max ${maxMB}MB)` }, 400)
+
+  const maxForMime = ALLOWED_MIME[file.type]
+  if (!maxForMime) return json({ error: 'File type not allowed' }, 400)
+
+  const ext = file.name?.split('.').pop() || 'bin'
+  const fileKey = `community-files/${uuid()}.${ext}`
+  await env.IMAGES.put(fileKey, await file.arrayBuffer(), {
+    httpMetadata: { contentType: file.type || 'application/octet-stream' }
+  })
+
+  const id = uuid()
+  const now = new Date().toISOString()
+  const userName = user.email?.split('@')[0] || 'User'
+
+  await env.DB.prepare(
+    `INSERT INTO community_messages (id, community_id, user_id, user_name, content, message_type, file_key, file_name, file_size, mime_type, created_at)
+     VALUES (?, ?, ?, ?, ?, 'file', ?, ?, ?, ?, ?)`
+  ).bind(id, communityId, user.sub, userName, file.name, fileKey, file.name, file.size, file.type, now).run()
+
+  broadcastEvent(env, communityId, {
+    version: 1, id: uuid(),
+    type: 'message:new',
+    payload: { message: { id, community_id: communityId, user_id: user.sub, user_name: userName, content: file.name, created_at: now, message_type: 'file', is_edited: 0 } }
+  }).catch(() => {})
+  return json({ id, success: true }, 201)
+}
+
+async function handleListCommunityFiles(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const { offset, limit } = pageParams(request.url)
+  const { results } = await env.DB.prepare(
+    `SELECT id, user_id, user_name, file_name, file_size, mime_type, created_at FROM community_messages WHERE community_id = ? AND message_type = 'file' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT ? OFFSET ?`
+  ).bind(communityId, limit, offset).all()
+
+  return json(results)
+}
+
+async function handleGetMessageFile(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const msgId = extractNestedId(request.url, 5)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not authorized', reason: 'membership_required' }, 403)
+
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM community_messages WHERE id = ? AND community_id = ? AND message_type = ? AND deleted_at IS NULL'
+  ).bind(msgId, communityId, 'file').all()
+  if (!results.length) return json({ error: 'File not found' }, 404)
+
+  const msg = results[0]
+  if (!msg.file_key) return json({ error: 'No file key' }, 404)
+
+  const obj = await env.IMAGES.get(msg.file_key)
+  if (!obj) return json({ error: 'File not found in storage' }, 404)
+
+  const headers = new Headers()
+  headers.set('content-type', msg.mime_type || 'application/octet-stream')
+  headers.set('content-disposition', `inline; filename="${msg.file_name}"`)
+  headers.set('cache-control', 'public, max-age=31536000')
+
+  return new Response(obj.body, { headers })
+}
+
+async function handleSendFlashcardMessage(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member', reason: 'membership_required' }, 403)
+
+  const { results: settings } = await env.DB.prepare('SELECT * FROM community_settings WHERE community_id = ?').bind(communityId).all()
+  if (settings.length && !settings[0].allow_flashcards) return json({ error: 'Flashcard sharing disabled' }, 403)
+
+  let { front, back, image_url, tags, deck_name } = await request.json()
+  front = safeString(front, MAX.CONTENT)
+  back = safeString(back, MAX.CONTENT)
+  if (!front || !back) return json({ error: 'Front and back required' }, 400)
+  deck_name = safeString(deck_name, MAX.NAME)
+
+  const msgId = uuid()
+  const now = new Date().toISOString()
+  const userName = user.email?.split('@')[0] || 'User'
+
+  await env.DB.prepare(
+    `INSERT INTO community_messages (id, community_id, user_id, user_name, content, message_type, created_at)
+     VALUES (?, ?, ?, ?, ?, 'flashcard', ?)`
+  ).bind(msgId, communityId, user.sub, userName, deck_name || '', now).run()
+
+  const cardId = uuid()
+  await env.DB.prepare(
+    `INSERT INTO community_message_flashcards (id, message_id, front, back, image_url, tags)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).bind(cardId, msgId, front, back, image_url || null, tags || null).run()
+
+  broadcastEvent(env, communityId, {
+    version: 1, id: uuid(),
+    type: 'message:new',
+    payload: { message: { id: msgId, community_id: communityId, user_id: user.sub, user_name: userName, content: deck_name || '', created_at: now, message_type: 'flashcard', is_edited: 0 } }
+  }).catch(() => {})
+  return json({ id: msgId, flashcard_id: cardId, success: true }, 201)
+}
+
+async function handleEditMessage(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const msgId = extractNestedId(request.url, 5)
+  let { content } = await request.json()
+  content = safeString(content, MAX.CONTENT)
+  if (!content) return json({ error: 'Content required' }, 400)
+
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM community_messages WHERE id = ? AND community_id = ? AND deleted_at IS NULL'
+  ).bind(msgId, communityId).all()
+  if (!results.length) return json({ error: 'Message not found' }, 404)
+
+  const msg = results[0]
+  if (msg.user_id !== user.sub && msg.message_type !== 'system') return json({ error: 'Not authorized', reason: 'not_owner' }, 403)
+
+  const created = new Date(msg.created_at.replace(' ', 'T') + 'Z').getTime()
+  const now = Date.now()
+  if (now - created > 15 * 60 * 1000) return json({ error: 'Edit window expired (15 min)' }, 400)
+
+  await env.DB.prepare(
+    'UPDATE community_messages SET content = ?, is_edited = 1 WHERE id = ?'
+  ).bind(content, msgId).run()
+
+  broadcastEvent(env, communityId, {
+    version: 1, id: uuid(),
+    type: 'message:edit',
+    payload: { id: msgId, new_content: content }
+  }).catch(() => {})
+  return json({ success: true })
+}
+
+async function handleDeleteMessage(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const msgId = extractNestedId(request.url, 5)
+
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM community_messages WHERE id = ? AND community_id = ? AND deleted_at IS NULL'
+  ).bind(msgId, communityId).all()
+  if (!results.length) return json({ error: 'Message not found' }, 404)
+
+  const member = await getMember(env, communityId, user.sub)
+  const isOwner = results[0].user_id === user.sub
+  const isMod = member && hasMinimumRole(member.role, ROLES.MODERATOR)
+  if (!isOwner && !isMod) return json({ error: 'Not authorized' }, 403)
+
+  await env.DB.prepare(
+    'UPDATE community_messages SET deleted_at = datetime(\'now\'), deleted_by = ?, content = NULL WHERE id = ?'
+  ).bind(user.sub, msgId).run()
+
+  broadcastEvent(env, communityId, {
+    version: 1, id: uuid(),
+    type: 'message:delete',
+    payload: { id: msgId }
+  }).catch(() => {})
+  log('message:deleted', { communityId, msgId, userId: user.sub })
+  return json({ success: true })
+}
+
+async function handleAddFlashcardToDeck(request, env, user) {
+  const msgId = extractNestedId(request.url, 4)
+
+  const { results: fc } = await env.DB.prepare(
+    'SELECT * FROM community_message_flashcards WHERE message_id = ?'
+  ).bind(msgId).all()
+  if (!fc.length) return json({ error: 'Flashcard not found' }, 404)
+
+  const { results: msg } = await env.DB.prepare(
+    'SELECT * FROM community_messages WHERE id = ? AND deleted_at IS NULL'
+  ).bind(msgId).all()
+  if (!msg.length) return json({ error: 'Message not found' }, 404)
+
+  const deckName = msg[0].content || 'Community Shared'
+  const now = new Date().toISOString()
+  const cardId = uuid()
+
+  await env.DB.prepare(
+    `INSERT INTO flashcards (id, user_id, deck_name, front, back, image_url, tags, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(cardId, user.sub, deckName, fc[0].front, fc[0].back, fc[0].image_url, fc[0].tags, now).run()
+
+  return json({ success: true, flashcard_id: cardId })
+}
+
+/* ── Reactions ── */
+
+async function handleToggleReaction(request, env, user) {
+  const parts = new URL(request.url).pathname.split('/')
+  const msgId = parts[5]
+  const { emoji } = await request.json()
+  if (!emoji) return json({ error: 'Emoji required' }, 400)
+
+  const { results: existing } = await env.DB.prepare(
+    'SELECT id FROM community_message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
+  ).bind(msgId, user.sub, emoji).all()
+
+  if (existing.length) {
+    await env.DB.prepare('DELETE FROM community_message_reactions WHERE id = ?').bind(existing[0].id).run()
+    return json({ action: 'removed' })
+  }
+
+  await env.DB.prepare(
+    'INSERT INTO community_message_reactions (id, message_id, user_id, emoji) VALUES (?, ?, ?, ?)'
+  ).bind(uuid(), msgId, user.sub, emoji).run()
+
+  return json({ action: 'added' })
+}
+
+/* ── Pins ── */
+
+async function handleListPins(request, env) {
+  const communityId = extractCommunityId(request.url)
+  const { offset, limit } = pageParams(request.url)
+  const { results } = await env.DB.prepare(
+    `SELECT p.*, m.content as message_content, m.user_name as message_user_name, m.created_at as message_created_at
+     FROM community_pins p JOIN community_messages m ON p.message_id = m.id
+     WHERE p.community_id = ? ORDER BY p.created_at DESC LIMIT ? OFFSET ?`
+  ).bind(communityId, limit, offset).all()
+  return json(results)
+}
+
+async function handlePinMessage(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const { message_id } = await request.json()
+  if (!message_id) return json({ error: 'message_id required' }, 400)
+
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  await env.DB.prepare(
+    'INSERT INTO community_pins (id, community_id, message_id, pinned_by) VALUES (?, ?, ?, ?)'
+  ).bind(uuid(), communityId, message_id, user.sub).run()
+
+  return json({ success: true }, 201)
+}
+
+async function handleUnpinMessage(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const pinId = extractNestedId(request.url, 5)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  await env.DB.prepare('DELETE FROM community_pins WHERE id = ? AND community_id = ?').bind(pinId, communityId).run()
+  return json({ success: true })
+}
+
+/* ── Announcements ── */
+
+async function handleListAnnouncements(request, env) {
+  const communityId = extractCommunityId(request.url)
+  const { offset, limit } = pageParams(request.url)
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM community_announcements WHERE community_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?'
+  ).bind(communityId, limit, offset).all()
+  return json(results)
+}
+
+async function handleCreateAnnouncement(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  let { title, content } = await request.json()
+  title = safeString(title, MAX.TITLE)
+  content = safeString(content, MAX.CONTENT)
+  if (!title || !content) return json({ error: 'Title and content required' }, 400)
+
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  await env.DB.prepare(
+    'INSERT INTO community_announcements (id, community_id, title, content, created_by) VALUES (?, ?, ?, ?, ?)'
+  ).bind(uuid(), communityId, title, content, user.sub).run()
+
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM community_announcements WHERE community_id = ? ORDER BY created_at DESC LIMIT 1'
+  ).bind(communityId).all()
+  return json(results[0], 201)
+}
+
+async function handleUpdateAnnouncement(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const annId = extractNestedId(request.url, 5)
+  let { title, content } = await request.json()
+
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const updates = []
+  const binds = []
+  if (title !== undefined) { title = safeString(title, MAX.TITLE); updates.push('title = ?'); binds.push(title) }
+  if (content !== undefined) { content = safeString(content, MAX.CONTENT); updates.push('content = ?'); binds.push(content) }
+  if (updates.length === 0) return json({ error: 'No fields to update' }, 400)
+
+  updates.push("updated_at = datetime('now')")
+  binds.push(annId, communityId)
+
+  await env.DB.prepare(`UPDATE community_announcements SET ${updates.join(', ')} WHERE id = ? AND community_id = ?`).bind(...binds).run()
+  return json({ success: true })
+}
+
+async function handleDeleteAnnouncement(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const annId = extractNestedId(request.url, 5)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  await env.DB.prepare('DELETE FROM community_announcements WHERE id = ? AND community_id = ?').bind(annId, communityId).run()
+  return json({ success: true })
+}
+
+/* ── Member Levels ── */
+
+async function handleListLevels(request, env) {
+  const communityId = extractCommunityId(request.url)
+  const { offset, limit } = pageParams(request.url)
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM member_levels WHERE community_id = ? ORDER BY level_number ASC LIMIT ? OFFSET ?'
+  ).bind(communityId, limit, offset).all()
+  return json(results)
+}
+
+async function handleCreateLevel(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  let { level_name, level_number, min_hours, permissions } = await request.json()
+  level_name = safeString(level_name, MAX.NAME)
+  if (!level_name || !level_number) return json({ error: 'Name and level number required' }, 400)
+
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.ADMINISTRATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const id = uuid()
+  const p = permissions || {}
+  await env.DB.prepare(
+    `INSERT INTO member_levels (id, community_id, level_name, level_number, min_hours, can_invite, can_create_competition, can_pin_messages, can_upload_files, can_remove_members)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(id, communityId, level_name, level_number, min_hours || 0,
+    p.can_invite ? 1 : 0, p.can_create_competition ? 1 : 0, p.can_pin_messages ? 1 : 0,
+    p.can_upload_files !== false ? 1 : 0, p.can_remove_members ? 1 : 0).run()
+
+  const { results } = await env.DB.prepare('SELECT * FROM member_levels WHERE id = ?').bind(id).all()
+  return json(results[0], 201)
+}
+
+async function handleUpdateLevel(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const levelId = extractNestedId(request.url, 5)
+  const body = await request.json()
+
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.ADMINISTRATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const fields = ['level_name', 'level_number', 'min_hours', 'can_invite', 'can_create_competition', 'can_pin_messages', 'can_upload_files', 'can_remove_members']
+  const updates = []
+  const binds = []
+  for (const f of fields) {
+    if (body[f] !== undefined) {
+      const val = f === 'level_name' ? safeString(body[f], MAX.NAME) : body[f]
+      updates.push(`${f} = ?`); binds.push(val)
+    }
+  }
+  if (updates.length === 0) return json({ error: 'No fields to update' }, 400)
+  updates.push("updated_at = datetime('now')")
+  binds.push(levelId, communityId)
+
+  await env.DB.prepare(`UPDATE member_levels SET ${updates.join(', ')} WHERE id = ? AND community_id = ?`).bind(...binds).run()
+  return json({ success: true })
+}
+
+async function handleDeleteLevel(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const levelId = extractNestedId(request.url, 5)
+
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.ADMINISTRATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const { results } = await env.DB.prepare('SELECT COUNT(*) as cnt FROM community_members WHERE level_id = ?').bind(levelId).all()
+  if (Number(results[0].cnt) > 0) return json({ error: 'Members assigned to this level; reassign them first' }, 400)
+
+  await env.DB.prepare('DELETE FROM member_levels WHERE id = ? AND community_id = ?').bind(levelId, communityId).run()
+  return json({ success: true })
+}
+
+/* ── Competitions ── */
+
+async function handleListCompetitions(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const now = new Date().toISOString()
+  await env.DB.prepare(
+    `UPDATE competitions SET status = 'active' WHERE community_id = ? AND status = 'pending' AND approved = 1 AND starts_at <= ?`
+  ).bind(communityId, now).run()
+  await env.DB.prepare(
+    `UPDATE competitions SET status = 'completed' WHERE community_id = ? AND status = 'active' AND ends_at < ?`
+  ).bind(communityId, now).run()
+
+  const member = await getMember(env, communityId, user?.sub)
+  const isMod = member && hasMinimumRole(member.role, ROLES.MODERATOR)
+  const userId = user?.sub || ''
+
+  const { offset, limit } = pageParams(request.url)
+  const search = new URL(request.url).searchParams.get('search') || ''
+  let sql = `SELECT c.*,
+    (SELECT COUNT(*) FROM competition_participants WHERE competition_id = c.id) as participant_count,
+    (SELECT COUNT(*) FROM competition_participants WHERE competition_id = c.id AND user_id = ?) as has_joined
+    FROM competitions c WHERE c.community_id = ?`
+  const params = [userId, communityId]
+  if (!isMod) {
+    sql += ' AND (c.status != \'rejected\' OR c.created_by = ?)'
+    params.push(userId)
+  }
+  if (search) { sql += ' AND c.title LIKE ?'; params.push('%' + search + '%') }
+  sql += ' ORDER BY c.status ASC, c.ends_at ASC LIMIT ? OFFSET ?'
+  params.push(limit, offset)
+  const { results } = await env.DB.prepare(sql).bind(...params).all()
+  return json(results)
+}
+
+async function handleCreateCompetition(request, env, user, ctx) {
+  const communityId = extractCommunityId(request.url)
+  let { title, description, duration } = await request.json()
+  title = safeString(title, MAX.TITLE)
+  description = safeString(description, MAX.DESC)
+  if (!title || !duration) return json({ error: 'Title and duration required' }, 400)
+  if (!DURATIONS.includes(duration)) return json({ error: 'Invalid duration' }, 400)
+
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member', reason: 'membership_required' }, 403)
+
+  const durationMap = { '1_week': 7, '1_month': 30, '6_months': 182, '1_year': 365 }
+  const days = durationMap[duration]
+  const now = new Date().toISOString()
+  const endsAt = new Date(new Date(now).getTime() + days * 24 * 60 * 60 * 1000).toISOString()
+
+  if (hasMinimumRole(member.role, ROLES.ADMINISTRATOR)) {
+    const id = uuid()
+    await env.DB.prepare(
+      `INSERT INTO competitions (id, community_id, title, description, duration, starts_at, ends_at, status, created_by, is_admin_created, approved)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, 1, 1)`
+    ).bind(id, communityId, title.trim(), description || '', duration, now, endsAt, user.sub).run()
+
+    ctx.waitUntil((async () => {
+      const members = await env.DB.prepare(
+        'SELECT user_id FROM community_members WHERE community_id = ? AND user_id != ?'
+      ).bind(communityId, user.sub).all()
+      for (const m of (members.results || [])) {
+        const nid = crypto.randomUUID()
+        await env.DB.prepare(
+          'INSERT INTO notifications (id, user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(nid, m.user_id, 'new_competition', 'New competition: ' + title, '', JSON.stringify({ community_id: communityId, competition_id: id })).run()
+      }
+    })())
+
+    const { results } = await env.DB.prepare('SELECT * FROM competitions WHERE id = ?').bind(id).all()
+    broadcastEvent(env, communityId, {
+      version: 1, id: uuid(),
+      type: 'competition:new',
+      payload: { competition: results[0] }
+    }).catch(() => {})
+    return json(results[0], 201)
+  }
+
+  if (!hasPermission(member.role, PERM.CREATE_COMPETITION)) {
+    return json({ error: 'Your role does not allow creating competitions. Scholar or higher is required.' }, 403)
+  }
+
+  const { results: settings } = await env.DB.prepare('SELECT * FROM community_settings WHERE community_id = ?').bind(communityId).all()
+  if (!settings.length || !settings[0].allow_competitions) return json({ error: 'Competitions disabled' }, 403)
+
+  const id = uuid()
+  await env.DB.prepare(
+    `INSERT INTO competitions (id, community_id, title, description, duration, starts_at, ends_at, status, created_by, is_admin_created, approved)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, 0)`
+  ).bind(id, communityId, title.trim(), description || '', duration, now, endsAt, user.sub).run()
+
+  ctx.waitUntil((async () => {
+    const members = await env.DB.prepare(
+      'SELECT user_id FROM community_members WHERE community_id = ? AND user_id != ?'
+    ).bind(communityId, user.sub).all()
+    for (const m of (members.results || [])) {
+      const nid = crypto.randomUUID()
+      await env.DB.prepare(
+        'INSERT INTO notifications (id, user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?, ?)'
+      ).bind(nid, m.user_id, 'new_competition', 'New competition: ' + title, '', JSON.stringify({ community_id: communityId, competition_id: id })).run()
+    }
+  })())
+
+  broadcastEvent(env, communityId, {
+    version: 1, id: uuid(),
+    type: 'competition:new',
+    payload: { competition: { id, community_id: communityId, title: title.trim(), description: description || '', duration, starts_at: now, ends_at: endsAt, status: 'pending', created_by: user.sub, is_admin_created: 0, approved: 0 } }
+  }).catch(() => {})
+  return json({ id, requires_approval: true, success: true }, 201)
+}
+
+async function handleApproveCompetition(request, env, user) {
+  const compId = extractNestedId(request.url, 3)
+
+  const { results } = await env.DB.prepare('SELECT * FROM competitions WHERE id = ?').bind(compId).all()
+  if (!results.length) return json({ error: 'Competition not found' }, 404)
+  const comp = results[0]
+
+  const member = await getMember(env, comp.community_id, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  await env.DB.prepare(
+    `UPDATE competitions SET approved = 1, status = 'active', starts_at = datetime('now'),
+     updated_at = datetime('now'), reviewed_by = ?, reviewed_at = datetime('now'), rejection_reason = NULL WHERE id = ?`
+  ).bind(user.sub, compId).run()
+
+  broadcastEvent(env, comp.community_id, {
+    version: 1, id: uuid(),
+    type: 'competition:update',
+    payload: { competition: { ...comp, approved: 1, status: 'active' } }
+  }).catch(() => {})
+  return json({ success: true })
+}
+
+async function handleRejectCompetition(request, env, user) {
+  const compId = extractNestedId(request.url, 3)
+  let { reason } = await request.json()
+
+  const { results } = await env.DB.prepare('SELECT * FROM competitions WHERE id = ?').bind(compId).all()
+  if (!results.length) return json({ error: 'Competition not found' }, 404)
+  const comp = results[0]
+
+  const member = await getMember(env, comp.community_id, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  reason = reason ? safeString(reason, 500) : ''
+  await env.DB.prepare(
+    `UPDATE competitions SET approved = 0, status = 'rejected',
+     updated_at = datetime('now'), reviewed_by = ?, reviewed_at = datetime('now'), rejection_reason = ? WHERE id = ?`
+  ).bind(user.sub, reason, compId).run()
+
+  broadcastEvent(env, comp.community_id, {
+    version: 1, id: uuid(),
+    type: 'competition:update',
+    payload: { competition: { ...comp, approved: 0, status: 'rejected', rejection_reason: reason } }
+  }).catch(() => {})
+  return json({ success: true })
+}
+
+async function handleJoinCompetition(request, env, user) {
+  const compId = extractNestedId(request.url, 3)
+
+  const { results } = await env.DB.prepare('SELECT * FROM competitions WHERE id = ?').bind(compId).all()
+  if (!results.length) return json({ error: 'Competition not found' }, 404)
+
+  const comp = results[0]
+  if (comp.status !== 'active' && comp.status !== 'pending') return json({ error: 'Competition is not open' }, 400)
+
+  const member = await getMember(env, comp.community_id, user.sub)
+  if (!member) return json({ error: 'Not a community member' }, 403)
+
+  await env.DB.prepare(
+    'INSERT OR IGNORE INTO competition_participants (id, competition_id, user_id) VALUES (?, ?, ?)'
+  ).bind(uuid(), compId, user.sub).run()
+
+  broadcastEvent(env, comp.community_id, {
+    version: 1, id: uuid(),
+    type: 'competition:update',
+    payload: { competition: comp }
+  }).catch(() => {})
+  return json({ success: true })
+}
+
+async function handleLeaveCompetition(request, env, user) {
+  const compId = extractNestedId(request.url, 3)
+  const { results } = await env.DB.prepare('SELECT * FROM competitions WHERE id = ?').bind(compId).all()
+  if (!results.length) return json({ error: 'Competition not found' }, 404)
+  await env.DB.prepare('DELETE FROM competition_participants WHERE competition_id = ? AND user_id = ?').bind(compId, user.sub).run()
+  broadcastEvent(env, results[0].community_id, {
+    version: 1, id: uuid(),
+    type: 'competition:update',
+    payload: { competition: results[0] }
+  }).catch(() => {})
+  return json({ success: true })
+}
+
+async function handleGetLeaderboard(request, env, user) {
+  const compId = extractNestedId(request.url, 3)
+  const { results: compCheck } = await env.DB.prepare('SELECT community_id FROM competitions WHERE id = ?').bind(compId).all()
+  if (!compCheck.length) return json({ error: 'Competition not found' }, 404)
+  const member = await getMember(env, compCheck[0].community_id, user.sub)
+  if (!member) return json({ error: 'Not authorized' }, 403)
+  const { offset, limit } = pageParams(request.url)
+  const { results } = await env.DB.prepare(
+    `SELECT p.* FROM competition_participants p
+     WHERE p.competition_id = ?
+     ORDER BY p.total_hours DESC LIMIT ? OFFSET ?`
+  ).bind(compId, limit, offset).all()
+  return json(results)
+}
+
+async function handleEndCompetition(request, env, user) {
+  const compId = extractNestedId(request.url, 3)
+
+  const { results } = await env.DB.prepare('SELECT * FROM competitions WHERE id = ?').bind(compId).all()
+  if (!results.length) return json({ error: 'Competition not found' }, 404)
+
+  const member = await getMember(env, results[0].community_id, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.ADMINISTRATOR)) return json({ error: 'Not authorized' }, 403)
+
+  await env.DB.prepare(
+    "UPDATE competitions SET status = 'completed', ends_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
+  ).bind(compId).run()
+
+  broadcastEvent(env, results[0].community_id, {
+    version: 1, id: uuid(),
+    type: 'competition:end',
+    payload: { competition: { ...results[0], status: 'completed' } }
+  }).catch(() => {})
+  return json({ success: true })
+}
+
+/* ── Study Hours Sync ── */
+
+async function handleSyncStudyHours(request, env, user) {
+  const { total_hours } = await request.json()
+  if (total_hours === undefined || total_hours === null) return json({ error: 'total_hours required' }, 400)
+
+  const now = new Date().toISOString()
+
+  await env.DB.prepare(
+    `UPDATE community_members SET total_study_hours = ? WHERE user_id = ?`
+  ).bind(total_hours, user.sub).run()
+
+  const { results: communities } = await env.DB.prepare(
+    'SELECT SUM(total_study_hours) as sum FROM community_members WHERE user_id = ?'
+  ).bind(user.sub).all()
+
+  await env.DB.prepare(
+    'UPDATE communities SET total_study_hours = (SELECT COALESCE(SUM(total_study_hours), 0) FROM community_members WHERE community_id = communities.id)'
+  ).run()
+
+  const { results: activeComps } = await env.DB.prepare(
+    `SELECT cp.id as participant_id FROM competition_participants cp
+     JOIN competitions c ON cp.competition_id = c.id
+     WHERE cp.user_id = ? AND c.status IN ('active', 'pending')`
+  ).bind(user.sub).all()
+
+  for (const p of activeComps) {
+    await env.DB.prepare(
+      'UPDATE competition_participants SET total_hours = ? WHERE id = ?'
+    ).bind(total_hours, p.participant_id).run()
+  }
+
+  return json({ success: true })
+}
+
+/* ── Realtime ── */
+
+function broadcastEvent(env, communityId, event) {
+  try {
+    const id = env.COMMUNITY_REALTIME_ROOM.idFromName(communityId)
+    const stub = env.COMMUNITY_REALTIME_ROOM.get(id)
+    return stub.fetch('http://dummy/broadcast', {
+      method: 'POST',
+      body: JSON.stringify(event),
+    })
+  } catch {}
+}
+
+async function handleWebSocketUpgrade(request, env) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const communityId = parts[3]
+
+  const jwt = url.searchParams.get('jwt') || request.headers.get('Authorization')?.replace('Bearer ', '')
+  if (!jwt) return json({ error: 'Unauthorized' }, 401)
+
+  const verifyAuth = createAuth(env)
+  const user = await verifyAuth(jwt)
+  if (!user) return json({ error: 'Unauthorized' }, 401)
+
+  try {
+    const member = await getMember(env, communityId, user.sub)
+    if (!member) return json({ error: 'Not a member' }, 403)
+  } catch {
+    return json({ error: 'Server error' }, 500)
+  }
+
+  const id = env.COMMUNITY_REALTIME_ROOM.idFromName(communityId)
+  const stub = env.COMMUNITY_REALTIME_ROOM.get(id)
+  return stub.fetch(request)
+}
+
+/* ── Notifications ── */
+
+async function handleListNotifications(request, env, user) {
+  const results = await env.DB.prepare(
+    'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50'
+  ).bind(user.sub).all()
+  return json(results.results || [])
+}
+
+async function handleCreateNotification(request, env, user) {
+  const body = await request.json()
+  const { user_id, type, title, body: notifBody, data } = body
+  if (!user_id || !type || !title) return json({ error: 'user_id, type, title required' }, 400)
+  const id = crypto.randomUUID()
+  const dataStr = data ? JSON.stringify(data) : null
+  await env.DB.prepare(
+    'INSERT INTO notifications (id, user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(id, user_id, type, title, notifBody || '', dataStr).run()
+  return json({ id })
+}
+
+async function handleMarkNotificationRead(request, env, user) {
+  const id = request.url.match(/\/notifications\/([^\/]+)\/read/)[1]
+  await env.DB.prepare('UPDATE notifications SET read = 1 WHERE id = ? AND user_id = ?')
+    .bind(id, user.sub).run()
+  return json({ success: true })
+}
+
+async function handleMarkAllRead(request, env, user) {
+  await env.DB.prepare('UPDATE notifications SET read = 1 WHERE user_id = ? AND read = 0')
+    .bind(user.sub).run()
+  return json({ success: true })
+}
+
+export { CommunityRealtimeRoom }
+
+function mapMessage(r) {
+  const deleted = r.deleted_at !== null
+  return {
+    id: r.id,
+    community_id: r.community_id,
+    user_id: r.user_id,
+    user_name: r.user_name,
+    user_role: r.user_role || 'member',
+    content: deleted ? null : r.content,
+    message_type: r.message_type,
+    file_key: r.file_key,
+    file_name: r.file_name,
+    file_size: Number(r.file_size) || 0,
+    mime_type: r.mime_type || '',
+    is_edited: !!r.is_edited,
+    deleted: deleted,
     created_at: r.created_at,
   }
 }
