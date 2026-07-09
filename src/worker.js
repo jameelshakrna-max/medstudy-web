@@ -77,6 +77,10 @@ export default {
       return handleGetImage(request, env)
     }
 
+    if (path.match(/^\/api\/communities\/[^\/]+\/ws$/) && request.method === 'GET') {
+      return handleWebSocketUpgrade(request, env)
+    }
+
     try {
       const verifyAuth = createAuth(env)
 
