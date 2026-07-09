@@ -89,8 +89,8 @@ self.addEventListener('fetch', (event) => {
           const copy = res.clone()
           caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {})
           return res
-        }).catch(() => {})
-        return cached || fetched
+        }).catch(() => undefined)
+        return cached || fetched || new Response(null, { status: 504 })
       })
   )
 })

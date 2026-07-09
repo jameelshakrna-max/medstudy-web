@@ -2293,7 +2293,7 @@ async function handleSyncStudyHours(request, env, user) {
 
 function broadcastEvent(env, communityId, event) {
   try {
-    const id = env.COMMUNITY_REALTIME_ROOM.idFromName(communityId)
+    const id = env.COMMUNITY_REALTIME_ROOM.idFromName(`${communityId}:v2`)
     const stub = env.COMMUNITY_REALTIME_ROOM.get(id)
     return stub.fetch('http://dummy/broadcast', {
       method: 'POST',
@@ -2321,7 +2321,7 @@ async function handleWebSocketUpgrade(request, env) {
     return json({ error: 'Server error' }, 500)
   }
 
-  const id = env.COMMUNITY_REALTIME_ROOM.idFromName(communityId)
+  const id = env.COMMUNITY_REALTIME_ROOM.idFromName(`${communityId}:v2`)
   const stub = env.COMMUNITY_REALTIME_ROOM.get(id)
   return stub.fetch(request)
 }
