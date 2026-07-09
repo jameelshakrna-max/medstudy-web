@@ -541,9 +541,6 @@ function FlashcardMessage({ msg, onAddToDeck }) {
   const [flipped, setFlipped] = useState(false)
   useEffect(() => {
     apiGet(`/communities/${msg.community_id}/messages/history?before=${msg.id}&limit=1`).catch(() => {})
-    if (msg.message_type === 'flashcard') {
-      fetch(API + '/community/messages/' + msg.id + '/add-to-deck', { method: 'HEAD' }).catch(() => {})
-    }
   }, [msg.id])
 
   return (
