@@ -78,7 +78,12 @@ export default {
     }
 
     if (path.match(/^\/api\/communities\/[^\/]+\/ws$/) && request.method === 'GET') {
-      return handleWebSocketUpgrade(request, env)
+      try {
+        return handleWebSocketUpgrade(request, env)
+      } catch (err) {
+        console.error('WS upgrade error:', err)
+        return json({ error: err.message }, 500)
+      }
     }
 
     try {
