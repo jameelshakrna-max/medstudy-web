@@ -1567,7 +1567,7 @@ async function handleGetMessages(request, env, user) {
     sql = `SELECT m.*, mem.role as user_role FROM community_messages m LEFT JOIN community_members mem ON m.user_id = mem.user_id AND m.community_id = mem.community_id WHERE m.community_id = ? AND m.deleted_at IS NULL AND m.content LIKE ? ORDER BY m.created_at DESC, m.id DESC LIMIT ?`
     binds = [communityId, `%${q}%`, limit]
   } else if (after) {
-    sql = `SELECT m.*, mem.role as user_role FROM community_messages m LEFT JOIN community_members mem ON m.user_id = mem.user_id AND m.community_id = mem.community_id WHERE m.community_id = ? AND m.id > ? AND m.deleted_at IS NULL ORDER BY m.created_at ASC, m.id ASC LIMIT ?`
+    sql = `SELECT m.*, mem.role as user_role FROM community_messages m LEFT JOIN community_members mem ON m.user_id = mem.user_id AND m.community_id = mem.community_id WHERE m.community_id = ? AND m.created_at > (SELECT created_at FROM community_messages WHERE id = ?) AND m.deleted_at IS NULL ORDER BY m.created_at ASC, m.id ASC LIMIT ?`
     binds = [communityId, after, limit]
   } else {
     sql = `SELECT m.*, mem.role as user_role FROM community_messages m LEFT JOIN community_members mem ON m.user_id = mem.user_id AND m.community_id = mem.community_id WHERE m.community_id = ? AND m.deleted_at IS NULL ORDER BY m.created_at ASC, m.id ASC LIMIT ?`
