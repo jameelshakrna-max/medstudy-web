@@ -243,8 +243,10 @@ export function useCommunityRealtime(communityId) {
 
   const sendMessage = useCallback(async (content) => {
     if (!communityId || !content?.trim()) return
-    return apiPost(`/communities/${communityId}/messages`, { content })
-  }, [apiPost, communityId])
+    const data = await apiPost(`/communities/${communityId}/messages`, { content })
+    if (data?.success) await backfillChat()
+    return data
+  }, [apiPost, backfillChat, communityId])
 
   const sendFlashcard = useCallback(async (flashcardData) => {
     if (!communityId) return

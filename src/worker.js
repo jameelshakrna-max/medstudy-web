@@ -1620,7 +1620,7 @@ async function handleSendMessage(request, env, user) {
   broadcastEvent(env, communityId, {
     version: 1, id: uuid(),
     type: 'message:new',
-    payload: { message: { id, community_id: communityId, user_id: user.sub, user_name: userName, content, created_at: now, message_type: 'text', is_edited: 0 } }
+    payload: { message: { id, community_id: communityId, user_id: user.sub, user_name: userName, content, created_at: now, message_type: 'text', is_edited: 0, user_role: member.role } }
   }).catch(() => {})
   return json({ id, success: true }, 201)
 }
