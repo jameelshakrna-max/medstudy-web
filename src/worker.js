@@ -1621,7 +1621,7 @@ async function handleSendMessage(request, env, user) {
     version: 1, id: uuid(),
     type: 'message:new',
     payload: { message: { id, community_id: communityId, user_id: user.sub, user_name: userName, content, created_at: now, message_type: 'text', is_edited: 0, user_role: member.role } }
-  }).catch(() => {})
+  }).catch(err => console.error('Broadcast failed:', err))
   return json({ id, success: true }, 201)
 }
 
@@ -1664,7 +1664,7 @@ async function handleSendFileMessage(request, env, user) {
     version: 1, id: uuid(),
     type: 'message:new',
     payload: { message: { id, community_id: communityId, user_id: user.sub, user_name: userName, content: file.name, created_at: now, message_type: 'file', is_edited: 0 } }
-  }).catch(() => {})
+  }).catch(err => console.error('Broadcast failed:', err))
   return json({ id, success: true }, 201)
 }
 
@@ -1739,7 +1739,7 @@ async function handleSendFlashcardMessage(request, env, user) {
     version: 1, id: uuid(),
     type: 'message:new',
     payload: { message: { id: msgId, community_id: communityId, user_id: user.sub, user_name: userName, content: deck_name || '', created_at: now, message_type: 'flashcard', is_edited: 0 } }
-  }).catch(() => {})
+  }).catch(err => console.error('Broadcast failed:', err))
   return json({ id: msgId, flashcard_id: cardId, success: true }, 201)
 }
 
@@ -1770,7 +1770,7 @@ async function handleEditMessage(request, env, user) {
     version: 1, id: uuid(),
     type: 'message:edit',
     payload: { id: msgId, new_content: content }
-  }).catch(() => {})
+  }).catch(err => console.error('Broadcast failed:', err))
   return json({ success: true })
 }
 
@@ -1796,7 +1796,7 @@ async function handleDeleteMessage(request, env, user) {
     version: 1, id: uuid(),
     type: 'message:delete',
     payload: { id: msgId }
-  }).catch(() => {})
+  }).catch(err => console.error('Broadcast failed:', err))
   log('message:deleted', { communityId, msgId, userId: user.sub })
   return json({ success: true })
 }
@@ -2096,7 +2096,7 @@ async function handleCreateCompetition(request, env, user, ctx) {
       version: 1, id: uuid(),
       type: 'competition:new',
       payload: { competition: results[0] }
-    }).catch(() => {})
+    }).catch(err => console.error('Broadcast failed:', err))
     return json(results[0], 201)
   }
 
@@ -2129,7 +2129,7 @@ async function handleCreateCompetition(request, env, user, ctx) {
     version: 1, id: uuid(),
     type: 'competition:new',
     payload: { competition: { id, community_id: communityId, title: title.trim(), description: description || '', duration, starts_at: now, ends_at: endsAt, status: 'pending', created_by: user.sub, is_admin_created: 0, approved: 0 } }
-  }).catch(() => {})
+  }).catch(err => console.error('Broadcast failed:', err))
   return json({ id, requires_approval: true, success: true }, 201)
 }
 
@@ -2152,7 +2152,7 @@ async function handleApproveCompetition(request, env, user) {
     version: 1, id: uuid(),
     type: 'competition:update',
     payload: { competition: { ...comp, approved: 1, status: 'active' } }
-  }).catch(() => {})
+  }).catch(err => console.error('Broadcast failed:', err))
   return json({ success: true })
 }
 
@@ -2177,7 +2177,7 @@ async function handleRejectCompetition(request, env, user) {
     version: 1, id: uuid(),
     type: 'competition:update',
     payload: { competition: { ...comp, approved: 0, status: 'rejected', rejection_reason: reason } }
-  }).catch(() => {})
+  }).catch(err => console.error('Broadcast failed:', err))
   return json({ success: true })
 }
 
@@ -2201,7 +2201,7 @@ async function handleJoinCompetition(request, env, user) {
     version: 1, id: uuid(),
     type: 'competition:update',
     payload: { competition: comp }
-  }).catch(() => {})
+  }).catch(err => console.error('Broadcast failed:', err))
   return json({ success: true })
 }
 
@@ -2214,7 +2214,7 @@ async function handleLeaveCompetition(request, env, user) {
     version: 1, id: uuid(),
     type: 'competition:update',
     payload: { competition: results[0] }
-  }).catch(() => {})
+  }).catch(err => console.error('Broadcast failed:', err))
   return json({ success: true })
 }
 
@@ -2250,7 +2250,7 @@ async function handleEndCompetition(request, env, user) {
     version: 1, id: uuid(),
     type: 'competition:end',
     payload: { competition: { ...results[0], status: 'completed' } }
-  }).catch(() => {})
+  }).catch(err => console.error('Broadcast failed:', err))
   return json({ success: true })
 }
 
@@ -2299,7 +2299,9 @@ function broadcastEvent(env, communityId, event) {
       method: 'POST',
       body: JSON.stringify(event),
     })
-  } catch {}
+  } catch (err) {
+    console.error('broadcastEvent error:', err)
+  }
 }
 
 async function handleWebSocketUpgrade(request, env) {

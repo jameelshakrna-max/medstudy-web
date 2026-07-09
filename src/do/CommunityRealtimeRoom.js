@@ -29,10 +29,13 @@ export class CommunityRealtimeRoom {
       const msg = JSON.stringify(event)
 
       const rooms = this.state.getWebSockets()
+      console.log('DO broadcast: sockets connected:', rooms.length)
       for (const ws of rooms) {
         try {
           ws.send(msg)
-        } catch {}
+        } catch (err) {
+          console.error('DO ws.send error:', err)
+        }
       }
       return new Response('OK')
     }

@@ -349,6 +349,11 @@ export default function CommunityDetail() {
               </button>
             )}
           </div>
+          <div className={s.wsIndicator}>
+            <span className={realtime.connected ? s.wsConnected : s.wsDisconnected}>
+              {realtime.connected ? '● Live' : '○ Reconnecting'}
+            </span>
+          </div>
           {searchMessages ? (
             <div className={s.messageList}>
               {searchResults.length === 0 && !searching ? (
