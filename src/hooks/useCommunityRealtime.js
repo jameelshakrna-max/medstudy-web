@@ -191,15 +191,11 @@ export function useCommunityRealtime(communityId) {
     wsRef.current = ws
 
     ws.onopen = async () => {
-      console.log('WS CONNECTED')
       setConnected(true)
       backoffRef.current = 1000
       try {
         await backfillChat()
-        console.log('Chat synced after WS connection')
-      } catch (err) {
-        console.error('Initial chat sync failed:', err)
-      }
+      } catch {}
     }
 
     ws.onmessage = (e) => {
@@ -207,12 +203,9 @@ export function useCommunityRealtime(communityId) {
       if (evt?.id) handleEvent(evt)
     }
 
-    ws.onerror = (e) => {
-      console.error('WS ERROR', e)
-    }
+    ws.onerror = () => {}
 
     ws.onclose = () => {
-      console.log('WS CLOSED')
       setConnected(false)
       const delay = Math.min(backoffRef.current, 30000)
       backoffRef.current = Math.min(backoffRef.current * 2, 30000)
