@@ -25,14 +25,12 @@ export default function ProfilePage() {
 
   return (
     <div style={{maxWidth:640,margin:'0 auto',padding:'24px 16px 60px'}}>
-      {/* Back button */}
-      <button onClick={() => navigate(-1)} style={{display:'inline-flex',alignItems:'center',gap:6,background:'none',border:'none',color:'var(--mist)',fontSize:14,cursor:'pointer',padding:'6px 12px',borderRadius:8,marginBottom:20,fontFamily:'DM Sans,sans-serif'}}>
+      <button onClick={() => { if (window.history.length > 1) navigate(-1); else navigate('/communities') }} style={{display:'inline-flex',alignItems:'center',gap:6,background:'none',border:'none',color:'var(--mist)',fontSize:14,cursor:'pointer',padding:'6px 12px',borderRadius:8,marginBottom:20,fontFamily:'DM Sans,sans-serif'}}>
         <ChevronLeft size={16} strokeWidth={1.5} /> Back
       </button>
 
-      {/* Profile card */}
       <div style={{background:'var(--card-bg)',border:'1px solid var(--card-border)',borderRadius:20,padding:28,marginBottom:20}}>
-        <div style={{display:'flex',alignItems:'center',gap:16,marginBottom:24}}>
+        <div style={{display:'flex',alignItems:'center',gap:16,marginBottom:24,flexWrap:'wrap'}}>
           <div style={{width:64,height:64,borderRadius:20,background:'var(--blueL)',color:'var(--blue)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,overflow:'hidden'}}>
             <Users size={28} strokeWidth={1.5} />
           </div>

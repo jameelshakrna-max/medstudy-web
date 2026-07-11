@@ -599,10 +599,10 @@ export default function SettingsTab({ community, rules, settings, members, annou
                       <div className={s.rowMeta}>{req.created_at?.slice(0, 10)}</div>
                     </div>
                     <div className={s.rowActions}>
-                      <button className={s.approveBtn} onClick={() => handleApproveRequest(req.id, 'approved')}>
+                      <button className={s.compactApproveBtn} onClick={() => handleApproveRequest(req.id, 'approved')}>
                         <Check size={12} /> Approve
                       </button>
-                      <button className={s.rejectBtn} onClick={() => handleApproveRequest(req.id, 'rejected')}>
+                      <button className={s.compactRejectBtn} onClick={() => handleApproveRequest(req.id, 'rejected')}>
                         <X size={12} /> Reject
                       </button>
                     </div>
@@ -647,8 +647,8 @@ export default function SettingsTab({ community, rules, settings, members, annou
                       </div>
                     </div>
                     <div className={s.rowActions}>
-                      <button className={s.actionBtn} onClick={() => handleRestoreBan(b.id)}>Restore</button>
-                      <button className={s.actionBtnDanger} onClick={() => handleRemoveBan(b.id)}>Remove</button>
+                      <button className={s.compactActionBtn} onClick={() => handleRestoreBan(b.id)}>Restore</button>
+                      <button className={s.compactActionBtnDanger} onClick={() => handleRemoveBan(b.id)}>Remove</button>
                     </div>
                   </div>
                 ))}

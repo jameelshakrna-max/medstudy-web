@@ -184,13 +184,12 @@ export default function ModDashboardTab({ communityId, members, announcements, s
       </div>
 
       <div className={s.memberSearch}>
-        <Search size={14} strokeWidth={1.5} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--mist)', pointerEvents: 'none' }} />
+        <Search size={14} strokeWidth={1.5} />
         <input
           type="text"
           placeholder="Search members..."
           value={searchText}
           onChange={e => setSearchText(e.target.value)}
-          style={{ width: '100%', padding: '8px 10px 8px 32px', fontSize: 13, borderRadius: 8, border: '1px solid var(--card-border)', background: 'var(--input-bg)', color: 'var(--text-primary)', fontFamily: "'DM Sans', sans-serif", outline: 'none', boxSizing: 'border-box' }}
         />
       </div>
 

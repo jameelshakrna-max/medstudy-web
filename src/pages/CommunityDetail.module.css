@@ -24,9 +24,9 @@
 .leaveBtn:hover { background: var(--redL); }
 
 .announcements { margin-bottom: 20px; display: flex; flex-direction: column; gap: 8px; }
-.announcement { position: relative; padding: 14px 18px; background: var(--amberL); border: 1px solid rgba(245,158,11,0.2); border-radius: 12px; }
+.announcement { position: relative; padding: 14px 32px 14px 18px; background: var(--amberL); border: 1px solid rgba(245,158,11,0.2); border-radius: 12px; }
 .annTitle { font-size: 14px; font-weight: 700; color: var(--amber); margin-bottom: 4px; }
-.annContent { font-size: 13px; color: var(--text-secondary); }
+.annContent { font-size: 13px; color: var(--text-secondary); max-height: 72px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .annDelete { position: absolute; top: 8px; right: 8px; background: none; border: none; color: var(--mist); cursor: pointer; padding: 4px; border-radius: 4px; }
 .annDelete:hover { background: var(--input-bg); color: var(--text-primary); }
 
@@ -39,7 +39,7 @@
 .chatArea { display: flex; flex-direction: column; height: calc(100vh - 380px); min-height: 400px; border: 1px solid var(--card-border); border-radius: 16px; background: var(--card-bg); overflow: hidden; }
 .pinBar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--blueL); font-size: 12px; color: var(--blue); border-bottom: 1px solid var(--card-border); overflow-x: auto; }
 .pinBarItem { display: flex; align-items: center; gap: 6px; padding: 2px 8px; background: var(--card-bg); border-radius: 6px; white-space: nowrap; max-width: 260px; flex-shrink: 0; }
-.pinBarText { overflow: hidden; text-overflow: ellipsis; color: var(--text-primary); font-size: 12px; }
+.pinBarText { overflow: hidden; text-overflow: ellipsis; color: var(--text-primary); font-size: 12px; min-width: 0; flex: 1; }
 .pinBarUnpin { display: flex; align-items: center; background: none; border: none; color: var(--mist); cursor: pointer; padding: 2px; border-radius: 3px; flex-shrink: 0; }
 .pinBarUnpin:hover { color: var(--red); background: var(--redL); }
 .wsIndicator { display: flex; justify-content: flex-end; padding: 4px 16px; font-size: 10px; }
@@ -142,7 +142,7 @@
 .compFilterBtn { padding: 6px 14px; border-radius: 8px; border: 1px solid var(--card-border); background: transparent; color: var(--text-secondary); font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
 .compFilterBtn:hover { border-color: var(--blueL); color: var(--text-primary); }
 .compFilterActive { background: var(--blue); color: var(--navy); border-color: var(--blue); }
-.empty { text-align: center; padding: 40px; color: var(--mist); }
+.empty { text-align: center; padding: 40px; color: var(--mist); display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .compsSectionLabel { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--mist); margin-bottom: 10px; margin-top: 8px; }
 .compsList > .compCard:last-child { margin-bottom: 0; }
 .pendingSection { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--card-border); }
@@ -181,19 +181,23 @@
 .compProgressFill { height: 100%; border-radius: 3px; transition: width 0.5s ease; background: linear-gradient(90deg, var(--blue), var(--blue2)); }
 .compProgressFill.completed { background: var(--mist); }
 .compActions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
-.joinCompBtn, .leaveCompBtn, .approveBtn, .rejectBtn, .endBtn, .leaderboardBtn { display: flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 8px; border: none; font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
-.joinCompBtn { background: var(--blue); color: var(--navy); font-weight: 600; }
+.joinCompBtn, .leaveCompBtn, .approveBtn, .rejectBtn, .endBtn, .leaderboardBtn { display: flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 8px; border: none; font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
+.joinCompBtn { background: var(--blue); color: var(--navy); }
 .joinCompBtn:hover { background: var(--blue2); }
-.leaveCompBtn { background: var(--redL); color: var(--red); font-weight: 600; }
+.leaveCompBtn { background: var(--redL); color: var(--red); }
 .leaveCompBtn:hover { background: var(--red); color: var(--navy); }
-.approveBtn { background: var(--emeraldL); color: var(--emerald); font-weight: 600; }
+.approveBtn { background: var(--emeraldL); color: var(--emerald); }
 .approveBtn:hover { background: var(--emerald); color: var(--navy); }
-.rejectBtn { background: var(--redL); color: var(--red); font-weight: 600; }
+.rejectBtn { background: var(--redL); color: var(--red); }
 .rejectBtn:hover { background: var(--red); color: var(--navy); }
-.endBtn { background: var(--redL); color: var(--red); font-weight: 600; }
+.endBtn { background: var(--redL); color: var(--red); }
 .endBtn:hover { background: var(--red); color: var(--navy); }
 .leaderboardBtn { background: var(--input-bg); color: var(--mist); }
 .leaderboardBtn:hover { color: var(--text-primary); background: var(--card-border); }
+.compactApproveBtn, .compactRejectBtn { display: flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 8px; border: none; font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: opacity 0.15s; }
+.compactApproveBtn:hover, .compactRejectBtn:hover { opacity: 0.8; }
+.compactApproveBtn { background: var(--emeraldL); color: var(--emerald); }
+.compactRejectBtn { background: var(--redL); color: var(--red); }
 .compParticipants { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--mist); }
 .compParticipantAvatars { display: flex; }
 .compParticipantDot { width: 20px; height: 20px; border-radius: 50%; background: var(--blueL); color: var(--blue); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; margin-right: -4px; border: 2px solid var(--card-bg); }
@@ -262,8 +266,8 @@
 .saveBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Invite code */
-.codeRow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.codeDisplay { padding: 8px 14px; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 8px; font-family: 'DM Mono', monospace; font-size: 14px; color: var(--blue); letter-spacing: 0.1em; }
+.codeRow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.codeDisplay { padding: 8px 14px; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 8px; font-family: 'DM Mono', monospace; font-size: 14px; color: var(--blue); letter-spacing: 0.1em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .iconBtn { padding: 6px; border-radius: 6px; border: none; background: var(--input-bg); color: var(--mist); cursor: pointer; display: flex; align-items: center; transition: background 0.2s, color 0.2s; }
 .iconBtn:hover { background: var(--blueL); color: var(--blue); }
 .iconBtnSm { display: flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--input-bg); color: var(--mist); font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: color 0.2s; }
@@ -287,7 +291,7 @@
 .rowIconRed { background: var(--redL); color: var(--red); }
 .rowIconGray { background: rgba(255,255,255,0.06); color: var(--mist); }
 .rowContent { flex: 1; min-width: 0; }
-.rowTitle { font-size: 13px; color: var(--text-primary); font-weight: 500; }
+.rowTitle { font-size: 13px; color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rowMeta { font-size: 11px; color: var(--mist); margin-top: 1px; display: flex; gap: 8px; align-items: center; }
 .rowActions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
 
@@ -318,17 +322,11 @@
 .toggle input:checked + .toggleSlider { background: var(--blue); box-shadow: 0 0 8px var(--blueL); }
 .toggle input:checked + .toggleSlider::before { transform: translateX(20px); }
 
-/* Approve / Reject buttons */
-.approveBtn, .rejectBtn { display: flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 8px; border: none; font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: opacity 0.15s; }
-.approveBtn:hover, .rejectBtn:hover { opacity: 0.8; }
-.approveBtn { background: var(--emeraldL); color: var(--emerald); }
-.rejectBtn { background: var(--redL); color: var(--red); }
-
-/* Action buttons (ban restore/remove) */
-.actionBtn { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--card-border); background: transparent; color: var(--mist); font-size: 11px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
-.actionBtn:hover { border-color: var(--emerald); color: var(--emerald); }
-.actionBtnDanger { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--card-border); background: transparent; color: var(--mist); font-size: 11px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
-.actionBtnDanger:hover { border-color: var(--red); color: var(--red); background: var(--redL); }
+/* Compact action buttons (ban restore/remove) */
+.compactActionBtn { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--card-border); background: transparent; color: var(--mist); font-size: 11px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+.compactActionBtn:hover { border-color: var(--emerald); color: var(--emerald); }
+.compactActionBtnDanger { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--card-border); background: transparent; color: var(--mist); font-size: 11px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+.compactActionBtnDanger:hover { border-color: var(--red); color: var(--red); background: var(--redL); }
 
 /* Empty states */
 .emptyState { text-align: center; padding: 36px 20px; }
@@ -372,7 +370,7 @@
 .deleteBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── Leaderboard ── */
-.leaderboardArea { }
+.leaderboardArea { margin-top: 4px; }
 .positionCard { background: var(--card-bg); border: 1px solid var(--blueL); border-radius: 16px; padding: 20px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 14px; }
 .positionHeader { display: flex; align-items: center; gap: 12px; }
 .positionRank { font-size: 20px; font-weight: 800; color: var(--blue); font-family: 'DM Serif Display', serif; }
@@ -385,13 +383,13 @@
 .positionStatValue { font-size: 16px; font-weight: 800; color: var(--text-primary); }
 .positionStatLabel { font-size: 11px; color: var(--mist); }
 
-.podium { display: flex; gap: 8px; justify-content: center; align-items: flex-end; margin-bottom: 24px; }
-.podiumColumn { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px 16px 16px; border-radius: 16px; background: var(--card-bg); border: 1px solid var(--card-border); min-width: 100px; }
+.podium { display: flex; gap: 8px; justify-content: center; align-items: flex-end; margin-bottom: 24px; flex-wrap: wrap; }
+.podiumColumn { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px 16px 16px; border-radius: 16px; background: var(--card-bg); border: 1px solid var(--card-border); min-width: 100px; overflow: hidden; }
 .podiumGold { border-color: var(--amber); background: linear-gradient(180deg, var(--amberL), var(--card-bg)); transform: scale(1.1); }
 .podiumSilver { border-color: #9CA3AF; background: linear-gradient(180deg, rgba(156,163,175,0.08), var(--card-bg)); }
 .podiumBronze { border-color: #D97706; background: linear-gradient(180deg, rgba(217,119,6,0.08), var(--card-bg)); }
 .podiumAvatar { font-size: 32px; line-height: 1; }
-.podiumName { font-size: 13px; font-weight: 700; color: var(--text-primary); text-align: center; }
+.podiumName { font-size: 13px; font-weight: 700; color: var(--text-primary); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .podiumHours { font-size: 14px; font-weight: 800; color: var(--blue); }
 .podiumTitle { font-size: 11px; color: var(--mist); text-align: center; max-width: 100px; }
 .lbList { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 8px; }
@@ -445,6 +443,16 @@
 .memberSearch { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 10px; margin-bottom: 16px; }
 .memberSearch input { border: none; background: none; outline: none; color: var(--text-primary); font-size: 13px; font-family: 'DM Sans', sans-serif; flex: 1; }
 .memberSearch input::placeholder { color: var(--mist); }
+
+/* ── Search / Input helpers ── */
+.messageSearch { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin: 0 16px; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 10px; }
+.messageSearch input { flex: 1; border: none; background: none; outline: none; color: var(--text-primary); font-size: 13px; font-family: 'DM Sans', sans-serif; }
+.messageSearch input::placeholder { color: var(--mist); }
+.searchClear { display: flex; align-items: center; background: none; border: none; color: var(--mist); cursor: pointer; padding: 2px; border-radius: 4px; }
+.searchClear:hover { color: var(--text-primary); background: var(--input-bg); }
+.fieldInput { padding: 6px 10px; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 8px; color: var(--text-primary); font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; width: 100%; box-sizing: border-box; }
+.fieldInput:focus { border-color: var(--blue); }
+.settingSection { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 20px; }
 
 @media (max-width: 768px) {
   .commHeader { flex-direction: column; }

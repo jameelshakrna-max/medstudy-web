@@ -13,7 +13,7 @@ import ModDashboardTab from '../components/community/ModDashboardTab'
 import AnnouncementsTab from '../components/community/AnnouncementsTab'
 import {
   MessageSquare, Users, Trophy, Settings, Send, Paperclip, Upload,
-  Plus, X, Loader2, ChevronLeft, Shield, UserMinus, UserCog, Star,
+  Plus, X, Loader2, ChevronLeft, Shield, ShieldAlert, UserMinus, UserCog, Star,
   Crown, Flag, Clock, Hash, Link as LinkIcon, Check, AlertTriangle,
   Copy, Ban, Pin, FileText, BookOpen, UserPlus, Search, Trash2, Megaphone
 } from 'lucide-react'
@@ -37,7 +37,6 @@ export default function CommunityDetail() {
   const [members, setMembers] = useState([])
   const [myMembership, setMyMembership] = useState(null)
   const [activeTab, setActiveTab] = useState('chat')
-  useEffect(() => { console.log('[CommunityDetail] activeTab changed to:', activeTab) }, [activeTab])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [rules, setRules] = useState([])
@@ -347,7 +346,7 @@ export default function CommunityDetail() {
             onClick={() => { setActiveTab(t.id); handleRefreshTab(t.id) }}
           >
             <t.icon size={16} strokeWidth={1.5} />
-            {t.label}
+            <span>{t.label}</span>
           </button>
         ))}
         {isMod && (
@@ -356,7 +355,8 @@ export default function CommunityDetail() {
             className={`${s.tab} ${activeTab === 'mod' ? s.tabActive : ''}`}
             onClick={() => setActiveTab('mod')}
           >
-            Mod Dashboard
+            <Shield size={16} strokeWidth={1.5} />
+            <span>Mod Dashboard</span>
           </button>
         )}
       </div>
@@ -545,7 +545,7 @@ export default function CommunityDetail() {
               placeholder="Type a message..."
               value={messageInput}
               onChange={e => setMessageInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); handleSend() } }}
             />
             <button className={s.sendBtn} onClick={handleSend} disabled={!messageInput.trim() || sending}>
               {sending ? <Loader2 size={16} className={s.spinner} /> : <Send size={16} strokeWidth={1.5} />}
@@ -631,14 +631,19 @@ function FlashcardMessage({ msg, onAddToDeck }) {
   const [flashcard, setFlashcard] = useState(null)
   const [flipped, setFlipped] = useState(false)
   useEffect(() => {
-    apiGet(`/communities/${msg.community_id}/messages/history?before=${msg.id}&limit=1`).catch(() => {})
+    apiGet(`/communities/${msg.community_id}/messages/history?before=${msg.id}&limit=1`)
+      .then(data => { if (data?.length) { const m = data[0]; setFlashcard({ front: m.content, back: m.content }) } })
+      .catch(() => {})
   }, [msg.id])
+
+  const front = flashcard?.front || msg.content || 'Front side'
+  const back = flashcard?.back || msg.content || 'Back side'
 
   return (
     <div className={s.flashcardMsg}>
       <div className={s.flashcardLabel}>Shared Flashcard</div>
       <div className={s.flashcardPreview} onClick={() => setFlipped(!flipped)}>
-        {flipped ? msg.content : msg.content || 'Front side'}
+        {flipped ? back : front}
       </div>
       <div className={s.flashcardHint}>Tap to flip</div>
     </div>
