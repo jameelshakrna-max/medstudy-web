@@ -17,6 +17,8 @@ export function useCommunityRealtime(communityId) {
   const [hasMore, setHasMore] = useState(false)
   const [competitions, setCompetitions] = useState([])
   const [leaderboards, setLeaderboards] = useState({})
+  const [pins, setPins] = useState([])
+  const [announcements, setAnnouncements] = useState([])
 
   const [connected, setConnected] = useState(false)
 
@@ -39,18 +41,26 @@ export function useCommunityRealtime(communityId) {
     try {
       const token = await getJwtFromSession()
 
-      const [msgRes, compRes] = await Promise.all([
+      const [msgRes, compRes, pinsRes, annRes] = await Promise.all([
         fetch(`${API}/communities/${communityId}/messages?limit=50`, {
           headers: { Authorization: 'Bearer ' + token },
         }),
         fetch(`${API}/communities/${communityId}/competitions`, {
           headers: { Authorization: 'Bearer ' + token },
         }),
+        fetch(`${API}/communities/${communityId}/pins`, {
+          headers: { Authorization: 'Bearer ' + token },
+        }),
+        fetch(`${API}/communities/${communityId}/announcements`, {
+          headers: { Authorization: 'Bearer ' + token },
+        }),
       ])
 
-      const [msgText, compText] = await Promise.all([msgRes.text(), compRes.text()])
+      const [msgText, compText, pinsText, annText] = await Promise.all([msgRes.text(), compRes.text(), pinsRes.text(), annRes.text()])
       const msgJson = safeParseJSON(msgText)
       const compJson = safeParseJSON(compText)
+      const pinsJson = safeParseJSON(pinsText)
+      const annJson = safeParseJSON(annText)
 
       if (!msgRes.ok) throw new Error(msgJson?.error || msgText)
       const msgs = Array.isArray(msgJson) ? msgJson : []
@@ -62,6 +72,8 @@ export function useCommunityRealtime(communityId) {
       }
 
       if (compRes.ok && Array.isArray(compJson)) setCompetitions(compJson)
+      if (pinsRes.ok && Array.isArray(pinsJson)) setPins(pinsJson)
+      if (annRes.ok && Array.isArray(annJson)) setAnnouncements(annJson)
     } finally {
       setChatLoading(false)
     }
@@ -150,6 +162,41 @@ export function useCommunityRealtime(communityId) {
       const id = payload.id
       if (!id) return
       setMessages(prev => prev.map(m => (m.id === id ? { ...m, deleted: true, content: null } : m)))
+      return
+    }
+
+    if (type === 'pin:new') {
+      const pin = payload.pin || payload
+      if (!pin?.id) return
+      setPins(prev => (prev.some(p => p.id === pin.id) ? prev : [...prev, pin]))
+      return
+    }
+
+    if (type === 'pin:remove') {
+      const pinId = payload.pin_id
+      if (!pinId) return
+      setPins(prev => prev.filter(p => p.id !== pinId))
+      return
+    }
+
+    if (type === 'announcement:new') {
+      const a = payload.announcement || payload
+      if (!a?.id) return
+      setAnnouncements(prev => (prev.some(x => x.id === a.id) ? prev : [...prev, a]))
+      return
+    }
+
+    if (type === 'announcement:update') {
+      const a = payload.announcement || payload
+      if (!a?.id) return
+      setAnnouncements(prev => prev.map(x => (x.id === a.id ? { ...x, ...a } : x)))
+      return
+    }
+
+    if (type === 'announcement:delete') {
+      const aId = payload.announcement_id
+      if (!aId) return
+      setAnnouncements(prev => prev.filter(x => x.id !== aId))
       return
     }
 
@@ -262,14 +309,38 @@ export function useCommunityRealtime(communityId) {
     return apiPost(`/communities/${communityId}/messages/flashcard`, flashcardData)
   }, [apiPost, communityId])
 
+  const apiDelete = useCallback(async (path) => {
+    const token = await getJwtFromSession()
+    const res = await fetch(API + path, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + token },
+    })
+    const text = await res.text()
+    const json = safeParseJSON(text)
+    if (!res.ok) throw new Error(json?.error || text || 'Request failed')
+    return json
+  }, [])
+
+  const deleteMessage = useCallback(async (msgId) => {
+    if (!communityId || !msgId) return
+    const data = await apiDelete(`/communities/${communityId}/messages/${msgId}`)
+    if (data?.success) {
+      setMessages(prev => prev.map(m => (m.id === msgId ? { ...m, deleted: true, content: null } : m)))
+    }
+    return data
+  }, [apiDelete, communityId])
+
   return {
     messages,
     loading: chatLoading,
     competitions,
     leaderboards,
+    pins,
+    announcements,
     connected,
     sendMessage,
     sendFlashcard,
+    deleteMessage,
     fetchNewMessages: backfillChat,
     hasMore,
     loadMore,

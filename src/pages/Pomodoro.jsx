@@ -180,7 +180,7 @@ export default function Pomodoro() {
       fetch(API + '/study-hours/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
-        body: JSON.stringify({ total_hours: 0 }),
+        body: JSON.stringify({ session_minutes: elapsedMinNow }),
       }).catch(() => {})
 
       if (selectedTopic && topicStatus) {

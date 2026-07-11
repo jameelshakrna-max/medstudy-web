@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiGet, apiPost, apiPut, apiDelete, formatDate } from '../../lib/api'
-import { X, Plus, Loader2, Check, Copy, FileText, Settings, Link, ScrollText, SlidersHorizontal, Trophy, UserPlus, Ban, Clock, AlertTriangle } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
+import RoleBadge from '../RoleBadge'
+import { X, Plus, Loader2, Check, Copy, FileText, Settings, Link, ScrollText, SlidersHorizontal, Trophy, UserPlus, Ban, Clock, AlertTriangle, Users, UserCog, UserMinus, Star, Search, Camera } from 'lucide-react'
 import s from '../../pages/CommunityDetail.module.css'
+
+const API = import.meta.env.VITE_API_URL || '/api'
 
 function RefreshCw({ size, strokeWidth }) {
   return (
@@ -12,7 +16,17 @@ function RefreshCw({ size, strokeWidth }) {
   )
 }
 
-export default function SettingsTab({ community, rules, levels, settings, joinRequests, bans, isAdmin, isMod, communityId, onUpdate, onRefresh, onRegenerateCode }) {
+const ROLE_ORDER = ['admin', 'moderator', 'mentor', 'scholar', 'member']
+
+const ROLE_LABELS = {
+  admin: 'Administrator',
+  moderator: 'Moderator',
+  mentor: 'Mentor',
+  scholar: 'Scholar',
+  member: 'Member',
+}
+
+export default function SettingsTab({ community, rules, settings, members, announcements, setAnnouncements, joinRequests, bans, isAdmin, isMod, communityId, myId, onUpdate, onRefresh, onRegenerateCode }) {
   const navigate = useNavigate()
   const [editName, setEditName] = useState(community.name)
   const [editDesc, setEditDesc] = useState(community.description || '')
@@ -23,8 +37,6 @@ export default function SettingsTab({ community, rules, levels, settings, joinRe
   const [suggestedRules, setSuggestedRules] = useState([])
   const [showSuggested, setShowSuggested] = useState(false)
 
-  const [levelForm, setLevelForm] = useState({ level_name: '', level_number: levels.length + 1, min_hours: 0 })
-  const [creatingLevel, setCreatingLevel] = useState(false)
   const [auditLog, setAuditLog] = useState([])
   const [communityFiles, setCommunityFiles] = useState([])
   const [loadingAudit, setLoadingAudit] = useState(false)
@@ -33,6 +45,13 @@ export default function SettingsTab({ community, rules, levels, settings, joinRe
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+
+  const [memberSearch, setMemberSearch] = useState('')
+  const [editingTitle, setEditingTitle] = useState(null)
+  const [titleValue, setTitleValue] = useState('')
+
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const [bannerUploading, setBannerUploading] = useState(false)
 
   useEffect(() => {
     apiGet('/community/suggested-rules').then(setSuggestedRules).catch(() => {})
@@ -72,29 +91,6 @@ export default function SettingsTab({ community, rules, levels, settings, joinRe
       await apiDelete('/communities/' + communityId + '/rules/' + ruleId)
       onRefresh()
     } catch {}
-  }
-
-  const handleCreateLevel = async () => {
-    if (!levelForm.level_name.trim()) return
-    setCreatingLevel(true)
-    try {
-      await apiPost('/communities/' + communityId + '/levels', {
-        level_name: levelForm.level_name.trim(),
-        level_number: levelForm.level_number,
-        min_hours: levelForm.min_hours,
-      })
-      setLevelForm({ level_name: '', level_number: levels.length + 2, min_hours: 0 })
-      onRefresh()
-    } catch {}
-    setCreatingLevel(false)
-  }
-
-  const handleRemoveLevel = async (levelId) => {
-    try {
-      const res = await apiDelete('/communities/' + communityId + '/levels/' + levelId)
-      if (res?.error) return alert(res.error)
-      onRefresh()
-    } catch (e) { alert(e.message) }
   }
 
   const handleUpdateSettings = async (field, value) => {
@@ -144,13 +140,13 @@ export default function SettingsTab({ community, rules, levels, settings, joinRe
     setLoadingFiles(false)
   }
 
-  const handleSuggestRule = (s) => {
-    if (s.field) {
-      if (s.field === 'visibility') setEditVisibility(s.value)
-      if (s.field === 'join_type') setEditJoinType(s.value)
+  const handleSuggestRule = (item) => {
+    if (item.field) {
+      if (item.field === 'visibility') setEditVisibility(item.value)
+      if (item.field === 'join_type') setEditJoinType(item.value)
       handleSave()
     } else {
-      setNewRule(s.label)
+      setNewRule(item.label)
     }
   }
 
@@ -163,6 +159,85 @@ export default function SettingsTab({ community, rules, levels, settings, joinRe
       navigate('/communities')
     } catch (e) { setDeleteError(e.message || 'Failed to delete community'); setDeleting(false) }
   }
+
+  const handleKick = async (userId) => {
+    if (!confirm('Remove this member?')) return
+    try { await apiDelete(`/communities/${communityId}/members/${userId}`); onRefresh() } catch {}
+  }
+
+  const handleBan = async (userId) => {
+    const reason = prompt('Ban reason (optional):')
+    try { await apiPost(`/communities/${communityId}/bans`, { user_id: userId, reason: reason || '' }); onRefresh() } catch {}
+  }
+
+  const handleUnban = async (banId) => {
+    if (!confirm('Unban this member?')) return
+    try { await apiDelete(`/communities/${communityId}/bans/${banId}`); onRefresh() } catch {}
+  }
+
+  const handleSetTitle = async (userId, title) => {
+    try { await apiPut(`/communities/${communityId}/members/${userId}/title`, { title: title || null }); onRefresh() } catch {}
+  }
+
+  const handleMute = async (userId) => {
+    try { await apiPost(`/communities/${communityId}/mutes`, { user_id: userId }); onRefresh() } catch {}
+  }
+
+  const handleUnmute = async (muteId) => {
+    try { await apiDelete(`/communities/${communityId}/mutes/${muteId}`); onRefresh() } catch {}
+  }
+
+  const handleRoleChange = async (userId, newRole) => {
+    try { await apiPut(`/communities/${communityId}/members/${userId}/role`, { role: newRole }); onRefresh() } catch {}
+  }
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAvatarUploading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const formData = new FormData()
+      formData.append('file', file)
+      await fetch(`${API}/communities/${communityId}/avatar`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+        body: formData,
+      })
+      onRefresh()
+    } catch {}
+    setAvatarUploading(false)
+  }
+
+  const handleBannerUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setBannerUploading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const formData = new FormData()
+      formData.append('file', file)
+      await fetch(`${API}/communities/${communityId}/banner`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+        body: formData,
+      })
+      onRefresh()
+    } catch {}
+    setBannerUploading(false)
+  }
+
+  const bannedUserIds = bans.map(b => b.user_id)
+  const filteredMembers = (members || []).filter(m => {
+    if (!memberSearch) return true
+    const q = memberSearch.toLowerCase()
+    return (m.user_name || '').toLowerCase().includes(q) || (m.title || '').toLowerCase().includes(q)
+  })
+
+  const groupedMembers = ROLE_ORDER.reduce((acc, role) => {
+    acc[role] = filteredMembers.filter(m => m.role === role)
+    return acc
+  }, {})
 
   return (
     <div className={s.settingsArea}>
@@ -177,7 +252,7 @@ export default function SettingsTab({ community, rules, levels, settings, joinRe
             <div className={s.cardInfo}>
               <div className={s.cardTitleRow}>
                 <h3 className={s.cardTitle}>General</h3>
-                {isAdmin && (
+                {isMod && (
                   <button className={s.saveBtn} onClick={handleSave} disabled={saving}>
                     {saving ? 'Saving...' : 'Save Changes'}
                   </button>
@@ -188,23 +263,23 @@ export default function SettingsTab({ community, rules, levels, settings, joinRe
           </div>
           <div className={s.field}>
             <label>Name</label>
-            <input type="text" value={editName} onChange={e => setEditName(e.target.value)} disabled={!isAdmin} />
+            <input type="text" value={editName} onChange={e => setEditName(e.target.value)} disabled={!isMod} />
           </div>
           <div className={s.field}>
             <label>Description</label>
-            <textarea rows={3} value={editDesc} onChange={e => setEditDesc(e.target.value)} disabled={!isAdmin} />
+            <textarea rows={3} value={editDesc} onChange={e => setEditDesc(e.target.value)} disabled={!isMod} />
           </div>
           <div className={s.fieldGrid}>
             <div className={s.field}>
               <label>Visibility</label>
-              <select value={editVisibility} onChange={e => setEditVisibility(e.target.value)} disabled={!isAdmin}>
+              <select value={editVisibility} onChange={e => setEditVisibility(e.target.value)} disabled={!isMod}>
                 <option value="public">Public</option>
                 <option value="private">Private</option>
               </select>
             </div>
             <div className={s.field}>
               <label>Join Type</label>
-              <select value={editJoinType} onChange={e => setEditJoinType(e.target.value)} disabled={!isAdmin}>
+              <select value={editJoinType} onChange={e => setEditJoinType(e.target.value)} disabled={!isMod}>
                 <option value="anyone">Anyone</option>
                 <option value="approval">Requires Approval</option>
                 <option value="code">Invite Code</option>
@@ -212,6 +287,36 @@ export default function SettingsTab({ community, rules, levels, settings, joinRe
               </select>
             </div>
           </div>
+          {isMod && (
+            <div className={s.fieldGrid} style={{ marginTop: 12 }}>
+              <div className={s.field}>
+                <label>Community Avatar</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {community.avatar_url && (
+                    <img src={community.avatar_url} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
+                  )}
+                  <label className={s.actionBtn} style={{ cursor: 'pointer' }}>
+                    <Camera size={14} />
+                    {avatarUploading ? 'Uploading...' : 'Upload'}
+                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarUpload} disabled={avatarUploading} />
+                  </label>
+                </div>
+              </div>
+              <div className={s.field}>
+                <label>Community Banner</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {community.banner_url && (
+                    <img src={community.banner_url} alt="" style={{ width: 80, height: 40, borderRadius: 6, objectFit: 'cover' }} />
+                  )}
+                  <label className={s.actionBtn} style={{ cursor: 'pointer' }}>
+                    <Camera size={14} />
+                    {bannerUploading ? 'Uploading...' : 'Upload'}
+                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleBannerUpload} disabled={bannerUploading} />
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Invite Code card ── */}
@@ -227,7 +332,7 @@ export default function SettingsTab({ community, rules, levels, settings, joinRe
           </div>
           <div className={s.codeRow}>
             <code className={s.codeDisplay}>{community.invite_code || 'N/A'}</code>
-            {isAdmin && (
+            {isMod && (
               <>
                 <button className={s.iconBtn} onClick={onRegenerateCode} title="Regenerate">
                   <RefreshCw size={14} strokeWidth={1.5} />
@@ -259,9 +364,9 @@ export default function SettingsTab({ community, rules, levels, settings, joinRe
           </div>
           {showSuggested && (
             <div className={s.suggestedRules}>
-              {suggestedRules.map(s => (
-                <button key={s.id} className={s.suggestedRule} onClick={() => handleSuggestRule(s)}>
-                  {s.label}
+              {suggestedRules.map(item => (
+                <button key={item.id} className={s.suggestedRule} onClick={() => handleSuggestRule(item)}>
+                  {item.label}
                 </button>
               ))}
             </div>
@@ -304,7 +409,7 @@ export default function SettingsTab({ community, rules, levels, settings, joinRe
         </div>
 
         {/* ── Community Settings card (toggles) ── */}
-        {isAdmin && (
+        {isMod && (
           <div className={`${s.settingsCard} ${s.cardAccentBlue} ${s.cardIconBlue} ${s.fadeIn}`} style={{animationDelay:'0.15s'}}>
             <div className={s.cardHeader}>
               <div className={s.cardIconWrap}><SlidersHorizontal size={16} strokeWidth={1.5} /></div>
@@ -349,57 +454,122 @@ export default function SettingsTab({ community, rules, levels, settings, joinRe
       </div>
 
       {/* ── Group: Members ── */}
-      {isAdmin && (
-        <div className={s.settingsGroup}>
-          <div className={s.settingsGroupLabel}>Members</div>
+      <div className={s.settingsGroup}>
+        <div className={s.settingsGroupLabel}>Members</div>
 
-          {/* ── Member Levels card ── */}
-          <div className={`${s.settingsCard} ${s.cardAccentGreen} ${s.cardIconGreen} ${s.fadeIn}`} style={{animationDelay:'0.2s'}}>
-            <div className={s.cardHeader}>
-              <div className={s.cardIconWrap}><Trophy size={16} strokeWidth={1.5} /></div>
-              <div className={s.cardInfo}>
-                <div className={s.cardTitleRow}>
-                  <h3 className={s.cardTitle}>Member Levels</h3>
-                </div>
-                <p className={s.cardDesc}>Define study hour requirements for member advancement.</p>
+        {/* ── Members card ── */}
+        <div className={`${s.settingsCard} ${s.cardAccentGreen} ${s.cardIconGreen} ${s.fadeIn}`} style={{animationDelay:'0.2s'}}>
+          <div className={s.cardHeader}>
+            <div className={s.cardIconWrap}><Users size={16} strokeWidth={1.5} /></div>
+            <div className={s.cardInfo}>
+              <div className={s.cardTitleRow}>
+                <h3 className={s.cardTitle}>Members</h3>
+                <span className={s.levelBadge}>{(members || []).length}</span>
               </div>
-            </div>
-            {levels.length === 0 ? (
-              <div className={s.emptyState}>
-                <Trophy size={32} className={s.emptyIcon} />
-                <p className={s.emptyTitle}>No levels defined</p>
-                <p className={s.emptyDesc}>Create levels to reward members based on study hours.</p>
-              </div>
-            ) : (
-              <div className={s.listStack}>
-                {levels.map(l => (
-                  <div key={l.id} className={s.compactRow}>
-                    <div className={`${s.rowIcon} ${s.rowIconGray}`}>
-                      <span className={s.levelBadge}>L{l.level_number}</span>
-                    </div>
-                    <div className={s.rowContent}>
-                      <div className={s.rowTitle}>{l.level_name}</div>
-                      <div className={s.rowMeta}>{l.min_hours}h minimum</div>
-                    </div>
-                    <div className={s.rowActions}>
-                      <button className={s.removeBtn} onClick={() => handleRemoveLevel(l.id)}>
-                        <X size={12} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className={s.addRow}>
-              <input type="text" placeholder="Level name" value={levelForm.level_name} onChange={e => setLevelForm(p => ({ ...p, level_name: e.target.value }))} />
-              <input type="number" placeholder="Min hrs" value={levelForm.min_hours} onChange={e => setLevelForm(p => ({ ...p, min_hours: parseInt(e.target.value) || 0 }))} />
-              <button className={s.addBtn} onClick={handleCreateLevel} disabled={!levelForm.level_name.trim() || creatingLevel}>
-                {creatingLevel ? <Loader2 size={14} className={s.spinner} /> : <Plus size={14} strokeWidth={1.5} />}
-              </button>
+              <p className={s.cardDesc}>View and manage community members.</p>
             </div>
           </div>
+          <div className={s.memberSearch}>
+            <Search size={14} />
+            <input
+              type="text"
+              placeholder="Search members..."
+              value={memberSearch}
+              onChange={e => setMemberSearch(e.target.value)}
+            />
+          </div>
+          {ROLE_ORDER.map(role => {
+            const groupMembers = groupedMembers[role]
+            if (!groupMembers || groupMembers.length === 0) return null
+            return (
+              <div key={role} className={s.memberSection}>
+                <div className={s.memberSectionTitle}>
+                  <span>{ROLE_LABELS[role]}s</span>
+                  <span className={s.memberCount}>{groupMembers.length}</span>
+                </div>
+                <div className={s.memberList}>
+                  {groupMembers.map(m => (
+                    <div key={m.id} className={s.memberCard}>
+                      <div className={s.memberAvatar}>
+                        {m.user_name?.[0]?.toUpperCase() || '?'}
+                      </div>
+                      <div className={s.memberInfo}>
+                        <div className={s.memberName}>{m.user_name}</div>
+                        <div className={s.memberMeta}>
+                          <RoleBadge role={m.role} />
+                          {m.title && <span>{m.title}</span>}
+                          {m.total_study_hours > 0 && <span>{m.total_study_hours}h studied</span>}
+                          <span>Joined {formatDate(m.joined_at)}</span>
+                        </div>
+                      </div>
+                      {isMod && m.user_id !== myId && (
+                        <div className={s.memberActions}>
+                          <select
+                            className={s.inlineSelect}
+                            value={m.role}
+                            onChange={e => handleRoleChange(m.user_id, e.target.value)}
+                          >
+                            {ROLE_ORDER.map(r => (
+                              <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                            ))}
+                          </select>
+                          {editingTitle === m.id ? (
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                              <input
+                                type="text"
+                                className={s.fieldInput}
+                                value={titleValue}
+                                onChange={e => setTitleValue(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') { handleSetTitle(m.user_id, titleValue); setEditingTitle(null) }
+                                  if (e.key === 'Escape') setEditingTitle(null)
+                                }}
+                                autoFocus
+                                placeholder="Custom title"
+                                style={{ fontSize: 12, padding: '4px 8px', width: 120 }}
+                              />
+                              <button className={s.actionBtn} onClick={() => { handleSetTitle(m.user_id, titleValue); setEditingTitle(null) }}>
+                                <Check size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              className={s.actionBtn}
+                              onClick={() => { setEditingTitle(m.id); setTitleValue(m.title || '') }}
+                              title="Set title"
+                            >
+                              <Star size={12} />
+                            </button>
+                          )}
+                          {!bannedUserIds.includes(m.user_id) ? (
+                            <>
+                              <button className={s.actionBtn} onClick={() => handleKick(m.user_id)} title="Kick">
+                                <UserMinus size={12} />
+                              </button>
+                              <button className={s.actionBtnDanger} onClick={() => handleBan(m.user_id)} title="Ban">
+                                <Ban size={12} />
+                              </button>
+                            </>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+          {filteredMembers.length === 0 && (
+            <div className={s.emptyState}>
+              <Users size={32} className={s.emptyIcon} />
+              <p className={s.emptyTitle}>No members found</p>
+              <p className={s.emptyDesc}>{memberSearch ? 'Try a different search term.' : 'No members in this community yet.'}</p>
+            </div>
+          )}
+        </div>
 
-          {/* ── Join Requests card ── */}
+        {/* ── Join Requests card ── */}
+        {isMod && (
           <div className={`${s.settingsCard} ${s.cardAccentAmber} ${s.cardIconAmber} ${s.fadeIn}`} style={{animationDelay:'0.25s'}}>
             <div className={s.cardHeader}>
               <div className={s.cardIconWrap}><UserPlus size={16} strokeWidth={1.5} /></div>
@@ -441,8 +611,10 @@ export default function SettingsTab({ community, rules, levels, settings, joinRe
               </div>
             )}
           </div>
+        )}
 
-          {/* ── Banned Members card ── */}
+        {/* ── Banned Members card ── */}
+        {isMod && (
           <div className={`${s.settingsCard} ${s.cardAccentRed} ${s.cardIconRed} ${s.fadeIn}`} style={{animationDelay:'0.3s'}}>
             <div className={s.cardHeader}>
               <div className={s.cardIconWrap}><Ban size={16} strokeWidth={1.5} /></div>
@@ -483,8 +655,8 @@ export default function SettingsTab({ community, rules, levels, settings, joinRe
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* ── Group: Administration ── */}
       {isAdmin && (

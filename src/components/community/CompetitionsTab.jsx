@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ROLES, PERM, hasPermission } from '../../lib/permissions'
 import { apiGet, apiPost, apiPut, formatDate, formatCountdown } from '../../lib/api'
-import { Search, Trophy, Plus, X, Loader2, Check, Flag, UserPlus, Clock, Users } from 'lucide-react'
+import { Search, Trophy, Plus, X, Loader2, Check, Flag, UserPlus, Clock, Users, BarChart3 } from 'lucide-react'
 import s from '../../pages/CommunityDetail.module.css'
 
 const COMPETITION_DURATIONS = [
@@ -116,6 +116,12 @@ export default function CompetitionsTab({ competitions, communityId, myId, isAdm
     return () => clearInterval(interval)
   }, [onRefresh, realtimeConnected])
 
+  useEffect(() => {
+    if (activeComp && !leaderboards[activeComp.id]) {
+      loadLeaderboard(activeComp.id)
+    }
+  }, [activeComp?.id])
+
   const renderCard = (c, hero) => {
     const now = Date.now()
     const start = new Date(c.starts_at?.replace(' ', 'T') + 'Z').getTime()
@@ -154,6 +160,51 @@ export default function CompetitionsTab({ competitions, communityId, myId, isAdm
           {!c.approved && c.status !== 'rejected' && <span className={s.pendingBadge}>Pending approval</span>}
           {isRejected && c.rejection_reason && <span className={s.rejectionReason}>Reason: {c.rejection_reason}</span>}
         </div>
+        {hero && lb && lb.length > 0 && (
+          <div className={s.heroCharts}>
+            <div className={s.heroGaugeWrap}>
+              <div className={s.gauge}>
+                {(() => {
+                  const pos = lb.findIndex(p => p.user_id === myId)
+                  const r = pos >= 0 ? pos + 1 : null
+                  const prog = lb.length > 1 && r ? 1 - (r - 1) / (lb.length - 1) : 1
+                  const deg = prog * 180
+                  return (
+                    <>
+                      <div className={s.gaugeArc} style={{
+                        background: `conic-gradient(from 180deg, var(--blue) 0deg ${deg}deg, var(--input-bg) ${deg}deg 360deg)`,
+                      }} />
+                      <div className={s.gaugeValue}>
+                        <div className={s.gaugeRank}>#{r || '—'}</div>
+                        <div className={s.gaugeLabel}>of {lb.length}</div>
+                      </div>
+                    </>
+                  )
+                })()}
+              </div>
+              <div className={s.heroGaugeLabel}>
+                <BarChart3 size={12} strokeWidth={1.5} /> Your Position
+              </div>
+            </div>
+            <div className={s.heroBarChart}>
+              <div className={s.barChartTitle}><BarChart3 size={12} strokeWidth={1.5} /> Top Participants</div>
+              {lb.slice(0, 5).map(p => {
+                const maxHours = Math.max(...lb.map(x => x.total_hours), 1)
+                const w = (p.total_hours / maxHours) * 100
+                return (
+                  <div key={p.id} className={`${s.barChartRow} ${p.user_id === myId ? s.barChartRowActive : ''}`}>
+                    <span className={s.barChartName}>{p.user_id === myId ? 'You' : (p.user_name || p.user_id?.slice(0, 8))}</span>
+                    <div className={s.barChartTrack}>
+                      <div className={s.barChartFill} style={{ width: w + '%' }} />
+                    </div>
+                    <span className={s.barChartHours}>{Math.round(p.total_hours)}h</span>
+                  </div>
+                )
+              })}
+              {lb.length > 5 && <div className={s.barChartMore}>+{lb.length - 5} more</div>}
+            </div>
+          </div>
+        )}
         <div className={s.compActions}>
           {c.status === 'active' && !hasJoined && (
             <button className={s.joinCompBtn} onClick={() => handleJoin(c.id)}>

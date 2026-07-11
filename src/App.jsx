@@ -22,6 +22,7 @@ const ResourceDetail = lazy(() => import('./pages/ResourceDetail'))
 const Goals      = lazy(() => import('./pages/Goals'))
 const Communities = lazy(() => import('./pages/Communities'))
 const CommunityDetail = lazy(() => import('./pages/CommunityDetail'))
+const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 
 const PAGE_LOADING = <LoadingScreen />
 
@@ -67,6 +68,7 @@ function AppRoutes() {
           <Route path="goals"     element={<Goals />} />
           <Route path="communities" element={<Communities />} />
           <Route path="communities/:id" element={<CommunityDetail />} />
+          <Route path="profile/:userId" element={<ProfilePage />} />
           <Route path="settings"   element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

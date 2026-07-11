@@ -63,6 +63,12 @@ function previewIntervals(card) {
 const API = import.meta.env.VITE_API_URL || '/api'
 
 async function apiJson(res) {
+  if (!res.ok) {
+    const text = await res.text()
+    let msg
+    try { msg = JSON.parse(text).error || text } catch { msg = text.slice(0, 300) }
+    throw new Error(msg || `Request failed (${res.status})`)
+  }
   const text = await res.text()
   try { return JSON.parse(text) } catch {
     console.error('API response not JSON:', res.status, res.headers.get('content-type'), text.slice(0, 500))

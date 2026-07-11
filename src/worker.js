@@ -278,6 +278,16 @@ export default {
       if (path.match(/^\/api\/competitions\/[^\/]+\/leaderboard$/) && request.method === 'GET') return handleGetLeaderboard(request, env, user)
       if (path.match(/^\/api\/competitions\/[^\/]+\/end$/) && request.method === 'PUT') return handleEndCompetition(request, env, user)
       if (path === '/api/study-hours/sync' && request.method === 'POST') return handleSyncStudyHours(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/leaderboard\/monthly$/) && request.method === 'GET') return handleMonthlyLeaderboard(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/leaderboard\/position$/) && request.method === 'GET') return handleLeaderboardPosition(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/leaderboard\/title$/) && request.method === 'PUT') return handleSetLeaderboardTitle(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/leaderboard\/all-time$/) && request.method === 'GET') return handleAllTimeLeaderboard(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/badges$/) && request.method === 'GET') return handleUserBadges(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+\/title$/) && request.method === 'PUT') return handleSetMemberTitle(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/mutes$/) && request.method === 'POST') return handleMuteMember(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/mutes$/) && request.method === 'GET') return handleGetMutes(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/mutes\/[^\/]+$/) && request.method === 'DELETE') return handleUnmuteMember(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/profile$/) && request.method === 'GET') return handleUserProfile(request, env)
 
       if (path.match(/^\/api\/communities\/[^\/]+\/ws$/) && request.method === 'GET') {
         return handleWebSocketUpgrade(request, env)
@@ -1077,7 +1087,7 @@ async function handleGetCommunity(request, env) {
 async function handleUpdateCommunity(request, env, user) {
   const id = extractId(request.url)
   const member = await getMember(env, id, user.sub)
-  if (!member || !hasMinimumRole(member.role, ROLES.ADMINISTRATOR)) return json({ error: 'Not authorized' }, 403)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
 
   const body = await request.json()
   const now = new Date().toISOString()
@@ -1871,11 +1881,22 @@ async function handlePinMessage(request, env, user) {
   const member = await getMember(env, communityId, user.sub)
   if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
 
+  const pinId = uuid()
   await env.DB.prepare(
     'INSERT INTO community_pins (id, community_id, message_id, pinned_by) VALUES (?, ?, ?, ?)'
-  ).bind(uuid(), communityId, message_id, user.sub).run()
+  ).bind(pinId, communityId, message_id, user.sub).run()
 
-  return json({ success: true }, 201)
+  const { results: msgInfo } = await env.DB.prepare(
+    'SELECT content, user_name FROM community_messages WHERE id = ?'
+  ).bind(message_id).all()
+
+  broadcastEvent(env, communityId, {
+    version: 1, id: uuid(),
+    type: 'pin:new',
+    payload: { pin: { id: pinId, community_id: communityId, message_id, pinned_by: user.sub, created_at: new Date().toISOString(), message_content: msgInfo[0]?.content || '', message_user_name: msgInfo[0]?.user_name || '' } }
+  }).catch(() => {})
+
+  return json({ success: true, pin_id: pinId }, 201)
 }
 
 async function handleUnpinMessage(request, env, user) {
@@ -1885,6 +1906,13 @@ async function handleUnpinMessage(request, env, user) {
   if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
 
   await env.DB.prepare('DELETE FROM community_pins WHERE id = ? AND community_id = ?').bind(pinId, communityId).run()
+
+  broadcastEvent(env, communityId, {
+    version: 1, id: uuid(),
+    type: 'pin:remove',
+    payload: { pin_id: pinId }
+  }).catch(() => {})
+
   return json({ success: true })
 }
 
@@ -1909,14 +1937,25 @@ async function handleCreateAnnouncement(request, env, user) {
   const member = await getMember(env, communityId, user.sub)
   if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
 
+  const annId = uuid()
   await env.DB.prepare(
     'INSERT INTO community_announcements (id, community_id, title, content, created_by) VALUES (?, ?, ?, ?, ?)'
-  ).bind(uuid(), communityId, title, content, user.sub).run()
+  ).bind(annId, communityId, title, content, user.sub).run()
 
-  const { results } = await env.DB.prepare(
-    'SELECT * FROM community_announcements WHERE community_id = ? ORDER BY created_at DESC LIMIT 1'
-  ).bind(communityId).all()
-  return json(results[0], 201)
+  const announcement = {
+    id: annId, community_id: communityId, title, content,
+    created_by: user.sub,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }
+
+  broadcastEvent(env, communityId, {
+    version: 1, id: uuid(),
+    type: 'announcement:new',
+    payload: { announcement }
+  }).catch(() => {})
+
+  return json(announcement, 201)
 }
 
 async function handleUpdateAnnouncement(request, env, user) {
@@ -1937,6 +1976,13 @@ async function handleUpdateAnnouncement(request, env, user) {
   binds.push(annId, communityId)
 
   await env.DB.prepare(`UPDATE community_announcements SET ${updates.join(', ')} WHERE id = ? AND community_id = ?`).bind(...binds).run()
+
+  broadcastEvent(env, communityId, {
+    version: 1, id: uuid(),
+    type: 'announcement:update',
+    payload: { announcement: { id: annId, community_id: communityId, title, content } }
+  }).catch(() => {})
+
   return json({ success: true })
 }
 
@@ -1947,6 +1993,13 @@ async function handleDeleteAnnouncement(request, env, user) {
   if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
 
   await env.DB.prepare('DELETE FROM community_announcements WHERE id = ? AND community_id = ?').bind(annId, communityId).run()
+
+  broadcastEvent(env, communityId, {
+    version: 1, id: uuid(),
+    type: 'announcement:delete',
+    payload: { announcement_id: annId }
+  }).catch(() => {})
+
   return json({ success: true })
 }
 
@@ -2257,36 +2310,460 @@ async function handleEndCompetition(request, env, user) {
 /* ── Study Hours Sync ── */
 
 async function handleSyncStudyHours(request, env, user) {
-  const { total_hours } = await request.json()
-  if (total_hours === undefined || total_hours === null) return json({ error: 'total_hours required' }, 400)
+  const { session_minutes } = await request.json()
+  if (!session_minutes || typeof session_minutes !== 'number' || session_minutes <= 0) {
+    return json({ error: 'session_minutes must be a positive number' }, 400)
+  }
 
-  const now = new Date().toISOString()
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
+  const isoNow = now.toISOString()
+  const sessionId = uuid()
 
-  await env.DB.prepare(
-    `UPDATE community_members SET total_study_hours = ? WHERE user_id = ?`
-  ).bind(total_hours, user.sub).run()
-
-  const { results: communities } = await env.DB.prepare(
-    'SELECT SUM(total_study_hours) as sum FROM community_members WHERE user_id = ?'
+  // Find all communities the user belongs to
+  const { results: memberships } = await env.DB.prepare(
+    'SELECT community_id FROM community_members WHERE user_id = ?'
   ).bind(user.sub).all()
 
+  for (const m of memberships) {
+    const communityId = m.community_id
+
+    // 1. Log granular session
+    await env.DB.prepare(
+      'INSERT INTO study_sessions_log (id, community_id, user_id, minutes, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).bind(sessionId + '_' + communityId, communityId, user.sub, session_minutes, isoNow).run()
+
+    // 2. Upsert monthly hours
+    await env.DB.prepare(
+      `INSERT INTO community_monthly_hours (id, community_id, user_id, year, month, total_hours, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(community_id, user_id, year, month)
+       DO UPDATE SET total_hours = total_hours + ?, updated_at = ?`
+    ).bind(
+      uuid(), communityId, user.sub, year, month, session_minutes / 60, isoNow,
+      session_minutes / 60, isoNow
+    ).run()
+
+    // 3. Update member cumulative total (incremental)
+    await env.DB.prepare(
+      'UPDATE community_members SET total_study_hours = COALESCE(total_study_hours, 0) + ? WHERE community_id = ? AND user_id = ?'
+    ).bind(session_minutes / 60, communityId, user.sub).run()
+  }
+
+  // 4. Update community global totals
   await env.DB.prepare(
-    'UPDATE communities SET total_study_hours = (SELECT COALESCE(SUM(total_study_hours), 0) FROM community_members WHERE community_id = communities.id)'
+    `UPDATE communities SET total_study_hours = (
+      SELECT COALESCE(SUM(total_study_hours), 0) FROM community_members WHERE community_id = communities.id
+    )`
   ).run()
 
+  // 5. Update hours for active competition participations (incremental)
   const { results: activeComps } = await env.DB.prepare(
-    `SELECT cp.id as participant_id FROM competition_participants cp
+    `SELECT cp.id as participant_id, cp.competition_id FROM competition_participants cp
      JOIN competitions c ON cp.competition_id = c.id
      WHERE cp.user_id = ? AND c.status IN ('active', 'pending')`
   ).bind(user.sub).all()
 
   for (const p of activeComps) {
     await env.DB.prepare(
-      'UPDATE competition_participants SET total_hours = ? WHERE id = ?'
-    ).bind(total_hours, p.participant_id).run()
+      'UPDATE competition_participants SET total_hours = total_hours + ? WHERE id = ?'
+    ).bind(session_minutes / 60, p.participant_id).run()
   }
 
   return json({ success: true })
+}
+
+/* ── Leaderboard ── */
+
+function badgeEmoji(rank) {
+  if (rank === 1) return '🥇'
+  if (rank === 2) return '🥈'
+  if (rank === 3) return '🥉'
+  return null
+}
+
+async function handleMonthlyLeaderboard(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const url = new URL(request.url)
+  const year = parseInt(url.searchParams.get('year')) || new Date().getFullYear()
+  const month = parseInt(url.searchParams.get('month')) || new Date().getMonth() + 1
+  const filter = url.searchParams.get('filter') || 'this_month' // this_month, this_week, mentors, scholars
+
+  // Verify membership
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+
+  let baseHoursQuery, baseHoursParams
+
+  if (filter === 'all_time') {
+    baseHoursQuery = `SELECT user_id, total_study_hours as hours FROM community_members WHERE community_id = ?`
+    baseHoursParams = [communityId]
+  } else if (filter === 'this_week') {
+    const weekAgo = new Date()
+    weekAgo.setDate(weekAgo.getDate() - 7)
+    baseHoursQuery = `SELECT user_id, SUM(minutes)/60.0 as hours FROM study_sessions_log WHERE community_id = ? AND created_at >= ? GROUP BY user_id`
+    baseHoursParams = [communityId, weekAgo.toISOString()]
+  } else {
+    // this_month or role-based
+    baseHoursQuery = `SELECT user_id, total_hours as hours FROM community_monthly_hours WHERE community_id = ? AND year = ? AND month = ?`
+    baseHoursParams = [communityId, year, month]
+  }
+
+  let q = baseHoursQuery
+  let params = [...baseHoursParams]
+
+  if (filter === 'mentors') {
+    q = `SELECT cm.user_id, COALESCE(ch.total_hours, 0) as hours FROM community_members cm
+         LEFT JOIN community_monthly_hours ch ON ch.community_id = cm.community_id AND ch.user_id = cm.user_id AND ch.year = ? AND ch.month = ?
+         WHERE cm.community_id = ? AND cm.role IN ('mentor', 'moderator', 'administrator')
+         ORDER BY hours DESC`
+    params = [year, month, communityId]
+  } else if (filter === 'scholars') {
+    q = `SELECT cm.user_id, COALESCE(ch.total_hours, 0) as hours FROM community_members cm
+         LEFT JOIN community_monthly_hours ch ON ch.community_id = cm.community_id AND ch.user_id = cm.user_id AND ch.year = ? AND ch.month = ?
+         WHERE cm.community_id = ? AND cm.role IN ('scholar', 'mentor', 'moderator', 'administrator')
+         ORDER BY hours DESC`
+    params = [year, month, communityId]
+  } else if (filter === 'this_month') {
+    q = baseHoursQuery + ' ORDER BY total_hours DESC'
+  } else if (filter === 'all_time') {
+    q = baseHoursQuery + ' ORDER BY total_study_hours DESC'
+  } else if (filter === 'this_week') {
+    q = baseHoursQuery + ' ORDER BY hours DESC'
+  }
+
+  const { results: hours } = await env.DB.prepare(q).bind(...params).all()
+
+  // Get user names from the community_messages table (most recent user_name per user_id)
+  const { results: nameRows } = await env.DB.prepare(
+    `SELECT DISTINCT m.user_id, m.user_name FROM community_messages m
+     WHERE m.community_id = ? AND m.user_id IN (${hours.map(h => '?').join(',')})`
+  ).bind(communityId, ...hours.map(h => h.user_id)).all()
+  const nameMap = {}
+  for (const r of nameRows) { nameMap[r.user_id] = r.user_name }
+
+  // Fallback: get names from community_members
+  for (const h of hours) {
+    if (!nameMap[h.user_id]) {
+      const { results: mem } = await env.DB.prepare(
+        'SELECT user_id FROM community_members WHERE community_id = ? AND user_id = ?'
+      ).bind(communityId, h.user_id).all()
+    }
+  }
+
+  // Get badges for this month
+  const { results: badges } = await env.DB.prepare(
+    'SELECT * FROM community_monthly_badges WHERE community_id = ? AND year = ? AND month = ? ORDER BY rank'
+  ).bind(communityId, year, month).all()
+  const badgeMap = {}
+  for (const b of badges) { badgeMap[b.user_id] = b }
+
+  // Assign badges if month ended and no badges exist yet
+  const now = new Date()
+  const thisMonthEnded = (year < now.getFullYear()) || (year === now.getFullYear() && month < now.getMonth() + 1)
+  if (thisMonthEnded && badges.length === 0 && hours.length >= 1) {
+    const newBadges = []
+    const ranks = [{ rank: 1 }, { rank: 2 }, { rank: 3 }]
+    for (let i = 0; i < Math.min(3, hours.length); i++) {
+      if (hours[i].hours > 0) {
+        const badgeId = uuid()
+        await env.DB.prepare(
+          'INSERT OR IGNORE INTO community_monthly_badges (id, community_id, user_id, year, month, rank) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(badgeId, communityId, hours[i].user_id, year, month, ranks[i].rank).run()
+        newBadges.push({ id: badgeId, user_id: hours[i].user_id, rank: ranks[i].rank, title: '' })
+      }
+    }
+    for (const b of newBadges) { badgeMap[b.user_id] = b }
+  }
+
+  const ranked = hours.map((h, i) => ({
+    rank: i + 1,
+    user_id: h.user_id,
+    user_name: nameMap[h.user_id] || h.user_id?.slice(0, 8) || 'Unknown',
+    hours: Math.round(h.hours * 10) / 10,
+    badge: badgeMap[h.user_id] ? { emoji: badgeEmoji(badgeMap[h.user_id].rank), rank: badgeMap[h.user_id].rank, title: badgeMap[h.user_id].title || '' } : null,
+    is_me: h.user_id === user.sub,
+  }))
+
+  return json(ranked)
+}
+
+async function handleLeaderboardPosition(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
+  const todayStr = now.toISOString().slice(0, 10)
+
+  // Current rank in monthly leaderboard
+  const { results: all } = await env.DB.prepare(
+    `SELECT user_id, total_hours FROM community_monthly_hours
+     WHERE community_id = ? AND year = ? AND month = ?
+     ORDER BY total_hours DESC`
+  ).bind(communityId, year, month).all()
+
+  const myIdx = all.findIndex(h => h.user_id === user.sub)
+  const myHours = myIdx >= 0 ? all[myIdx].total_hours : 0
+  const myRank = myIdx >= 0 ? myIdx + 1 : null
+  const totalParticipants = all.length
+
+  // Hours needed to pass next rank
+  let hoursToNext = null
+  if (myIdx > 0) {
+    hoursToNext = Math.round((all[myIdx - 1].total_hours - myHours) * 10) / 10
+  }
+
+  // Position change: compare with last snapshot or yesterday
+  const yesterday = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const yesterdayStr = yesterday.toISOString().slice(0, 10)
+
+  const { results: snapshots } = await env.DB.prepare(
+    `SELECT ranking FROM community_leaderboard_snapshots
+     WHERE community_id = ? AND snapshot_date = ?
+     LIMIT 1`
+  ).bind(communityId, yesterdayStr).all()
+
+  let placesChanged = 0
+  if (snapshots.length > 0) {
+    const oldRanking = JSON.parse(snapshots[0].ranking)
+    const oldIdx = oldRanking.findIndex(r => r.user_id === user.sub)
+    const oldRank = oldIdx >= 0 ? oldIdx + 1 : null
+    if (myRank && oldRank) {
+      placesChanged = oldRank - myRank
+    }
+  }
+
+  // Create today's snapshot if not exists
+  const { results: todaySnap } = await env.DB.prepare(
+    'SELECT id FROM community_leaderboard_snapshots WHERE community_id = ? AND snapshot_date = ?'
+  ).bind(communityId, todayStr).all()
+  if (todaySnap.length === 0) {
+    const snapshotData = all.map(h => ({ user_id: h.user_id, hours: h.total_hours }))
+    await env.DB.prepare(
+      'INSERT INTO community_leaderboard_snapshots (id, community_id, snapshot_date, ranking) VALUES (?, ?, ?, ?)'
+    ).bind(uuid(), communityId, todayStr, JSON.stringify(snapshotData)).run()
+  }
+
+  // Today's hours
+  const { results: todayHours } = await env.DB.prepare(
+    `SELECT COALESCE(SUM(minutes), 0)/60.0 as today_hours FROM study_sessions_log
+     WHERE community_id = ? AND user_id = ? AND created_at >= ?`
+  ).bind(communityId, user.sub, todayStr).run()
+
+  return json({
+    rank: myRank,
+    total_participants: totalParticipants,
+    hours: Math.round(myHours * 10) / 10,
+    today_hours: Math.round((todayHours[0]?.today_hours || 0) * 10) / 10,
+    hours_to_next: hoursToNext,
+    places_changed: placesChanged,
+  })
+}
+
+async function handleSetLeaderboardTitle(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.ADMINISTRATOR)) {
+    return json({ error: 'Only admins can assign titles' }, 403)
+  }
+
+  const { user_id, year, month, title } = await request.json()
+  if (!user_id || !year || !month) return json({ error: 'user_id, year, month required' }, 400)
+  if (typeof title !== 'string' || title.length > 100) return json({ error: 'Title too long' }, 400)
+
+  const sanitized = title.trim().slice(0, 100)
+
+  await env.DB.prepare(
+    `UPDATE community_monthly_badges SET title = ? WHERE community_id = ? AND user_id = ? AND year = ? AND month = ?`
+  ).bind(sanitized, communityId, user_id, year, month).run()
+
+  return json({ success: true, title: sanitized })
+}
+
+async function handleAllTimeLeaderboard(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+
+  const { results: allTime } = await env.DB.prepare(
+    `SELECT cm.user_id, cm.total_study_hours as hours
+     FROM community_members cm
+     WHERE cm.community_id = ?
+     ORDER BY cm.total_study_hours DESC
+     LIMIT 100`
+  ).bind(communityId).all()
+
+  // Get names
+  const { results: nameRows } = await env.DB.prepare(
+    `SELECT DISTINCT m.user_id, m.user_name FROM community_messages m
+     WHERE m.community_id = ? AND m.user_id IN (${allTime.map(h => '?').join(',')})`
+  ).bind(communityId, ...allTime.map(h => h.user_id)).all()
+  const nameMap = {}
+  for (const r of nameRows) { nameMap[r.user_id] = r.user_name }
+
+  const ranked = allTime.map((h, i) => ({
+    rank: i + 1,
+    user_id: h.user_id,
+    user_name: nameMap[h.user_id] || h.user_id?.slice(0, 8),
+    hours: Math.round((h.hours || 0) * 10) / 10,
+    is_me: h.user_id === user.sub,
+  }))
+
+  return json(ranked)
+}
+
+async function handleUserBadges(request, env) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const targetUserId = parts[4] // /api/users/:id/badges
+
+  const { results: badges } = await env.DB.prepare(
+    `SELECT cmb.*, c.name as community_name
+     FROM community_monthly_badges cmb
+     JOIN communities c ON cmb.community_id = c.id
+     WHERE cmb.user_id = ?
+     ORDER BY cmb.year DESC, cmb.month DESC, cmb.rank`
+  ).bind(targetUserId).all()
+
+  return json(badges.map(b => ({
+    community_id: b.community_id,
+    community_name: b.community_name,
+    year: b.year,
+    month: b.month,
+    rank: b.rank,
+    emoji: badgeEmoji(b.rank),
+    title: b.title || '',
+    awarded_at: b.awarded_at,
+  })))
+}
+
+/* ── Member Management ── */
+
+async function handleSetMemberTitle(request, env, user) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const communityId = parts[3]
+  const targetUserId = parts[5]
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const { title } = await request.json()
+  if (title !== null && (typeof title !== 'string' || title.length > 100)) return json({ error: 'Title too long' }, 400)
+
+  const sanitized = title !== null ? title.trim() : null
+  await env.DB.prepare('UPDATE community_members SET title = ? WHERE community_id = ? AND user_id = ?')
+    .bind(sanitized || null, communityId, targetUserId).run()
+
+  return json({ success: true, title: sanitized || null })
+}
+
+async function handleMuteMember(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const { user_id, reason } = await request.json()
+  if (!user_id) return json({ error: 'user_id required' }, 400)
+
+  await env.DB.prepare(
+    'INSERT OR IGNORE INTO community_mutes (id, community_id, user_id, muted_by, reason) VALUES (?, ?, ?, ?, ?)'
+  ).bind(uuid(), communityId, user_id, user.sub, reason || '').run()
+
+  return json({ success: true })
+}
+
+async function handleUnmuteMember(request, env, user) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const communityId = parts[3]
+  const muteId = parts[5]
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  await env.DB.prepare('DELETE FROM community_mutes WHERE id = ? AND community_id = ?').bind(muteId, communityId).run()
+  return json({ success: true })
+}
+
+async function handleGetMutes(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const { results } = await env.DB.prepare(
+    'SELECT cm.*, m.user_name FROM community_mutes cm LEFT JOIN (SELECT DISTINCT user_id, user_name FROM community_messages WHERE community_id = ?) m ON cm.user_id = m.user_id WHERE cm.community_id = ? ORDER BY cm.created_at DESC'
+  ).bind(communityId, communityId).all()
+
+  return json(results)
+}
+
+async function handleUserProfile(request, env) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const targetUserId = parts[3]
+
+  const { results: badges } = await env.DB.prepare(
+    `SELECT cmb.*, c.name as community_name FROM community_monthly_badges cmb
+     JOIN communities c ON cmb.community_id = c.id
+     WHERE cmb.user_id = ? ORDER BY cmb.year DESC, cmb.month DESC`
+  ).bind(targetUserId).all()
+
+  const { results: hours } = await env.DB.prepare(
+    'SELECT COALESCE(SUM(total_study_hours), 0) as total FROM community_members WHERE user_id = ?'
+  ).bind(targetUserId).all()
+  const totalHours = hours[0]?.total || 0
+
+  const { results: communities } = await env.DB.prepare(
+    `SELECT cm.role, cm.title, cm.total_study_hours, cm.joined_at, c.id, c.name, c.avatar_url
+     FROM community_members cm JOIN communities c ON cm.community_id = c.id
+     WHERE cm.user_id = ? ORDER BY cm.joined_at DESC`
+  ).bind(targetUserId).all()
+
+  const { results: questions } = await env.DB.prepare(
+    'SELECT COALESCE(SUM(correct), 0) as solved FROM uworld_blocks WHERE user_id = ?'
+  ).bind(targetUserId).all()
+  const questionsSolved = questions[0]?.solved || 0
+
+  let streak = 0
+  const { results: sessionDays } = await env.DB.prepare(
+    'SELECT DISTINCT DATE(created_at) as day FROM study_sessions_log WHERE user_id = ? ORDER BY day DESC'
+  ).bind(targetUserId).all()
+
+  if (sessionDays.length > 0) {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+
+    const latestDay = new Date(sessionDays[0].day + 'T00:00:00')
+    if (latestDay >= yesterday) {
+      streak = 1
+      for (let i = 1; i < sessionDays.length; i++) {
+        const prev = new Date(sessionDays[i - 1].day + 'T00:00:00')
+        const cur = new Date(sessionDays[i].day + 'T00:00:00')
+        const diff = (prev - cur) / 86400000
+        if (diff === 1) streak++
+        else break
+      }
+    }
+  }
+
+  return json({
+    badges: badges.map(b => ({
+      community_id: b.community_id, community_name: b.community_name,
+      year: b.year, month: b.month, rank: b.rank,
+      emoji: b.rank === 1 ? '🥇' : b.rank === 2 ? '🥈' : '🥉',
+      title: b.title || '',
+    })),
+    totalHours,
+    questionsSolved,
+    streak,
+    communities,
+  })
 }
 
 /* ── Realtime ── */

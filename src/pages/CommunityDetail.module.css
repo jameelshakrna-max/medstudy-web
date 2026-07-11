@@ -37,7 +37,11 @@
 
 /* ── Chat ── */
 .chatArea { display: flex; flex-direction: column; height: calc(100vh - 380px); min-height: 400px; border: 1px solid var(--card-border); border-radius: 16px; background: var(--card-bg); overflow: hidden; }
-.pinBar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--blueL); font-size: 12px; color: var(--blue); border-bottom: 1px solid var(--card-border); }
+.pinBar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--blueL); font-size: 12px; color: var(--blue); border-bottom: 1px solid var(--card-border); overflow-x: auto; }
+.pinBarItem { display: flex; align-items: center; gap: 6px; padding: 2px 8px; background: var(--card-bg); border-radius: 6px; white-space: nowrap; max-width: 260px; flex-shrink: 0; }
+.pinBarText { overflow: hidden; text-overflow: ellipsis; color: var(--text-primary); font-size: 12px; }
+.pinBarUnpin { display: flex; align-items: center; background: none; border: none; color: var(--mist); cursor: pointer; padding: 2px; border-radius: 3px; flex-shrink: 0; }
+.pinBarUnpin:hover { color: var(--red); background: var(--redL); }
 .wsIndicator { display: flex; justify-content: flex-end; padding: 4px 16px; font-size: 10px; }
 .wsConnected { color: #22c55e; }
 .wsDisconnected { color: #ef4444; }
@@ -53,6 +57,14 @@
 .msgMeta { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
 .msgUser { font-size: 12px; font-weight: 600; color: var(--text-primary); }
 .msgTime { font-size: 10px; color: var(--mist); }
+.msgRow { position: relative; display: flex; flex-direction: column; }
+.msgRow:hover .msgActions { opacity: 1; }
+.msgActions { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
+.msgActionBtn { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; border: none; background: var(--card-bg); color: var(--mist); cursor: pointer; transition: all 0.15s; }
+.msgActionBtn:hover { background: var(--input-bg); color: var(--text-primary); }
+.msgActionBtnDanger:hover { background: var(--redL); color: var(--red); }
+.msgActionBtnPin:hover { background: var(--blueL); color: var(--blue); }
+.msgActionBtnPinned { color: var(--blue); background: var(--blueL); }
 .msgContent { font-size: 14px; color: var(--text-primary); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
 .msgDeleted { font-size: 12px; font-style: italic; color: var(--mist); }
 .msgSystem { font-size: 12px; color: var(--mist); font-style: italic; text-align: center; }
@@ -359,7 +371,81 @@
 .deleteBtn { padding: 10px 22px; border-radius: 10px; border: none; background: var(--red); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; }
 .deleteBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* ── Leaderboard ── */
+.leaderboardArea { }
+.positionCard { background: var(--card-bg); border: 1px solid var(--blueL); border-radius: 16px; padding: 20px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 14px; }
+.positionHeader { display: flex; align-items: center; gap: 12px; }
+.positionRank { font-size: 20px; font-weight: 800; color: var(--blue); font-family: 'DM Serif Display', serif; }
+.positionChange { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 8px; }
+.positionChangeUp { color: var(--emerald); background: var(--emeraldL); }
+.positionChangeDown { color: var(--red); background: var(--redL); }
+.positionChangeNeutral { color: var(--mist); background: var(--input-bg); }
+.positionStats { display: flex; gap: 16px; flex-wrap: wrap; }
+.positionStat { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--input-bg); border-radius: 12px; flex: 1; min-width: 120px; color: var(--mist); }
+.positionStatValue { font-size: 16px; font-weight: 800; color: var(--text-primary); }
+.positionStatLabel { font-size: 11px; color: var(--mist); }
+
+.podium { display: flex; gap: 8px; justify-content: center; align-items: flex-end; margin-bottom: 24px; }
+.podiumColumn { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px 16px 16px; border-radius: 16px; background: var(--card-bg); border: 1px solid var(--card-border); min-width: 100px; }
+.podiumGold { border-color: var(--amber); background: linear-gradient(180deg, var(--amberL), var(--card-bg)); transform: scale(1.1); }
+.podiumSilver { border-color: #9CA3AF; background: linear-gradient(180deg, rgba(156,163,175,0.08), var(--card-bg)); }
+.podiumBronze { border-color: #D97706; background: linear-gradient(180deg, rgba(217,119,6,0.08), var(--card-bg)); }
+.podiumAvatar { font-size: 32px; line-height: 1; }
+.podiumName { font-size: 13px; font-weight: 700; color: var(--text-primary); text-align: center; }
+.podiumHours { font-size: 14px; font-weight: 800; color: var(--blue); }
+.podiumTitle { font-size: 11px; color: var(--mist); text-align: center; max-width: 100px; }
+.lbList { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 8px; }
+.lbBadge { font-size: 14px; margin-left: 4px; }
+
+/* ── Competition Bar Chart + Gauge ── */
+.heroCharts { display: flex; gap: 16px; margin-top: 16px; margin-bottom: 8px; flex-wrap: wrap; }
+.heroGaugeWrap { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0; }
+.heroGaugeLabel { font-size: 11px; color: var(--mist); display: flex; align-items: center; gap: 4px; }
+.gauge { width: 100px; height: 50px; position: relative; overflow: hidden; }
+.gaugeArc { width: 100px; height: 100px; border-radius: 50%; position: absolute; top: 0; left: 0; }
+.gaugeValue { position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); text-align: center; z-index: 1; }
+.gaugeRank { font-size: 16px; font-weight: 800; color: var(--blue); }
+.gaugeLabel { font-size: 10px; color: var(--mist); margin-top: -2px; }
+.heroBarChart { flex: 1; min-width: 200px; background: var(--input-bg); border-radius: 12px; padding: 14px; }
+.barChartTitle { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--mist); margin-bottom: 10px; display: flex; align-items: center; gap: 4px; }
+.barChartRow { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; }
+.barChartRowActive { font-weight: 700; }
+.barChartName { width: 60px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+.barChartRowActive .barChartName { color: var(--blue); }
+.barChartTrack { flex: 1; height: 20px; background: var(--card-bg); border-radius: 4px; overflow: hidden; }
+.barChartFill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--blue), var(--blue2)); transition: width 0.5s ease; }
+.barChartRowActive .barChartFill { background: linear-gradient(90deg, var(--blue), var(--indigo)); }
+.barChartHours { width: 40px; text-align: right; color: var(--text-primary); font-weight: 600; flex-shrink: 0; }
+.barChartMore { font-size: 11px; color: var(--mist); padding: 6px 0 2px; text-align: center; }
+
 /* Media queries */
+/* ── Announcements Tab ── */
+.annTabHeader { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.annTabTitle { font-size: 18px; font-weight: 700; color: var(--text-primary); }
+.createAnnBtn { display: flex; align-items: center; gap: 6px; padding: 8px 16px; background: var(--blue); color: var(--navy); font-weight: 700; font-size: 13px; border: none; border-radius: 10px; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+.createAnnBtn:hover { background: var(--blue2); }
+.annForm { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 20px; margin-bottom: 20px; }
+.annFormInput, .annFormTextarea { width: 100%; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 10px; color: var(--text-primary); font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 14px; outline: none; margin-bottom: 10px; box-sizing: border-box; }
+.annFormInput:focus, .annFormTextarea:focus { border-color: var(--blue); }
+.annFormTextarea { resize: vertical; min-height: 80px; }
+.annFormActions { display: flex; gap: 8px; }
+.annList { display: flex; flex-direction: column; gap: 12px; }
+.annCard { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 18px; position: relative; }
+.annCardTitle { font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
+.annCardContent { font-size: 14px; color: var(--text-secondary); line-height: 1.5; white-space: pre-wrap; }
+.annCardMeta { display: flex; gap: 12px; font-size: 12px; color: var(--mist); margin-top: 12px; }
+.annCardActions { display: flex; gap: 6px; margin-top: 12px; }
+.iconBtnSmDanger { display: flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--input-bg); color: var(--mist); font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: color 0.2s; }
+.iconBtnSmDanger:hover { border-color: var(--red); color: var(--red); background: var(--redL); }
+
+.filterBar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.filterBtn { padding: 6px 14px; border-radius: 8px; border: 1px solid var(--card-border); background: transparent; color: var(--mist); font-size: 12px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+.filterBtn:hover { border-color: var(--blueL); color: var(--text-primary); }
+.filterActive { border-color: var(--blue); color: var(--blue); background: var(--blueL); }
+.memberSearch { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 10px; margin-bottom: 16px; }
+.memberSearch input { border: none; background: none; outline: none; color: var(--text-primary); font-size: 13px; font-family: 'DM Sans', sans-serif; flex: 1; }
+.memberSearch input::placeholder { color: var(--mist); }
+
 @media (max-width: 768px) {
   .commHeader { flex-direction: column; }
   .commActions { align-self: flex-start; }

@@ -6,15 +6,16 @@ import { useCommunityRealtime } from '../hooks/useCommunityRealtime'
 import { ROLES, PERM, hasPermission, hasMinimumRole } from '../lib/permissions'
 import { apiGet, apiPost, apiPut, apiDelete, apiJson, formatDate } from '../lib/api'
 import RoleBadge from '../components/RoleBadge'
-import MembersTab from '../components/community/MembersTab'
 import CompetitionsTab from '../components/community/CompetitionsTab'
+import LeaderboardTab from '../components/community/LeaderboardTab'
 import SettingsTab from '../components/community/SettingsTab'
 import ModDashboardTab from '../components/community/ModDashboardTab'
+import AnnouncementsTab from '../components/community/AnnouncementsTab'
 import {
   MessageSquare, Users, Trophy, Settings, Send, Paperclip, Upload,
   Plus, X, Loader2, ChevronLeft, Shield, UserMinus, UserCog, Star,
   Crown, Flag, Clock, Hash, Link as LinkIcon, Check, AlertTriangle,
-  Copy, Ban,   Pin, FileText, BookOpen, UserPlus, Search
+  Copy, Ban, Pin, FileText, BookOpen, UserPlus, Search, Trash2, Megaphone
 } from 'lucide-react'
 import s from './CommunityDetail.module.css'
 import FlashcardShareModal from '../components/FlashcardShareModal'
@@ -23,7 +24,7 @@ const API = import.meta.env.VITE_API_URL || '/api'
 
 const TABS = [
   { id: 'chat', icon: MessageSquare, label: 'Chat' },
-  { id: 'members', icon: Users, label: 'Members' },
+  { id: 'leaderboard', icon: Trophy, label: 'Leaderboard' },
   { id: 'competitions', icon: Trophy, label: 'Competitions' },
   { id: 'settings', icon: Settings, label: 'Settings' },
 ]
@@ -43,7 +44,6 @@ export default function CommunityDetail() {
   const [pins, setPins] = useState([])
   const [announcements, setAnnouncements] = useState([])
   const [settings, setSettings] = useState(null)
-  const [levels, setLevels] = useState([])
   const [competitions, setCompetitions] = useState([])
   const [joinRequests, setJoinRequests] = useState([])
   const [bans, setBans] = useState([])
@@ -78,7 +78,6 @@ export default function CommunityDetail() {
       const data = await apiGet('/communities/' + id + '/full')
       setCommunity(data.community)
       setMembers(Array.isArray(data.members) ? data.members : [])
-      setLevels(Array.isArray(data.levels) ? data.levels : [])
       setCompetitions(Array.isArray(data.competitions) ? data.competitions : [])
       setRules(Array.isArray(data.rules) ? data.rules : [])
       setPins(Array.isArray(data.pins) ? data.pins : [])
@@ -103,6 +102,14 @@ export default function CommunityDetail() {
   useEffect(() => {
     if (realtime.competitions?.length) setCompetitions(realtime.competitions)
   }, [realtime.competitions])
+
+  useEffect(() => {
+    if (realtime.pins) setPins(realtime.pins)
+  }, [realtime.pins])
+
+  useEffect(() => {
+    if (realtime.announcements) setAnnouncements(realtime.announcements)
+  }, [realtime.announcements])
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chat.messages])
 
@@ -202,6 +209,38 @@ export default function CommunityDetail() {
     }
   }
 
+  const handleDeleteMsg = async (msgId) => {
+    if (!confirm('Delete this message?')) return
+    try {
+      await realtime.deleteMessage(msgId)
+    } catch (e) { alert(e.message) }
+  }
+
+  const handlePinMsg = async (msgId) => {
+    try {
+      const data = await apiPost('/communities/' + id + '/pins', { message_id: msgId })
+      if (data?.pin_id) {
+        const msg = chat.messages.find(m => m.id === msgId)
+        setPins(prev => [...prev, {
+          id: data.pin_id,
+          community_id: id,
+          message_id: msgId,
+          pinned_by: user?.id,
+          created_at: new Date().toISOString(),
+          message_content: msg?.content || '',
+          message_user_name: msg?.user_name || user?.email?.split('@')[0] || '',
+        }])
+      }
+    } catch (e) { alert(e.message) }
+  }
+
+  const handleUnpin = async (pinId) => {
+    try {
+      await apiDelete('/communities/' + id + '/pins/' + pinId)
+      setPins(prev => prev.filter(p => p.id !== pinId))
+    } catch (e) { alert(e.message) }
+  }
+
   const handleAddToDeck = async (messageId) => {
     try {
       const data = await apiPost(`/community/messages/${messageId}/add-to-deck`, {})
@@ -218,10 +257,6 @@ export default function CommunityDetail() {
 
   const handleRefreshTab = async (tab) => {
     try {
-      if (tab === 'members') {
-        const m = await apiGet('/communities/' + id + '/members')
-        setMembers(Array.isArray(m) ? m : [])
-      }
       if (tab === 'competitions') {
         const c = await apiGet('/communities/' + id + '/competitions')
         setCompetitions(Array.isArray(c) ? c : [])
@@ -229,8 +264,8 @@ export default function CommunityDetail() {
       if (tab === 'settings') {
         const r = await apiGet('/communities/' + id + '/rules')
         setRules(Array.isArray(r) ? r : [])
-        const l = await apiGet('/communities/' + id + '/levels')
-        setLevels(Array.isArray(l) ? l : [])
+        const m = await apiGet('/communities/' + id + '/members')
+        setMembers(Array.isArray(m) ? m : [])
         setSettings(await apiGet('/communities/' + id + '/settings'))
         if (isMod) {
           const jr = await apiGet('/communities/' + id + '/join-requests')
@@ -330,8 +365,17 @@ export default function CommunityDetail() {
         <div className={s.chatArea}>
           {pins.length > 0 && (
             <div className={s.pinBar}>
-              <Pin size={12} strokeWidth={1.5} />
-              <span>{pins[0].message_content}</span>
+              {pins.map(pin => (
+                <div key={pin.id} className={s.pinBarItem} onClick={() => document.getElementById('msg-' + pin.message_id)?.scrollIntoView({ behavior: 'smooth' })} style={{cursor: 'pointer'}}>
+                  <Pin size={12} strokeWidth={1.5} />
+                  <span className={s.pinBarText}>{pin.message_content}</span>
+                  {isMod && (
+                    <button className={s.pinBarUnpin} onClick={(e) => { e.stopPropagation(); handleUnpin(pin.id) }} title="Unpin">
+                      <X size={10} strokeWidth={2} />
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           )}
           <div className={s.messageSearch}>
@@ -362,8 +406,11 @@ export default function CommunityDetail() {
                   <p>No messages found</p>
                 </div>
               ) : (
-                searchResults.map(msg => (
-                  <div key={msg.id} className={`${s.message} ${msg.deleted ? s.deleted : ''} ${msg.user_id === user?.id ? s.own : ''}`}>
+                searchResults.map(msg => {
+                  const isPinned = pins.some(p => p.message_id === msg.id)
+                  const pinRecord = pins.find(p => p.message_id === msg.id)
+                  return (
+                  <div key={msg.id} id={'msg-' + msg.id} className={`${s.message} ${s.msgRow} ${msg.deleted ? s.deleted : ''} ${msg.user_id === user?.id ? s.own : ''}`}>
                     <div className={s.msgMeta}>
                       <span className={s.msgUser}>{msg.user_name}</span>
                       <RoleBadge role={msg.user_role} size="sm" />
@@ -380,8 +427,21 @@ export default function CommunityDetail() {
                     ) : (
                       <div className={s.msgContent}>{msg.content}</div>
                     )}
+                    <div className={s.msgActions}>
+                      {isMod && !msg.deleted && msg.message_type !== 'system' && (
+                        <button className={`${s.msgActionBtn} ${s.msgActionBtnPin} ${isPinned ? s.msgActionBtnPinned : ''}`} onClick={() => isPinned ? handleUnpin(pinRecord.id) : handlePinMsg(msg.id)} title={isPinned ? 'Unpin' : 'Pin'}>
+                          <Pin size={12} strokeWidth={1.5} />
+                        </button>
+                      )}
+                      {(msg.user_id === user?.id || isMod) && !msg.deleted && (
+                        <button className={`${s.msgActionBtn} ${s.msgActionBtnDanger}`} onClick={() => handleDeleteMsg(msg.id)} title="Delete">
+                          <Trash2 size={12} strokeWidth={1.5} />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                ))
+                  )
+                })
               )}
             </div>
           ) : (
@@ -420,8 +480,11 @@ export default function CommunityDetail() {
                     )}
                   </div>
                 ))}
-                {chat.messages.map(msg => (
-                  <div key={msg.id} className={`${s.message} ${msg.deleted ? s.deleted : ''} ${msg.user_id === user?.id ? s.own : ''}`}>
+                {chat.messages.map(msg => {
+                  const isPinned = pins.some(p => p.message_id === msg.id)
+                  const pinRecord = pins.find(p => p.message_id === msg.id)
+                  return (
+                  <div key={msg.id} id={'msg-' + msg.id} className={`${s.message} ${s.msgRow} ${msg.deleted ? s.deleted : ''} ${msg.user_id === user?.id ? s.own : ''}`}>
                     <div className={s.msgMeta}>
                       <span className={s.msgUser}>{msg.user_name}</span>
                       <RoleBadge role={msg.user_role} size="sm" />
@@ -438,6 +501,18 @@ export default function CommunityDetail() {
                     ) : (
                       <div className={s.msgContent}>{msg.content}</div>
                     )}
+                    <div className={s.msgActions}>
+                      {isMod && !msg.deleted && msg.message_type !== 'system' && (
+                        <button className={`${s.msgActionBtn} ${s.msgActionBtnPin} ${isPinned ? s.msgActionBtnPinned : ''}`} onClick={() => isPinned ? handleUnpin(pinRecord.id) : handlePinMsg(msg.id)} title={isPinned ? 'Unpin' : 'Pin'}>
+                          <Pin size={12} strokeWidth={1.5} />
+                        </button>
+                      )}
+                      {(msg.user_id === user?.id || isMod) && !msg.deleted && (
+                        <button className={`${s.msgActionBtn} ${s.msgActionBtnDanger}`} onClick={() => handleDeleteMsg(msg.id)} title="Delete">
+                          <Trash2 size={12} strokeWidth={1.5} />
+                        </button>
+                      )}
+                    </div>
                     {msg.message_type === 'flashcard' && msg.id && (
                       <button className={s.addToDeckBtn} onClick={() => handleAddToDeck(msg.id)}>
                         <BookOpen size={12} strokeWidth={1.5} />
@@ -445,7 +520,8 @@ export default function CommunityDetail() {
                       </button>
                     )}
                   </div>
-                ))}
+                  )
+                })}
                 <div ref={messagesEndRef} />
               </>
             )}
@@ -494,15 +570,12 @@ export default function CommunityDetail() {
         </div>
       )}
 
-      {activeTab === 'members' && (
-        <MembersTab
-          members={members}
+      {activeTab === 'leaderboard' && (
+        <LeaderboardTab
+          communityId={id}
           myId={user?.id}
-          levels={levels}
           isAdmin={isAdmin}
           isMod={isMod}
-          communityId={id}
-          onRefresh={() => handleRefreshTab('members')}
         />
       )}
 
@@ -519,19 +592,32 @@ export default function CommunityDetail() {
         />
       )}
 
-      {activeTab === 'mod' && (() => { console.log('[CommunityDetail] rendering ModDashboardTab, setActiveTab is', typeof setActiveTab); return <ModDashboardTab communityId={id} onNavigate={setActiveTab} /> })()}
+      {activeTab === 'mod' && (
+        <ModDashboardTab
+          communityId={id}
+          members={members}
+          announcements={announcements}
+          setAnnouncements={setAnnouncements}
+          myId={user?.id}
+          isMod={isMod}
+          isAdmin={isAdmin}
+        />
+      )}
 
       {activeTab === 'settings' && (
         <SettingsTab
           community={community}
           rules={rules}
-          levels={levels}
           settings={settings}
+          members={members}
+          announcements={announcements}
+          setAnnouncements={setAnnouncements}
           joinRequests={joinRequests}
           bans={bans}
           isAdmin={isAdmin}
           isMod={isMod}
           communityId={id}
+          myId={user?.id}
           onUpdate={fetchCommunity}
           onRefresh={() => handleRefreshTab('settings')}
           onRegenerateCode={handleRegenerateCode}

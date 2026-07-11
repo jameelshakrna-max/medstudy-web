@@ -605,3 +605,52 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at);
+
+-- ═══════════════════════════════════════════
+-- STUDY HOURS & LEADERBOARD
+-- ═══════════════════════════════════════════
+
+-- Granular per-session log (enables daily/weekly/monthly queries)
+CREATE TABLE IF NOT EXISTS study_sessions_log (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  minutes REAL NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_ssl_community_user ON study_sessions_log(community_id, user_id, created_at);
+
+-- Monthly aggregated study hours per member
+CREATE TABLE IF NOT EXISTS community_monthly_hours (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  year INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  total_hours REAL DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(community_id, user_id, year, month)
+);
+
+-- Monthly badge winners (gold/silver/copper)
+CREATE TABLE IF NOT EXISTS community_monthly_badges (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  year INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  rank INTEGER NOT NULL, -- 1=gold, 2=silver, 3=copper
+  title TEXT DEFAULT '',
+  awarded_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(community_id, year, month, rank)
+);
+
+-- Daily leaderboard snapshots for position-change analytics
+CREATE TABLE IF NOT EXISTS community_leaderboard_snapshots (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  snapshot_date TEXT NOT NULL,
+  ranking TEXT NOT NULL, -- JSON array: [{"user_id":"...","rank":1,"hours":12.5},...]
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(community_id, snapshot_date)
+);

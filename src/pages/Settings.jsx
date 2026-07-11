@@ -2,18 +2,23 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { usePomodoroSettings } from '../context/PomodoroContext'
 import { supabase } from '../lib/supabase'
-import { User, Lock, Bell, Palette, Clock, ShieldAlert } from 'lucide-react'
+import { User, Lock, Bell, Palette, Clock, ShieldAlert, Medal, Loader2 } from 'lucide-react'
+import { apiGet } from '../lib/api'
 import s from './Settings.module.css'
 
 const APP_VERSION = '1.0.0'
 const NAME_CHANGE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
+
+const MONTH_NAMES = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export default function Settings() {
   const { user, profile, signOut } = useAuth()
   const { focusMins, setFocusMins, shortMins, setShortMins, longMins, setLongMins } = usePomodoroSettings()
   const [error, setError] = useState(null)
   const [message, setMessage] = useState(null)
-   const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [badges, setBadges] = useState([])
+  const [badgesLoading, setBadgesLoading] = useState(true)
 
   // ── Local state ──
   const [fullName, setFullName] = useState('')
@@ -75,6 +80,12 @@ export default function Settings() {
     const saved = localStorage.getItem('medstudy-name-last-changed')
     if (saved) setNameLastChanged(parseInt(saved, 10))
   }, [])
+
+  useEffect(() => {
+    if (!user?.id) return
+    setBadgesLoading(true)
+    apiGet(`/users/${user.id}/badges`).then(setBadges).catch(() => setBadges([])).finally(() => setBadgesLoading(false))
+  }, [user?.id])
 
   // ── Accordion toggle ──
   const toggleSection = (section) => {
@@ -432,6 +443,33 @@ export default function Settings() {
             <div className={s.themeLabel}>Light</div>
           </div>
         </div>
+      )
+    },
+    {
+      key: 'badges',
+      icon: Medal,
+      title: 'Badges',
+      content: (
+        <>
+          {badgesLoading ? (
+            <div className={s.badgesLoading}><Loader2 size={16} className={s.spinner} /> Loading badges...</div>
+          ) : badges.length === 0 ? (
+            <p className={s.badgesEmpty}>No badges yet. Study hard and compete in community leaderboards to earn monthly badges!</p>
+          ) : (
+            <div className={s.badgesList}>
+              {badges.map(b => (
+                <div key={`${b.community_id}-${b.year}-${b.month}`} className={s.badgeCard}>
+                  <span className={s.badgeEmoji}>{b.emoji}</span>
+                  <div className={s.badgeInfo}>
+                    <div className={s.badgeCommunity}>{b.community_name}</div>
+                    <div className={s.badgeMeta}>{MONTH_NAMES[b.month]} {b.year} · #{b.rank}</div>
+                    {b.title && <div className={s.badgeTitle}>"{b.title}"</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )
     },
     {

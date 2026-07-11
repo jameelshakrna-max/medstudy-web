@@ -568,6 +568,20 @@
   color: var(--red, #EF4444);
 }
 
+/* ── Badges ── */
+.badgesLoading { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--mist); padding: 12px 0; }
+.spinner { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.badgesEmpty { font-size: 13px; color: var(--mist); padding: 12px 0; line-height: 1.5; }
+.badgesList { display: flex; flex-direction: column; gap: 10px; }
+.badgeCard { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 14px; transition: border-color 0.2s; }
+.badgeCard:hover { border-color: var(--blueL); }
+.badgeEmoji { font-size: 28px; line-height: 1; width: 40px; text-align: center; }
+.badgeInfo { flex: 1; min-width: 0; }
+.badgeCommunity { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.badgeMeta { font-size: 12px; color: var(--mist); margin-top: 2px; }
+.badgeTitle { font-size: 12px; color: var(--blue); font-style: italic; margin-top: 2px; }
+
 /* ── Light Mode Override (only what global vars don't cover) ── */
 .pageLight {
 }
