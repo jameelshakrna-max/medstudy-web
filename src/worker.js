@@ -294,6 +294,10 @@ export default {
       if (path.match(/^\/api\/communities\/[^\/]+\/mutes$/) && request.method === 'POST') return handleMuteMember(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/mutes$/) && request.method === 'GET') return handleGetMutes(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/mutes\/[^\/]+$/) && request.method === 'DELETE') return handleUnmuteMember(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms$/) && request.method === 'GET') return handleListRooms(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms$/) && request.method === 'POST') return handleCreateRoom(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/join$/) && request.method === 'POST') return handleJoinRoom(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/end$/) && request.method === 'POST') return handleEndRoom(request, env, user)
       if (path.match(/^\/api\/users\/[^\/]+\/profile$/) && request.method === 'GET') return handleUserProfile(request, env)
 
       if (path.match(/^\/api\/communities\/[^\/]+\/ws$/) && request.method === 'GET') {
@@ -2720,6 +2724,128 @@ async function handleGetMutes(request, env, user) {
   ).bind(communityId).all()
 
   return json(results)
+}
+
+async function callRealtimeKit(env, method, path, body = null) {
+  const base = `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/realtime/kit/${env.REALTIMEKIT_APP_ID}`
+  const opts = {
+    method,
+    headers: {
+      'Authorization': `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+  }
+  if (body) opts.body = JSON.stringify(body)
+  const res = await fetch(`${base}${path}`, opts)
+  const data = await res.json()
+  if (!data.success) throw new Error(data.errors?.[0]?.message || 'RealtimeKit API error')
+  return data.result
+}
+
+async function handleListRooms(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+  if (!hasPermission(member.role, PERM.VIEW_CONTENT)) return json({ error: 'Not authorized' }, 403)
+
+  const { results } = await env.DB.prepare(
+    `SELECT cr.*, u.user_name as created_by_name FROM community_rooms cr
+     LEFT JOIN user_profiles u ON cr.created_by = u.user_id
+     WHERE cr.community_id = ? AND cr.status = 'active'
+     ORDER BY cr.created_at DESC`
+  ).bind(communityId).all()
+
+  for (const room of results) {
+    const { results: participants } = await env.DB.prepare(
+      'SELECT COUNT(*) as cnt FROM community_room_participants WHERE room_id = ? AND left_at IS NULL'
+    ).bind(room.id).all()
+    room.participants = participants[0]?.cnt || 0
+  }
+
+  return json(results)
+}
+
+async function handleCreateRoom(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+  if (!hasPermission(member.role, PERM.CREATE_VOICE_ROOM)) return json({ error: 'Not authorized' }, 403)
+
+  const { name } = await request.json()
+  if (!name || typeof name !== 'string' || name.trim().length > 100) return json({ error: 'Name required (max 100 chars)' }, 400)
+
+  const { results: activeCount } = await env.DB.prepare(
+    'SELECT COUNT(*) as cnt FROM community_rooms WHERE community_id = ? AND status = \'active\''
+  ).bind(communityId).all()
+  if (activeCount[0]?.cnt >= 5) return json({ error: 'Maximum 5 active rooms per community' }, 429)
+
+  const meeting = await callRealtimeKit(env, 'POST', '/meetings', { title: name.trim() })
+
+  const id = uuid()
+  const now = new Date().toISOString()
+  await env.DB.prepare(
+    `INSERT INTO community_rooms (id, community_id, room_name, type, provider, status, created_by, created_at, realtimekit_meeting_id)
+     VALUES (?, ?, ?, 'voice', 'realtimekit', 'active', ?, ?, ?)`
+  ).bind(id, communityId, name.trim(), user.sub, now, meeting.id).run()
+
+  log('room:created', { communityId, roomId: id, by: user.sub })
+  return json({ id, name: name.trim(), status: 'active', participants: 0 })
+}
+
+async function handleJoinRoom(request, env, user) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const communityId = parts[3]
+  const roomId = parts[5]
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+  if (!hasPermission(member.role, PERM.JOIN_VOICE_ROOM)) return json({ error: 'Not authorized' }, 403)
+
+  const { results: rooms } = await env.DB.prepare(
+    'SELECT * FROM community_rooms WHERE id = ? AND community_id = ? AND status = \'active\''
+  ).bind(roomId, communityId).all()
+  if (!rooms.length) return json({ error: 'Room not found or not active' }, 404)
+  const room = rooms[0]
+
+  const preset = hasMinimumRole(member.role, ROLES.MODERATOR) ? 'study-host' : 'study-participant'
+  const participant = await callRealtimeKit(env, 'POST', `/meetings/${room.realtimekit_meeting_id}/participants`, {
+    name: user.email?.split('@')[0] || 'Someone',
+    preset_name: preset,
+    custom_participant_id: user.sub,
+  })
+
+  await env.DB.prepare(
+    'INSERT INTO community_room_participants (id, room_id, user_id) VALUES (?, ?, ?)'
+  ).bind(uuid(), roomId, user.sub).run()
+
+  return json({ authToken: participant.token, meetingId: room.realtimekit_meeting_id })
+}
+
+async function handleEndRoom(request, env, user) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const communityId = parts[3]
+  const roomId = parts[5]
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+  if (!hasPermission(member.role, PERM.END_VOICE_ROOM)) return json({ error: 'Not authorized' }, 403)
+
+  const { results: rooms } = await env.DB.prepare(
+    'SELECT * FROM community_rooms WHERE id = ? AND community_id = ? AND status = \'active\''
+  ).bind(roomId, communityId).all()
+  if (!rooms.length) return json({ error: 'Room not found or not active' }, 404)
+  const room = rooms[0]
+
+  await env.DB.prepare(
+    'UPDATE community_rooms SET status = \'ended\', ended_at = ? WHERE id = ?'
+  ).bind(new Date().toISOString(), roomId).run()
+
+  await env.DB.prepare(
+    'UPDATE community_room_participants SET left_at = ? WHERE room_id = ? AND left_at IS NULL'
+  ).bind(new Date().toISOString(), roomId).run()
+
+  log('room:ended', { communityId, roomId, by: user.sub })
+  return json({ success: true })
 }
 
 async function handleUserProfile(request, env) {

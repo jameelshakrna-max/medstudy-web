@@ -11,11 +11,12 @@ import LeaderboardTab from '../components/community/LeaderboardTab'
 import SettingsTab from '../components/community/SettingsTab'
 import ModDashboardTab from '../components/community/ModDashboardTab'
 import AnnouncementsTab from '../components/community/AnnouncementsTab'
+import VoiceRooms from '../components/community/VoiceRooms'
 import {
   MessageSquare, Users, Trophy, Settings, Send, Paperclip, Upload,
   Plus, X, Loader2, ChevronLeft, Shield, ShieldAlert, UserMinus, UserCog, Star,
   Crown, Flag, Clock, Hash, Link as LinkIcon, Check, AlertTriangle,
-  Copy, Ban, Pin, FileText, BookOpen, UserPlus, Search, Trash2, Megaphone
+  Copy, Ban, Pin, FileText, BookOpen, UserPlus, Search, Trash2, Megaphone, Headphones
 } from 'lucide-react'
 import s from './CommunityDetail.module.css'
 import FlashcardShareModal from '../components/FlashcardShareModal'
@@ -26,6 +27,7 @@ const TABS = [
   { id: 'chat', icon: MessageSquare, label: 'Chat' },
   { id: 'leaderboard', icon: Trophy, label: 'Leaderboard' },
   { id: 'competitions', icon: Trophy, label: 'Competitions' },
+  { id: 'voice', icon: Headphones, label: 'Voice' },
   { id: 'settings', icon: Settings, label: 'Settings' },
 ]
 
@@ -592,6 +594,15 @@ export default function CommunityDetail() {
           myMembership={myMembership}
           onRefresh={() => handleRefreshTab('competitions')}
           realtimeConnected={realtime.connected}
+        />
+      )}
+
+      {activeTab === 'voice' && (
+        <VoiceRooms
+          communityId={id}
+          myRole={myMembership?.role}
+          isMod={isMod}
+          isAdmin={isAdmin}
         />
       )}
 
