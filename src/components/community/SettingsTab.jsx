@@ -66,12 +66,14 @@ export default function SettingsTab({ community, rules, settings, members, annou
     if (isAdmin) loadFiles()
   }, [communityId, isAdmin])
 
-  const handleSave = async () => {
+  const handleSave = async (overrides = {}) => {
     setSaving(true)
     try {
       await apiPut('/communities/' + communityId, {
-        name: editName.trim(), description: editDesc.trim(),
-        visibility: editVisibility, join_type: editJoinType,
+        name: (overrides.name ?? editName).trim(),
+        description: (overrides.description ?? editDesc).trim(),
+        visibility: overrides.visibility ?? editVisibility,
+        join_type: overrides.joinType ?? editJoinType,
       })
       onUpdate()
     } catch {}
@@ -143,9 +145,14 @@ export default function SettingsTab({ community, rules, settings, members, annou
 
   const handleSuggestRule = (item) => {
     if (item.field) {
-      if (item.field === 'visibility') setEditVisibility(item.value)
-      if (item.field === 'join_type') setEditJoinType(item.value)
-      handleSave()
+      if (item.field === 'visibility') {
+        handleSave({ visibility: item.value })
+        setEditVisibility(item.value)
+      }
+      if (item.field === 'join_type') {
+        handleSave({ joinType: item.value })
+        setEditJoinType(item.value)
+      }
     } else {
       setNewRule(item.label)
     }
@@ -228,7 +235,7 @@ export default function SettingsTab({ community, rules, settings, members, annou
     setBannerUploading(false)
   }
 
-  const bannedUserIds = bans.map(b => b.user_id)
+  const bannedUserIds = (bans ?? []).map(b => b.user_id)
   const filteredMembers = (members || []).filter(m => {
     if (!memberSearch) return true
     const q = memberSearch.toLowerCase()

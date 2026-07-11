@@ -44,6 +44,13 @@ function pageParams(url) {
   return { offset, limit }
 }
 
+async function ensureUserProfile(env, userId, userName) {
+  if (!userId) return
+  await env.DB.prepare(
+    'INSERT OR IGNORE INTO user_profiles (user_id, user_name) VALUES (?, ?)'
+  ).bind(userId, userName || userId.slice(0, 8)).run()
+}
+
 function log(event, meta = {}) {
   console.log(JSON.stringify({ t: new Date().toISOString(), event, ...meta }))
 }
@@ -873,6 +880,7 @@ async function handleCreateCommunityFromTemplate(request, env, user) {
     await env.DB.prepare(
       'INSERT INTO community_members (id, community_id, user_id, role, joined_at) VALUES (?, ?, ?, \'administrator\', ?)'
     ).bind(memberId, id, user.sub, now).run()
+    await ensureUserProfile(env, user.sub, user.email?.split('@')[0])
 
     const levelId = uuid()
     await env.DB.prepare(
@@ -928,6 +936,7 @@ async function handleCreateCommunity(request, env, user) {
      `INSERT INTO community_members (id, community_id, user_id, role, joined_at)
      VALUES (?, ?, ?, 'administrator', ?)`
   ).bind(memberId, id, user.sub, now).run()
+  await ensureUserProfile(env, user.sub, user.email?.split('@')[0])
 
   const levelId = uuid()
   await env.DB.prepare(
@@ -1160,6 +1169,7 @@ async function handleJoinCommunity(request, env, user, ctx) {
   await env.DB.prepare(
     'INSERT INTO community_members (id, community_id, user_id, level_id, joined_at) VALUES (?, ?, ?, ?, ?)'
   ).bind(memberId, communityId, user.sub, levelId, now).run()
+  await ensureUserProfile(env, user.sub, user.email?.split('@')[0])
 
   await updateMemberCount(env, communityId)
 
@@ -1210,6 +1220,7 @@ async function handleJoinByCode(request, env, user) {
   await env.DB.prepare(
     'INSERT INTO community_members (id, community_id, user_id, level_id, joined_at) VALUES (?, ?, ?, ?, ?)'
   ).bind(memberId, community.id, user.sub, levelId, now).run()
+  await ensureUserProfile(env, user.sub, user.email?.split('@')[0])
 
   await updateMemberCount(env, community.id)
 
@@ -1269,13 +1280,15 @@ async function handleListMembers(request, env) {
   const { offset, limit } = pageParams(request.url)
   let sql, binds
   if (q) {
-    sql = `SELECT m.*, l.level_name FROM community_members m
+    sql = `SELECT m.*, l.level_name, u.user_name, u.avatar_url FROM community_members m
      LEFT JOIN member_levels l ON m.level_id = l.id
-     WHERE m.community_id = ? AND m.user_name LIKE ? ORDER BY m.role ASC, m.total_study_hours DESC LIMIT ? OFFSET ?`
+     LEFT JOIN user_profiles u ON m.user_id = u.user_id
+     WHERE m.community_id = ? AND u.user_name LIKE ? ORDER BY m.role ASC, m.total_study_hours DESC LIMIT ? OFFSET ?`
     binds = [communityId, `%${q}%`, limit, offset]
   } else {
-    sql = `SELECT m.*, l.level_name FROM community_members m
+    sql = `SELECT m.*, l.level_name, u.user_name, u.avatar_url FROM community_members m
      LEFT JOIN member_levels l ON m.level_id = l.id
+     LEFT JOIN user_profiles u ON m.user_id = u.user_id
      WHERE m.community_id = ? ORDER BY m.role ASC, m.total_study_hours DESC LIMIT ? OFFSET ?`
     binds = [communityId, limit, offset]
   }
@@ -1382,8 +1395,10 @@ async function handleListBans(request, env, user) {
 
   const { offset, limit } = pageParams(request.url)
   const { results } = await env.DB.prepare(
-    `SELECT * FROM community_bans WHERE community_id = ? AND (expires_at IS NULL OR expires_at > datetime('now'))
-     ORDER BY created_at DESC LIMIT ? OFFSET ?`
+    `SELECT cb.*, u.user_name FROM community_bans cb
+     LEFT JOIN user_profiles u ON cb.user_id = u.user_id
+     WHERE cb.community_id = ? AND (cb.expires_at IS NULL OR cb.expires_at > datetime('now'))
+     ORDER BY cb.created_at DESC LIMIT ? OFFSET ?`
   ).bind(communityId, limit, offset).all()
   return json(results)
 }
@@ -1411,6 +1426,7 @@ async function handleRestoreBan(request, env, user) {
   await env.DB.prepare(
     'INSERT OR IGNORE INTO community_members (id, community_id, user_id, role) VALUES (?, ?, ?, ?)'
   ).bind(uuid(), communityId, ban.user_id, ROLES.MEMBER).run()
+  await ensureUserProfile(env, ban.user_id, null)
 
   await env.DB.prepare('DELETE FROM community_bans WHERE id = ? AND community_id = ?').bind(banId, communityId).run()
   await updateMemberCount(env, communityId)
@@ -1468,6 +1484,7 @@ async function handleUpdateJoinRequest(request, env, user) {
     await env.DB.prepare(
       'INSERT INTO community_members (id, community_id, user_id, level_id, joined_at) VALUES (?, ?, ?, ?, ?)'
     ).bind(uuid(), communityId, results[0].user_id, levelId, now).run()
+    await ensureUserProfile(env, results[0].user_id, null)
     await updateMemberCount(env, communityId)
   }
 
@@ -2435,21 +2452,14 @@ async function handleMonthlyLeaderboard(request, env, user) {
 
   const { results: hours } = await env.DB.prepare(q).bind(...params).all()
 
-  // Get user names from the community_messages table (most recent user_name per user_id)
-  const { results: nameRows } = await env.DB.prepare(
-    `SELECT DISTINCT m.user_id, m.user_name FROM community_messages m
-     WHERE m.community_id = ? AND m.user_id IN (${hours.map(h => '?').join(',')})`
-  ).bind(communityId, ...hours.map(h => h.user_id)).all()
+  // Get user names from user_profiles
   const nameMap = {}
-  for (const r of nameRows) { nameMap[r.user_id] = r.user_name }
-
-  // Fallback: get names from community_members
-  for (const h of hours) {
-    if (!nameMap[h.user_id]) {
-      const { results: mem } = await env.DB.prepare(
-        'SELECT user_id FROM community_members WHERE community_id = ? AND user_id = ?'
-      ).bind(communityId, h.user_id).all()
-    }
+  if (hours.length > 0) {
+    const { results: nameRows } = await env.DB.prepare(
+      `SELECT user_id, user_name FROM user_profiles
+       WHERE user_id IN (${hours.map(h => '?').join(',')})`
+    ).bind(...hours.map(h => h.user_id)).all()
+    for (const r of nameRows) { nameMap[r.user_id] = r.user_name }
   }
 
   // Get badges for this month
@@ -2599,12 +2609,14 @@ async function handleAllTimeLeaderboard(request, env, user) {
   ).bind(communityId).all()
 
   // Get names
-  const { results: nameRows } = await env.DB.prepare(
-    `SELECT DISTINCT m.user_id, m.user_name FROM community_messages m
-     WHERE m.community_id = ? AND m.user_id IN (${allTime.map(h => '?').join(',')})`
-  ).bind(communityId, ...allTime.map(h => h.user_id)).all()
   const nameMap = {}
-  for (const r of nameRows) { nameMap[r.user_id] = r.user_name }
+  if (allTime.length > 0) {
+    const { results: nameRows } = await env.DB.prepare(
+      `SELECT user_id, user_name FROM user_profiles
+       WHERE user_id IN (${allTime.map(h => '?').join(',')})`
+    ).bind(...allTime.map(h => h.user_id)).all()
+    for (const r of nameRows) { nameMap[r.user_id] = r.user_name }
+  }
 
   const ranked = allTime.map((h, i) => ({
     rank: i + 1,
@@ -2672,8 +2684,13 @@ async function handleMuteMember(request, env, user) {
   const { user_id, reason } = await request.json()
   if (!user_id) return json({ error: 'user_id required' }, 400)
 
+  const existing = await env.DB.prepare(
+    'SELECT id FROM community_mutes WHERE community_id = ? AND user_id = ?'
+  ).bind(communityId, user_id).first()
+  if (existing) return json({ error: 'already_muted', message: 'This member is already muted.' }, 409)
+
   await env.DB.prepare(
-    'INSERT OR IGNORE INTO community_mutes (id, community_id, user_id, muted_by, reason) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO community_mutes (id, community_id, user_id, muted_by, reason) VALUES (?, ?, ?, ?, ?)'
   ).bind(uuid(), communityId, user_id, user.sub, reason || '').run()
 
   return json({ success: true })
@@ -2699,8 +2716,8 @@ async function handleGetMutes(request, env, user) {
   if (!hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized', reason: 'role_insufficient' }, 403)
 
   const { results } = await env.DB.prepare(
-    'SELECT cm.*, m.user_name FROM community_mutes cm LEFT JOIN (SELECT DISTINCT user_id, user_name FROM community_messages WHERE community_id = ?) m ON cm.user_id = m.user_id WHERE cm.community_id = ? ORDER BY cm.created_at DESC'
-  ).bind(communityId, communityId).all()
+    'SELECT cm.*, u.user_name FROM community_mutes cm LEFT JOIN user_profiles u ON cm.user_id = u.user_id WHERE cm.community_id = ? ORDER BY cm.created_at DESC'
+  ).bind(communityId).all()
 
   return json(results)
 }

@@ -28,15 +28,23 @@ export default function ModDashboardTab({ communityId, members, announcements, s
   const [titleEdits, setTitleEdits] = useState({})
   const [expandedMember, setExpandedMember] = useState(null)
 
+  const fetchMutes = async () => {
+    try {
+      const d = await apiGet(`/communities/${communityId}/mutes`)
+      setMutes(Array.isArray(d) ? d : [])
+    } catch {}
+  }
+
   useEffect(() => {
     if (!communityId) return
     apiGet(`/communities/${communityId}/mod-dashboard`).then(d => setStats(d)).catch(() => {})
     fetchJoinRequests()
+    fetchMutes()
   }, [communityId])
 
   useEffect(() => {
     if (filterRole === 'muted' && communityId) {
-      apiGet(`/communities/${communityId}/mutes`).then(d => setMutes(Array.isArray(d) ? d : [])).catch(() => {})
+      fetchMutes()
     }
     if (filterRole === 'banned' && communityId) {
       apiGet(`/communities/${communityId}/bans`).then(d => setBannedList(Array.isArray(d) ? d : [])).catch(() => {})
@@ -56,7 +64,12 @@ export default function ModDashboardTab({ communityId, members, announcements, s
   }
 
   const handleSetTitle = async (userId, title) => {
-    try { await apiPut(`/communities/${communityId}/members/${userId}/title`, { title: title || null }) } catch {}
+    try {
+      await apiPut(`/communities/${communityId}/members/${userId}/title`, { title: title || null })
+      onRefresh?.()
+    } catch (e) {
+      setError('Failed to set title')
+    }
   }
 
   const handleKick = async (userId) => {
@@ -88,13 +101,13 @@ export default function ModDashboardTab({ communityId, members, announcements, s
       const list = (members || []).filter(m => muteUserIds.has(m.user_id || m.id))
       if (!searchText) return list
       const q = searchText.toLowerCase()
-      return list.filter(m => (m.username || '').toLowerCase().includes(q))
+      return list.filter(m => (m.user_name || '').toLowerCase().includes(q))
     }
     if (filterRole === 'banned') {
       let list = bannedList.map(b => ({ ...b, _banId: b.id, username: b.username, user_id: b.user_id || b.userId }))
       if (searchText) {
         const q = searchText.toLowerCase()
-        list = list.filter(m => (m.username || '').toLowerCase().includes(q))
+        list = list.filter(m => (m.user_name || '').toLowerCase().includes(q))
       }
       return list
     }
@@ -104,7 +117,7 @@ export default function ModDashboardTab({ communityId, members, announcements, s
     }
     if (searchText) {
       const q = searchText.toLowerCase()
-      list = list.filter(m => (m.username || '').toLowerCase().includes(q))
+      list = list.filter(m => (m.user_name || '').toLowerCase().includes(q))
     }
     return list
   }
@@ -204,10 +217,10 @@ export default function ModDashboardTab({ communityId, members, announcements, s
           return (
             <div key={uid} className={s.memberCard}>
               <div className={s.memberAvatar}>
-                {(m.username || '?')[0].toUpperCase()}
+                {(m.user_name || '?')[0].toUpperCase()}
               </div>
               <div className={s.memberInfo}>
-                <div className={s.memberName}>{m.username}</div>
+                <div className={s.memberName}>{m.user_name}</div>
                 <div className={s.memberMeta}>
                   <RoleBadge role={role} />
                   {m.title && <span style={{ color: 'var(--mist)' }}>{m.title}</span>}
