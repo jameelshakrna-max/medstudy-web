@@ -17,7 +17,7 @@ const FILTER_TABS = [
   { key: 'banned', label: 'Banned' },
 ]
 
-export default function ModDashboardTab({ communityId, members, announcements, setAnnouncements, myId, isMod, isAdmin }) {
+export default function ModDashboardTab({ communityId, members, announcements, setAnnouncements, myId, isMod, isAdmin, onRefresh }) {
   const [error, setError] = useState('')
   const [stats, setStats] = useState(null)
   const [joinReqs, setJoinReqs] = useState([])

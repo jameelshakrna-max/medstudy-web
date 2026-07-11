@@ -604,6 +604,7 @@ export default function CommunityDetail() {
           myId={user?.id}
           isMod={isMod}
           isAdmin={isAdmin}
+          onRefresh={() => handleRefreshTab('mod')}
         />
       )}
 
