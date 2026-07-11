@@ -18,6 +18,7 @@ const FILTER_TABS = [
 ]
 
 export default function ModDashboardTab({ communityId, members, announcements, setAnnouncements, myId, isMod, isAdmin }) {
+  const [error, setError] = useState('')
   const [stats, setStats] = useState(null)
   const [joinReqs, setJoinReqs] = useState([])
   const [filterRole, setFilterRole] = useState('all')
@@ -138,6 +139,8 @@ export default function ModDashboardTab({ communityId, members, announcements, s
           </div>
         ))}
       </div>
+
+      {error && <div className={s.hint} style={{ padding: '8px 12px', marginBottom: 12, background: 'var(--red-bg, #3b1a1a)', border: '1px solid var(--red, #ef4444)', borderRadius: 8, fontSize: 13, color: 'var(--red, #ef4444)' }}>{error}</div>}
 
       {joinReqs.length > 0 && (
         <div className={s.settingSection} style={{ marginBottom: 20 }}>

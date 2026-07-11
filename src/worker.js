@@ -2665,7 +2665,9 @@ async function handleSetMemberTitle(request, env, user) {
 async function handleMuteMember(request, env, user) {
   const communityId = extractCommunityId(request.url)
   const member = await getMember(env, communityId, user.sub)
-  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+  console.log('handleMuteMember:', JSON.stringify({ userId: user.sub, communityId, memberFound: !!member, memberRole: member?.role, requiredRole: ROLES.MODERATOR }))
+  if (!member) return json({ error: 'Not authorized', reason: 'membership_required' }, 403)
+  if (!hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized', reason: 'role_insufficient' }, 403)
 
   const { user_id, reason } = await request.json()
   if (!user_id) return json({ error: 'user_id required' }, 400)
@@ -2683,7 +2685,8 @@ async function handleUnmuteMember(request, env, user) {
   const communityId = parts[3]
   const muteId = parts[5]
   const member = await getMember(env, communityId, user.sub)
-  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+  if (!member) return json({ error: 'Not authorized', reason: 'membership_required' }, 403)
+  if (!hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized', reason: 'role_insufficient' }, 403)
 
   await env.DB.prepare('DELETE FROM community_mutes WHERE id = ? AND community_id = ?').bind(muteId, communityId).run()
   return json({ success: true })
@@ -2692,7 +2695,8 @@ async function handleUnmuteMember(request, env, user) {
 async function handleGetMutes(request, env, user) {
   const communityId = extractCommunityId(request.url)
   const member = await getMember(env, communityId, user.sub)
-  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+  if (!member) return json({ error: 'Not authorized', reason: 'membership_required' }, 403)
+  if (!hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized', reason: 'role_insufficient' }, 403)
 
   const { results } = await env.DB.prepare(
     'SELECT cm.*, m.user_name FROM community_mutes cm LEFT JOIN (SELECT DISTINCT user_id, user_name FROM community_messages WHERE community_id = ?) m ON cm.user_id = m.user_id WHERE cm.community_id = ? ORDER BY cm.created_at DESC'

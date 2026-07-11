@@ -260,6 +260,9 @@ export default function CommunityDetail() {
         const c = await apiGet('/communities/' + id + '/competitions')
         setCompetitions(Array.isArray(c) ? c : [])
       }
+      if (tab === 'mod') {
+        fetchCommunity()
+      }
       if (tab === 'settings') {
         const r = await apiGet('/communities/' + id + '/rules')
         setRules(Array.isArray(r) ? r : [])

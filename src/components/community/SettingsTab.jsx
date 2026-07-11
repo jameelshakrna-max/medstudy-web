@@ -28,6 +28,7 @@ const ROLE_LABELS = {
 
 export default function SettingsTab({ community, rules, settings, members, announcements, setAnnouncements, joinRequests, bans, isAdmin, isMod, communityId, myId, onUpdate, onRefresh, onRegenerateCode }) {
   const navigate = useNavigate()
+  const [actionError, setActionError] = useState('')
   const [editName, setEditName] = useState(community.name)
   const [editDesc, setEditDesc] = useState(community.description || '')
   const [editVisibility, setEditVisibility] = useState(community.visibility)
