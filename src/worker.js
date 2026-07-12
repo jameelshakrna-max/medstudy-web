@@ -78,7 +78,7 @@ export default {
     const path = url.pathname
 
     if (!path.startsWith('/api/')) {
-      return new Response('Not found', { status: 404 })
+      return json({ error: 'Not found' }, 404)
     }
     if (path.startsWith('/api/images/')) {
       return handleGetImage(request, env)
@@ -2739,7 +2739,7 @@ async function callRealtimeKit(env, method, path, body = null) {
   const res = await fetch(`${base}${path}`, opts)
   const data = await res.json()
   if (!data.success) throw new Error(data.errors?.[0]?.message || 'RealtimeKit API error')
-  return data.result
+  return data.data
 }
 
 async function handleListRooms(request, env, user) {

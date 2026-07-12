@@ -21,3 +21,5 @@ bucket_name = "card-images"
 
 [vars]
 SUPABASE_URL = "https://undakhccjrbcpzryfmot.supabase.co"
+CF_ACCOUNT_ID = "a05b2fac1d43aa509d8765c8089f499b"
+REALTIMEKIT_APP_ID = "96b410b8-1a27-477b-8fb9-eaa406775a82"
