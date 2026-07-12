@@ -82,7 +82,8 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
     } catch { setError('Failed to end room') }
   }
 
-  const handleLeave = () => {
+  const handleLeave = async () => {
+    try { await apiPost(`/communities/${communityId}/rooms/${joinedRoom.id}/leave`, {}) } catch {}
     setJoinedRoom(null)
   }
 

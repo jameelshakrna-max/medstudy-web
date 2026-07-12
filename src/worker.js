@@ -297,6 +297,7 @@ export default {
       if (path.match(/^\/api\/communities\/[^\/]+\/rooms$/) && request.method === 'GET') return handleListRooms(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/rooms$/) && request.method === 'POST') return handleCreateRoom(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/join$/) && request.method === 'POST') return handleJoinRoom(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/leave$/) && request.method === 'POST') return handleLeaveRoom(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/end$/) && request.method === 'POST') return handleEndRoom(request, env, user)
       if (path.match(/^\/api\/users\/[^\/]+\/profile$/) && request.method === 'GET') return handleUserProfile(request, env)
 
@@ -2755,11 +2756,15 @@ async function handleListRooms(request, env, user) {
      ORDER BY cr.created_at DESC`
   ).bind(communityId).all()
 
-  for (const room of results) {
-    const { results: participants } = await env.DB.prepare(
-      'SELECT COUNT(*) as cnt FROM community_room_participants WHERE room_id = ? AND left_at IS NULL'
-    ).bind(room.id).all()
-    room.participants = participants[0]?.cnt || 0
+  if (results.length > 0) {
+    const ids = results.map(r => "'" + r.id + "'").join(',')
+    const { results: participantCounts } = await env.DB.prepare(
+      `SELECT room_id, COUNT(*) as cnt FROM community_room_participants WHERE left_at IS NULL AND room_id IN (${ids}) GROUP BY room_id`
+    ).all()
+    const countMap = Object.fromEntries(participantCounts.map(r => [r.room_id, r.cnt]))
+    for (const room of results) {
+      room.participants = countMap[room.id] || 0
+    }
   }
 
   return json(results)
@@ -2819,6 +2824,23 @@ async function handleJoinRoom(request, env, user) {
   ).bind(uuid(), roomId, user.sub).run()
 
   return json({ authToken: participant.token, meetingId: room.realtimekit_meeting_id })
+}
+
+async function handleLeaveRoom(request, env, user) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const communityId = parts[3]
+  const roomId = parts[5]
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+  if (!hasPermission(member.role, PERM.JOIN_VOICE_ROOM)) return json({ error: 'Not authorized' }, 403)
+
+  await env.DB.prepare(
+    'UPDATE community_room_participants SET left_at = CURRENT_TIMESTAMP WHERE room_id = ? AND user_id = ? AND left_at IS NULL'
+  ).bind(roomId, user.sub).run()
+
+  log('room:leave', { communityId, roomId, userId: user.sub })
+  return json({ ok: true })
 }
 
 async function handleEndRoom(request, env, user) {
