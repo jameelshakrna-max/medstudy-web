@@ -454,6 +454,35 @@ CREATE TABLE IF NOT EXISTS community_rooms (
   ended_at TEXT
 );
 
+-- Shared Pomodoro timer per voice room
+CREATE TABLE IF NOT EXISTS community_room_timers (
+  room_id TEXT PRIMARY KEY REFERENCES community_rooms(id) ON DELETE CASCADE,
+  status TEXT DEFAULT 'stopped',              -- stopped | running | paused
+  mode TEXT DEFAULT 'focus',                  -- focus | short_break | long_break
+  focus_duration INTEGER DEFAULT 1500,
+  short_break_duration INTEGER DEFAULT 300,
+  long_break_duration INTEGER DEFAULT 900,
+  long_break_every INTEGER DEFAULT 4,
+  round_number INTEGER DEFAULT 0,
+  started_at TEXT,
+  total_paused_seconds INTEGER DEFAULT 0,
+  last_pause_started_at TEXT,
+  controlled_by TEXT,                          -- user_id who started
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Per-participant study time within a room
+CREATE TABLE IF NOT EXISTS community_room_timer_participants (
+  room_id TEXT NOT NULL REFERENCES community_rooms(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  study_seconds INTEGER DEFAULT 0,
+  joined_at TEXT,
+  left_at TEXT,
+  last_seen_at TEXT,
+  PRIMARY KEY (room_id, user_id)
+);
+
 -- ════════════════════════════════════════════════════════════
 -- SUPABASE / POSTGRESQL SECTION
 -- Run these statements in the Supabase SQL Editor (Dashboard → SQL Editor)

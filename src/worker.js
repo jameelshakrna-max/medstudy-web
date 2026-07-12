@@ -299,6 +299,11 @@ export default {
       if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/join$/) && request.method === 'POST') return handleJoinRoom(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/leave$/) && request.method === 'POST') return handleLeaveRoom(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/end$/) && request.method === 'POST') return handleEndRoom(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timer$/) && request.method === 'GET') return handleGetTimer(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timer\/start$/) && request.method === 'POST') return handleStartTimer(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timer\/pause$/) && request.method === 'POST') return handlePauseTimer(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timer\/resume$/) && request.method === 'POST') return handleResumeTimer(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timer\/stop$/) && request.method === 'POST') return handleStopTimer(request, env, user)
       if (path.match(/^\/api\/users\/[^\/]+\/profile$/) && request.method === 'GET') return handleUserProfile(request, env)
 
       if (path.match(/^\/api\/communities\/[^\/]+\/ws$/) && request.method === 'GET') {
@@ -2823,6 +2828,10 @@ async function handleJoinRoom(request, env, user) {
     'INSERT INTO community_room_participants (id, room_id, user_id) VALUES (?, ?, ?)'
   ).bind(uuid(), roomId, user.sub).run()
 
+  await env.DB.prepare(
+    'INSERT OR IGNORE INTO community_room_timer_participants (room_id, user_id, joined_at, last_seen_at) VALUES (?, ?, ?, ?)'
+  ).bind(roomId, user.sub, new Date().toISOString(), new Date().toISOString()).run()
+
   return json({ authToken: participant.token, meetingId: room.realtimekit_meeting_id })
 }
 
@@ -2838,6 +2847,10 @@ async function handleLeaveRoom(request, env, user) {
   await env.DB.prepare(
     'UPDATE community_room_participants SET left_at = CURRENT_TIMESTAMP WHERE room_id = ? AND user_id = ? AND left_at IS NULL'
   ).bind(roomId, user.sub).run()
+
+  await env.DB.prepare(
+    'UPDATE community_room_timer_participants SET left_at = ? WHERE room_id = ? AND user_id = ? AND left_at IS NULL'
+  ).bind(new Date().toISOString(), roomId, user.sub).run()
 
   log('room:leave', { communityId, roomId, userId: user.sub })
   return json({ ok: true })
@@ -2866,8 +2879,265 @@ async function handleEndRoom(request, env, user) {
     'UPDATE community_room_participants SET left_at = ? WHERE room_id = ? AND left_at IS NULL'
   ).bind(new Date().toISOString(), roomId).run()
 
+  await env.DB.prepare(
+    'UPDATE community_room_timer_participants SET left_at = ? WHERE room_id = ? AND left_at IS NULL'
+  ).bind(new Date().toISOString(), roomId).run()
+
   log('room:ended', { communityId, roomId, by: user.sub })
   return json({ success: true })
+}
+
+function timerElapsedSeconds(timer, nowMs) {
+  if (!timer.started_at) return 0
+  const startedAt = new Date(timer.started_at).getTime()
+  const pausedMs = (timer.total_paused_seconds || 0) * 1000
+  return Math.max(0, (nowMs - startedAt - pausedMs) / 1000)
+}
+
+function timerCurrentDuration(timer) {
+  if (timer.mode === 'focus') return timer.focus_duration
+  if (timer.mode === 'long_break') return timer.long_break_duration
+  return timer.short_break_duration
+}
+
+async function advanceTimerMode(env, roomId, now) {
+  const { results: timers } = await env.DB.prepare(
+    'SELECT * FROM community_room_timers WHERE room_id = ?'
+  ).bind(roomId).all()
+  if (!timers.length) return null
+  const timer = timers[0]
+
+  if (timer.mode === 'focus') {
+    const { results: active } = await env.DB.prepare(
+      'SELECT user_id FROM community_room_timer_participants WHERE room_id = ? AND left_at IS NULL'
+    ).bind(roomId).all()
+
+    for (const p of active) {
+      await env.DB.prepare(
+        'UPDATE community_room_timer_participants SET study_seconds = study_seconds + ? WHERE room_id = ? AND user_id = ?'
+      ).bind(timer.focus_duration, roomId, p.user_id).run()
+    }
+
+    const { results: room } = await env.DB.prepare(
+      'SELECT community_id FROM community_rooms WHERE id = ?'
+    ).bind(roomId).all()
+
+    const nowDate = now.slice(0, 10)
+    for (const p of active) {
+      await env.DB.prepare(
+        'INSERT OR IGNORE INTO study_sessions_log (id, community_id, user_id, minutes, created_at) VALUES (?, ?, ?, ?, ?)'
+      ).bind(uuid(), room[0].community_id, p.user_id, Math.round(timer.focus_duration / 60), now).run()
+    }
+
+    const nextRound = (timer.round_number || 0) + 1
+    const nextMode = nextRound % timer.long_break_every === 0 ? 'long_break' : 'short_break'
+
+    await env.DB.prepare(
+      'UPDATE community_room_timers SET mode = ?, round_number = ?, started_at = ?, updated_at = ? WHERE room_id = ?'
+    ).bind(nextMode, nextRound, now, now, roomId).run()
+  } else {
+    await env.DB.prepare(
+      'UPDATE community_room_timers SET mode = \'focus\', started_at = ?, updated_at = ? WHERE room_id = ?'
+    ).bind(now, now, roomId).run()
+  }
+
+  const { results: updated } = await env.DB.prepare(
+    'SELECT * FROM community_room_timers WHERE room_id = ?'
+  ).bind(roomId).all()
+  return updated[0]
+}
+
+async function handleGetTimer(request, env, user) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const communityId = parts[3]
+  const roomId = parts[5]
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+
+  const now = new Date().toISOString()
+  const nowMs = Date.now()
+
+  await env.DB.prepare(
+    `INSERT INTO community_room_timer_participants (room_id, user_id, joined_at, last_seen_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(room_id, user_id) DO UPDATE SET last_seen_at = excluded.last_seen_at,
+       left_at = CASE WHEN community_room_timer_participants.left_at IS NOT NULL THEN NULL ELSE community_room_timer_participants.left_at END,
+       joined_at = CASE WHEN community_room_timer_participants.left_at IS NOT NULL THEN excluded.joined_at ELSE community_room_timer_participants.joined_at END`
+  ).bind(roomId, user.sub, now, now).run()
+
+  const staleCutoff = new Date(Date.now() - 60000).toISOString()
+  await env.DB.prepare(
+    'UPDATE community_room_timer_participants SET left_at = ? WHERE room_id = ? AND left_at IS NULL AND last_seen_at < ?'
+  ).bind(now, roomId, staleCutoff).run()
+
+  const { results: timers } = await env.DB.prepare(
+    'SELECT * FROM community_room_timers WHERE room_id = ?'
+  ).bind(roomId).all()
+
+  let timer = timers[0]
+
+  if (timer && timer.status === 'running') {
+    const elapsed = timerElapsedSeconds(timer, nowMs)
+    const duration = timerCurrentDuration(timer)
+    if (elapsed >= duration) {
+      timer = await advanceTimerMode(env, roomId, now)
+    }
+  }
+
+  const { results: activeCount } = await env.DB.prepare(
+    'SELECT COUNT(*) as cnt FROM community_room_timer_participants WHERE room_id = ? AND left_at IS NULL'
+  ).bind(roomId).all()
+  const participantCount = activeCount[0]?.cnt || 0
+
+  if (timer && participantCount === 0 && timer.status === 'running') {
+    await env.DB.prepare(
+      'UPDATE community_room_timers SET status = \'stopped\', mode = \'focus\', round_number = 0, started_at = NULL, total_paused_seconds = 0, last_pause_started_at = NULL, updated_at = ? WHERE room_id = ?'
+    ).bind(now, roomId).run()
+    const { results: reset } = await env.DB.prepare(
+      'SELECT * FROM community_room_timers WHERE room_id = ?'
+    ).bind(roomId).all()
+    timer = reset[0]
+  }
+
+  let remaining = 0
+  if (timer && timer.status === 'running') {
+    const elapsed = timerElapsedSeconds(timer, nowMs)
+    const duration = timerCurrentDuration(timer)
+    remaining = Math.max(0, duration - elapsed)
+  } else if (timer && timer.status === 'paused') {
+    const elapsed = timerElapsedSeconds(timer, new Date(timer.last_pause_started_at).getTime())
+    const duration = timerCurrentDuration(timer)
+    remaining = Math.max(0, duration - elapsed)
+  }
+
+  const { results: participants } = await env.DB.prepare(
+    'SELECT user_id, study_seconds FROM community_room_timer_participants WHERE room_id = ? AND left_at IS NULL ORDER BY study_seconds DESC'
+  ).bind(roomId).all()
+
+  return json({
+    timer: timer ? {
+      status: timer.status,
+      mode: timer.mode,
+      round_number: timer.round_number,
+      focus_duration: timer.focus_duration,
+      short_break_duration: timer.short_break_duration,
+      long_break_duration: timer.long_break_duration,
+      long_break_every: timer.long_break_every,
+      controlled_by: timer.controlled_by,
+    } : null,
+    remaining,
+    server_time: now,
+    participants: participants.map(p => ({ user_id: p.user_id, study_seconds: p.study_seconds })),
+    participant_count: participantCount,
+  })
+}
+
+async function handleStartTimer(request, env, user) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const communityId = parts[3]
+  const roomId = parts[5]
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+  if (!hasPermission(member.role, PERM.MANAGE_ROOM_TIMER)) return json({ error: 'Not authorized' }, 403)
+
+  const { results: existing } = await env.DB.prepare(
+    'SELECT status FROM community_room_timers WHERE room_id = ?'
+  ).bind(roomId).all()
+
+  if (existing.length && existing[0].status !== 'stopped') {
+    return json({ error: 'Timer already running or paused. Stop it first.' }, 409)
+  }
+
+  const body = await request.json()
+  const now = new Date().toISOString()
+
+  const focus_duration = Math.max(60, Math.min(7200, Number(body.focus_duration) || 1500))
+  const short_break_duration = Math.max(60, Math.min(3600, Number(body.short_break_duration) || 300))
+  const long_break_duration = Math.max(60, Math.min(3600, Number(body.long_break_duration) || 900))
+  const long_break_every = Math.max(1, Math.min(10, Number(body.long_break_every) || 4))
+
+  await env.DB.prepare(
+    `INSERT INTO community_room_timers (room_id, status, mode, focus_duration, short_break_duration, long_break_duration, long_break_every, round_number, started_at, controlled_by, created_at, updated_at)
+     VALUES (?, 'running', 'focus', ?, ?, ?, ?, 0, ?, ?, ?, ?)
+     ON CONFLICT(room_id) DO UPDATE SET status = 'running', mode = 'focus', focus_duration = excluded.focus_duration,
+       short_break_duration = excluded.short_break_duration, long_break_duration = excluded.long_break_duration,
+       long_break_every = excluded.long_break_every, round_number = 0, started_at = excluded.started_at,
+       total_paused_seconds = 0, last_pause_started_at = NULL, controlled_by = excluded.controlled_by, updated_at = excluded.updated_at`
+  ).bind(roomId, focus_duration, short_break_duration, long_break_duration, long_break_every, now, user.sub, now, now).run()
+
+  log('timer:start', { communityId, roomId, by: user.sub })
+  return json({ ok: true })
+}
+
+async function handlePauseTimer(request, env, user) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const communityId = parts[3]
+  const roomId = parts[5]
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+  if (!hasPermission(member.role, PERM.MANAGE_ROOM_TIMER)) return json({ error: 'Not authorized' }, 403)
+
+  const { results: timers } = await env.DB.prepare(
+    'SELECT status FROM community_room_timers WHERE room_id = ?'
+  ).bind(roomId).all()
+  if (!timers.length || timers[0].status !== 'running') return json({ error: 'Timer is not running' }, 409)
+
+  const now = new Date().toISOString()
+  await env.DB.prepare(
+    'UPDATE community_room_timers SET status = \'paused\', last_pause_started_at = ?, updated_at = ? WHERE room_id = ?'
+  ).bind(now, now, roomId).run()
+
+  log('timer:pause', { communityId, roomId, by: user.sub })
+  return json({ ok: true })
+}
+
+async function handleResumeTimer(request, env, user) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const communityId = parts[3]
+  const roomId = parts[5]
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+  if (!hasPermission(member.role, PERM.MANAGE_ROOM_TIMER)) return json({ error: 'Not authorized' }, 403)
+
+  const { results: timers } = await env.DB.prepare(
+    'SELECT * FROM community_room_timers WHERE room_id = ?'
+  ).bind(roomId).all()
+  if (!timers.length || timers[0].status !== 'paused') return json({ error: 'Timer is not paused' }, 409)
+
+  const timer = timers[0]
+  const now = new Date().toISOString()
+  const nowMs = Date.now()
+  const pauseStarted = new Date(timer.last_pause_started_at).getTime()
+  const pauseDuration = Math.round((nowMs - pauseStarted) / 1000)
+
+  await env.DB.prepare(
+    'UPDATE community_room_timers SET status = \'running\', total_paused_seconds = total_paused_seconds + ?, started_at = ?, last_pause_started_at = NULL, updated_at = ? WHERE room_id = ?'
+  ).bind(pauseDuration, now, now, roomId).run()
+
+  log('timer:resume', { communityId, roomId, by: user.sub, pauseDuration })
+  return json({ ok: true })
+}
+
+async function handleStopTimer(request, env, user) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const communityId = parts[3]
+  const roomId = parts[5]
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+  if (!hasPermission(member.role, PERM.MANAGE_ROOM_TIMER)) return json({ error: 'Not authorized' }, 403)
+
+  const now = new Date().toISOString()
+  await env.DB.prepare(
+    'UPDATE community_room_timers SET status = \'stopped\', mode = \'focus\', round_number = 0, started_at = NULL, total_paused_seconds = 0, last_pause_started_at = NULL, updated_at = ? WHERE room_id = ?'
+  ).bind(now, roomId).run()
+
+  log('timer:stop', { communityId, roomId, by: user.sub })
+  return json({ ok: true })
 }
 
 async function handleUserProfile(request, env) {
