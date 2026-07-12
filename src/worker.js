@@ -3115,8 +3115,8 @@ async function handleResumeTimer(request, env, user) {
   const pauseDuration = Math.round((nowMs - pauseStarted) / 1000)
 
   await env.DB.prepare(
-    'UPDATE community_room_timers SET status = \'running\', total_paused_seconds = total_paused_seconds + ?, started_at = ?, last_pause_started_at = NULL, updated_at = ? WHERE room_id = ?'
-  ).bind(pauseDuration, now, now, roomId).run()
+    'UPDATE community_room_timers SET status = \'running\', total_paused_seconds = total_paused_seconds + ?, last_pause_started_at = NULL, updated_at = ? WHERE room_id = ?'
+  ).bind(pauseDuration, now, roomId).run()
 
   log('timer:resume', { communityId, roomId, by: user.sub, pauseDuration })
   return json({ ok: true })
