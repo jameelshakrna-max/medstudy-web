@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRealtimeKitClient, RealtimeKitProvider } from '@cloudflare/realtimekit-react'
 import { RtkMeeting } from '@cloudflare/realtimekit-react-ui'
 import { apiGet, apiPost } from '../../lib/api'
+import { supabase } from '../../lib/supabase'
 import { Headphones, Plus, X, Loader2, Mic, MicOff, LogOut, UserCheck } from 'lucide-react'
 import s from '../../pages/CommunityDetail.module.css'
 
@@ -42,6 +43,43 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
   const canCreate = isMod || isAdmin
   const canEnd = isMod || isAdmin
   const canJoin = true // all members
+
+  const tokenRef = useRef(null)
+  const API_BASE = import.meta.env.VITE_API_URL || '/api'
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      tokenRef.current = session?.access_token
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      tokenRef.current = session?.access_token
+    })
+    return () => subscription?.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (!joinedRoom) return
+
+    const leaveUrl = `${API_BASE}/communities/${communityId}/rooms/${joinedRoom.id}/leave`
+
+    const onLeave = () => {
+      const token = tokenRef.current
+      if (!token) return
+      fetch(leaveUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: '{}',
+        keepalive: true,
+      })
+    }
+
+    window.addEventListener('beforeunload', onLeave)
+
+    return () => {
+      window.removeEventListener('beforeunload', onLeave)
+      onLeave()
+    }
+  }, [joinedRoom, communityId])
 
   const fetchRooms = async () => {
     try {
