@@ -4,6 +4,7 @@ import { CommunityRealtimeRoom } from './do/CommunityRealtimeRoom.js'
 import {
   uuid, json, corsHeaders, extractId, safeString, pageParams, MAX, ALLOWED_MIME,
   ensureUserProfile, log, checkRate, mapCard, mapResource,
+  isValidUsername, sanitizeUsername, calculateProfileCompletion,
 } from './lib/worker-utils.js'
 
 import {
@@ -291,6 +292,12 @@ export default {
       if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/stats$/) && request.method === 'GET') return handleRoomStats(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timeline$/) && request.method === 'GET') return handleSessionTimeline(request, env, user)
       if (path.match(/^\/api\/users\/[^\/]+\/profile$/) && request.method === 'GET') return handleUserProfile(request, env)
+      if (path.match(/^\/api\/users\/[^\/]+\/profile$/) && request.method === 'PUT') return handleUpdateUserProfile(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/avatar$/) && request.method === 'POST') return handleUploadUserAvatar(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/banner$/) && request.method === 'POST') return handleUploadUserBanner(request, env, user)
+      if (path.match(/^\/api\/users\/username\/[^\/]+$/) && request.method === 'GET') return handleGetUserByUsername(request, env)
+      if (path.match(/^\/api\/users\/check-username\/[^\/]+$/) && request.method === 'GET') return handleCheckUsername(request, env)
+      if (path.match(/^\/api\/users\/[^\/]+\/activity$/) && request.method === 'GET') return handleGetUserActivity(request, env)
 
       return json({ error: 'Not found' }, 404)
     } catch (err) {
@@ -617,10 +624,234 @@ async function handleVoteComment(request, env, user) {
 
 /* ── User Profile ── */
 
+async function handleUpdateUserProfile(request, env, user) {
+  const url = new URL(request.url)
+  const targetUserId = url.pathname.split('/')[3]
+  if (user.sub !== targetUserId) return json({ error: 'Forbidden' }, 403)
+
+  const body = await request.json()
+  const { display_name, bio, website, location, active_title, pinned_badges, username } = body
+
+  if (username !== undefined && username !== null && username !== '') {
+    if (!isValidUsername(username)) {
+      return json({ error: 'Username must be 3-20 characters, lowercase letters, numbers, and hyphens only' }, 400)
+    }
+    const { results: existing } = await env.DB.prepare(
+      'SELECT user_id FROM user_profiles WHERE username = ? AND user_id != ?'
+    ).bind(username, targetUserId).all()
+    if (existing.length > 0) {
+      return json({ error: 'Username is already taken' }, 409)
+    }
+  }
+
+  const safeDisplayName = safeString(display_name, 50)
+  const safeBio = safeString(bio, 300)
+  const safeWebsite = safeString(website, 200)
+  const safeLocation = safeString(location, 100)
+  const safeTitle = safeString(active_title, 100)
+  const safeUsername = username ? sanitizeUsername(username) : null
+  const safePinned = pinned_badges ? JSON.stringify(pinned_badges) : null
+
+  await env.DB.prepare(`
+    INSERT INTO user_profiles (user_id, display_name, username, bio, website, location, active_title, pinned_badges, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET
+      display_name = CASE WHEN ? != '' THEN ? ELSE user_profiles.display_name END,
+      username = CASE WHEN ? IS NOT NULL THEN ? ELSE user_profiles.username END,
+      bio = CASE WHEN ? != '' THEN ? ELSE user_profiles.bio END,
+      website = CASE WHEN ? != '' THEN ? ELSE user_profiles.website END,
+      location = CASE WHEN ? != '' THEN ? ELSE user_profiles.location END,
+      active_title = CASE WHEN ? != '' THEN ? ELSE user_profiles.active_title END,
+      pinned_badges = CASE WHEN ? IS NOT NULL THEN ? ELSE user_profiles.pinned_badges END,
+      updated_at = datetime('now')
+  `).bind(
+    targetUserId, safeDisplayName, safeUsername, safeBio, safeWebsite, safeLocation, safeTitle, safePinned,
+    safeDisplayName, safeDisplayName,
+    safeUsername, safeUsername,
+    safeBio, safeBio,
+    safeWebsite, safeWebsite,
+    safeLocation, safeLocation,
+    safeTitle, safeTitle,
+    safePinned, safePinned
+  ).run()
+
+  return json({ success: true })
+}
+
+async function handleUploadUserAvatar(request, env, user) {
+  const url = new URL(request.url)
+  const targetUserId = url.pathname.split('/')[3]
+  if (user.sub !== targetUserId) return json({ error: 'Forbidden' }, 403)
+
+  const formData = await request.formData()
+  const file = formData.get('image')
+  if (!file) return json({ error: 'Image required' }, 400)
+  if (!file.type.startsWith('image/')) return json({ error: 'Only images allowed' }, 400)
+  if (file.size > 5 * 1024 * 1024) return json({ error: 'Image too large (max 5MB)' }, 400)
+
+  const { results: existing } = await env.DB.prepare(
+    'SELECT avatar_url FROM user_profiles WHERE user_id = ?'
+  ).bind(targetUserId).all()
+  if (existing[0]?.avatar_url) {
+    const oldKey = existing[0].avatar_url.split('/api/images/')[1]
+    if (oldKey) {
+      try { await env.IMAGES.delete(oldKey) } catch {}
+    }
+  }
+
+  const ext = file.name?.split('.').pop() || 'png'
+  const key = `user-assets/${targetUserId}/avatar.${ext}`
+  await env.IMAGES.put(key, await file.arrayBuffer(), {
+    httpMetadata: { contentType: file.type },
+  })
+
+  const avatarUrl = `${new URL(request.url).origin}/api/images/${key}`
+
+  await env.DB.prepare(`
+    INSERT INTO user_profiles (user_id, avatar_url, updated_at) VALUES (?, ?, datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET avatar_url = ?, updated_at = datetime('now')
+  `).bind(targetUserId, avatarUrl, avatarUrl).run()
+
+  return json({ success: true, url: avatarUrl, key })
+}
+
+async function handleUploadUserBanner(request, env, user) {
+  const url = new URL(request.url)
+  const targetUserId = url.pathname.split('/')[3]
+  if (user.sub !== targetUserId) return json({ error: 'Forbidden' }, 403)
+
+  const formData = await request.formData()
+  const file = formData.get('image')
+  if (!file) return json({ error: 'Image required' }, 400)
+  if (!file.type.startsWith('image/')) return json({ error: 'Only images allowed' }, 400)
+  if (file.size > 10 * 1024 * 1024) return json({ error: 'Image too large (max 10MB)' }, 400)
+
+  const { results: existing } = await env.DB.prepare(
+    'SELECT banner_url FROM user_profiles WHERE user_id = ?'
+  ).bind(targetUserId).all()
+  if (existing[0]?.banner_url) {
+    const oldKey = existing[0].banner_url.split('/api/images/')[1]
+    if (oldKey) {
+      try { await env.IMAGES.delete(oldKey) } catch {}
+    }
+  }
+
+  const ext = file.name?.split('.').pop() || 'png'
+  const key = `user-assets/${targetUserId}/banner.${ext}`
+  await env.IMAGES.put(key, await file.arrayBuffer(), {
+    httpMetadata: { contentType: file.type },
+  })
+
+  const bannerUrl = `${new URL(request.url).origin}/api/images/${key}`
+
+  await env.DB.prepare(`
+    INSERT INTO user_profiles (user_id, banner_url, updated_at) VALUES (?, ?, datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET banner_url = ?, updated_at = datetime('now')
+  `).bind(targetUserId, bannerUrl, bannerUrl).run()
+
+  return json({ success: true, url: bannerUrl, key })
+}
+
+async function handleGetUserByUsername(request, env) {
+  const url = new URL(request.url)
+  const username = url.pathname.split('/').pop()
+
+  const { results } = await env.DB.prepare(
+    'SELECT user_id FROM user_profiles WHERE username = ?'
+  ).bind(username).all()
+
+  if (results.length === 0) return json({ error: 'User not found' }, 404)
+  return json({ user_id: results[0].user_id })
+}
+
+async function handleCheckUsername(request, env) {
+  const url = new URL(request.url)
+  const username = url.pathname.split('/').pop()
+
+  if (!isValidUsername(username)) {
+    return json({ available: false, error: 'Invalid format. Use 3-20 lowercase letters, numbers, and hyphens.' })
+  }
+
+  const { results } = await env.DB.prepare(
+    'SELECT user_id FROM user_profiles WHERE username = ?'
+  ).bind(username).all()
+
+  return json({ available: results.length === 0 })
+}
+
+async function handleGetUserActivity(request, env) {
+  const url = new URL(request.url)
+  const userId = url.pathname.split('/')[3]
+  const { offset, limit } = pageParams(request.url)
+
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM user_activity WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?'
+  ).bind(userId, limit, offset).all()
+
+  return json(results.map(a => ({
+    id: a.id,
+    type: a.type,
+    entity_id: a.entity_id,
+    entity_type: a.entity_type,
+    metadata: JSON.parse(a.metadata || '{}'),
+    created_at: a.created_at,
+  })))
+}
+
 async function handleUserProfile(request, env) {
   const url = new URL(request.url)
   const parts = url.pathname.split('/')
   const targetUserId = parts[3]
+
+  const { results: profileRows } = await env.DB.prepare(
+    'SELECT * FROM user_profiles WHERE user_id = ?'
+  ).bind(targetUserId).all()
+  const profile = profileRows[0] || null
+
+  const { results: statsRows } = await env.DB.prepare(
+    'SELECT * FROM user_stats WHERE user_id = ?'
+  ).bind(targetUserId).all()
+  const stats = statsRows[0] || null
+
+  let computedStats = stats
+  if (!stats) {
+    const { results: hours } = await env.DB.prepare(
+      'SELECT COALESCE(SUM(total_study_hours), 0) as total FROM community_members WHERE user_id = ?'
+    ).bind(targetUserId).all()
+
+    const { results: questions } = await env.DB.prepare(
+      'SELECT COALESCE(SUM(correct), 0) as solved FROM uworld_blocks WHERE user_id = ?'
+    ).bind(targetUserId).all()
+
+    let streak = 0
+    const { results: sessionDays } = await env.DB.prepare(
+      'SELECT DISTINCT DATE(created_at) as day FROM study_sessions_log WHERE user_id = ? ORDER BY day DESC'
+    ).bind(targetUserId).all()
+
+    if (sessionDays.length > 0) {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const yesterday = new Date(today)
+      yesterday.setDate(yesterday.getDate() - 1)
+      const latestDay = new Date(sessionDays[0].day + 'T00:00:00')
+      if (latestDay >= yesterday) {
+        streak = 1
+        for (let i = 1; i < sessionDays.length; i++) {
+          const prev = new Date(sessionDays[i - 1].day + 'T00:00:00')
+          const cur = new Date(sessionDays[i].day + 'T00:00:00')
+          const diff = (prev - cur) / 86400000
+          if (diff === 1) streak++
+          else break
+        }
+      }
+    }
+
+    computedStats = {
+      study_hours: Number(hours[0]?.total) || 0,
+      questions_answered: Number(questions[0]?.solved) || 0,
+      current_streak: streak,
+    }
+  }
 
   const { results: badges } = await env.DB.prepare(
     `SELECT cmb.*, c.name as community_name FROM community_monthly_badges cmb
@@ -628,56 +859,45 @@ async function handleUserProfile(request, env) {
      WHERE cmb.user_id = ? ORDER BY cmb.year DESC, cmb.month DESC`
   ).bind(targetUserId).all()
 
-  const { results: hours } = await env.DB.prepare(
-    'SELECT COALESCE(SUM(total_study_hours), 0) as total FROM community_members WHERE user_id = ?'
-  ).bind(targetUserId).all()
-  const totalHours = hours[0]?.total || 0
-
   const { results: communities } = await env.DB.prepare(
     `SELECT cm.role, cm.title, cm.total_study_hours, cm.joined_at, c.id, c.name, c.avatar_url
      FROM community_members cm JOIN communities c ON cm.community_id = c.id
      WHERE cm.user_id = ? ORDER BY cm.joined_at DESC`
   ).bind(targetUserId).all()
 
-  const { results: questions } = await env.DB.prepare(
-    'SELECT COALESCE(SUM(correct), 0) as solved FROM uworld_blocks WHERE user_id = ?'
-  ).bind(targetUserId).all()
-  const questionsSolved = questions[0]?.solved || 0
-
-  let streak = 0
-  const { results: sessionDays } = await env.DB.prepare(
-    'SELECT DISTINCT DATE(created_at) as day FROM study_sessions_log WHERE user_id = ? ORDER BY day DESC'
-  ).bind(targetUserId).all()
-
-  if (sessionDays.length > 0) {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const yesterday = new Date(today)
-    yesterday.setDate(yesterday.getDate() - 1)
-
-    const latestDay = new Date(sessionDays[0].day + 'T00:00:00')
-    if (latestDay >= yesterday) {
-      streak = 1
-      for (let i = 1; i < sessionDays.length; i++) {
-        const prev = new Date(sessionDays[i - 1].day + 'T00:00:00')
-        const cur = new Date(sessionDays[i].day + 'T00:00:00')
-        const diff = (prev - cur) / 86400000
-        if (diff === 1) streak++
-        else break
-      }
-    }
-  }
+  const completion = calculateProfileCompletion(profile)
 
   return json({
+    user_id: targetUserId,
+    username: profile?.username || null,
+    display_name: profile?.display_name || profile?.user_name || targetUserId.slice(0, 8),
+    avatar_url: profile?.avatar_url || '',
+    banner_url: profile?.banner_url || '',
+    bio: profile?.bio || '',
+    website: profile?.website || '',
+    location: profile?.location || '',
+    active_title: profile?.active_title || '',
+    pinned_badges: JSON.parse(profile?.pinned_badges || '[]'),
+    joined_at: profile?.joined_at || null,
+    profile_completion: completion,
+    stats: {
+      study_hours: computedStats?.study_hours || 0,
+      questions_answered: computedStats?.questions_answered || 0,
+      cards_reviewed: computedStats?.cards_reviewed || 0,
+      pomodoros_completed: computedStats?.pomodoros_completed || 0,
+      competitions_joined: computedStats?.competitions_joined || 0,
+      communities_count: communities.length,
+      current_streak: computedStats?.current_streak || 0,
+      longest_streak: computedStats?.longest_streak || 0,
+      followers_count: computedStats?.followers_count || 0,
+      following_count: computedStats?.following_count || 0,
+    },
     badges: badges.map(b => ({
       community_id: b.community_id, community_name: b.community_name,
       year: b.year, month: b.month, rank: b.rank,
       emoji: b.rank === 1 ? '🥇' : b.rank === 2 ? '🥈' : '🥉',
       title: b.title || '',
     })),
-    totalHours,
-    questionsSolved,
-    streak,
     communities,
   })
 }

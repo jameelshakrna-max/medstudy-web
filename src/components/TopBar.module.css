@@ -46,11 +46,23 @@
 }
 
 .userDot {
-  width: 7px;
-  height: 7px;
+  display: none;
+}
+
+.userAvatar {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: var(--emerald);
-  box-shadow: 0 0 8px rgba(16,185,129,0.4);
+  background: linear-gradient(135deg, var(--blue, #4F8CFF), var(--emerald, #10B981));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  object-fit: cover;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 
 .userName {

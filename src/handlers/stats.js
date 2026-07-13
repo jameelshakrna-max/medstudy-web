@@ -477,3 +477,150 @@ export async function handleUserBadges(request, env) {
     awarded_at: b.awarded_at,
   })))
 }
+
+// ── User Profile Stats ──
+
+export async function incrementUserStats(env, userId, field, amount = 1) {
+  if (!userId || !field) return
+  const allowedFields = [
+    'study_hours', 'questions_answered', 'cards_reviewed', 'pomodoros_completed',
+    'competitions_joined', 'communities_count', 'followers_count', 'following_count',
+    'current_streak', 'longest_streak'
+  ]
+  if (!allowedFields.includes(field)) return
+
+  await env.DB.prepare(`
+    INSERT INTO user_stats (user_id, ${field}, updated_at)
+    VALUES (?, ?, datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET
+      ${field} = ${field} + ?,
+      updated_at = datetime('now')
+  `).bind(userId, amount, amount).run()
+}
+
+export async function refreshUserStats(env, userId) {
+  if (!userId) return
+
+  const { results: hours } = await env.DB.prepare(
+    'SELECT COALESCE(SUM(total_study_hours), 0) as total FROM community_members WHERE user_id = ?'
+  ).bind(userId).all()
+
+  const { results: questions } = await env.DB.prepare(
+    'SELECT COALESCE(SUM(correct), 0) as total FROM uworld_blocks WHERE user_id = ?'
+  ).bind(userId).all()
+
+  const { results: cards } = await env.DB.prepare(
+    'SELECT COALESCE(COUNT(*), 0) as total FROM flashcards WHERE user_id = ?'
+  ).bind(userId).all()
+
+  const { results: communities } = await env.DB.prepare(
+    'SELECT COALESCE(COUNT(*), 0) as total FROM community_members WHERE user_id = ?'
+  ).bind(userId).all()
+
+  const { results: competitions } = await env.DB.prepare(
+    'SELECT COALESCE(COUNT(*), 0) as total FROM competition_participants WHERE user_id = ?'
+  ).bind(userId).all()
+
+  let currentStreak = 0
+  let longestStreak = 0
+  const { results: sessionDays } = await env.DB.prepare(
+    'SELECT DISTINCT DATE(created_at) as day FROM study_sessions_log WHERE user_id = ? ORDER BY day DESC'
+  ).bind(userId).all()
+
+  if (sessionDays.length > 0) {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+    const latestDay = new Date(sessionDays[0].day + 'T00:00:00')
+
+    if (latestDay >= yesterday) {
+      currentStreak = 1
+      for (let i = 1; i < sessionDays.length; i++) {
+        const prev = new Date(sessionDays[i - 1].day + 'T00:00:00')
+        const cur = new Date(sessionDays[i].day + 'T00:00:00')
+        const diff = (prev - cur) / 86400000
+        if (diff === 1) currentStreak++
+        else break
+      }
+    }
+
+    let tempStreak = 1
+    for (let i = 1; i < sessionDays.length; i++) {
+      const prev = new Date(sessionDays[i - 1].day + 'T00:00:00')
+      const cur = new Date(sessionDays[i].day + 'T00:00:00')
+      const diff = (prev - cur) / 86400000
+      if (diff === 1) {
+        tempStreak++
+        longestStreak = Math.max(longestStreak, tempStreak)
+      } else {
+        tempStreak = 1
+      }
+    }
+    longestStreak = Math.max(longestStreak, tempStreak, currentStreak)
+  }
+
+  const { results: followers } = await env.DB.prepare(
+    'SELECT COALESCE(COUNT(*), 0) as total FROM user_followers WHERE following_id = ?'
+  ).bind(userId).all()
+
+  const { results: following } = await env.DB.prepare(
+    'SELECT COALESCE(COUNT(*), 0) as total FROM user_followers WHERE follower_id = ?'
+  ).bind(userId).all()
+
+  const { results: pomodoros } = await env.DB.prepare(
+    "SELECT COALESCE(COUNT(*), 0) as total FROM study_activity WHERE user_id = ? AND module = 'pomodoro' AND action = 'completed'"
+  ).bind(userId).all()
+
+  await env.DB.prepare(`
+    INSERT INTO user_stats (user_id, study_hours, questions_answered, cards_reviewed, pomodoros_completed, competitions_joined, communities_count, followers_count, following_count, current_streak, longest_streak, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET
+      study_hours = ?, questions_answered = ?, cards_reviewed = ?, pomodoros_completed = ?,
+      competitions_joined = ?, communities_count = ?, followers_count = ?, following_count = ?,
+      current_streak = ?, longest_streak = ?, updated_at = datetime('now')
+  `).bind(
+    userId,
+    Number(hours[0]?.total) || 0,
+    Number(questions[0]?.total) || 0,
+    Number(cards[0]?.total) || 0,
+    Number(pomodoros[0]?.total) || 0,
+    Number(competitions[0]?.total) || 0,
+    Number(communities[0]?.total) || 0,
+    Number(followers[0]?.total) || 0,
+    Number(following[0]?.total) || 0,
+    currentStreak,
+    longestStreak,
+    Number(hours[0]?.total) || 0,
+    Number(questions[0]?.total) || 0,
+    Number(cards[0]?.total) || 0,
+    Number(pomodoros[0]?.total) || 0,
+    Number(competitions[0]?.total) || 0,
+    Number(communities[0]?.total) || 0,
+    Number(followers[0]?.total) || 0,
+    Number(following[0]?.total) || 0,
+    currentStreak,
+    longestStreak
+  ).run()
+
+  return {
+    study_hours: Number(hours[0]?.total) || 0,
+    questions_answered: Number(questions[0]?.total) || 0,
+    cards_reviewed: Number(cards[0]?.total) || 0,
+    pomodoros_completed: Number(pomodoros[0]?.total) || 0,
+    competitions_joined: Number(competitions[0]?.total) || 0,
+    communities_count: Number(communities[0]?.total) || 0,
+    followers_count: Number(followers[0]?.total) || 0,
+    following_count: Number(following[0]?.total) || 0,
+    current_streak: currentStreak,
+    longest_streak: longestStreak,
+  }
+}
+
+export async function logUserActivity(env, userId, type, entityId, entityType, metadata = {}) {
+  if (!userId || !type) return
+  const { uuid } = await import('../lib/worker-utils.js')
+  await env.DB.prepare(
+    'INSERT INTO user_activity (id, user_id, type, entity_id, entity_type, metadata) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(uuid(), userId, type, entityId || null, entityType || null, JSON.stringify(metadata)).run()
+}

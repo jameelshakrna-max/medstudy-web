@@ -69,6 +69,7 @@ function AppRoutes() {
           <Route path="communities" element={<Communities />} />
           <Route path="communities/:id" element={<CommunityDetail />} />
           <Route path="profile/:userId" element={<ProfilePage />} />
+          <Route path="u/:username" element={<ProfilePage />} />
           <Route path="settings"   element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

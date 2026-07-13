@@ -43,8 +43,34 @@ export function pageParams(url) {
 export async function ensureUserProfile(env, userId, userName) {
   if (!userId) return
   await env.DB.prepare(
-    'INSERT OR IGNORE INTO user_profiles (user_id, user_name) VALUES (?, ?)'
-  ).bind(userId, userName || userId.slice(0, 8)).run()
+    'INSERT OR IGNORE INTO user_profiles (user_id, user_name, display_name) VALUES (?, ?, ?)'
+  ).bind(userId, userName || userId.slice(0, 8), userName || userId.slice(0, 8)).run()
+}
+
+export function isValidUsername(username) {
+  if (!username || typeof username !== 'string') return false
+  return /^[a-z0-9][a-z0-9-]{2,19}$/.test(username)
+}
+
+export function sanitizeUsername(username) {
+  return (username || '').toLowerCase().trim().replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '')
+}
+
+export function calculateProfileCompletion(profile) {
+  if (!profile) return { percentage: 0, checks: {} }
+  const checks = {
+    avatar: !!profile.avatar_url,
+    display_name: !!profile.display_name && profile.display_name !== profile.user_id?.slice(0, 8),
+    bio: !!profile.bio && profile.bio.length > 0,
+    username: !!profile.username,
+    banner: !!profile.banner_url,
+    website: !!profile.website,
+    location: !!profile.location,
+    title: !!profile.active_title,
+  }
+  const filled = Object.values(checks).filter(Boolean).length
+  const total = Object.keys(checks).length
+  return { percentage: Math.round((filled / total) * 100), checks }
 }
 
 export function log(event, meta = {}) {

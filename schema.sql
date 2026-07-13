@@ -695,3 +695,64 @@ CREATE TABLE IF NOT EXISTS community_leaderboard_snapshots (
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(community_id, snapshot_date)
 );
+
+-- ════════════════════════════════════════════════════════════
+-- USER PROFILES (Phase 1: Social Profile System)
+-- ════════════════════════════════════════════════════════════
+
+-- user_profiles is created in schema-migration3.sql, expanded in schema-migration6.sql
+-- For fresh installs, the full table is:
+
+CREATE TABLE IF NOT EXISTS user_profiles (
+  user_id TEXT PRIMARY KEY,
+  user_name TEXT NOT NULL DEFAULT '',
+  avatar_url TEXT DEFAULT '',
+  username TEXT,
+  display_name TEXT NOT NULL DEFAULT '',
+  bio TEXT DEFAULT '',
+  website TEXT DEFAULT '',
+  location TEXT DEFAULT '',
+  banner_url TEXT DEFAULT '',
+  active_title TEXT DEFAULT '',
+  pinned_badges TEXT DEFAULT '[]',
+  profile_visibility TEXT DEFAULT 'public',
+  activity_visibility TEXT DEFAULT 'everyone',
+  joined_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_profiles_username ON user_profiles(username);
+
+CREATE TABLE IF NOT EXISTS user_stats (
+  user_id TEXT PRIMARY KEY,
+  study_hours REAL DEFAULT 0,
+  questions_answered INTEGER DEFAULT 0,
+  cards_reviewed INTEGER DEFAULT 0,
+  pomodoros_completed INTEGER DEFAULT 0,
+  competitions_joined INTEGER DEFAULT 0,
+  communities_count INTEGER DEFAULT 0,
+  followers_count INTEGER DEFAULT 0,
+  following_count INTEGER DEFAULT 0,
+  current_streak INTEGER DEFAULT 0,
+  longest_streak INTEGER DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS user_activity (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  entity_id TEXT,
+  entity_type TEXT,
+  metadata TEXT DEFAULT '{}',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_user_activity_user ON user_activity(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS user_followers (
+  follower_id TEXT NOT NULL,
+  following_id TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (follower_id, following_id)
+);
+CREATE INDEX IF NOT EXISTS idx_followers_following ON user_followers(following_id);

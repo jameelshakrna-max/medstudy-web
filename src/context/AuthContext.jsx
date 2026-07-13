@@ -6,6 +6,7 @@ const AuthContext = createContext({})
 export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null)
   const [profile, setProfile] = useState(null)
+  const [userProfile, setUserProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const fetchProfile = useCallback(async (userId) => {
@@ -14,21 +15,46 @@ export function AuthProvider({ children }) {
     setLoading(false)
   }, [])
 
+  const fetchUserProfile = useCallback(async (userId) => {
+    try {
+      const API = import.meta.env.VITE_API_URL || '/api'
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) return
+      const res = await fetch(`${API}/users/${userId}/profile`, {
+        headers: { 'Authorization': 'Bearer ' + session.access_token }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setUserProfile(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch user profile:', err)
+    }
+  }, [])
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
-      else setLoading(false)
+      if (session?.user) {
+        fetchProfile(session.user.id)
+        fetchUserProfile(session.user.id)
+      } else setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
-      else { setProfile(null); setLoading(false) }
+      if (session?.user) {
+        fetchProfile(session.user.id)
+        fetchUserProfile(session.user.id)
+      } else {
+        setProfile(null)
+        setUserProfile(null)
+        setLoading(false)
+      }
     })
 
     return () => subscription.unsubscribe()
-  }, [fetchProfile])
+  }, [fetchProfile, fetchUserProfile])
 
   const signUp = useCallback(async (email, password, fullName) => {
     const { data, error } = await supabase.auth.signUp({
@@ -53,9 +79,13 @@ export function AuthProvider({ children }) {
     })
   }, [])
 
+  const refreshUserProfile = useCallback(async () => {
+    if (user?.id) await fetchUserProfile(user.id)
+  }, [user?.id, fetchUserProfile])
+
   const value = useMemo(() => ({
-    user, profile, loading, signUp, signIn, signOut, resetPassword
-  }), [user, profile, loading, signUp, signIn, signOut, resetPassword])
+    user, profile, userProfile, loading, signUp, signIn, signOut, resetPassword, refreshUserProfile
+  }), [user, profile, userProfile, loading, signUp, signIn, signOut, resetPassword, refreshUserProfile])
 
   return (
     <AuthContext.Provider value={value}>

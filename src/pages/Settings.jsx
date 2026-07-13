@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { usePomodoroSettings } from '../context/PomodoroContext'
 import { supabase } from '../lib/supabase'
-import { User, Lock, Bell, Palette, Clock, ShieldAlert, Medal, Loader2 } from 'lucide-react'
+import { User, Lock, Bell, Palette, Clock, ShieldAlert, Medal, Loader2, Camera, MapPin, LinkIcon, AtSign, FileText, Award } from 'lucide-react'
 import { apiGet } from '../lib/api'
+import AvatarUpload from '../components/AvatarUpload'
+import BannerUpload from '../components/BannerUpload'
+import ProfileCompletion from '../components/ProfileCompletion'
 import s from './Settings.module.css'
 
 const APP_VERSION = '1.0.0'
@@ -24,6 +27,17 @@ export default function Settings() {
   const [fullName, setFullName] = useState('')
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState(null)
+
+  const [username, setUsername] = useState('')
+  const [bio, setBio] = useState('')
+  const [website, setWebsite] = useState('')
+  const [location, setLocation] = useState('')
+  const [activeTitle, setActiveTitle] = useState('')
+  const [usernameStatus, setUsernameStatus] = useState(null) // null | 'checking' | 'available' | 'taken' | 'invalid'
+  const [usernameCooldown, setUsernameCooldown] = useState(null)
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [profileStatus, setProfileStatus] = useState(null)
+  const [userProfile, setUserProfile] = useState(null)
 
   // Name change tracking
   const [nameLastChanged, setNameLastChanged] = useState(null)
@@ -86,6 +100,54 @@ export default function Settings() {
     setBadgesLoading(true)
     apiGet(`/users/${user.id}/badges`).then(setBadges).catch(() => setBadges([])).finally(() => setBadgesLoading(false))
   }, [user?.id])
+
+  useEffect(() => {
+    if (!user?.id) return
+    const API = import.meta.env.VITE_API_URL || '/api'
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session?.access_token) return
+      fetch(`${API}/users/${user.id}/profile`, {
+        headers: { 'Authorization': 'Bearer ' + session.access_token }
+      })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) {
+          setUserProfile(data)
+          setUsername(data.username || '')
+          setBio(data.bio || '')
+          setWebsite(data.website || '')
+          setLocation(data.location || '')
+          setActiveTitle(data.active_title || '')
+          setFullName(data.display_name || profile?.full_name || '')
+        }
+      })
+      .catch(() => {})
+    })
+  }, [user?.id])
+
+  useEffect(() => {
+    if (!username || username === userProfile?.username) {
+      setUsernameStatus(null)
+      return
+    }
+    if (!/^[a-z0-9][a-z0-9-]{2,19}$/.test(username)) {
+      setUsernameStatus('invalid')
+      return
+    }
+    setUsernameStatus('checking')
+    const timer = setTimeout(() => {
+      const API = import.meta.env.VITE_API_URL || '/api'
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        fetch(`${API}/users/check-username/${username}`, {
+          headers: { 'Authorization': 'Bearer ' + session.access_token }
+        })
+        .then(r => r.json())
+        .then(data => setUsernameStatus(data.available ? 'available' : 'taken'))
+        .catch(() => setUsernameStatus(null))
+      })
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [username, userProfile?.username])
 
   // ── Accordion toggle ──
   const toggleSection = (section) => {
@@ -242,6 +304,52 @@ export default function Settings() {
 
   const themeClass = theme === 'light' ? s.pageLight : ''
 
+  // ── Full profile save ──
+  const handleSaveFullProfile = async () => {
+    setProfileSaving(true)
+    setProfileStatus(null)
+    try {
+      const API = import.meta.env.VITE_API_URL || '/api'
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      const { error: supaErr } = await supabase
+        .from('profiles')
+        .update({ full_name: fullName })
+        .eq('id', user.id)
+      if (supaErr) throw supaErr
+
+      const res = await fetch(`${API}/users/${user.id}/profile`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': 'Bearer ' + session.access_token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          display_name: fullName,
+          username: username || null,
+          bio,
+          website,
+          location,
+          active_title: activeTitle,
+        })
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to update profile')
+      }
+
+      const now = Date.now()
+      setNameLastChanged(now)
+      localStorage.setItem('medstudy-name-last-changed', String(now))
+
+      setProfileStatus({ type: 'success', msg: 'Profile updated successfully!' })
+    } catch (err) {
+      setProfileStatus({ type: 'error', msg: err.message || 'Failed to update profile' })
+    } finally {
+      setProfileSaving(false)
+    }
+  }
+
   // ── Accordion sections config ──
   const sections = [
     {
@@ -250,30 +358,117 @@ export default function Settings() {
       title: 'Profile',
       content: (
         <>
-          <div className={s.profileRow}>
-            <div className={s.avatar}>{initials}</div>
-            <div className={s.profileInfo}>
-              <div className={s.profileName}>{profile?.full_name || 'Student'}</div>
-              <div className={s.profileEmail}>{user?.email}</div>
-              <div className={s.profilePlan}>
-                {profile?.plan === 'pro' ? 'Pro' : profile?.plan === 'core' ? 'Core' : 'Free'}
+          {/* Profile Completion */}
+          {userProfile?.profile_completion && (
+            <ProfileCompletion completion={userProfile.profile_completion} />
+          )}
+
+          {/* Banner Upload */}
+          <div className={s.field}>
+            <label className={s.label}>Profile Banner</label>
+            <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid var(--card-border)' }}>
+              <BannerUpload
+                url={userProfile?.banner_url}
+                userId={user?.id}
+                editable={true}
+                onChange={(url) => setUserProfile(prev => ({ ...prev, banner_url: url }))}
+              />
+            </div>
+          </div>
+
+          {/* Avatar + Basic Info */}
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 20 }}>
+            <AvatarUpload
+              url={userProfile?.avatar_url}
+              size="lg"
+              userName={fullName || profile?.full_name}
+              userId={user?.id}
+              editable={true}
+              onChange={(url) => setUserProfile(prev => ({ ...prev, avatar_url: url }))}
+            />
+            <div style={{ flex: 1 }}>
+              <div className={s.field}>
+                <label className={s.label}>Display Name</label>
+                <input
+                  className={s.input}
+                  type="text"
+                  value={fullName}
+                  onChange={e => setFullName(e.target.value)}
+                  placeholder="Enter your name"
+                  disabled={!nameChangeAllowed}
+                />
+                {!nameChangeAllowed && (
+                  <p className={s.fieldHint}>You can change your name again in {nameCooldownDays} day{nameCooldownDays !== 1 ? 's' : ''}</p>
+                )}
+              </div>
+              <div className={s.field}>
+                <label className={s.label}><AtSign size={12} /> Username</label>
+                <input
+                  className={s.input}
+                  type="text"
+                  value={username}
+                  onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  placeholder="e.g. jimmy"
+                  maxLength={20}
+                />
+                {usernameStatus === 'checking' && <p className={s.fieldHint} style={{ color: 'var(--mist)' }}>Checking...</p>}
+                {usernameStatus === 'available' && <p className={s.fieldHint} style={{ color: 'var(--emerald)' }}>✓ Username is available</p>}
+                {usernameStatus === 'taken' && <p className={s.fieldHint}>✕ Username is already taken</p>}
+                {usernameStatus === 'invalid' && <p className={s.fieldHint}>3-20 characters, lowercase letters, numbers, and hyphens only</p>}
               </div>
             </div>
           </div>
 
           <div className={s.field}>
-            <label className={s.label}>Display Name</label>
+            <label className={s.label}><FileText size={12} /> Bio</label>
+            <textarea
+              className={s.input}
+              value={bio}
+              onChange={e => setBio(e.target.value.slice(0, 300))}
+              placeholder="Tell others about yourself..."
+              rows={3}
+              maxLength={300}
+              style={{ resize: 'vertical', minHeight: 80 }}
+            />
+            <p className={s.fieldHint} style={{ color: 'var(--mist)' }}>{bio.length}/300</p>
+          </div>
+
+          <div className={s.field}>
+            <label className={s.label}><Award size={12} /> Profile Title</label>
             <input
               className={s.input}
               type="text"
-              value={fullName}
-              onChange={e => setFullName(e.target.value)}
-              placeholder="Enter your name"
-              disabled={!nameChangeAllowed}
+              value={activeTitle}
+              onChange={e => setActiveTitle(e.target.value)}
+              placeholder="e.g. Cardiology Expert"
+              maxLength={100}
             />
-            {!nameChangeAllowed && (
-              <p className={s.fieldHint}>You can change your name again in {nameCooldownDays} day{nameCooldownDays !== 1 ? 's' : ''}</p>
-            )}
+            <p className={s.fieldHint} style={{ color: 'var(--mist)' }}>A title shown under your name on your profile</p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className={s.field}>
+              <label className={s.label}><MapPin size={12} /> Location</label>
+              <input
+                className={s.input}
+                type="text"
+                value={location}
+                onChange={e => setLocation(e.target.value)}
+                placeholder="e.g. Palestine"
+                maxLength={100}
+              />
+            </div>
+            <div className={s.field}>
+              <label className={s.label}><LinkIcon size={12} /> Website</label>
+              <input
+                className={s.input}
+                type="text"
+                value={website}
+                onChange={e => setWebsite(e.target.value)}
+                placeholder="e.g. https://..."
+                maxLength={200}
+              />
+            </div>
           </div>
 
           <div className={s.field}>
@@ -282,14 +477,18 @@ export default function Settings() {
           </div>
 
           <div className={s.btnRow}>
-            <button className={`${s.btn} ${s.btnPrimary}`} onClick={handleSaveProfile} disabled={saving || !nameChangeAllowed}>
-              {saving ? 'Saving...' : 'Save Changes'}
+            <button
+              className={`${s.btn} ${s.btnPrimary}`}
+              onClick={handleSaveFullProfile}
+              disabled={profileSaving || (usernameStatus === 'taken' || usernameStatus === 'invalid')}
+            >
+              {profileSaving ? 'Saving...' : 'Save Profile'}
             </button>
           </div>
 
-          {status && (
-            <div className={`${s.statusMsg} ${status.type === 'success' ? s.statusSuccess : s.statusError}`}>
-              {status.msg}
+          {profileStatus && (
+            <div className={`${s.statusMsg} ${profileStatus.type === 'success' ? s.statusSuccess : s.statusError}`}>
+              {profileStatus.msg}
             </div>
           )}
         </>
