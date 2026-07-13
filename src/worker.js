@@ -97,7 +97,7 @@ export default {
         if (isRead) {
           rateMax = 300
         } else if (path.includes('/settings')) {
-          rateMax = 5; rateWindow = 60000
+          rateMax = 30; rateWindow = 60000
         } else if (path.includes('/messages/file')) {
           rateMax = 20; rateWindow = 60000
         } else if (path.includes('/messages/flashcard')) {

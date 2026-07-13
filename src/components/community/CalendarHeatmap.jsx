@@ -141,7 +141,6 @@ export default function CalendarHeatmap({ communityId }) {
 
       // Find which week column contains the 1st of this month
       let weekIdx = 0
-      const d = new Date(start)
       const startCopy = new Date(year, 0, 1)
       const dow = startCopy.getDay()
       const mo = dow === 0 ? -6 : 1 - dow
