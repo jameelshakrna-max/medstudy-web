@@ -2921,12 +2921,27 @@ async function advanceTimerMode(env, roomId, now) {
     const { results: room } = await env.DB.prepare(
       'SELECT community_id FROM community_rooms WHERE id = ?'
     ).bind(roomId).all()
+    const communityId = room[0].community_id
+    const hours = Math.round(timer.focus_duration / 60) / 60
+    const nowDate = new Date(now)
+    const year = nowDate.getFullYear()
+    const month = nowDate.getMonth() + 1
 
-    const nowDate = now.slice(0, 10)
     for (const p of active) {
       await env.DB.prepare(
         'INSERT OR IGNORE INTO study_sessions_log (id, community_id, user_id, minutes, created_at) VALUES (?, ?, ?, ?, ?)'
-      ).bind(uuid(), room[0].community_id, p.user_id, Math.round(timer.focus_duration / 60), now).run()
+      ).bind(uuid(), communityId, p.user_id, Math.round(timer.focus_duration / 60), now).run()
+
+      await env.DB.prepare(
+        `INSERT INTO community_monthly_hours (id, community_id, user_id, year, month, total_hours, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(community_id, user_id, year, month)
+         DO UPDATE SET total_hours = total_hours + ?, updated_at = ?`
+      ).bind(uuid(), communityId, p.user_id, year, month, hours, now, hours, now).run()
+
+      await env.DB.prepare(
+        'UPDATE community_members SET total_study_hours = COALESCE(total_study_hours, 0) + ? WHERE community_id = ? AND user_id = ?'
+      ).bind(hours, communityId, p.user_id).run()
     }
 
     const nextRound = (timer.round_number || 0) + 1
