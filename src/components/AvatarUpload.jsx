@@ -86,7 +86,7 @@ export default function AvatarUpload({
       setUploading(true)
 
       const API = import.meta.env.VITE_API_URL || '/api'
-      const { default: { supabase } } = await import('../lib/supabase')
+      const { supabase } = await import('../lib/supabase')
       const { data: { session } } = await supabase.auth.getSession()
 
       const res = await fetch(`${API}/users/${userId}/avatar`, {
