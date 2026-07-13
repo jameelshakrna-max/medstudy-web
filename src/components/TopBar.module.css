@@ -1,0 +1,130 @@
+.topBar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--card-border);
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 0 24px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.userMenu {
+  position: relative;
+}
+
+.userBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.userBtn:hover {
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+
+.userDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--emerald);
+  box-shadow: 0 0 8px rgba(16,185,129,0.4);
+}
+
+.userName {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.chevron {
+  transition: transform 0.2s;
+  opacity: 0.5;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 180px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.dropdownItem:hover {
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+
+.dropdownDanger {
+  color: var(--red);
+}
+
+.dropdownDanger:hover {
+  background: var(--redL);
+}
+
+.dropdownDivider {
+  height: 1px;
+  background: var(--card-border);
+  margin: 4px 0;
+}
+
+@media (max-width: 480px) {
+  .topBar {
+    padding: 0 16px;
+  }
+
+  .userName {
+    display: none;
+  }
+
+  .chevron {
+    display: none;
+  }
+}

@@ -9,8 +9,6 @@
   backdrop-filter: blur(20px);
 }
 .sidebarTop { padding: 24px 20px 16px; border-bottom: 1px solid var(--card-border); }
-.userChip { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--mist); padding: 8px 10px; margin-top: 12px; background: var(--input-bg); border-radius: 10px; }
-.userDot { width: 7px; height: 7px; border-radius: 50%; background: var(--emerald); flex-shrink: 0; box-shadow: 0 0 8px rgba(16,185,129,0.4); }
 .nav { flex: 1; padding: 10px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
 .navItem { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; font-size: 14px; font-weight: 500; color: var(--mist); transition: all 0.2s; position: relative; }
 .navItem:hover { background: var(--input-bg); color: var(--text-primary); }
@@ -25,11 +23,10 @@
 .planBadge { font-size: 11px; font-weight: 600; color: var(--blue); margin-bottom: 10px; letter-spacing: 0.05em; text-transform: uppercase; }
 .signOutBtn { width: 100%; padding: 9px 12px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 10px; color: var(--mist); font-size: 13px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 8px; justify-content: center; }
 .signOutBtn:hover { border-color: var(--red); color: var(--red); background: var(--redL); }
-.main { flex: 1; margin-left: 260px; min-height: 100vh; }
-.mobileHeader { display: none; align-items: center; gap: 14px; padding: 16px 20px; border-bottom: 1px solid var(--card-border); background: var(--page-bg); position: sticky; top: 0; z-index: 40; backdrop-filter: blur(16px); }
+.main { flex: 1; margin-left: 260px; min-height: 100vh; display: flex; flex-direction: column; }
+.mobileHeader { display: none; align-items: center; gap: 14px; padding: 12px 20px; border-bottom: 1px solid var(--card-border); background: var(--page-bg); position: sticky; top: 0; z-index: 40; backdrop-filter: blur(16px); }
 .menuBtn { background: none; border: none; color: var(--text-secondary); font-size: 22px; cursor: pointer; padding: 4px; }
-.mobileLogo { font-family: 'DM Serif Display', serif; font-size: 18px; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
-.content { padding: 36px 40px; max-width: 1200px; }
+.content { padding: 36px 40px; max-width: 1200px; flex: 1; }
 .overlay { display: none; }
 @media (max-width: 768px) {
   .sidebar { transform: translateX(-100%); border-right: none; }
@@ -42,11 +39,6 @@
 @media (max-width: 480px) {
   .content { padding: 20px 16px; }
 }
-/* ═══════════════════════════════════════════
-   Layout.module.css ADDITIONS
-   Add these to your existing Layout.module.css
-   ═══════════════════════════════════════════ */
-
 /* ── Logo with icon ── */
 .logo {
   display: flex;
@@ -74,20 +66,6 @@
   white-space: nowrap;
 }
 
-/* ── Mobile logo ── */
-.mobileLogo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.logoIconMobile {
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  border-radius: 6px;
-}
-
 /* ── Responsive ── */
 @media (max-width: 480px) {
   .logoIcon {
@@ -96,9 +74,5 @@
   }
   .logoText {
     font-size: 16px;
-  }
-  .logoIconMobile {
-    width: 22px;
-    height: 22px;
   }
 }

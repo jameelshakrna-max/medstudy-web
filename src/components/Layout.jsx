@@ -6,7 +6,7 @@ import {
   BarChart3, Timer, ClipboardList, Settings,
   FolderOpen, LogOut, Menu, ChevronRight, Target, Users,
 } from 'lucide-react'
-import NotificationBell from './NotificationBell'
+import TopBar from './TopBar'
 import styles from './Layout.module.css'
 
 const NAV = [
@@ -43,13 +43,7 @@ export default function Layout() {
             <img src="/icon.svg" alt="MedStudy" className={styles.logoIcon} />
             <span className={styles.logoText}>MedStudy OS</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-            <NotificationBell user={user} />
-            <div className={styles.userChip}>
-              <div className={styles.userDot} />
-              <span>{profile?.full_name || profile?.email?.split('@')[0] || 'Student'}</span>
-            </div>
-          </div>
+
         </div>
 
         <nav className={styles.nav}>
@@ -86,11 +80,8 @@ export default function Layout() {
           <button className={styles.menuBtn} onClick={() => setMobileOpen(!mobileOpen)}>
             <Menu size={20} strokeWidth={1.5} />
           </button>
-          <div className={styles.mobileLogo}>
-            <img src="/icon.svg" alt="MedStudy" className={styles.logoIconMobile} />
-            <span>MedStudy OS</span>
-          </div>
         </div>
+        <TopBar />
         <div className={styles.content}>
           <Outlet />
         </div>

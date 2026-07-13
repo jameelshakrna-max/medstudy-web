@@ -457,8 +457,8 @@ export async function handleJoinCommunity(request, env, user, ctx) {
     if (ownerMember && ownerMember.user_id !== user.sub) {
       const nid = crypto.randomUUID()
       await env.DB.prepare(
-        'INSERT INTO notifications (id, user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?, ?)'
-      ).bind(nid, ownerMember.user_id, 'member_joined', (user.email?.split('@')[0] || 'Someone') + ' joined', '', JSON.stringify({ community_id: communityId })).run()
+        'INSERT INTO notifications (id, user_id, type, title, body, data, priority, category, action_url, action_label, group_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(nid, ownerMember.user_id, 'member_joined', (user.email?.split('@')[0] || 'Someone') + ' joined', '', JSON.stringify({ community_id: communityId }), 'info', 'community', '/communities/' + communityId, 'View Community', null).run()
     }
   })())
 
@@ -1426,8 +1426,8 @@ export async function handleCreateCompetition(request, env, user, ctx) {
       for (const m of (members.results || [])) {
         const nid = crypto.randomUUID()
         await env.DB.prepare(
-          'INSERT INTO notifications (id, user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?, ?)'
-        ).bind(nid, m.user_id, 'new_competition', 'New competition: ' + title, '', JSON.stringify({ community_id: communityId, competition_id: id })).run()
+          'INSERT INTO notifications (id, user_id, type, title, body, data, priority, category, action_url, action_label, group_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).bind(nid, m.user_id, 'new_competition', 'New competition: ' + title, '', JSON.stringify({ community_id: communityId, competition_id: id }), 'info', 'community', '/communities/' + communityId, 'Open Competition', 'comp_' + communityId).run()
       }
     })())
 
@@ -1460,8 +1460,8 @@ export async function handleCreateCompetition(request, env, user, ctx) {
     for (const m of (members.results || [])) {
       const nid = crypto.randomUUID()
       await env.DB.prepare(
-        'INSERT INTO notifications (id, user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?, ?)'
-      ).bind(nid, m.user_id, 'new_competition', 'New competition: ' + title, '', JSON.stringify({ community_id: communityId, competition_id: id })).run()
+        'INSERT INTO notifications (id, user_id, type, title, body, data, priority, category, action_url, action_label, group_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(nid, m.user_id, 'new_competition', 'New competition: ' + title, '', JSON.stringify({ community_id: communityId, competition_id: id }), 'important', 'community', '/communities/' + communityId, 'Open Competition', 'comp_' + communityId).run()
     }
   })())
 

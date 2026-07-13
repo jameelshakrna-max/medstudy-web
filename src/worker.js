@@ -43,6 +43,7 @@ import {
 import {
   handleListNotifications, handleCreateNotification,
   handleMarkAllRead, handleMarkNotificationRead, handleCleanupNotifications,
+  handleGetUnreadCounts,
 } from './handlers/notifications.js'
 
 export default {
@@ -196,6 +197,7 @@ export default {
         return handleVoteComment(request, env, user)
       }
 
+      if (path === '/api/notifications/unread-counts' && request.method === 'GET') return handleGetUnreadCounts(request, env, user)
       if (path === '/api/notifications' && request.method === 'GET') return handleListNotifications(request, env, user)
       if (path === '/api/notifications' && request.method === 'POST') return handleCreateNotification(request, env, user)
       if (path === '/api/notifications/read-all' && request.method === 'POST') return handleMarkAllRead(request, env, user)

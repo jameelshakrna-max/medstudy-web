@@ -635,9 +635,17 @@ CREATE TABLE IF NOT EXISTS notifications (
   body TEXT,
   data TEXT,
   read INTEGER DEFAULT 0,
+  priority TEXT DEFAULT 'info',
+  category TEXT DEFAULT 'system',
+  action_url TEXT,
+  action_label TEXT,
+  group_key TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_category ON notifications(user_id, category, read);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_priority ON notifications(user_id, priority, read);
+CREATE INDEX IF NOT EXISTS idx_notifications_group ON notifications(user_id, group_key);
 
 -- ═══════════════════════════════════════════
 -- STUDY HOURS & LEADERBOARD
