@@ -358,7 +358,7 @@ export async function handleUploadCommunityAvatar(request, env, user) {
     httpMetadata: { contentType: file.type },
   })
 
-  const avatarUrl = `/api/images/${key}`
+  const avatarUrl = `${new URL(request.url).origin}/api/images/${key}`
   await env.DB.prepare('UPDATE communities SET avatar_url = ?, updated_at = ? WHERE id = ?')
     .bind(avatarUrl, new Date().toISOString(), communityId).run()
 
@@ -383,7 +383,7 @@ export async function handleUploadCommunityBanner(request, env, user) {
     httpMetadata: { contentType: file.type },
   })
 
-  const bannerUrl = `/api/images/${key}`
+  const bannerUrl = `${new URL(request.url).origin}/api/images/${key}`
   await env.DB.prepare('UPDATE communities SET banner_url = ?, updated_at = ? WHERE id = ?')
     .bind(bannerUrl, new Date().toISOString(), communityId).run()
 
