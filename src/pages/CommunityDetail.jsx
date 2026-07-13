@@ -12,11 +12,12 @@ import SettingsTab from '../components/community/SettingsTab'
 import ModDashboardTab from '../components/community/ModDashboardTab'
 import AnnouncementsTab from '../components/community/AnnouncementsTab'
 import VoiceRooms from '../components/community/VoiceRooms'
+import CalendarHeatmap from '../components/community/CalendarHeatmap.jsx'
 import {
   MessageSquare, Users, Trophy, Settings, Send, Paperclip, Upload,
   Plus, X, Loader2, ChevronLeft, Shield, ShieldAlert, UserMinus, UserCog, Star,
   Crown, Flag, Clock, Hash, Link as LinkIcon, Check, AlertTriangle,
-  Copy, Ban, Pin, FileText, BookOpen, UserPlus, Search, Trash2, Megaphone, Headphones
+  Copy, Ban, Pin, FileText, BookOpen, UserPlus, Search, Trash2, Megaphone, Headphones, BarChart3
 } from 'lucide-react'
 import s from './CommunityDetail.module.css'
 import FlashcardShareModal from '../components/FlashcardShareModal'
@@ -28,6 +29,7 @@ const TABS = [
   { id: 'leaderboard', icon: Trophy, label: 'Leaderboard' },
   { id: 'competitions', icon: Trophy, label: 'Competitions' },
   { id: 'voice', icon: Headphones, label: 'Voice' },
+  { id: 'stats', icon: BarChart3, label: 'Stats' },
   { id: 'settings', icon: Settings, label: 'Settings' },
 ]
 
@@ -604,6 +606,12 @@ export default function CommunityDetail() {
           isMod={isMod}
           isAdmin={isAdmin}
         />
+      )}
+
+      {activeTab === 'stats' && (
+        <div style={{ padding: '20px 0' }}>
+          <CalendarHeatmap communityId={id} />
+        </div>
       )}
 
       {activeTab === 'mod' && (

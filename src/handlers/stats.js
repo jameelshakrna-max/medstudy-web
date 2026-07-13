@@ -1,0 +1,479 @@
+import { ROLES, hasMinimumRole } from '../lib/permissions.js'
+import {
+  json, uuid, log, corsHeaders, extractCommunityId, getMember, pageParams,
+} from '../lib/worker-utils.js'
+
+function badgeEmoji(rank) {
+  if (rank === 1) return '🥇'
+  if (rank === 2) return '🥈'
+  if (rank === 3) return '🥉'
+  return null
+}
+
+/* ── Study Hours Sync ── */
+
+export async function handleSyncStudyHours(request, env, user) {
+  const { session_minutes } = await request.json()
+  if (!session_minutes || typeof session_minutes !== 'number' || session_minutes <= 0) {
+    return json({ error: 'session_minutes must be a positive number' }, 400)
+  }
+
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
+  const isoNow = now.toISOString()
+  const sessionId = uuid()
+
+  const { results: memberships } = await env.DB.prepare(
+    'SELECT community_id FROM community_members WHERE user_id = ?'
+  ).bind(user.sub).all()
+
+  for (const m of memberships) {
+    const communityId = m.community_id
+
+    await env.DB.prepare(
+      'INSERT INTO study_sessions_log (id, community_id, user_id, minutes, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).bind(sessionId + '_' + communityId, communityId, user.sub, session_minutes, isoNow).run()
+
+    await env.DB.prepare(
+      `INSERT INTO community_monthly_hours (id, community_id, user_id, year, month, total_hours, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(community_id, user_id, year, month)
+       DO UPDATE SET total_hours = total_hours + ?, updated_at = ?`
+    ).bind(
+      uuid(), communityId, user.sub, year, month, session_minutes / 60, isoNow,
+      session_minutes / 60, isoNow
+    ).run()
+
+    await env.DB.prepare(
+      'UPDATE community_members SET total_study_hours = COALESCE(total_study_hours, 0) + ? WHERE community_id = ? AND user_id = ?'
+    ).bind(session_minutes / 60, communityId, user.sub).run()
+  }
+
+  await env.DB.prepare(
+    `UPDATE communities SET total_study_hours = (
+      SELECT COALESCE(SUM(total_study_hours), 0) FROM community_members WHERE community_id = communities.id
+    )`
+  ).run()
+
+  const { results: activeComps } = await env.DB.prepare(
+    `SELECT cp.id as participant_id, cp.competition_id FROM competition_participants cp
+     JOIN competitions c ON cp.competition_id = c.id
+     WHERE cp.user_id = ? AND c.status IN ('active', 'pending')`
+  ).bind(user.sub).all()
+
+  for (const p of activeComps) {
+    await env.DB.prepare(
+      'UPDATE competition_participants SET total_hours = total_hours + ? WHERE id = ?'
+    ).bind(session_minutes / 60, p.participant_id).run()
+  }
+
+  return json({ success: true })
+}
+
+/* ── Leaderboard ── */
+
+export async function handleMonthlyLeaderboard(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const url = new URL(request.url)
+  const year = parseInt(url.searchParams.get('year')) || new Date().getFullYear()
+  const month = parseInt(url.searchParams.get('month')) || new Date().getMonth() + 1
+  const filter = url.searchParams.get('filter') || 'this_month'
+
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+
+  let baseHoursQuery, baseHoursParams
+
+  if (filter === 'all_time') {
+    baseHoursQuery = `SELECT user_id, total_study_hours as hours FROM community_members WHERE community_id = ?`
+    baseHoursParams = [communityId]
+  } else if (filter === 'this_week') {
+    const weekAgo = new Date()
+    weekAgo.setDate(weekAgo.getDate() - 7)
+    baseHoursQuery = `SELECT user_id, SUM(minutes)/60.0 as hours FROM study_sessions_log WHERE community_id = ? AND created_at >= ? GROUP BY user_id`
+    baseHoursParams = [communityId, weekAgo.toISOString()]
+  } else {
+    baseHoursQuery = `SELECT user_id, total_hours as hours FROM community_monthly_hours WHERE community_id = ? AND year = ? AND month = ?`
+    baseHoursParams = [communityId, year, month]
+  }
+
+  let q = baseHoursQuery
+  let params = [...baseHoursParams]
+
+  if (filter === 'mentors') {
+    q = `SELECT cm.user_id, COALESCE(ch.total_hours, 0) as hours FROM community_members cm
+         LEFT JOIN community_monthly_hours ch ON ch.community_id = cm.community_id AND ch.user_id = cm.user_id AND ch.year = ? AND ch.month = ?
+         WHERE cm.community_id = ? AND cm.role IN ('mentor', 'moderator', 'administrator')
+         ORDER BY hours DESC`
+    params = [year, month, communityId]
+  } else if (filter === 'scholars') {
+    q = `SELECT cm.user_id, COALESCE(ch.total_hours, 0) as hours FROM community_members cm
+         LEFT JOIN community_monthly_hours ch ON ch.community_id = cm.community_id AND ch.user_id = cm.user_id AND ch.year = ? AND ch.month = ?
+         WHERE cm.community_id = ? AND cm.role IN ('scholar', 'mentor', 'moderator', 'administrator')
+         ORDER BY hours DESC`
+    params = [year, month, communityId]
+  } else if (filter === 'this_month') {
+    q = baseHoursQuery + ' ORDER BY total_hours DESC'
+  } else if (filter === 'all_time') {
+    q = baseHoursQuery + ' ORDER BY total_study_hours DESC'
+  } else if (filter === 'this_week') {
+    q = baseHoursQuery + ' ORDER BY hours DESC'
+  }
+
+  const { results: hours } = await env.DB.prepare(q).bind(...params).all()
+
+  const nameMap = {}
+  if (hours.length > 0) {
+    const { results: nameRows } = await env.DB.prepare(
+      `SELECT user_id, user_name FROM user_profiles
+       WHERE user_id IN (${hours.map(h => '?').join(',')})`
+    ).bind(...hours.map(h => h.user_id)).all()
+    for (const r of nameRows) { nameMap[r.user_id] = r.user_name }
+  }
+
+  const { results: badges } = await env.DB.prepare(
+    'SELECT * FROM community_monthly_badges WHERE community_id = ? AND year = ? AND month = ? ORDER BY rank'
+  ).bind(communityId, year, month).all()
+  const badgeMap = {}
+  for (const b of badges) { badgeMap[b.user_id] = b }
+
+  const now = new Date()
+  const thisMonthEnded = (year < now.getFullYear()) || (year === now.getFullYear() && month < now.getMonth() + 1)
+  if (thisMonthEnded && badges.length === 0 && hours.length >= 1) {
+    const newBadges = []
+    const ranks = [{ rank: 1 }, { rank: 2 }, { rank: 3 }]
+    for (let i = 0; i < Math.min(3, hours.length); i++) {
+      if (hours[i].hours > 0) {
+        const badgeId = uuid()
+        await env.DB.prepare(
+          'INSERT OR IGNORE INTO community_monthly_badges (id, community_id, user_id, year, month, rank) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(badgeId, communityId, hours[i].user_id, year, month, ranks[i].rank).run()
+        newBadges.push({ id: badgeId, user_id: hours[i].user_id, rank: ranks[i].rank, title: '' })
+      }
+    }
+    for (const b of newBadges) { badgeMap[b.user_id] = b }
+  }
+
+  const ranked = hours.map((h, i) => ({
+    rank: i + 1,
+    user_id: h.user_id,
+    user_name: nameMap[h.user_id] || h.user_id?.slice(0, 8) || 'Unknown',
+    hours: Math.round(h.hours * 10) / 10,
+    badge: badgeMap[h.user_id] ? { emoji: badgeEmoji(badgeMap[h.user_id].rank), rank: badgeMap[h.user_id].rank, title: badgeMap[h.user_id].title || '' } : null,
+    is_me: h.user_id === user.sub,
+  }))
+
+  return json(ranked)
+}
+
+export async function handleLeaderboardPosition(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
+  const todayStr = now.toISOString().slice(0, 10)
+
+  const { results: all } = await env.DB.prepare(
+    `SELECT user_id, total_hours FROM community_monthly_hours
+     WHERE community_id = ? AND year = ? AND month = ?
+     ORDER BY total_hours DESC`
+  ).bind(communityId, year, month).all()
+
+  const myIdx = all.findIndex(h => h.user_id === user.sub)
+  const myHours = myIdx >= 0 ? all[myIdx].total_hours : 0
+  const myRank = myIdx >= 0 ? myIdx + 1 : null
+  const totalParticipants = all.length
+
+  let hoursToNext = null
+  if (myIdx > 0) {
+    hoursToNext = Math.round((all[myIdx - 1].total_hours - myHours) * 10) / 10
+  }
+
+  const yesterday = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const yesterdayStr = yesterday.toISOString().slice(0, 10)
+
+  const { results: snapshots } = await env.DB.prepare(
+    `SELECT ranking FROM community_leaderboard_snapshots
+     WHERE community_id = ? AND snapshot_date = ?
+     LIMIT 1`
+  ).bind(communityId, yesterdayStr).all()
+
+  let placesChanged = 0
+  if (snapshots.length > 0) {
+    const oldRanking = JSON.parse(snapshots[0].ranking)
+    const oldIdx = oldRanking.findIndex(r => r.user_id === user.sub)
+    const oldRank = oldIdx >= 0 ? oldIdx + 1 : null
+    if (myRank && oldRank) {
+      placesChanged = oldRank - myRank
+    }
+  }
+
+  const { results: todaySnap } = await env.DB.prepare(
+    'SELECT id FROM community_leaderboard_snapshots WHERE community_id = ? AND snapshot_date = ?'
+  ).bind(communityId, todayStr).all()
+  if (todaySnap.length === 0) {
+    const snapshotData = all.map(h => ({ user_id: h.user_id, hours: h.total_hours }))
+    await env.DB.prepare(
+      'INSERT INTO community_leaderboard_snapshots (id, community_id, snapshot_date, ranking) VALUES (?, ?, ?, ?)'
+    ).bind(uuid(), communityId, todayStr, JSON.stringify(snapshotData)).run()
+  }
+
+  const { results: todayHours } = await env.DB.prepare(
+    `SELECT COALESCE(SUM(minutes), 0)/60.0 as today_hours FROM study_sessions_log
+     WHERE community_id = ? AND user_id = ? AND created_at >= ?`
+  ).bind(communityId, user.sub, todayStr).run()
+
+  return json({
+    rank: myRank,
+    total_participants: totalParticipants,
+    hours: Math.round(myHours * 10) / 10,
+    today_hours: Math.round((todayHours[0]?.today_hours || 0) * 10) / 10,
+    hours_to_next: hoursToNext,
+    places_changed: placesChanged,
+  })
+}
+
+export async function handleSetLeaderboardTitle(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.ADMINISTRATOR)) {
+    return json({ error: 'Only admins can assign titles' }, 403)
+  }
+
+  const { user_id, year, month, title } = await request.json()
+  if (!user_id || !year || !month) return json({ error: 'user_id, year, month required' }, 400)
+  if (typeof title !== 'string' || title.length > 100) return json({ error: 'Title too long' }, 400)
+
+  const sanitized = title.trim().slice(0, 100)
+
+  await env.DB.prepare(
+    `UPDATE community_monthly_badges SET title = ? WHERE community_id = ? AND user_id = ? AND year = ? AND month = ?`
+  ).bind(sanitized, communityId, user_id, year, month).run()
+
+  return json({ success: true, title: sanitized })
+}
+
+export async function handleAllTimeLeaderboard(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+
+  const { results: allTime } = await env.DB.prepare(
+    `SELECT cm.user_id, cm.total_study_hours as hours
+     FROM community_members cm
+     WHERE cm.community_id = ?
+     ORDER BY cm.total_study_hours DESC
+     LIMIT 100`
+  ).bind(communityId).all()
+
+  const nameMap = {}
+  if (allTime.length > 0) {
+    const { results: nameRows } = await env.DB.prepare(
+      `SELECT user_id, user_name FROM user_profiles
+       WHERE user_id IN (${allTime.map(h => '?').join(',')})`
+    ).bind(...allTime.map(h => h.user_id)).all()
+    for (const r of nameRows) { nameMap[r.user_id] = r.user_name }
+  }
+
+  const ranked = allTime.map((h, i) => ({
+    rank: i + 1,
+    user_id: h.user_id,
+    user_name: nameMap[h.user_id] || h.user_id?.slice(0, 8),
+    hours: Math.round((h.hours || 0) * 10) / 10,
+    is_me: h.user_id === user.sub,
+  }))
+
+  return json(ranked)
+}
+
+/* ── Heatmap ── */
+
+export async function handleHeatmap(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+
+  const url = new URL(request.url)
+  const year = url.searchParams.get('year') || String(new Date().getFullYear())
+  const userId = url.searchParams.get('user_id') || null
+
+  const yearStart = `${year}-01-01`
+  const yearEnd = `${Number(year) + 1}-01-01`
+
+  let q = `SELECT DATE(created_at) as date, ROUND(SUM(minutes) / 60.0, 2) as hours
+    FROM study_sessions_log
+    WHERE community_id = ? AND strftime('%Y', created_at) = ? AND created_at >= ? AND created_at < ?`
+  const params = [communityId, year, yearStart, yearEnd]
+
+  if (userId) {
+    q += ` AND user_id = ?`
+    params.push(userId)
+  }
+
+  q += ` GROUP BY DATE(created_at) ORDER BY date ASC`
+
+  const { results } = await env.DB.prepare(q).bind(...params).all()
+
+  const totalHours = Math.round(results.reduce((sum, r) => sum + r.hours, 0) * 10) / 10
+
+  return json({
+    data: results,
+    total_hours: totalHours,
+    active_days: results.length,
+    year: Number(year),
+  })
+}
+
+/* ── Session Timeline ── */
+
+export async function handleSessionTimeline(request, env, user) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const communityId = parts[3]
+  const roomId = parts[5]
+
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+
+  const { results: participants } = await env.DB.prepare(
+    'SELECT * FROM community_room_timer_participants WHERE room_id = ?'
+  ).bind(roomId).all()
+  const hasJoined = participants.some(p => p.user_id === user.sub)
+  if (!hasJoined) return json({ error: 'You have not joined this room' }, 403)
+
+  const dateParam = url.searchParams.get('date') || new Date().toISOString().slice(0, 10)
+  const dayStart = `${dateParam}T00:00:00.000Z`
+  const dayEnd = `${dateParam}T23:59:59.999Z`
+
+  const { results: timers } = await env.DB.prepare(
+    `SELECT * FROM community_room_timers WHERE room_id = ?`
+  ).bind(roomId).all()
+
+  const { results: dayParticipants } = await env.DB.prepare(
+    `SELECT * FROM community_room_timer_participants
+     WHERE room_id = ? AND ((joined_at <= ? AND (left_at >= ? OR left_at IS NULL)) OR (joined_at >= ? AND joined_at <= ?))`
+  ).bind(roomId, dayEnd, dayStart, dayStart, dayEnd).all()
+
+  const events = []
+
+  if (timers.length > 0) {
+    const timer = timers[0]
+    if (timer.started_at && timer.started_at >= dayStart && timer.started_at <= dayEnd) {
+      events.push({ time: timer.started_at.slice(11, 19), type: 'timer_start', mode: timer.mode })
+    }
+    for (const p of dayParticipants) {
+      if (p.joined_at && p.joined_at >= dayStart && p.joined_at <= dayEnd) {
+        events.push({ time: p.joined_at.slice(11, 19), type: 'participant_join', user_id: p.user_id })
+      }
+      if (p.left_at && p.left_at >= dayStart && p.left_at <= dayEnd) {
+        events.push({ time: p.left_at.slice(11, 19), type: 'participant_leave', user_id: p.user_id })
+      }
+    }
+  }
+
+  events.sort((a, b) => a.time.localeCompare(b.time))
+
+  const totalFocusMinutes = Math.round(dayParticipants.reduce((sum, p) => sum + (p.study_seconds || 0), 0) / 60)
+  const defaultFocusRatio = 0.8
+  const totalBreakMinutes = Math.round(totalFocusMinutes * (1 - defaultFocusRatio) / defaultFocusRatio)
+
+  return json({
+    date: dateParam,
+    total_focus_minutes: totalFocusMinutes,
+    total_break_minutes: totalBreakMinutes,
+    events,
+    participants: dayParticipants.map(p => ({
+      user_id: p.user_id,
+      joined_at: p.joined_at,
+      left_at: p.left_at,
+      study_seconds: p.study_seconds || 0,
+    })),
+  })
+}
+
+/* ── Room Stats Dashboard ── */
+
+export async function handleRoomStats(request, env, user) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const communityId = parts[3]
+  const roomId = parts[5]
+
+  const member = await getMember(env, communityId, user.sub)
+  if (!member) return json({ error: 'Not a member' }, 403)
+
+  const { results: allParticipants } = await env.DB.prepare(
+    'SELECT * FROM community_room_timer_participants WHERE room_id = ?'
+  ).bind(roomId).all()
+
+  const completed = allParticipants.filter(p => p.left_at != null)
+  const totalStudySeconds = completed.reduce((sum, p) => sum + (p.study_seconds || 0), 0)
+
+  const { results: sessionDates } = await env.DB.prepare(
+    `SELECT DISTINCT DATE(joined_at) as d FROM community_room_timer_participants
+     WHERE room_id = ? AND joined_at IS NOT NULL`
+  ).bind(roomId).all()
+
+  const distinctUsers = new Set(allParticipants.map(p => p.user_id))
+  const currentParticipants = allParticipants.filter(p => p.left_at == null).length
+
+  const hourCounts = {}
+  for (const p of allParticipants) {
+    if (p.joined_at) {
+      const hour = p.joined_at.slice(11, 13) + ':00'
+      hourCounts[hour] = (hourCounts[hour] || 0) + 1
+    }
+  }
+  const peakHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
+
+  const userStats = {}
+  for (const p of completed) {
+    if (!userStats[p.user_id]) userStats[p.user_id] = { user_id: p.user_id, study_seconds: 0, sessions: 0 }
+    userStats[p.user_id].study_seconds += p.study_seconds || 0
+    userStats[p.user_id].sessions += 1
+  }
+  const topParticipants = Object.values(userStats)
+    .sort((a, b) => b.study_seconds - a.study_seconds)
+    .slice(0, 10)
+
+  return json({
+    total_study_seconds: totalStudySeconds,
+    total_sessions: sessionDates.length,
+    active_participants: distinctUsers.size,
+    current_participants: currentParticipants,
+    peak_hour: peakHour,
+    top_participants: topParticipants,
+  })
+}
+
+/* ── Badges ── */
+
+export async function handleUserBadges(request, env) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const targetUserId = parts[4]
+
+  const { results: badges } = await env.DB.prepare(
+    `SELECT cmb.*, c.name as community_name
+     FROM community_monthly_badges cmb
+     JOIN communities c ON cmb.community_id = c.id
+     WHERE cmb.user_id = ?
+     ORDER BY cmb.year DESC, cmb.month DESC, cmb.rank`
+  ).bind(targetUserId).all()
+
+  return json(badges.map(b => ({
+    community_id: b.community_id,
+    community_name: b.community_name,
+    year: b.year,
+    month: b.month,
+    rank: b.rank,
+    emoji: badgeEmoji(b.rank),
+    title: b.title || '',
+    awarded_at: b.awarded_at,
+  })))
+}

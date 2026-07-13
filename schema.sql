@@ -480,8 +480,12 @@ CREATE TABLE IF NOT EXISTS community_room_timer_participants (
   joined_at TEXT,
   left_at TEXT,
   last_seen_at TEXT,
+  focus_status TEXT DEFAULT 'focusing',
   PRIMARY KEY (room_id, user_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_room_participants_room_left ON community_room_timer_participants(room_id, left_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read);
 
 -- ════════════════════════════════════════════════════════════
 -- SUPABASE / POSTGRESQL SECTION
