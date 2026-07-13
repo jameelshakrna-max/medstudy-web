@@ -168,28 +168,31 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
     }
   }
 
+  function playNote(ctx, freq, startTime, duration, volume) {
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'triangle'
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.frequency.setValueAtTime(freq, startTime)
+    gain.gain.setValueAtTime(0, startTime)
+    gain.gain.linearRampToValueAtTime(volume, startTime + 0.02)
+    gain.gain.linearRampToValueAtTime(0, startTime + duration)
+    osc.start(startTime)
+    osc.stop(startTime + duration)
+  }
+
   function playChime(mode) {
     const ctx = audioCtxRef.current
     if (!ctx || ctx.state === 'closed') return
     if (ctx.state === 'suspended') ctx.resume()
-
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.type = 'sine'
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    gain.gain.setValueAtTime(0.2, ctx.currentTime)
-
+    const now = ctx.currentTime
     if (mode === 'short_break' || mode === 'long_break') {
-      osc.frequency.setValueAtTime(440, ctx.currentTime)
-      osc.frequency.linearRampToValueAtTime(660, ctx.currentTime + 0.5)
-      osc.start(ctx.currentTime)
-      osc.stop(ctx.currentTime + 0.5)
+      playNote(ctx, 523.25, now, 0.25, 0.3)
+      playNote(ctx, 392.00, now + 0.15, 0.35, 0.3)
     } else {
-      osc.frequency.setValueAtTime(660, ctx.currentTime)
-      osc.frequency.linearRampToValueAtTime(440, ctx.currentTime + 0.3)
-      osc.start(ctx.currentTime)
-      osc.stop(ctx.currentTime + 0.3)
+      playNote(ctx, 392.00, now, 0.15, 0.3)
+      playNote(ctx, 523.25, now + 0.12, 0.25, 0.3)
     }
   }
 
