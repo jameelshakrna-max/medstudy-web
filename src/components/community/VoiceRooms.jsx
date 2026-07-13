@@ -5,7 +5,7 @@ import { apiGet, apiPost } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
 import {
   Headphones, Plus, X, Loader2, LogOut,
-  Play, Pause, Square, Clock, Users, Timer,
+  Play, Pause, Square, Clock, Users, Timer, Volume2, VolumeX,
 } from 'lucide-react'
 import s from '../../pages/CommunityDetail.module.css'
 
@@ -122,6 +122,8 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
 
   const handleJoin = async (room) => {
     setJoining(true)
+    ensureAudio()
+    if (Notification.permission === 'default') Notification.requestPermission()
     try {
       const { authToken, meetingId } = await apiPost(`/communities/${communityId}/rooms/${room.id}/join`, {})
       setJoinedRoom({ ...room, meetingId })
@@ -146,14 +148,62 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
 
   const [timer, setTimer] = useState(null)
   const [participants, setParticipants] = useState([])
-  const [localRemaining, setLocalRemaining] = useState(0)
+  const [endsAt, setEndsAt] = useState(null)
+  const [renderTick, setRenderTick] = useState(0)
   const [timerError, setTimerError] = useState('')
+  const [soundEnabled, setSoundEnabled] = useState(true)
   const pollRef = useRef(null)
+  const audioCtxRef = useRef(null)
+  const prevModeRef = useRef(null)
 
   const [focusDur, setFocusDur] = useState(25)
   const [shortBreakDur, setShortBreakDur] = useState(5)
   const [longBreakDur, setLongBreakDur] = useState(15)
   const [longBreakEvery, setLongBreakEvery] = useState(4)
+
+  function ensureAudio() {
+    if (!audioCtxRef.current) {
+      const Ctor = window.AudioContext || window.webkitAudioContext
+      if (Ctor) audioCtxRef.current = new Ctor()
+    }
+  }
+
+  function playChime(mode) {
+    const ctx = audioCtxRef.current
+    if (!ctx || ctx.state === 'closed') return
+    if (ctx.state === 'suspended') ctx.resume()
+
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sine'
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    gain.gain.setValueAtTime(0.2, ctx.currentTime)
+
+    if (mode === 'short_break' || mode === 'long_break') {
+      osc.frequency.setValueAtTime(440, ctx.currentTime)
+      osc.frequency.linearRampToValueAtTime(660, ctx.currentTime + 0.5)
+      osc.start(ctx.currentTime)
+      osc.stop(ctx.currentTime + 0.5)
+    } else {
+      osc.frequency.setValueAtTime(660, ctx.currentTime)
+      osc.frequency.linearRampToValueAtTime(440, ctx.currentTime + 0.3)
+      osc.start(ctx.currentTime)
+      osc.stop(ctx.currentTime + 0.3)
+    }
+  }
+
+  const displayRemaining = timer && endsAt && timer.status === 'running'
+    ? Math.max(0, Math.round((new Date(endsAt).getTime() - Date.now()) / 1000))
+    : timer && endsAt && timer.status === 'paused'
+    ? Math.max(0, Math.round((new Date(endsAt).getTime() - Date.now()) / 1000))
+    : 0
+
+  // Re-render every second for live countdown
+  useEffect(() => {
+    const id = setInterval(() => setRenderTick(t => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
 
   const pollTimer = useCallback(async () => {
     if (!joinedRoom) return
@@ -165,13 +215,11 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
       const data = await res.json()
       if (data.timer) {
         setTimer(data.timer)
-        setLocalRemaining(data.remaining)
-        const serverTime = new Date(data.server_time).getTime()
-        pollRef.current.serverTime = serverTime
-        pollRef.current.remainingAtPoll = data.remaining
+        setEndsAt(data.ends_at)
+        pollRef.current = { endsAt: data.ends_at, serverTime: data.server_time }
       } else {
         setTimer(null)
-        setLocalRemaining(0)
+        setEndsAt(null)
       }
       setParticipants(data.participants || [])
     } catch {}
@@ -181,26 +229,42 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
     if (!joinedRoom) {
       setTimer(null)
       setParticipants([])
-      setLocalRemaining(0)
+      setEndsAt(null)
       setTimerError('')
       return
     }
 
     setTimerError('')
-    pollRef.current = { serverTime: Date.now(), remainingAtPoll: 0 }
     pollTimer()
 
     const interval = setInterval(pollTimer, 15000)
     return () => clearInterval(interval)
   }, [joinedRoom, pollTimer])
 
+  // Audio chime + notification on mode change
   useEffect(() => {
-    if (!timer || timer.status !== 'running') return
-    const tick = setInterval(() => {
-      setLocalRemaining(prev => Math.max(0, prev - 1))
-    }, 1000)
-    return () => clearInterval(tick)
-  }, [timer?.status, timer?.mode, timer?.round_number])
+    if (!timer) { prevModeRef.current = null; return }
+    const prev = prevModeRef.current
+    prevModeRef.current = timer.mode
+    if (!prev || prev === timer.mode) return
+    if (soundEnabled) {
+      ensureAudio()
+      playChime(timer.mode)
+    }
+    if (Notification.permission === 'granted') {
+      const isFocus = timer.mode === 'focus'
+      new Notification(isFocus ? '☕ Break finished!' : '🍅 Focus complete!', {
+        body: isFocus ? 'Time to focus.' : 'Great session! Break starts now.',
+      })
+    }
+  }, [timer?.mode, soundEnabled])
+
+  // Re-poll when tab becomes visible
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') pollTimer() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [pollTimer])
 
   const handleTimerAction = async (action) => {
     setTimerError('')
@@ -212,6 +276,8 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
 
   const handleStartTimer = async () => {
     setTimerError('')
+    ensureAudio()
+    if (Notification.permission === 'default') Notification.requestPermission()
     try {
       await apiPost(`/communities/${communityId}/rooms/${joinedRoom.id}/timer/start`, {
         focus_duration: focusDur * 60,
@@ -297,7 +363,7 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
                   {timerLabel}
                 </div>
                 <div style={{ fontSize: 42, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: '#fff', marginBottom: 8 }}>
-                  {formatTime(localRemaining)}
+                  {formatTime(displayRemaining)}
                 </div>
                 <div style={{
                   height: 4, borderRadius: 2, background: 'var(--card-border, #2a3448)',
@@ -309,7 +375,7 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
                     width: `${(() => {
                       const d = timer.mode === 'focus' ? timer.focus_duration
                         : timer.mode === 'long_break' ? timer.long_break_duration : timer.short_break_duration
-                      const elapsed = (localRemaining > 0 && d > 0) ? ((d - localRemaining) / d) * 100 : 0
+                      const elapsed = (displayRemaining > 0 && d > 0) ? ((d - displayRemaining) / d) * 100 : 0
                       return Math.min(100, elapsed)
                     })()}%`,
                   }} />
@@ -523,9 +589,15 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
             <button className={s.actionBtn} onClick={handleCreate} disabled={creating || !createName.trim()}>
               {creating ? <Loader2 size={14} className={s.spinner} /> : 'Create'}
             </button>
-          </div>
-        </div>
-      )}
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', marginTop: 10, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={soundEnabled}
+                    onChange={e => setSoundEnabled(e.target.checked)}
+                    style={{ accentColor: 'var(--blue, #4f8cff)' }} />
+                  <Volume2 size={13} /> Sound alerts
+                </label>
+              </div>
+            )}
 
       {loading ? (
         <div className={s.hint} style={{ padding: 20, textAlign: 'center' }}>Loading rooms...</div>

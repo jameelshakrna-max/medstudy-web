@@ -3027,6 +3027,7 @@ async function handleGetTimer(request, env, user) {
       controlled_by: timer.controlled_by,
     } : null,
     remaining,
+    ends_at: new Date(nowMs + remaining * 1000).toISOString(),
     server_time: now,
     participants: participants.map(p => ({ user_id: p.user_id, study_seconds: p.study_seconds })),
     participant_count: participantCount,
