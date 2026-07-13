@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useCommunityRealtime } from '../hooks/useCommunityRealtime'
 import { ROLES, PERM, hasPermission, hasMinimumRole } from '../lib/permissions'
-import { apiGet, apiPost, apiPut, apiDelete, apiJson, formatDate } from '../lib/api'
+import { apiGet, apiPost, apiPut, apiDelete, apiJson, formatDate, imageUrl } from '../lib/api'
 import RoleBadge from '../components/RoleBadge'
 import CompetitionsTab from '../components/community/CompetitionsTab'
 import LeaderboardTab from '../components/community/LeaderboardTab'
@@ -50,6 +50,7 @@ export default function CommunityDetail() {
   const [competitions, setCompetitions] = useState([])
   const [joinRequests, setJoinRequests] = useState([])
   const [bans, setBans] = useState([])
+  const [avatarError, setAvatarError] = useState(false)
 
   const realtime = useCommunityRealtime(id)
   const chat = realtime
@@ -302,7 +303,7 @@ export default function CommunityDetail() {
       <div className={s.commHeader}>
         <div className={s.commInfo}>
           <div className={s.commAvatar}>
-            {community.avatar_url ? <img src={community.avatar_url} alt="" /> : <Users size={24} />}
+            {!avatarError && community.avatar_url ? <img src={imageUrl(community.avatar_url)} onError={() => setAvatarError(true)} alt="" /> : <Users size={24} />}
           </div>
           <div>
             <h1 className={s.commName}>{community.name}</h1>

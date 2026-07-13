@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { apiGet, apiPost, apiPut, apiDelete, formatDate } from '../../lib/api'
+import { apiGet, apiPost, apiPut, apiDelete, formatDate, imageUrl } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
 import RoleBadge from '../RoleBadge'
 import { X, Plus, Loader2, Check, Copy, FileText, Settings, Link, ScrollText, SlidersHorizontal, Trophy, UserPlus, Ban, Clock, AlertTriangle, Users, UserCog, UserMinus, Star, Search, Camera } from 'lucide-react'
@@ -53,6 +53,10 @@ export default function SettingsTab({ community, rules, settings, members, annou
 
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [bannerUploading, setBannerUploading] = useState(false)
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(null)
+  const [bannerPreviewUrl, setBannerPreviewUrl] = useState(null)
+  const [avatarError, setAvatarError] = useState(false)
+  const [bannerError, setBannerError] = useState(false)
 
   useEffect(() => {
     apiGet('/community/suggested-rules').then(setSuggestedRules).catch(() => {})
@@ -65,6 +69,11 @@ export default function SettingsTab({ community, rules, settings, members, annou
   useEffect(() => {
     if (isAdmin) loadFiles()
   }, [communityId, isAdmin])
+
+  useEffect(() => {
+    setAvatarError(false)
+    setBannerError(false)
+  }, [community.avatar_url, community.banner_url])
 
   const handleSave = async (overrides = {}) => {
     setSaving(true)
@@ -203,15 +212,18 @@ export default function SettingsTab({ community, rules, settings, members, annou
     const file = e.target.files?.[0]
     if (!file) return
     setAvatarUploading(true)
+    setAvatarError(false)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const formData = new FormData()
       formData.append('file', file)
-      await fetch(`${API}/communities/${communityId}/avatar`, {
+      const res = await fetch(`${API}/communities/${communityId}/avatar`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${session?.access_token}` },
         body: formData,
       })
+      const data = await res.json()
+      if (data.avatar_url) setAvatarPreviewUrl(data.avatar_url)
       onRefresh()
     } catch {}
     setAvatarUploading(false)
@@ -221,15 +233,18 @@ export default function SettingsTab({ community, rules, settings, members, annou
     const file = e.target.files?.[0]
     if (!file) return
     setBannerUploading(true)
+    setBannerError(false)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const formData = new FormData()
       formData.append('file', file)
-      await fetch(`${API}/communities/${communityId}/banner`, {
+      const res = await fetch(`${API}/communities/${communityId}/banner`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${session?.access_token}` },
         body: formData,
       })
+      const data = await res.json()
+      if (data.banner_url) setBannerPreviewUrl(data.banner_url)
       onRefresh()
     } catch {}
     setBannerUploading(false)
@@ -300,8 +315,12 @@ export default function SettingsTab({ community, rules, settings, members, annou
               <div className={s.field}>
                 <label>Community Avatar</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {community.avatar_url && (
-                    <img src={community.avatar_url} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
+                  {!avatarError && (avatarPreviewUrl || community.avatar_url) ? (
+                    <img key={avatarPreviewUrl || community.avatar_url} src={imageUrl(avatarPreviewUrl || community.avatar_url)} onError={() => setAvatarError(true)} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Camera size={14} style={{ opacity: 0.4 }} />
+                    </div>
                   )}
                   <label className={s.actionBtn} style={{ cursor: 'pointer' }}>
                     <Camera size={14} />
@@ -313,8 +332,12 @@ export default function SettingsTab({ community, rules, settings, members, annou
               <div className={s.field}>
                 <label>Community Banner</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {community.banner_url && (
-                    <img src={community.banner_url} alt="" style={{ width: 80, height: 40, borderRadius: 6, objectFit: 'cover' }} />
+                  {!bannerError && (bannerPreviewUrl || community.banner_url) ? (
+                    <img key={bannerPreviewUrl || community.banner_url} src={imageUrl(bannerPreviewUrl || community.banner_url)} onError={() => setBannerError(true)} alt="" style={{ width: 80, height: 40, borderRadius: 6, objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: 80, height: 40, borderRadius: 6, background: 'linear-gradient(135deg, var(--bg-secondary), var(--border-color))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Camera size={14} style={{ opacity: 0.4 }} />
+                    </div>
                   )}
                   <label className={s.actionBtn} style={{ cursor: 'pointer' }}>
                     <Camera size={14} />

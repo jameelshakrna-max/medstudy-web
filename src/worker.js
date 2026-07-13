@@ -403,7 +403,8 @@ async function handleUploadImage(request, env, user) {
 }
 
 async function handleGetImage(request, env) {
-  const key = extractId(request.url)
+  const url = new URL(request.url)
+  const key = url.pathname.slice('/api/images/'.length)
   const obj = await env.IMAGES.get(key)
   if (!obj) return json({ error: 'Not found' }, 404)
 

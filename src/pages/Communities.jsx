@@ -7,6 +7,7 @@ import {
 import s from './Communities.module.css'
 import communityTemplates from '../data/communityTemplates'
 import TemplatePicker from '../components/community/TemplatePicker'
+import { imageUrl } from '../lib/api'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -67,6 +68,7 @@ export default function Communities() {
   const [createVisibility, setCreateVisibility] = useState('public')
   const [createJoinType, setCreateJoinType] = useState('anyone')
   const [creating, setCreating] = useState(false)
+  const [avatarErrors, setAvatarErrors] = useState({})
 
   const fetchCommunities = useCallback(async () => {
     try {
@@ -183,7 +185,7 @@ export default function Communities() {
                   <div key={c.id} className={s.card} onClick={() => navigate('/communities/' + c.id)}>
                     <div className={s.cardTop}>
                       <div className={s.cardAvatar}>
-                        {c.avatar_url ? <img src={c.avatar_url} alt="" /> : <Users size={20} />}
+                        {!avatarErrors[c.id] && c.avatar_url ? <img key={c.avatar_url} src={imageUrl(c.avatar_url)} onError={() => setAvatarErrors(p => ({...p, [c.id]: true}))} alt="" /> : <Users size={20} />}
                       </div>
                       <div className={s.cardVisibility}>
                         {c.visibility === 'private' ? <Lock size={12} /> : <Globe size={12} />}
@@ -214,7 +216,7 @@ export default function Communities() {
                   <div key={c.id} className={s.card} onClick={() => navigate('/communities/' + c.id)}>
                     <div className={s.cardTop}>
                       <div className={s.cardAvatar}>
-                        {c.avatar_url ? <img src={c.avatar_url} alt="" /> : <Users size={20} />}
+                        {!avatarErrors[c.id] && c.avatar_url ? <img key={c.avatar_url} src={imageUrl(c.avatar_url)} onError={() => setAvatarErrors(p => ({...p, [c.id]: true}))} alt="" /> : <Users size={20} />}
                       </div>
                       <div className={s.cardVisibility}>
                         {c.visibility === 'private' ? <Lock size={12} /> : <Globe size={12} />}

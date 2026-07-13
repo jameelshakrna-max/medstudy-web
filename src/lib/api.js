@@ -50,6 +50,13 @@ export async function apiDelete(path) {
   return apiJson(res)
 }
 
+export function imageUrl(url) {
+  if (!url) return null
+  if (url.startsWith('http')) return url
+  const base = API.replace(/\/api\/?$/, '')
+  return base + url
+}
+
 export function formatDate(iso) {
   if (!iso) return ''
   const normalized = iso.replace(' ', 'T') + (iso.includes('Z') || iso.includes('+') ? '' : 'Z')
