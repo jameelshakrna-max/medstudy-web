@@ -341,6 +341,56 @@ export async function handleUpdateCommunity(request, env, user) {
   return json(results[0])
 }
 
+export async function handleUploadCommunityAvatar(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const formData = await request.formData()
+  const file = formData.get('file')
+  if (!file) return json({ error: 'File required' }, 400)
+  if (!file.type.startsWith('image/')) return json({ error: 'Only images allowed' }, 400)
+  if (file.size > 5 * 1024 * 1024) return json({ error: 'Image too large (max 5MB)' }, 400)
+
+  const ext = file.name?.split('.').pop() || 'png'
+  const key = `community-assets/${communityId}/avatar.${ext}`
+  await env.IMAGES.put(key, await file.arrayBuffer(), {
+    httpMetadata: { contentType: file.type },
+  })
+
+  const avatarUrl = `/api/images/${key}`
+  await env.DB.prepare('UPDATE communities SET avatar_url = ?, updated_at = ? WHERE id = ?')
+    .bind(avatarUrl, new Date().toISOString(), communityId).run()
+
+  log('community:avatar', { communityId, by: user.sub })
+  return json({ success: true, avatar_url: avatarUrl })
+}
+
+export async function handleUploadCommunityBanner(request, env, user) {
+  const communityId = extractCommunityId(request.url)
+  const member = await getMember(env, communityId, user.sub)
+  if (!member || !hasMinimumRole(member.role, ROLES.MODERATOR)) return json({ error: 'Not authorized' }, 403)
+
+  const formData = await request.formData()
+  const file = formData.get('file')
+  if (!file) return json({ error: 'File required' }, 400)
+  if (!file.type.startsWith('image/')) return json({ error: 'Only images allowed' }, 400)
+  if (file.size > 10 * 1024 * 1024) return json({ error: 'Image too large (max 10MB)' }, 400)
+
+  const ext = file.name?.split('.').pop() || 'png'
+  const key = `community-assets/${communityId}/banner.${ext}`
+  await env.IMAGES.put(key, await file.arrayBuffer(), {
+    httpMetadata: { contentType: file.type },
+  })
+
+  const bannerUrl = `/api/images/${key}`
+  await env.DB.prepare('UPDATE communities SET banner_url = ?, updated_at = ? WHERE id = ?')
+    .bind(bannerUrl, new Date().toISOString(), communityId).run()
+
+  log('community:banner', { communityId, by: user.sub })
+  return json({ success: true, banner_url: bannerUrl })
+}
+
 export async function handleDeleteCommunity(request, env, user) {
   const id = extractCommunityId(request.url)
   const member = await getMember(env, id, user.sub)

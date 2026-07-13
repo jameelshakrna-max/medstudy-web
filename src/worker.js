@@ -14,7 +14,7 @@ import {
 
 import {
   handleListCommunities, handleCreateCommunity, handleCreateCommunityFromTemplate,
-  handleGetCommunityFull, handleGetCommunity, handleUpdateCommunity, handleDeleteCommunity,
+  handleGetCommunityFull, handleGetCommunity, handleUpdateCommunity, handleUploadCommunityAvatar, handleUploadCommunityBanner, handleDeleteCommunity,
   handleJoinCommunity, handleLeaveCommunity, handleResolveInviteCode, handleJoinByCode,
   handleRegenerateInviteCode, handleListMembers, handleRemoveMember, handleChangeMemberRole,
   handleAssignLevel, handleUpdateReadState, handleSetMemberTitle,
@@ -226,6 +226,8 @@ export default {
       if (path.match(/^\/api\/communities\/[^\/]+\/pins\/[^\/]+$/) && request.method === 'DELETE') return handleUnpinMessage(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/pins$/) && request.method === 'GET') return handleListPins(request, env)
       if (path.match(/^\/api\/communities\/[^\/]+\/pins$/) && request.method === 'POST') return handlePinMessage(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/avatar$/) && request.method === 'POST') return handleUploadCommunityAvatar(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/banner$/) && request.method === 'POST') return handleUploadCommunityBanner(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/announcements\/[^\/]+$/) && request.method === 'PUT') return handleUpdateAnnouncement(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/announcements\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteAnnouncement(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/announcements$/) && request.method === 'GET') return handleListAnnouncements(request, env)
