@@ -8,8 +8,6 @@ import { PresenceProvider } from './context/PresenceContext'
 import { NotificationProvider } from './context/NotificationContext'
 import { ProfilePanelProvider } from './context/ProfilePanelContext'
 import ProfilePanel from './components/ProfilePanel'
-import DMInbox from './components/DMInbox'
-import DMConversation from './components/DMConversation'
 import FloatingTimer from './components/FloatingTimer'
 import Layout from './components/Layout'
 import LoadingScreen from './components/LoadingScreen'
@@ -47,6 +45,8 @@ const CommunityDetail = lazy(() => import('./pages/CommunityDetail'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const Leaderboard = lazy(() => import('./pages/Leaderboard'))
 const People = lazy(() => import('./pages/People'))
+const DMInbox = lazy(() => import('./components/DMInbox'))
+const DMConversation = lazy(() => import('./components/DMConversation'))
 
 const PAGE_LOADING = <LoadingScreen />
 
