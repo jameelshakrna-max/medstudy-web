@@ -50,6 +50,10 @@ export const queryKeys = {
     search: (q, year, month, type) => [...queryKeys.leaderboard.all, 'search', q, year, month, type],
     hallOfFame: (communityId) => [...queryKeys.leaderboard.all, 'hallOfFame', communityId],
   },
+  communityPanel: {
+    full: (id) => ['communityPanel', 'full', id],
+    heatmap: (id, year) => ['communityPanel', 'heatmap', id, year],
+  },
   invitations: {
     all: ['invitations'],
     list: () => [...queryKeys.invitations.all, 'list'],
@@ -125,6 +129,10 @@ export const queryKeys = {
     all: ['settings'],
     notifPrefs: () => [...queryKeys.settings.all, 'notifPrefs'],
     profile: (userId) => [...queryKeys.settings.all, 'profile', userId],
+  },
+  communityPanel: {
+    full: (id) => ['communityPanel', 'full', id],
+    heatmap: (id, year) => ['communityPanel', 'heatmap', id, year],
   },
   dashboard: {
     all: ['dashboard'],

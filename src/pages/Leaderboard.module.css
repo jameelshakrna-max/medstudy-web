@@ -370,6 +370,48 @@
 .scoreMid { background: rgba(245, 158, 11, 0.1); color: var(--amber); }
 .scoreLow { background: rgba(239, 68, 68, 0.1); color: var(--red); }
 
+/* Community row join button */
+.communityJoinBtn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--blue);
+  background: transparent;
+  color: var(--blue);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.communityJoinBtn:hover {
+  background: var(--blue);
+  color: #fff;
+}
+.communityJoinBtnJoined {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--emerald);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--emerald);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: default;
+}
+.communityJoinBtnDisabled {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  background: var(--input-bg);
+  color: var(--mist);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 /* Loading / Empty */
 .loading {
   text-align: center;

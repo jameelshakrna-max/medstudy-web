@@ -10,6 +10,8 @@ import { PresenceProvider } from './context/PresenceContext'
 import { NotificationProvider } from './context/NotificationContext'
 import { ProfilePanelProvider } from './context/ProfilePanelContext'
 import ProfilePanel from './components/ProfilePanel'
+import { CommunityPanelProvider } from './context/CommunityPanelContext'
+import CommunityPanel from './components/CommunityPanel/CommunityPanel'
 import FloatingTimer from './components/FloatingTimer'
 import Layout from './components/Layout'
 import LoadingScreen from './components/LoadingScreen'
@@ -117,12 +119,15 @@ export default function App() {
           <PomodoroProvider>
             <PresenceProvider>
               <NotificationProvider>
-                <ProfilePanelProvider>
-                  <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => window.location.reload()}>
-                    <AppRoutes />
-                  </ErrorBoundary>
-                  <ProfilePanel />
-                </ProfilePanelProvider>
+                <CommunityPanelProvider>
+                  <ProfilePanelProvider>
+                    <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => window.location.reload()}>
+                      <AppRoutes />
+                    </ErrorBoundary>
+                    <ProfilePanel />
+                    <CommunityPanel />
+                  </ProfilePanelProvider>
+                </CommunityPanelProvider>
               </NotificationProvider>
             </PresenceProvider>
           </PomodoroProvider>

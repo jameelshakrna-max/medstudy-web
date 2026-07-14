@@ -5,11 +5,12 @@ import {
   Trophy, Clock, BookOpen, Flame, BarChart3, Users, Building2, TrendingUp,
   ChevronLeft, ChevronRight, Search, Star, Medal, Crown
 } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
-import { apiGet, imageUrl } from '../lib/api'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiGet, apiPost, imageUrl } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import { useAuth } from '../context/AuthContext'
 import { useProfilePanel } from '../context/ProfilePanelContext'
+import { useCommunityPanel } from '../context/CommunityPanelContext'
 import s from './Leaderboard.module.css'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -76,7 +77,9 @@ function PodiumCard({ entry, place, medals, showStreak }) {
 export default function Leaderboard() {
   const { user } = useAuth()
   const { openProfile, preloadProfile, cancelPreload } = useProfilePanel()
+  const { openCommunity, preloadCommunity, cancelPreload: cancelCommPreload } = useCommunityPanel()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const now = new Date()
   const [scope, setScope] = useState('individuals')
@@ -86,6 +89,7 @@ export default function Leaderboard() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [showSearch, setShowSearch] = useState(false)
   const searchRef = useRef(null)
+  const [joinedIds, setJoinedIds] = useState(new Set())
 
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() + 1
@@ -161,6 +165,17 @@ export default function Leaderboard() {
   const restComms = commEntries.slice(3)
 
   const medals = { First: '🥇', Second: '🥈', Third: '🥉' }
+
+  const handleQuickJoin = async (e, entry) => {
+    e.stopPropagation()
+    try {
+      await apiPost(`/communities/${entry.id}/join`, {})
+      setJoinedIds(prev => new Set([...prev, entry.id]))
+      queryClient.invalidateQueries({ queryKey: queryKeys.leaderboard.communitiesMonthly })
+    } catch (err) {
+      // ignore errors
+    }
+  }
 
   const isLoading = scope === 'individuals' ? usersLoading : commsLoading
 
@@ -348,11 +363,16 @@ export default function Leaderboard() {
                 const entry = restComms[index]
                 const medal = entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : null
                 const catCfg = CATEGORY_CONFIG[entry.category]
+                const isJoined = entry.is_member || joinedIds.has(entry.id)
+                const isApproval = entry.join_type === 'approval'
+                const isInviteOnly = entry.join_type === 'invite_only'
                 return (
                   <div
                     key={entry.id}
                     className={`${s.row} ${s.communityRow}`}
-                    onClick={() => navigate(`/communities/${entry.id}`)}
+                    onClick={() => openCommunity(entry.id)}
+                    onMouseEnter={() => preloadCommunity(entry.id)}
+                    onMouseLeave={cancelCommPreload}
                   >
                     <div className={s.rank}>
                       {medal ? <span className={s.medal}>{medal}</span> : <span className={s.rankNum}>{entry.rank}</span>}
@@ -373,6 +393,20 @@ export default function Leaderboard() {
                     </div>
                     <div className={s.value}>{Math.round(entry.total_hours ?? entry.hours ?? 0)}h</div>
                     <ScoreBadge score={entry.community_score} />
+                    {!isJoined && !isInviteOnly && (
+                      <button
+                        className={`${s.communityJoinBtn} ${isJoined ? s.communityJoinBtnJoined : ''}`}
+                        onClick={(e) => handleQuickJoin(e, entry)}
+                      >
+                        {isApproval ? 'Request' : 'Join'}
+                      </button>
+                    )}
+                    {isJoined && (
+                      <span className={s.communityJoinBtnJoined}>Joined!</span>
+                    )}
+                    {isInviteOnly && !isJoined && (
+                      <span className={s.communityJoinBtnDisabled}>Invite Only</span>
+                    )}
                   </div>
                 )
               }}
