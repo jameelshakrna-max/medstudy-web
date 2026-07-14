@@ -644,16 +644,88 @@ async function handleGetResource(request, env) {
   return json(mapResource(results[0]))
 }
 
+const ALLOWED_RESOURCE_MIME = [
+  'application/pdf', 'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain', 'application/zip',
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/mp4',
+]
+const MAX_FILE_SIZE = 100 * 1024 * 1024
+
 async function handleCreateResource(request, env, user) {
-  let { title, category, description, tags, type, file_name, file_key, file_size, mime_type, image_key } = await request.json()
-  if (!title || !category) return json({ error: 'Title and category required' }, 400)
+  const ct = request.headers.get('content-type') || ''
+  let title, category, type, description, tags, user_name
+  let file = null, image = null
+
+  try {
+    if (ct.includes('multipart/form-data')) {
+      const fd = await request.formData()
+      title = fd.get('title')
+      category = fd.get('category')
+      type = fd.get('type') || ''
+      description = fd.get('description') || ''
+      tags = fd.get('tags') || '[]'
+      user_name = fd.get('user_name') || user.email?.split('@')[0] || 'User'
+      file = fd.get('file')
+      image = fd.get('image')
+
+      if (file) {
+        if (file.size > MAX_FILE_SIZE)
+          return json({ error: 'File exceeds 100 MB limit' }, 413)
+        if (!ALLOWED_RESOURCE_MIME.includes(file.type))
+          return json({ error: 'Unsupported file type' }, 415)
+      }
+    } else {
+      const body = await request.json()
+      title = body.title; category = body.category; type = body.type || ''
+      description = body.description || ''; tags = JSON.stringify(body.tags || [])
+      user_name = body.user_name || user.email?.split('@')[0] || 'User'
+    }
+  } catch (err) {
+    console.error('parse error:', err)
+    return json({ error: 'Invalid request body' }, 400)
+  }
+
+  if (!title || !category)
+    return json({ error: 'Title and category required' }, 400)
 
   const id = uuid()
-  await env.DB.prepare(
-    `INSERT INTO resources (id, title, category, description, tags, type, file_name, file_key, file_size, mime_type, image_key, user_id, user_name)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(id, title, category, description || '', JSON.stringify(tags || []), type || '', file_name || '', file_key || '', Number(file_size) || 0, mime_type || '', image_key || null, user.sub, user.email?.split('@')[0] || 'User').run()
-  await ensureUserProfile(env, user.sub, user.email?.split('@')[0])
+  let fileKey = '', fileName = '', fileSize = 0, mimeType = ''
+  let imageKey = ''
+
+  try {
+    if (file) {
+      const ext = file.name.split('.').pop() || 'bin'
+      fileKey = `resources/${user.sub}/${uuid()}.${ext}`
+      fileName = file.name
+      fileSize = file.size
+      mimeType = file.type
+      await env.IMAGES.put(fileKey, file.stream(), {
+        httpMetadata: { contentType: file.type },
+      })
+    }
+
+    if (image) {
+      const ext = image.name?.split('.').pop() || 'png'
+      imageKey = `resources/${user.sub}/${uuid()}.${ext}`
+      await env.IMAGES.put(imageKey, image.stream(), {
+        httpMetadata: { contentType: image.type },
+      })
+    }
+
+    await env.DB.prepare(
+      `INSERT INTO resources (id, title, category, description, tags, type, file_name, file_key, file_size, mime_type, image_key, user_id, user_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(id, title, category, description, tags, type, fileName, fileKey, fileSize, mimeType, imageKey || null, user.sub, user_name).run()
+
+    await ensureUserProfile(env, user.sub, user.email?.split('@')[0])
+  } catch (err) {
+    console.error('Resource upload failed', { user: user.sub, file: fileName, size: fileSize, error: err.message })
+    if (fileKey) env.IMAGES.delete(fileKey).catch(() => {})
+    if (imageKey) env.IMAGES.delete(imageKey).catch(() => {})
+    return json({ error: 'Upload failed: ' + err.message }, 500)
+  }
 
   const { results } = await env.DB.prepare('SELECT * FROM resources WHERE id = ?').bind(id).all()
   return json(mapResource(results[0]), 201)

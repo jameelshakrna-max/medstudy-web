@@ -228,14 +228,14 @@ export default function Anki() {
 
   /* ── queries ────────────────────────────────────────── */
 
-  const { data: decks = [], isLoading: decksLoading } = useQuery({
+  const { data: decks = [], isLoading: decksLoading, isError: decksError, error: decksErrorObj } = useQuery({
     queryKey: queryKeys.flashcards.decks(),
     queryFn: () => apiGet('/decks'),
     enabled: !!user,
     staleTime: 60_000,
   })
 
-  const { data: cards = [], isLoading: cardsLoading } = useQuery({
+  const { data: cards = [], isLoading: cardsLoading, isError: cardsError, error: cardsErrorObj } = useQuery({
     queryKey: queryKeys.flashcards.list(),
     queryFn: () => apiGet('/flashcards'),
     enabled: !!user,
@@ -626,12 +626,12 @@ export default function Anki() {
 
   if (loading) return <LoadingScreen fullPage={false} message="Loading Anki..." />
 
-  if ((decksQuery.isError || cardsQuery.isError) && !cards.length && !decks.length) return (
+  if ((decksError || cardsError) && !cards.length && !decks.length) return (
     <div className={s.page}>
       <div className={s.errorBox}>
         <h3>Connection Error</h3>
         <p>Could not load data from server.</p>
-        <p className={s.errorDetail}>{decksQuery.error?.message || cardsQuery.error?.message || 'Unknown error'}</p>
+        <p className={s.errorDetail}>{decksErrorObj?.message || cardsErrorObj?.message || 'Unknown error'}</p>
       </div>
     </div>
   )
