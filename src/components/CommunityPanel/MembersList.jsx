@@ -5,14 +5,6 @@ import { ChevronRight, Search } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import s from './CommunityPanel.module.css'
 
-const ROLE_COLORS = {
-  administrator: '#F59E0B',
-  moderator: '#8B5CF6',
-  mentor: '#06B6D4',
-  scholar: 'var(--emerald)',
-  member: 'var(--mist)',
-}
-
 export default function MembersList({ communityId, members }) {
   const { openProfile } = useProfilePanel()
   const navigate = useNavigate()
@@ -52,9 +44,6 @@ export default function MembersList({ communityId, members }) {
             </div>
             <div className={s.memberInfo}>
               <span className={s.memberName}>{m.user_name}</span>
-              <span className={s.memberRole} style={{ color: ROLE_COLORS[m.role] || 'var(--mist)' }}>
-                {m.role}
-              </span>
             </div>
             <div className={s.memberHours}>{Math.round(m.total_study_hours || 0)}h</div>
           </div>

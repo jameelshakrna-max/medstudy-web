@@ -27,7 +27,13 @@ export default function JoinButton({ communityId, community, members }) {
     },
   })
 
-  if (isAlreadyMember || isOwner) return null
+  if (isAlreadyMember || isOwner) {
+    return (
+      <div className={s.joinSection}>
+        <button className={s.joinBtnDisabled} disabled>Joined</button>
+      </div>
+    )
+  }
 
   const joinType = community.join_type || 'anyone'
 
