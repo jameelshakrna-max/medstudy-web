@@ -377,7 +377,7 @@ export default {
       if (path.match(/^\/api\/users\/username\/[^\/]+$/) && request.method === 'GET') return handleGetUserByUsername(request, env)
       if (path.match(/^\/api\/users\/check-username\/[^\/]+$/) && request.method === 'GET') return handleCheckUsername(request, env)
       if (path.match(/^\/api\/users\/[^\/]+\/activity$/) && request.method === 'GET') return handleGetUserActivity(request, env)
-      if (path.match(/^\/api\/users\/[^\/]+\/follow$/) && request.method === 'POST') return handleFollowUser(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/follow$/) && request.method === 'POST') return handleFollowUser(request, env, user, ctx)
       if (path.match(/^\/api\/users\/[^\/]+\/follow$/) && request.method === 'DELETE') return handleUnfollowUser(request, env, user)
       if (path.match(/^\/api\/users\/[^\/]+\/follow-status$/) && request.method === 'GET') return handleFollowStatus(request, env, user)
 
@@ -1168,7 +1168,7 @@ async function handleUserProfile(request, env, viewerUser, ctx) {
 
 /* ── Follow / Unfollow ── */
 
-async function handleFollowUser(request, env, user) {
+async function handleFollowUser(request, env, user, ctx) {
   const url = new URL(request.url)
   const targetUserId = url.pathname.split('/')[3]
   if (user.sub === targetUserId) return json({ error: 'Cannot follow yourself' }, 400)
@@ -1188,21 +1188,23 @@ async function handleFollowUser(request, env, user) {
   await incrementUserStats(env, user.sub, 'following_count', 1).catch(() => {})
   await incrementUserStats(env, targetUserId, 'followers_count', 1).catch(() => {})
 
-  createNotificationIfAllowed(env, targetUserId, {
-    type: 'follow',
-    title: 'New follower',
-    body: `${user.email?.split('@')[0] || 'Someone'} started following you`,
-    category: 'follows',
-    priority: 'info',
-    action_url: `/profile/${user.sub}`,
-    data: { follower_id: user.sub },
-  }).catch((err) => {
-    console.error('[follow-notification]', {
-      followerId: user.sub,
-      followedUserId: targetUserId,
-      error: err,
+  ctx.waitUntil(
+    createNotificationIfAllowed(env, targetUserId, {
+      type: 'follow',
+      title: 'New follower',
+      body: `${user.email?.split('@')[0] || 'Someone'} started following you`,
+      category: 'follows',
+      priority: 'info',
+      action_url: `/profile/${user.sub}`,
+      data: { follower_id: user.sub },
+    }).catch((err) => {
+      console.error('[follow-notification]', {
+        followerId: user.sub,
+        followedUserId: targetUserId,
+        error: err,
+      })
     })
-  })
+  )
 
   return json({ success: true })
 }

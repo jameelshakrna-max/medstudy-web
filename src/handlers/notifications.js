@@ -126,48 +126,26 @@ export async function handleUpdateNotificationPreferences(request, env, user) {
 }
 
 // Helper: create a notification only if the user has that category enabled
-// TEMP DEBUG: structured logging to diagnose follow notification failure — remove after root cause found
 export async function createNotificationIfAllowed(env, userId, { type, title, body, category, priority, data, action_url, action_label, group_key }) {
-  const log = (msg, extra) => console.log('[notifications]', msg, { userId, type, category, ...extra })
-  try {
-    if (!userId || !type || !title) {
-      log('EARLY RETURN: missing fields', { userId, type, title })
-      return
-    }
-    log('START', { title, body: body?.slice(0, 60) })
-
-    const { results } = await env.DB.prepare(
-      'SELECT * FROM notification_preferences WHERE user_id = ?'
-    ).bind(userId).all()
-    const prefs = results[0]
-
-    if (!prefs) {
-      log('NO PREFS ROW — proceeding (all categories enabled by default)')
-    } else {
-      const prefKey = category === 'study_streak' ? 'study_streaks'
-        : category === 'flashcard_milestone' ? 'flashcard_milestones'
-        : category === 'uworld_milestone' ? 'uworld_milestones'
-        : category === 'goal' ? 'goal_completed'
-        : category === 'announcement' ? 'announcements'
-        : category
-      log('PREFS ROW FOUND', { prefKey, value: prefs[prefKey], follows: prefs.follows })
-      if (prefs[prefKey] === 0) {
-        log('EARLY RETURN: preference disabled', { prefKey, value: prefs[prefKey] })
-        return
-      }
-    }
-
-    const id = crypto.randomUUID()
-    log('INSERTING', { id, category, action_url })
-    const result = await env.DB.prepare(
-      'INSERT INTO notifications (id, user_id, type, title, body, data, priority, category, action_url, action_label, group_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(id, userId, type, title, body || '', data ? JSON.stringify(data) : null, priority || 'info', category || 'system', action_url || '/dashboard', action_label || null, group_key || null).run()
-    log('INSERT OK', { id, changes: result?.meta?.changes })
-    return id
-  } catch (err) {
-    log('EXCEPTION', { error: err?.message, stack: err?.stack })
-    throw err
+  if (!userId || !type || !title) return
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM notification_preferences WHERE user_id = ?'
+  ).bind(userId).all()
+  const prefs = results[0]
+  if (prefs) {
+    const prefKey = category === 'study_streak' ? 'study_streaks'
+      : category === 'flashcard_milestone' ? 'flashcard_milestones'
+      : category === 'uworld_milestone' ? 'uworld_milestones'
+      : category === 'goal' ? 'goal_completed'
+      : category === 'announcement' ? 'announcements'
+      : category
+    if (prefs[prefKey] === 0) return
   }
+  const id = crypto.randomUUID()
+  await env.DB.prepare(
+    'INSERT INTO notifications (id, user_id, type, title, body, data, priority, category, action_url, action_label, group_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(id, userId, type, title, body || '', data ? JSON.stringify(data) : null, priority || 'info', category || 'system', action_url || '/dashboard', action_label || null, group_key || null).run()
+  return id
 }
 
 // Check and create streak milestone notifications
