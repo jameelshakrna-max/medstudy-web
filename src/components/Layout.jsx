@@ -7,6 +7,7 @@ import {
   FolderOpen, LogOut, Menu, ChevronRight, Target, Users, UserSearch,
 } from 'lucide-react'
 import TopBar from './TopBar'
+import BottomNav from './BottomNav'
 import styles from './Layout.module.css'
 
 const NAV = [
@@ -87,6 +88,7 @@ export default function Layout() {
           <Outlet />
         </div>
       </main>
+      <BottomNav />
     </div>
   )
 }
