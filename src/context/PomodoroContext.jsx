@@ -284,67 +284,50 @@ export function PomodoroProvider({ children }) {
   useEffect(() => { doneRef.current = done }, [done])
   useEffect(() => { runningRef.current = running }, [running])
 
-  // ── Register SW + set up push subscription on user gesture ──
+  // ── Send VAPID key to SW (registered by vite-plugin-pwa) ──
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      pushLog('Registering Service Worker...')
-      navigator.serviceWorker.register('/sw.js').then(async (reg) => {
-        pushLog('SW registered OK')
-        swReadyRef.current = true
+    if (!('serviceWorker' in navigator)) return
 
-        // Tell SW which assets to precache for faster repeat visits
-        // (Don't include '/' — navigation handler always fetches fresh HTML)
-        const precacheAssets = [
-          '/icon.svg', '/favicon.png', '/apple-touch-icon.png', '/manifest.json'
-        ]
+    navigator.serviceWorker.ready.then(async (reg) => {
+      pushLog('SW ready, sending VAPID key...')
+      swReadyRef.current = true
 
-        if (reg.active) {
-          reg.active.postMessage({ type: 'PRECACHE_ASSETS', assets: precacheAssets })
-          reg.active.postMessage({ type: 'SET_VAPID_KEY', vapidKey: VAPID_PUBLIC_KEY })
-          pushLog('VAPID key and precache list sent to active SW')
-        } else {
-          reg.addEventListener('activate', () => {
-            reg.active?.postMessage({ type: 'PRECACHE_ASSETS', assets: precacheAssets })
-            reg.active?.postMessage({ type: 'SET_VAPID_KEY', vapidKey: VAPID_PUBLIC_KEY })
-            pushLog('VAPID key and precache list sent after SW activation')
-          })
-        }
+      if (reg.active) {
+        reg.active.postMessage({ type: 'SET_VAPID_KEY', vapidKey: VAPID_PUBLIC_KEY })
+      }
 
-        // On iOS, we MUST subscribe to push during a user gesture
-        const onGesture = async () => {
-          if (pushSubscribedRef.current) return
-          pushSubscribedRef.current = true
-          pushLog('User gesture detected, checking auth...')
+      // On iOS, we MUST subscribe to push during a user gesture
+      const onGesture = async () => {
+        if (pushSubscribedRef.current) return
+        pushSubscribedRef.current = true
+        pushLog('User gesture detected, checking auth...')
 
-          try {
-            const { data: { user } } = await supabase.auth.getUser()
+        try {
+          const { data: { user } } = await supabase.auth.getUser()
 
-            if (user) {
-              pushLog('User logged in: ' + user.id.substring(0, 8) + '...')
-              await subscribeToPush(user.id)
-            } else {
-              pushLog('ERROR: No user logged in! Cannot subscribe.')
-              pushSubscribedRef.current = false
-            }
-          } catch (e) {
-            pushLog('ERROR: Auth check failed: ' + e.message)
+          if (user) {
+            pushLog('User logged in: ' + user.id.substring(0, 8) + '...')
+            await subscribeToPush(user.id)
+          } else {
+            pushLog('ERROR: No user logged in! Cannot subscribe.')
             pushSubscribedRef.current = false
           }
-
-          document.removeEventListener('click', onGesture)
-          document.removeEventListener('touchstart', onGesture)
-          document.removeEventListener('keydown', onGesture)
+        } catch (e) {
+          pushLog('ERROR: Auth check failed: ' + e.message)
+          pushSubscribedRef.current = false
         }
 
-        document.addEventListener('click', onGesture, { once: false })
-        document.addEventListener('touchstart', onGesture, { once: false })
-        document.addEventListener('keydown', onGesture, { once: false })
-      }).catch((err) => {
-        pushLog('ERROR: SW registration failed: ' + err.message)
-      })
-    } else {
-      pushLog('ERROR: Service Worker not supported')
-    }
+        document.removeEventListener('click', onGesture)
+        document.removeEventListener('touchstart', onGesture)
+        document.removeEventListener('keydown', onGesture)
+      }
+
+      document.addEventListener('click', onGesture, { once: false })
+      document.addEventListener('touchstart', onGesture, { once: false })
+      document.addEventListener('keydown', onGesture, { once: false })
+    }).catch((err) => {
+      pushLog('ERROR: SW ready failed: ' + err.message)
+    })
 
     const unlock = () => {
       unlockAudio()

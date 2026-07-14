@@ -1,8 +1,75 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['icon.svg', 'favicon.png', 'apple-touch-icon.png'],
+      workbox: {
+        globDirectory: 'dist',
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,wasm}'],
+        globIgnores: ['**/CommunityDetail-*.js', '**/TrackingHub-*.js'],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        runtimeCaching: [
+          {
+            urlPattern: /^https?:\/\/.*\/api\//,
+            handler: 'NetworkOnly',
+          },
+          {
+            urlPattern: /^https?:\/\/.*supabase\.co\//,
+            handler: 'NetworkOnly',
+          },
+          {
+            urlPattern: /\/assets\/.*-[A-Za-z0-9]{8}\./,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'medstudy-hashed-assets',
+              expiration: { maxEntries: 200, maxAgeSeconds: 30 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'medstudy-navigation',
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: /.*/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'medstudy-general',
+              expiration: { maxEntries: 100, maxAgeSeconds: 7 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
+      },
+      manifest: {
+        name: 'MedStudy OS',
+        short_name: 'MedStudy',
+        description: 'Your all-in-one medical study platform — Curriculum, Anki, UWorld, Pomodoro & Session Tracking',
+        start_url: '/',
+        display: 'standalone',
+        display_override: ['window-controls-overlay', 'standalone'],
+        background_color: '#0B1120',
+        theme_color: '#0B1120',
+        orientation: 'any',
+        categories: ['education', 'medical', 'productivity'],
+        scope: '/',
+        icons: [
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
+    }),
+  ],
   server: {
     port: 3000,
     proxy: {
