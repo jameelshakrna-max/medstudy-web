@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { ChevronLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { apiGet, imageUrl, formatDate } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
@@ -30,6 +31,9 @@ export default function DMInbox() {
   return (
     <div className={styles.inbox}>
       <div className={styles.header}>
+        <button className={styles.backBtn} onClick={() => window.history.length > 1 ? navigate(-1) : navigate('/dashboard')}>
+          <ChevronLeft size={16} strokeWidth={1.5} />
+        </button>
         <h1 className={styles.title}>Messages</h1>
       </div>
       <input
