@@ -340,7 +340,17 @@ export default function ResourceDetail() {
             )}
             <div className={s.metaRow}>
               <span className={s.metaLabel}>Uploaded by</span>
-              <span className={s.metaValue}>{resource.user_name}</span>
+              <span className={s.metaValue}>
+                <span
+                  onClick={() => navigate(`/profile/${resource.user_id}`)}
+                  role="link"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && navigate(`/profile/${resource.user_id}`)}
+                  style={{ cursor: 'pointer', color: 'var(--blue)' }}
+                >
+                  {resource.user_name}
+                </span>
+              </span>
             </div>
             <div className={s.metaRow}>
               <span className={s.metaLabel}>Date</span>
@@ -414,7 +424,16 @@ function CommentCard({ comment, userId, onVote, onReply, onDelete, replyTo }) {
       </div>
       <div className={s.commentContent}>
         <div className={s.commentHeader}>
-          <span className={s.commentAuthor}>{comment.user_name}</span>
+          <span
+            className={s.commentAuthor}
+            onClick={() => navigate(`/profile/${comment.user_id}`)}
+            role="link"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && navigate(`/profile/${comment.user_id}`)}
+            style={{ cursor: 'pointer' }}
+          >
+            {comment.user_name}
+          </span>
           <span className={s.commentTime}>{formatDate(comment.created_at)}</span>
           {comment.removed && <span className={s.removedBadge}>Removed</span>}
         </div>
