@@ -87,12 +87,20 @@ export default function DMConversation() {
   })
 
   useEffect(() => {
-    if (!isLoading) scrollToBottom()
+    if (!isLoading && messages.length > 0) scrollToBottom()
   }, [messages, isLoading, scrollToBottom])
 
   useEffect(() => {
-    if (!isLoading) inputRef.current?.focus()
+    if (!isLoading && inputRef.current) inputRef.current.focus()
   }, [isLoading])
+
+  useEffect(() => {
+    if (!user || !conversationId || isLoading) return
+    apiPost(`/dm/${conversationId}/read`).then(() => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.dm.unread() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.dm.conversations() })
+    }).catch(() => {})
+  }, [user, conversationId, isLoading, queryClient])
 
   useEffect(() => {
     if (!user || !conversationId) return

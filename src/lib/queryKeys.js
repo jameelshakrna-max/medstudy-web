@@ -57,6 +57,7 @@ export const queryKeys = {
   dm: {
     all: ['dm'],
     conversations: () => [...queryKeys.dm.all, 'conversations'],
+    unread: () => [...queryKeys.dm.all, 'unread'],
     messages: (convId, limit) => [...queryKeys.dm.all, 'messages', convId, limit],
   },
   flashcards: {

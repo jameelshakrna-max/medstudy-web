@@ -18,7 +18,7 @@ export default function TopBar() {
   const { myStatus } = usePresence() || {}
 
   const { data: dmUnread = 0 } = useQuery({
-    queryKey: queryKeys.dm.conversations(),
+    queryKey: queryKeys.dm.unread(),
     queryFn: () => apiGet('/dm/conversations').then(data => Array.isArray(data) ? data.reduce((sum, c) => sum + (c.unread_count || 0), 0) : 0),
     refetchInterval: 30_000,
     enabled: !!user,
