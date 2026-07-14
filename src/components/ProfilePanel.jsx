@@ -2,21 +2,15 @@ import { useEffect, useCallback, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { UserPlus, UserMinus, MessageCircle, Link, Clock, BookOpen, Users, Trophy, Activity, ArrowRight } from 'lucide-react'
+import { UserPlus, UserMinus, MessageCircle, Link, Users, ArrowRight, Crown, Shield } from 'lucide-react'
 import { useSwipeable } from 'react-swipeable'
 import { useProfilePanel } from '../context/ProfilePanelContext'
 import { useAuth } from '../context/AuthContext'
-import { apiGet, apiPost, apiDelete, imageUrl, formatDate } from '../lib/api'
+import { apiGet, apiPost, apiDelete, imageUrl } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import { ProfilePanelSkeleton } from './profile/Skeleton'
 import s from './ProfilePanel.module.css'
 
-const ACTIVITY_ICONS = {
-  studied: Clock,
-  created_cards: BookOpen,
-  joined_community: Users,
-  joined_competition: Trophy,
-}
 
 export default function ProfilePanel() {
   const { panelState, closeProfile } = useProfilePanel()
@@ -48,13 +42,6 @@ export default function ProfilePanel() {
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: queryKeys.profile.detail(userId),
     queryFn: () => apiGet(`/users/${userId}/profile`),
-    enabled: open && !!userId,
-    staleTime: 30_000,
-  })
-
-  const { data: activityData = [], isLoading: activityLoading } = useQuery({
-    queryKey: queryKeys.profile.activity(userId, 10),
-    queryFn: () => apiGet(`/users/${userId}/activity?limit=10`).then(d => Array.isArray(d) ? d : []),
     enabled: open && !!userId,
     staleTime: 30_000,
   })
@@ -250,8 +237,16 @@ export default function ProfilePanel() {
                 <div className={s.statLabel}>Streak</div>
               </div>
               <div className={s.stat}>
-                <div className={s.statValue}>{profile.stats?.followers_count || 0}</div>
+                <div className={s.statValue}>{Math.max(0, profile.stats?.followers_count || 0)}</div>
                 <div className={s.statLabel}>Followers</div>
+              </div>
+              <div className={s.stat}>
+                <div className={s.statValue}>{profile.stats?.following_count || 0}</div>
+                <div className={s.statLabel}>Following</div>
+              </div>
+              <div className={s.stat}>
+                <div className={s.statValue}>{profile.stats?.communities_count || 0}</div>
+                <div className={s.statLabel}>Communities</div>
               </div>
             </div>
 
@@ -283,31 +278,14 @@ export default function ProfilePanel() {
                         {c.avatar_url ? <img src={imageUrl(c.avatar_url)} alt="" loading="lazy" /> : (c.name?.[0]?.toUpperCase() || 'C')}
                       </div>
                       <span className={s.communityName}>{c.name}</span>
+                      {c.role === 'admin' && (
+                        <span className={s.communityRole} title="Admin"><Crown size={12} color="#fbbf24" /></span>
+                      )}
+                      {c.role === 'moderator' && (
+                        <span className={s.communityRole} title="Moderator"><Shield size={12} color="#60a5fa" /></span>
+                      )}
                     </div>
                   ))}
-                </div>
-              </div>
-            )}
-
-            {activityData.length > 0 && (
-              <div className={s.section}>
-                <h3 className={s.sectionTitle}>Recent Activity</h3>
-                <div className={s.activityList}>
-                  {activityData.slice(0, 5).map(a => {
-                    const Icon = ACTIVITY_ICONS[a.type] || Activity
-                    return (
-                      <div key={a.id} className={s.activity}>
-                        <div className={s.activityIcon}><Icon size={12} /></div>
-                        <span className={s.activityText}>
-                          {a.type === 'studied' && 'Studied a session'}
-                          {a.type === 'created_cards' && `Created ${a.metadata?.count || ''} card${a.metadata?.count !== 1 ? 's' : ''}`}
-                          {a.type === 'joined_community' && 'Joined a community'}
-                          {!['studied', 'created_cards', 'joined_community'].includes(a.type) && a.type.replace(/_/g, ' ')}
-                        </span>
-                        <span className={s.activityTime}>{formatDate(a.created_at)}</span>
-                      </div>
-                    )
-                  })}
                 </div>
               </div>
             )}

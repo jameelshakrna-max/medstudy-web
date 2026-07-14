@@ -555,7 +555,7 @@ export async function incrementUserStats(env, userId, field, amount = 1) {
     INSERT INTO user_stats (user_id, ${field}, updated_at)
     VALUES (?, ?, datetime('now'))
     ON CONFLICT(user_id) DO UPDATE SET
-      ${field} = ${field} + ?,
+      ${field} = MAX(0, ${field} + ?),
       updated_at = datetime('now')
   `).bind(userId, amount, amount).run()
 }

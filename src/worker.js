@@ -41,7 +41,7 @@ import {
   handleSetLeaderboardTitle, handleAllTimeLeaderboard, handleUserBadges,
   handleHeatmap, handleSessionTimeline, handleRoomStats,
   handleGlobalLeaderboard,
-  logUserActivity, refreshUserStatsAndNotify, incrementUserStats,
+  logUserActivity, refreshUserStatsAndNotify, refreshUserStats, incrementUserStats,
 } from './handlers/stats.js'
 
 import {
@@ -1185,40 +1185,51 @@ async function handleFollowUser(request, env, user, ctx) {
     'INSERT INTO user_followers (follower_id, following_id) VALUES (?, ?)'
   ).bind(user.sub, targetUserId).run()
 
-  await incrementUserStats(env, user.sub, 'following_count', 1).catch(() => {})
-  await incrementUserStats(env, targetUserId, 'followers_count', 1).catch(() => {})
-
   ctx.waitUntil(
-    createNotificationIfAllowed(env, targetUserId, {
-      type: 'follow',
-      title: 'New follower',
-      body: `${user.email?.split('@')[0] || 'Someone'} started following you`,
-      category: 'follows',
-      priority: 'info',
-      action_url: `/profile/${user.sub}`,
-      data: { follower_id: user.sub },
-    }).catch((err) => {
-      console.error('[follow-notification]', {
-        followerId: user.sub,
-        followedUserId: targetUserId,
-        error: err,
-      })
-    })
+    Promise.all([
+      incrementUserStats(env, user.sub, 'following_count', 1).catch(() => {}),
+      incrementUserStats(env, targetUserId, 'followers_count', 1).catch(() => {}),
+      refreshUserStats(env, user.sub).catch(() => {}),
+      refreshUserStats(env, targetUserId).catch(() => {}),
+      createNotificationIfAllowed(env, targetUserId, {
+        type: 'follow',
+        title: 'New follower',
+        body: `${user.email?.split('@')[0] || 'Someone'} started following you`,
+        category: 'follows',
+        priority: 'info',
+        action_url: `/profile/${user.sub}`,
+        data: { follower_id: user.sub },
+      }).catch((err) => {
+        console.error('[follow-notification]', {
+          followerId: user.sub,
+          followedUserId: targetUserId,
+          error: err,
+        })
+      }),
+    ])
   )
 
   return json({ success: true })
 }
 
-async function handleUnfollowUser(request, env, user) {
+async function handleUnfollowUser(request, env, user, ctx) {
   const url = new URL(request.url)
   const targetUserId = url.pathname.split('/')[3]
 
-  await env.DB.prepare(
+  const result = await env.DB.prepare(
     'DELETE FROM user_followers WHERE follower_id = ? AND following_id = ?'
   ).bind(user.sub, targetUserId).run()
 
-  await incrementUserStats(env, user.sub, 'following_count', -1).catch(() => {})
-  await incrementUserStats(env, targetUserId, 'followers_count', -1).catch(() => {})
+  if (result.meta?.changes > 0) {
+    ctx.waitUntil(
+      Promise.all([
+        incrementUserStats(env, user.sub, 'following_count', -1).catch(() => {}),
+        incrementUserStats(env, targetUserId, 'followers_count', -1).catch(() => {}),
+        refreshUserStats(env, user.sub).catch(() => {}),
+        refreshUserStats(env, targetUserId).catch(() => {}),
+      ])
+    )
+  }
 
   return json({ success: true })
 }

@@ -242,6 +242,11 @@
   color: var(--text-primary);
   font-weight: 500;
 }
+.communityRole {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
 
 .activityList {
   display: flex;
