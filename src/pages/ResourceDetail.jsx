@@ -398,6 +398,7 @@ export default function ResourceDetail() {
 }
 
 function CommentCard({ comment, userId, onVote, onReply, onDelete, replyTo }) {
+  const navigate = useNavigate()
   const isOwn = userId === comment.user_id
   const netVotes = (comment.upvotes || 0) - (comment.downvotes || 0)
 
