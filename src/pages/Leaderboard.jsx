@@ -169,8 +169,8 @@ export default function Leaderboard() {
   const handleQuickJoin = async (e, entry) => {
     e.stopPropagation()
     try {
-      await apiPost(`/communities/${entry.id}/join`, {})
-      setJoinedIds(prev => new Set([...prev, entry.id]))
+      await apiPost(`/communities/${entry.community_id}/join`, {})
+      setJoinedIds(prev => new Set([...prev, entry.community_id]))
       queryClient.invalidateQueries({ queryKey: queryKeys.leaderboard.communitiesMonthly })
     } catch (err) {
       // ignore errors
@@ -316,9 +316,9 @@ export default function Leaderboard() {
           )}
           {scope === 'communities' && top3Comms.length > 0 && (
             <div className={s.podium}>
-              <PodiumCard entry={top3Comms[1]} place="Second" medals={medals} showStreak={false} onClick={() => openCommunity(top3Comms[1].id)} />
-              <PodiumCard entry={top3Comms[0]} place="First" medals={medals} showStreak={false} onClick={() => openCommunity(top3Comms[0].id)} />
-              <PodiumCard entry={top3Comms[2]} place="Third" medals={medals} showStreak={false} onClick={() => openCommunity(top3Comms[2].id)} />
+              <PodiumCard entry={top3Comms[1]} place="Second" medals={medals} showStreak={false} onClick={() => openCommunity(top3Comms[1].community_id)} />
+              <PodiumCard entry={top3Comms[0]} place="First" medals={medals} showStreak={false} onClick={() => openCommunity(top3Comms[0].community_id)} />
+              <PodiumCard entry={top3Comms[2]} place="Third" medals={medals} showStreak={false} onClick={() => openCommunity(top3Comms[2].community_id)} />
             </div>
           )}
 
@@ -363,15 +363,15 @@ export default function Leaderboard() {
                 const entry = restComms[index]
                 const medal = entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : null
                 const catCfg = CATEGORY_CONFIG[entry.category]
-                const isJoined = entry.is_member || joinedIds.has(entry.id)
+                const isJoined = entry.is_member || joinedIds.has(entry.community_id)
                 const isApproval = entry.join_type === 'approval'
                 const isInviteOnly = entry.join_type === 'invite_only'
                 return (
                   <div
-                    key={entry.id}
+                    key={entry.community_id}
                     className={`${s.row} ${s.communityRow}`}
-                    onClick={() => openCommunity(entry.id)}
-                    onMouseEnter={() => preloadCommunity(entry.id)}
+                    onClick={() => openCommunity(entry.community_id)}
+                    onMouseEnter={() => preloadCommunity(entry.community_id)}
                     onMouseLeave={cancelCommPreload}
                   >
                     <div className={s.rank}>
