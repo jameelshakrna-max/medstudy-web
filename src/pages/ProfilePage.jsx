@@ -98,7 +98,11 @@ export default function ProfilePage() {
         setProfile(prev => prev ? { ...prev, stats: { ...prev.stats, followers_count: (prev.stats?.followers_count || 0) + 1 } } : prev)
       }
     } catch (err) {
-      console.error('Follow toggle failed:', err)
+      if (err.message === 'Already following') {
+        setIsFollowing(true)
+      } else {
+        console.error('Follow toggle failed:', err)
+      }
     } finally {
       setFollowLoading(false)
     }

@@ -69,7 +69,11 @@ export default function ProfilePanel() {
         }
       }
     } catch (err) {
-      console.error('Follow toggle failed:', err)
+      if (err.message === 'Already following') {
+        if (data) data.isFollowing = true
+      } else {
+        console.error('Follow toggle failed:', err)
+      }
     }
   }
 
