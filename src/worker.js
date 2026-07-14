@@ -94,7 +94,8 @@ export default {
       return json({ error: 'Not found' }, 404)
     }
     if (path.startsWith('/api/images/')) {
-      return handleGetImage(request, env)
+      try { return await handleGetImage(request, env) }
+      catch (err) { return json({ error: err.message }, 500) }
     }
 
     if (path.match(/^\/api\/communities\/[^\/]+\/ws$/) && request.method === 'GET') {
@@ -1160,13 +1161,13 @@ async function handleFollowUser(request, env, user) {
   if (!target.length) return json({ error: 'User not found' }, 404)
 
   const { results: existing } = await env.DB.prepare(
-    'SELECT id FROM user_followers WHERE follower_id = ? AND following_id = ?'
+    'SELECT 1 FROM user_followers WHERE follower_id = ? AND following_id = ?'
   ).bind(user.sub, targetUserId).all()
   if (existing.length > 0) return json({ error: 'Already following' }, 409)
 
   await env.DB.prepare(
-    'INSERT INTO user_followers (id, follower_id, following_id) VALUES (?, ?, ?)'
-  ).bind(uuid(), user.sub, targetUserId).run()
+    'INSERT INTO user_followers (follower_id, following_id) VALUES (?, ?)'
+  ).bind(user.sub, targetUserId).run()
 
   await incrementUserStats(env, user.sub, 'following_count', 1).catch(() => {})
   await incrementUserStats(env, targetUserId, 'followers_count', 1).catch(() => {})
@@ -1193,7 +1194,7 @@ async function handleFollowStatus(request, env, user) {
   const targetUserId = url.pathname.split('/')[3]
 
   const { results } = await env.DB.prepare(
-    'SELECT id FROM user_followers WHERE follower_id = ? AND following_id = ?'
+    'SELECT 1 FROM user_followers WHERE follower_id = ? AND following_id = ?'
   ).bind(user.sub, targetUserId).all()
 
   return json({ following: results.length > 0 })
