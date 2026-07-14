@@ -1031,13 +1031,17 @@ async function handleUserProfile(request, env, viewerUser, ctx) {
   const targetUserId = parts[3]
   const isOtherUser = viewerUser && viewerUser.sub !== targetUserId
 
-  // Batch 1: profile + stats (2 queries in 1 round-trip)
-  const [profileRes, statsRes] = await env.DB.batch([
+  // Batch 1: profile + stats + live follower/following counts (4 queries in 1 round-trip)
+  const [profileRes, statsRes, followersRes, followingRes] = await env.DB.batch([
     env.DB.prepare('SELECT * FROM user_profiles WHERE user_id = ?').bind(targetUserId),
     env.DB.prepare('SELECT * FROM user_stats WHERE user_id = ?').bind(targetUserId),
+    env.DB.prepare('SELECT COALESCE(COUNT(*), 0) as total FROM user_followers WHERE following_id = ?').bind(targetUserId),
+    env.DB.prepare('SELECT COALESCE(COUNT(*), 0) as total FROM user_followers WHERE follower_id = ?').bind(targetUserId),
   ])
   const profile = profileRes.results[0] || null
   const stats = statsRes.results[0] || null
+  const liveFollowers = Number(followersRes.results[0]?.total) || 0
+  const liveFollowing = Number(followingRes.results[0]?.total) || 0
 
   if (profile && profile.profile_visibility === 'private' && isOtherUser) {
     return json({ hidden: true, display_name: 'Private Account', user_id: targetUserId })
@@ -1152,8 +1156,8 @@ async function handleUserProfile(request, env, viewerUser, ctx) {
       communities_count: communities.length,
       current_streak: computedStats?.current_streak || 0,
       longest_streak: computedStats?.longest_streak || 0,
-      followers_count: computedStats?.followers_count || 0,
-      following_count: computedStats?.following_count || 0,
+      followers_count: liveFollowers,
+      following_count: liveFollowing,
     },
     badges: badges.map(b => ({
       community_id: b.community_id, community_name: b.community_name,

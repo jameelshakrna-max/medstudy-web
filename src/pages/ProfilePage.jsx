@@ -12,7 +12,6 @@ import FavoriteSubjects from '../components/FavoriteSubjects'
 import ProfileHeader from '../components/profile/ProfileHeader'
 import ProfileBadges from '../components/profile/ProfileBadges'
 import ProfileCommunities from '../components/profile/ProfileCommunities'
-import ProfileActivity from '../components/profile/ProfileActivity'
 import s from './ProfilePage.module.css'
 
 export default function ProfilePage() {
@@ -40,12 +39,6 @@ export default function ProfilePage() {
   const { data: profile, isLoading: profileLoading, error: profileError } = useQuery({
     queryKey: queryKeys.profile.detail(resolvedUserId),
     queryFn: () => apiGet(`/users/${resolvedUserId}/profile`),
-    enabled: !!resolvedUserId,
-  })
-
-  const { data: activity = [], isLoading: activityLoading } = useQuery({
-    queryKey: queryKeys.profile.activity(resolvedUserId, 20),
-    queryFn: () => apiGet(`/users/${resolvedUserId}/activity?limit=20`).then(d => Array.isArray(d) ? d : []),
     enabled: !!resolvedUserId,
   })
 
@@ -222,9 +215,7 @@ export default function ProfilePage() {
         currentUserId={user?.id}
       />
 
-      <ProfileActivity activity={activity} loading={activityLoading} />
-
-      {!profile.bio && !profile.badges?.length && !profile.communities?.length && activity.length === 0 && (
+      {!profile.bio && !profile.badges?.length && !profile.communities?.length && (
         <div className={s.section}>
           <div className={s.emptyState}>
             <div className={s.emptyIcon}><Users size={32} style={{ color: 'var(--mist)', opacity: 0.5 }} /></div>
