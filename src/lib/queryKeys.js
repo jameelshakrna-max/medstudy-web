@@ -130,10 +130,6 @@ export const queryKeys = {
     notifPrefs: () => [...queryKeys.settings.all, 'notifPrefs'],
     profile: (userId) => [...queryKeys.settings.all, 'profile', userId],
   },
-  communityPanel: {
-    full: (id) => ['communityPanel', 'full', id],
-    heatmap: (id, year) => ['communityPanel', 'heatmap', id, year],
-  },
   dashboard: {
     all: ['dashboard'],
     stats: (userId) => [...queryKeys.dashboard.all, 'stats', userId],

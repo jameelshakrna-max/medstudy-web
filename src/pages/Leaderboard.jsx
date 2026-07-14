@@ -49,11 +49,11 @@ function ScoreBadge({ score }) {
   return <span className={`${s.communityScore} ${cls}`}>{Math.round(score)}</span>
 }
 
-function PodiumCard({ entry, place, medals, showStreak }) {
+function PodiumCard({ entry, place, medals, showStreak, onClick }) {
   if (!entry) return <div className={`${s.podiumPlace} ${s['podium' + place]}`} />
   const medal = medals[place]
   return (
-    <div className={`${s.podiumPlace} ${s['podium' + place]}`}>
+    <div className={`${s.podiumPlace} ${s['podium' + place]} ${s.podiumClickable}`} onClick={onClick}>
       <div className={s.podiumMedal}>{medal}</div>
       <div className={s.podiumAvatar}>
         {entry.avatar_url ? (
@@ -268,22 +268,6 @@ export default function Leaderboard() {
         </div>
       ) : (
         <>
-          {/* Podium */}
-          {scope === 'individuals' && top3Users.length > 0 && (
-            <div className={s.podium}>
-              <PodiumCard entry={top3Users[1]} place="Second" medals={medals} showStreak />
-              <PodiumCard entry={top3Users[0]} place="First" medals={medals} showStreak />
-              <PodiumCard entry={top3Users[2]} place="Third" medals={medals} showStreak />
-            </div>
-          )}
-          {scope === 'communities' && top3Comms.length > 0 && (
-            <div className={s.podium}>
-              <PodiumCard entry={top3Comms[1]} place="Second" medals={medals} showStreak={false} />
-              <PodiumCard entry={top3Comms[0]} place="First" medals={medals} showStreak={false} />
-              <PodiumCard entry={top3Comms[2]} place="Third" medals={medals} showStreak={false} />
-            </div>
-          )}
-
           {/* Search */}
           <div className={s.searchWrapper} ref={searchRef}>
             <Search size={16} strokeWidth={1.5} className={s.searchIcon} />
@@ -321,6 +305,22 @@ export default function Leaderboard() {
               </div>
             )}
           </div>
+
+          {/* Podium */}
+          {scope === 'individuals' && top3Users.length > 0 && (
+            <div className={s.podium}>
+              <PodiumCard entry={top3Users[1]} place="Second" medals={medals} showStreak onClick={() => openProfile(top3Users[1].user_id)} />
+              <PodiumCard entry={top3Users[0]} place="First" medals={medals} showStreak onClick={() => openProfile(top3Users[0].user_id)} />
+              <PodiumCard entry={top3Users[2]} place="Third" medals={medals} showStreak onClick={() => openProfile(top3Users[2].user_id)} />
+            </div>
+          )}
+          {scope === 'communities' && top3Comms.length > 0 && (
+            <div className={s.podium}>
+              <PodiumCard entry={top3Comms[1]} place="Second" medals={medals} showStreak={false} onClick={() => openCommunity(top3Comms[1].id)} />
+              <PodiumCard entry={top3Comms[0]} place="First" medals={medals} showStreak={false} onClick={() => openCommunity(top3Comms[0].id)} />
+              <PodiumCard entry={top3Comms[2]} place="Third" medals={medals} showStreak={false} onClick={() => openCommunity(top3Comms[2].id)} />
+            </div>
+          )}
 
           {/* Ranked List */}
           {scope === 'individuals' ? (
