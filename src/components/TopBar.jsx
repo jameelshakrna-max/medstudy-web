@@ -2,7 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate, Link } from 'react-router-dom'
 import { ChevronDown, LogOut, Settings, User, LayoutDashboard, MessageCircle } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { apiGet } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 import NotificationCenter from './NotificationCenter'
 import StatusIndicator from './StatusIndicator'
 import { usePresence } from '../context/PresenceContext'
@@ -13,28 +15,21 @@ export default function TopBar() {
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef()
-  const [dmUnread, setDmUnread] = useState(0)
   const { myStatus } = usePresence() || {}
+
+  const { data: dmUnread = 0 } = useQuery({
+    queryKey: queryKeys.dm.conversations(),
+    queryFn: () => apiGet('/dm/conversations').then(data => Array.isArray(data) ? data.reduce((sum, c) => sum + (c.unread_count || 0), 0) : 0),
+    refetchInterval: 30_000,
+    enabled: !!user,
+    staleTime: 15_000,
+  })
 
   useEffect(() => {
     const handler = e => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false) }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
-
-  useEffect(() => {
-    if (!user) return
-    const fetchUnread = () => {
-      apiGet('/dm/conversations').then(data => {
-        if (Array.isArray(data)) {
-          setDmUnread(data.reduce((sum, c) => sum + (c.unread_count || 0), 0))
-        }
-      }).catch(() => {})
-    }
-    fetchUnread()
-    const interval = setInterval(fetchUnread, 30000)
-    return () => clearInterval(interval)
-  }, [user])
 
   const avatarUrl = userProfile?.avatar_url
   const initials = (userProfile?.display_name || profile?.full_name || profile?.email || 'S')

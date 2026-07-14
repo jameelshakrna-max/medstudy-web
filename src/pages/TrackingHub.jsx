@@ -1,6 +1,8 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { queryKeys } from '../lib/queryKeys'
 import { BookOpen } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
 import DashboardView from './DashboardView'
@@ -22,14 +24,13 @@ const TABS = [
 
 export default function TrackingHub() {
   const { user } = useAuth()
+  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('dashboard')
-  const [loading, setLoading] = useState(true)
-  const [report, setReport] = useState(null)
   const [resourcesOpen, setResourcesOpen] = useState(false)
 
-  const loadReport = useCallback(async () => {
-    if (!user) return
-    try {
+  const { data, isLoading } = useQuery({
+    queryKey: queryKeys.tracking.report(user?.id),
+    queryFn: async () => {
       const [blocksRes, mrcpRes, boardRes, activityRes, goalsRes] = await Promise.all([
         supabase.from('uworld_blocks').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
         supabase.from('mrcp_topics').select('*').eq('user_id', user.id),
@@ -38,25 +39,20 @@ export default function TrackingHub() {
         supabase.from('goals').select('*').eq('user_id', user.id),
       ])
 
-      const perfReport = generate({
+      return generate({
         uworld: blocksRes.data || [],
         mrcp: mrcpRes.data || [],
         board: boardRes.data || [],
         activity: activityRes.data || [],
         goals: goalsRes.data || [],
       })
+    },
+    enabled: !!user,
+    staleTime: 30_000,
+  })
 
-      setReport(perfReport)
-    } catch (err) {
-      console.error('loadReport error:', err)
-    }
-    setLoading(false)
-  }, [user])
-
-  useEffect(() => { loadReport() }, [loadReport])
-
-  const handleActivity = useCallback(async ({ module, action, entity_id, summary, metadata }) => {
-    try {
+  const handleActivity = useMutation({
+    mutationFn: async ({ module, action, entity_id, summary, metadata }) => {
       await supabase.from('study_activity').insert({
         id: crypto.randomUUID(),
         user_id: user.id,
@@ -66,13 +62,15 @@ export default function TrackingHub() {
         summary,
         metadata,
       })
-      loadReport()
-    } catch (err) {
-      console.error('logActivity error:', err)
-    }
-  }, [user, loadReport])
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tracking.report(user?.id) })
+    },
+  })
 
-  if (loading) return <LoadingScreen fullPage={false} message="Loading tracking hub..." />
+  const report = data || null
+
+  if (isLoading) return <LoadingScreen fullPage={false} message="Loading tracking hub..." />
 
   return (
     <div className={styles.page}>
@@ -95,13 +93,13 @@ export default function TrackingHub() {
           <DashboardView report={report} onViewChange={setActiveTab} />
         )}
         {activeTab === 'uworld' && (
-          <UWorldView onActivity={handleActivity} />
+          <UWorldView onActivity={handleActivity.mutate} />
         )}
         {activeTab === 'mrcp' && (
-          <MRCPView onActivity={handleActivity} />
+          <MRCPView onActivity={handleActivity.mutate} />
         )}
         {activeTab === 'board' && (
-          <LocalBoardView onActivity={handleActivity} />
+          <LocalBoardView onActivity={handleActivity.mutate} />
         )}
         {activeTab === 'goals' && (
           <Goals />

@@ -1,5 +1,8 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { queryKeys } from '../lib/queryKeys'
 import { FSRS, Card as FSRSCard, State as FSRSState, Rating as FSRSRating } from 'fsrs.js'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
@@ -176,10 +179,9 @@ function maturityLabel(c) {
 /* ── component ──────────────────────────────────────────── */
 
 export default function Anki() {
-  const [cards, setCards] = useState([])
-  const [decks, setDecks] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+
   const [view, setView] = useState('decks')
   const [activeDeckId, setActiveDeckId] = useState(null)
   const [filter, setFilter] = useState('all')
@@ -224,27 +226,73 @@ export default function Anki() {
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState(null) // { msg, type } | null
 
-  /* ── data loading ────────────────────────────────────── */
+  /* ── queries ────────────────────────────────────────── */
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const [deckData, cardData] = await Promise.all([
-        apiGet('/decks'),
-        apiGet('/flashcards')
-      ])
-      if (deckData.error) throw new Error(deckData.error)
-      if (cardData.error) throw new Error(cardData.error)
-      setDecks(Array.isArray(deckData) ? deckData : [])
-      setCards(Array.isArray(cardData) ? cardData : [])
-    } catch (e) {
-      setError(e.message)
-    }
-    setLoading(false)
-  }, [])
+  const { data: decks = [], isLoading: decksLoading } = useQuery({
+    queryKey: queryKeys.flashcards.decks(),
+    queryFn: () => apiGet('/decks'),
+    enabled: !!user,
+    staleTime: 60_000,
+  })
 
-  useEffect(() => { load() }, [load])
+  const { data: cards = [], isLoading: cardsLoading } = useQuery({
+    queryKey: queryKeys.flashcards.list(),
+    queryFn: () => apiGet('/flashcards'),
+    enabled: !!user,
+    staleTime: 30_000,
+  })
+
+  const loading = decksLoading || cardsLoading
+
+  /* ── mutations ──────────────────────────────────────── */
+
+  const createDeckMutation = useMutation({
+    mutationFn: async (name) => {
+      const r = await apiPost('/decks', { name })
+      if (r.error) throw new Error(r.error)
+      return r
+    },
+    onSuccess: () => queryClient.invalidateQueries(queryKeys.flashcards.decks()),
+  })
+
+  const deleteDeckMutation = useMutation({
+    mutationFn: async (id) => {
+      const r = await apiDel('/decks/' + id)
+      if (r.error) throw new Error(r.error)
+      return r
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(queryKeys.flashcards.decks())
+      queryClient.invalidateQueries(queryKeys.flashcards.list())
+    },
+  })
+
+  const addCardMutation = useMutation({
+    mutationFn: async (body) => {
+      const r = await apiPost('/flashcards', body)
+      if (r.error) throw new Error(r.error)
+      return r
+    },
+    onSuccess: () => queryClient.invalidateQueries(queryKeys.flashcards.list()),
+  })
+
+  const deleteCardMutation = useMutation({
+    mutationFn: async (id) => {
+      const r = await apiDel('/flashcards/' + id)
+      if (r.error) throw new Error(r.error)
+      return r
+    },
+    onSuccess: () => queryClient.invalidateQueries(queryKeys.flashcards.list()),
+  })
+
+  const reviewMutation = useMutation({
+    mutationFn: async ({ id, ...updates }) => {
+      const r = await apiPut('/flashcards/' + id, updates)
+      if (r.error) throw new Error(r.error)
+      return r
+    },
+    onSuccess: () => queryClient.invalidateQueries(queryKeys.flashcards.list()),
+  })
 
   // keep nowRef current for isDue checks
   useEffect(() => {
@@ -276,10 +324,8 @@ export default function Anki() {
     if (!deckName.trim()) return
     setSavingDeck(true)
     try {
-      const r = await apiPost('/decks', { name: deckName.trim() })
-      if (r.error) throw new Error(r.error)
+      await createDeckMutation.mutateAsync(deckName.trim())
       setDeckName('')
-      setDecks(prev => [...prev, r])
     } catch (e) { alert(e.message) }
     setSavingDeck(false)
   }
@@ -287,10 +333,7 @@ export default function Anki() {
   async function deleteDeck(id) {
     if (!confirm('Delete deck and all its cards?')) return
     try {
-      const r = await apiDel('/decks/' + id)
-      if (r.error) throw new Error(r.error)
-      setDecks(prev => prev.filter(d => d.id !== id))
-      setCards(prev => prev.filter(c => c.deck_id !== id))
+      await deleteDeckMutation.mutateAsync(id)
       if (activeDeckId === id) {
         setActiveDeckId(null)
         setView('decks')
@@ -305,30 +348,17 @@ export default function Anki() {
     if (!formDeckId) return alert('Please select or create a deck first.')
     setSaving(true)
     try {
-      const r = await apiPost('/flashcards', {
+      await addCardMutation.mutateAsync({
         deck_id: formDeckId,
         front: front.trim(),
         back: back.trim(),
         high_yield: highYield,
         image_url: cardImage || null
       })
-      if (r.error) throw new Error(r.error)
       setFront('')
       setBack('')
       setHighYield(false)
       setCardImage(null)
-      const now = new Date().toISOString()
-      setCards(prev => [...prev, {
-        id: r.ids?.[0] || crypto.randomUUID(),
-        user_id: null,
-        deck_id: formDeckId,
-        front: front.trim(),
-        back: back.trim(),
-        image_url: cardImage || null,
-        high_yield: highYield,
-        difficulty: 0, stability: 0, state: 0, interval: 0, repetitions: 0,
-        last_review: null, next_review: null, created_at: now
-      }])
       setView('add')
     } catch (e) { alert(e.message) }
     setSaving(false)
@@ -337,9 +367,7 @@ export default function Anki() {
   async function deleteCard(id) {
     if (!confirm('Delete this card?')) return
     try {
-      const r = await apiDel('/flashcards/' + id)
-      if (r.error) throw new Error(r.error)
-      setCards(prev => prev.filter(c => c.id !== id))
+      await deleteCardMutation.mutateAsync(id)
     } catch (e) { alert(e.message) }
   }
 
@@ -359,7 +387,6 @@ export default function Anki() {
     if (!c) return
     const u = fsrs(option, c)
 
-    // advance UI immediately
     const nextIdx = qIdx + 1
     const isLast = nextIdx >= queue.length
 
@@ -371,11 +398,9 @@ export default function Anki() {
     }
     setSubmitting(true)
 
-    // update local state optimistically
-    setCards(prev => prev.map(card => card.id === c.id ? { ...card, ...u } : card))
-
     try {
-      const r = await apiPut('/flashcards/' + c.id, {
+      await reviewMutation.mutateAsync({
+        id: c.id,
         difficulty: u.difficulty,
         stability: u.stability,
         state: u.state,
@@ -383,7 +408,6 @@ export default function Anki() {
         next_review: u.next_review,
         last_review: u.last_review
       })
-      if (r.error) throw new Error(r.error)
     } catch (e) {
       setToast({ msg: 'Save failed: ' + e.message, type: 'error' })
       setTimeout(() => setToast(null), 4000)
@@ -396,7 +420,8 @@ export default function Anki() {
     setQIdx(0)
     setShowAns(false)
     setView(activeDeckId ? 'browse' : 'decks')
-    load()
+    queryClient.invalidateQueries(queryKeys.flashcards.decks())
+    queryClient.invalidateQueries(queryKeys.flashcards.list())
   }
 
   /* ── inline review (single card in browse view) ──────── */
@@ -407,11 +432,9 @@ export default function Anki() {
     setReviewingCardId(null)
     setSubmitting(true)
 
-    // update local state optimistically
-    setCards(prev => prev.map(c => c.id === card.id ? { ...c, ...u } : c))
-
     try {
-      const r = await apiPut('/flashcards/' + card.id, {
+      await reviewMutation.mutateAsync({
+        id: card.id,
         difficulty: u.difficulty,
         stability: u.stability,
         state: u.state,
@@ -419,7 +442,6 @@ export default function Anki() {
         next_review: u.next_review,
         last_review: u.last_review
       })
-      if (r.error) throw new Error(r.error)
     } catch (e) {
       setToast({ msg: 'Save failed: ' + e.message, type: 'error' })
       setTimeout(() => setToast(null), 4000)
@@ -556,8 +578,6 @@ export default function Anki() {
     setUploadProgress('Importing ' + total + ' cards...')
     try {
       const CHUNK = 500
-      const allIds = []
-      const now = new Date().toISOString()
       for (let i = 0; i < total; i += CHUNK) {
         const chunk = cards.slice(i, i + CHUNK)
         setUploadProgress('Importing ' + Math.min(i + CHUNK, total) + ' / ' + total + ' cards...')
@@ -568,24 +588,9 @@ export default function Anki() {
           }))
         }, controller.signal)
         if (r.error) throw new Error(r.error)
-        ;(r.ids || []).forEach((id, j) => {
-          const idx = i + j
-          allIds.push({ idx, id })
-        })
       }
 
-      const newCards = allIds.map(({ idx, id }) => ({
-        id,
-        user_id: null,
-        deck_id: uploadDeck,
-        front: cards[idx].front,
-        back: cards[idx].back,
-        image_url: cards[idx].image_url || null,
-        high_yield: false,
-        difficulty: 0, stability: 0, state: 0, interval: 0, repetitions: 0,
-        last_review: null, next_review: null, created_at: now
-      }))
-      setCards(prev => [...prev, ...newCards])
+      queryClient.invalidateQueries(queryKeys.flashcards.list())
 
       setParsed([])
       setUploadDeck('')
@@ -621,12 +626,12 @@ export default function Anki() {
 
   if (loading) return <LoadingScreen fullPage={false} message="Loading Anki..." />
 
-  if (error && !cards.length && !decks.length) return (
+  if ((decksQuery.isError || cardsQuery.isError) && !cards.length && !decks.length) return (
     <div className={s.page}>
       <div className={s.errorBox}>
         <h3>Connection Error</h3>
         <p>Could not load data from server.</p>
-        <p className={s.errorDetail}>{error}</p>
+        <p className={s.errorDetail}>{decksQuery.error?.message || cardsQuery.error?.message || 'Unknown error'}</p>
       </div>
     </div>
   )

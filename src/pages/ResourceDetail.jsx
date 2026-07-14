@@ -1,7 +1,9 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { queryKeys } from '../lib/queryKeys'
 import {
   ArrowLeft, Download, ChevronUp, ChevronDown,
   Trash2, MessageCircle, Reply, Loader2, FileText, ExternalLink, Maximize2
@@ -60,10 +62,7 @@ export default function ResourceDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { profile } = useAuth()
-  const [resource, setResource] = useState(null)
-  const [categories, setCategories] = useState([])
-  const [comments, setComments] = useState([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [sessionToken, setSessionToken] = useState('')
   const [userId, setUserId] = useState('')
   const [commentText, setCommentText] = useState('')
@@ -71,32 +70,55 @@ export default function ResourceDetail() {
   const [sending, setSending] = useState(false)
   const pdfRef = useRef(null)
 
-  const fetchResource = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-    setSessionToken(session.access_token)
-    setUserId(session.user?.id || '')
-    const [res, catRes] = await Promise.all([
-      fetch(API + '/resources/' + id, { headers: { Authorization: 'Bearer ' + session.access_token } }),
-      fetch(API + '/categories', { headers: { Authorization: 'Bearer ' + session.access_token } }),
-    ])
-    setResource(await apiJson(res))
-    setCategories(await apiJson(catRes))
-    setLoading(false)
-  }, [id])
-
-  const fetchComments = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    const params = new URLSearchParams()
-    if (session?.user?.id) params.set('user_id', session.user.id)
-    const res = await fetch(API + '/resources/' + id + '/comments?' + params, {
-      headers: { Authorization: 'Bearer ' + session.access_token }
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setSessionToken(session.access_token)
+        setUserId(session.user?.id || '')
+      }
     })
-    setComments(await apiJson(res))
-  }, [id])
+  }, [])
 
-  useEffect(() => { fetchResource() }, [fetchResource])
-  useEffect(() => { fetchComments() }, [fetchComments])
+  const resourceQuery = useQuery({
+    queryKey: queryKeys.resources.detail(id),
+    queryFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(API + '/resources/' + id, { headers: { Authorization: 'Bearer ' + session.access_token } })
+      return apiJson(res)
+    },
+    enabled: !!id && !!sessionToken,
+    staleTime: 30_000,
+  })
+
+  const categoriesQuery = useQuery({
+    queryKey: queryKeys.categories.list(),
+    queryFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(API + '/categories', { headers: { Authorization: 'Bearer ' + session.access_token } })
+      return apiJson(res)
+    },
+    staleTime: 300_000,
+  })
+
+  const commentsQuery = useQuery({
+    queryKey: queryKeys.resources.comments(id),
+    queryFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      const params = new URLSearchParams()
+      if (session?.user?.id) params.set('user_id', session.user.id)
+      const res = await fetch(API + '/resources/' + id + '/comments?' + params, {
+        headers: { Authorization: 'Bearer ' + session.access_token }
+      })
+      return apiJson(res)
+    },
+    enabled: !!id && !!sessionToken,
+    staleTime: 15_000,
+  })
+
+  const resource = resourceQuery.data
+  const categories = categoriesQuery.data ?? []
+  const comments = commentsQuery.data ?? []
+  const loading = resourceQuery.isLoading
 
   const handleVote = async (commentId, vote) => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -105,7 +127,7 @@ export default function ResourceDetail() {
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
       body: JSON.stringify({ vote })
     })
-    fetchComments()
+    queryClient.invalidateQueries({ queryKey: queryKeys.resources.comments(id) })
   }
 
   const handleAddComment = async () => {
@@ -120,7 +142,7 @@ export default function ResourceDetail() {
     setCommentText('')
     setReplyTo(null)
     setSending(false)
-    fetchComments()
+    queryClient.invalidateQueries({ queryKey: queryKeys.resources.comments(id) })
   }
 
   const handleDeleteComment = async (commentId) => {
@@ -129,7 +151,7 @@ export default function ResourceDetail() {
       method: 'DELETE',
       headers: { Authorization: 'Bearer ' + session.access_token }
     })
-    fetchComments()
+    queryClient.invalidateQueries({ queryKey: queryKeys.resources.comments(id) })
   }
 
   const handleDeleteResource = async () => {

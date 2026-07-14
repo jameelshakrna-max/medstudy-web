@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { apiGet } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 import styles from './PinnedResources.module.css'
 
 const TYPE_ICONS = {
@@ -17,14 +18,15 @@ const TYPE_LABELS = {
 }
 
 export default function PinnedResources({ userId, isOwnProfile }) {
-  const [pins, setPins] = useState([])
-
-  useEffect(() => {
-    if (!userId) return
-    apiGet(`/users/${userId}/pins`)
-      .then(data => setPins(Array.isArray(data) ? data : data?.pins || []))
-      .catch(() => setPins([]))
-  }, [userId])
+  const { data: pins = [] } = useQuery({
+    queryKey: queryKeys.resources.pins(userId),
+    queryFn: async () => {
+      const data = await apiGet(`/users/${userId}/pins`)
+      return Array.isArray(data) ? data : data?.pins || []
+    },
+    enabled: !!userId,
+    staleTime: 30000,
+  })
 
   if (!pins.length) return null
 

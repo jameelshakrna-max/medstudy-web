@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { queryKeys } from '../lib/queryKeys'
 import { X, Loader2, Search, BrainCircuit, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || '/api'
@@ -93,35 +95,32 @@ const styles = {
 }
 
 export default function FlashcardShareModal({ communityId, onShare, onClose }) {
-  const [decks, setDecks] = useState([])
-  const [cards, setCards] = useState([])
   const [selectedDeck, setSelectedDeck] = useState(null)
   const [selectedCard, setSelectedCard] = useState(null)
   const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    apiGet('/decks').then(d => {
-      setDecks(d || [])
-      setLoading(false)
-    }).catch(() => setLoading(false))
-  }, [])
+  const decksQuery = useQuery({
+    queryKey: queryKeys.flashcards.decks(),
+    queryFn: () => apiGet('/decks'),
+    staleTime: 60_000,
+  })
 
-  useEffect(() => {
-    if (!selectedDeck) return
-    setLoading(true)
-    apiGet(`/flashcards?deck_id=${encodeURIComponent(selectedDeck)}&limit=200`).then(c => {
-      setCards(c || [])
-      setLoading(false)
-    }).catch(() => setLoading(false))
-  }, [selectedDeck])
+  const cardsQuery = useQuery({
+    queryKey: queryKeys.flashcards.forDeck(selectedDeck),
+    queryFn: () => apiGet('/flashcards?deck_id=' + encodeURIComponent(selectedDeck) + '&limit=200'),
+    enabled: !!selectedDeck,
+    staleTime: 30_000,
+  })
+
+  const decks = decksQuery.data ?? []
+  const allCards = cardsQuery.data ?? []
 
   const filteredCards = search
-    ? cards.filter(c =>
+    ? allCards.filter(c =>
         (c.front || '').toLowerCase().includes(search.toLowerCase()) ||
         (c.back || '').toLowerCase().includes(search.toLowerCase())
       )
-    : cards
+    : allCards
 
   const handleShare = async () => {
     if (!selectedCard) return
@@ -166,7 +165,7 @@ export default function FlashcardShareModal({ communityId, onShare, onClose }) {
                 />
               </div>
 
-              {loading ? (
+              {cardsQuery.isLoading ? (
                 <div style={styles.loading}><Loader2 size={20} style={styles.spinner} /> Loading cards...</div>
               ) : filteredCards.length === 0 ? (
                 <div style={styles.empty}>No flashcards in this deck</div>
@@ -191,7 +190,9 @@ export default function FlashcardShareModal({ communityId, onShare, onClose }) {
           ) : (
             <>
               <p style={{ fontSize: 14, color: 'var(--mist)', marginBottom: 16 }}>Select a deck to share a flashcard from:</p>
-              {decks.length === 0 ? (
+              {decksQuery.isLoading ? (
+                <div style={styles.loading}><Loader2 size={20} style={styles.spinner} /> Loading decks...</div>
+              ) : decks.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 40, color: 'var(--mist)' }}>
                   <BrainCircuit size={40} strokeWidth={1} style={{ marginBottom: 12 }} />
                   <p>No decks yet. Create flashcards first!</p>

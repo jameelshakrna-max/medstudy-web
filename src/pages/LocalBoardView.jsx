@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { queryKeys } from '../lib/queryKeys'
 import { FolderOpen, Plus, Minus, Trash2 } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
 import EmptyState from '../components/EmptyState'
@@ -29,27 +31,24 @@ const SUBJECTS = [
 
 export default function LocalBoardView({ onActivity }) {
   const { user } = useAuth()
-  const [cases, setCases] = useState([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ case_name: '', subject_id: '', past_paper_year: '', repetition_count: 0, mastery_level: 'Started', notes: '' })
 
-  useEffect(() => { loadData() }, [])
-
-  async function loadData() {
-    try {
+  const { data: cases = [], isLoading } = useQuery({
+    queryKey: queryKeys.localBoard.cases(user?.id),
+    queryFn: async () => {
       const { data, error } = await supabase.from('local_board_cases').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
-      if (error) console.error('Error loading cases:', error)
-      setCases(data || [])
-    } catch (err) {
-      console.error('loadData error:', err)
-    }
-    setLoading(false)
-  }
+      if (error) throw error
+      return data || []
+    },
+    enabled: !!user,
+    staleTime: 15000,
+  })
 
-  async function addCase() {
-    if (!form.case_name.trim()) return
-    try {
+  const addCaseMutation = useMutation({
+    mutationFn: async () => {
+      if (!form.case_name.trim()) return
       const { data, error } = await supabase.from('local_board_cases').insert({
         id: crypto.randomUUID(),
         user_id: user.id,
@@ -60,14 +59,17 @@ export default function LocalBoardView({ onActivity }) {
         mastery_level: form.mastery_level || 'Started',
         notes: form.notes || null,
       }).select()
+      if (error) throw error
+      return data[0]
+    },
+    onSuccess: async (data) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.localBoard.all })
 
-      if (error) { alert('Error: ' + error.message); return }
-
-      if (onActivity && data?.[0]) {
+      if (onActivity && data) {
         await onActivity({
           module: 'Local Board',
           action: 'case_added',
-          entity_id: data[0].id,
+          entity_id: data.id,
           summary: `Added case "${form.case_name}" · ${form.subject_id ? getSubjectName(form.subject_id) : 'No subject'}`,
           metadata: JSON.stringify({ case_name: form.case_name, subject_id: form.subject_id }),
         })
@@ -75,37 +77,50 @@ export default function LocalBoardView({ onActivity }) {
 
       setForm({ case_name: '', subject_id: '', past_paper_year: '', repetition_count: 0, mastery_level: 'Started', notes: '' })
       setShowAdd(false)
-      loadData()
-    } catch (err) {
+    },
+    onError: (err) => {
+      if (err.message) alert('Error: ' + err.message)
       console.error('addCase error:', err)
-    }
-  }
+    },
+  })
 
-  async function updateCase(id, updates) {
-    const { error } = await supabase.from('local_board_cases').update(updates).eq('id', id)
-    if (error) { console.error('Error updating case:', error); return }
-    setCases(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c))
+  const updateCaseMutation = useMutation({
+    mutationFn: async ({ id, updates }) => {
+      const { error } = await supabase.from('local_board_cases').update(updates).eq('id', id)
+      if (error) throw error
+      return { id, updates }
+    },
+    onSuccess: async ({ id, updates }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.localBoard.all })
 
-    if (onActivity && updates.mastery_level) {
-      const c = cases.find(cc => cc.id === id)
-      await onActivity({
-        module: 'Local Board',
-        action: 'mastery_changed',
-        entity_id: id,
-        summary: `Case "${c?.case_name}" mastery: ${c?.mastery_level} → ${updates.mastery_level}`,
-        metadata: JSON.stringify({ case_id: id, from: c?.mastery_level, to: updates.mastery_level }),
-      })
-    }
-  }
+      if (onActivity && updates.mastery_level) {
+        const c = cases.find(cc => cc.id === id)
+        await onActivity({
+          module: 'Local Board',
+          action: 'mastery_changed',
+          entity_id: id,
+          summary: `Case "${c?.case_name}" mastery: ${c?.mastery_level} → ${updates.mastery_level}`,
+          metadata: JSON.stringify({ case_id: id, from: c?.mastery_level, to: updates.mastery_level }),
+        })
+      }
+    },
+    onError: (err) => console.error('Error updating case:', err),
+  })
 
-  async function deleteCase(id) {
-    if (!confirm('Delete this case?')) return
-    const { error } = await supabase.from('local_board_cases').delete().eq('id', id)
-    if (error) { alert('Error: ' + error.message); return }
-    setCases(prev => prev.filter(c => c.id !== id))
-  }
+  const deleteCaseMutation = useMutation({
+    mutationFn: async (id) => {
+      if (!confirm('Delete this case?')) return
+      const { error } = await supabase.from('local_board_cases').delete().eq('id', id)
+      if (error) throw error
+      return id
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.localBoard.all })
+    },
+    onError: (err) => alert('Error: ' + err.message),
+  })
 
-  if (loading) return <LoadingScreen fullPage={false} message="Loading cases..." />
+  if (isLoading) return <LoadingScreen fullPage={false} message="Loading cases..." />
 
   return (
     <div>
@@ -141,7 +156,7 @@ export default function LocalBoardView({ onActivity }) {
             </div>
           </div>
           <div className={styles.field}><label>Notes</label><textarea rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Key findings, differentials, management..." /></div>
-          <button className={styles.primaryBtn} onClick={addCase}>Log Case</button>
+          <button className={styles.primaryBtn} onClick={() => addCaseMutation.mutate()}>Log Case</button>
         </div>
       )}
 
@@ -163,11 +178,11 @@ export default function LocalBoardView({ onActivity }) {
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--card-bg)', borderRadius: 8, padding: '4px 10px', border: '1px solid var(--input-bg)' }}>
                   <span style={{ fontSize: 12, color: 'var(--mist)' }}>Repetitions:</span>
-                  <button className={styles.filterBtnSm} onClick={() => updateCase(c.id, { repetition_count: Math.max(0, (c.repetition_count || 0) - 1) })}>
+                   <button className={styles.filterBtnSm} onClick={() => updateCaseMutation.mutate({ id: c.id, updates: { repetition_count: Math.max(0, (c.repetition_count || 0) - 1) } })}>
                     <Minus size={12} />
                   </button>
                   <strong style={{ fontSize: 14, color: 'var(--text-primary)', minWidth: 20, textAlign: 'center' }}>{c.repetition_count || 0}</strong>
-                  <button className={styles.filterBtnSm} onClick={() => updateCase(c.id, { repetition_count: (c.repetition_count || 0) + 1 })}>
+                   <button className={styles.filterBtnSm} onClick={() => updateCaseMutation.mutate({ id: c.id, updates: { repetition_count: (c.repetition_count || 0) + 1 } })}>
                     <Plus size={12} />
                   </button>
                 </div>
@@ -176,14 +191,14 @@ export default function LocalBoardView({ onActivity }) {
                     {c.past_paper_year}
                   </span>
                 )}
-                <select value={c.mastery_level}
-                  onChange={e => updateCase(c.id, { mastery_level: e.target.value })}
+                 <select value={c.mastery_level}
+                  onChange={e => updateCaseMutation.mutate({ id: c.id, updates: { mastery_level: e.target.value } })}
                   style={{ background: 'var(--card-bg)', border: '1px solid var(--input-bg)', borderRadius: 8, padding: '4px 10px', fontSize: 12, fontWeight: 600, color: MASTERY_COLORS[c.mastery_level] || 'var(--mist)', cursor: 'pointer', outline: 'none' }}>
                   {MASTERY_LEVELS.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
               {c.notes && <div className={styles.uwNotes}>{c.notes}</div>}
-              <button onClick={() => deleteCase(c.id)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', cursor: 'pointer', opacity: 0.3, padding: 4, borderRadius: 6, color: 'var(--red)' }}
+               <button onClick={() => deleteCaseMutation.mutate(c.id)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', cursor: 'pointer', opacity: 0.3, padding: 4, borderRadius: 6, color: 'var(--red)' }}
                 onMouseEnter={e => e.target.style.opacity = '1'} onMouseLeave={e => e.target.style.opacity = '0.3'}
                 title="Delete"><Trash2 size={14} strokeWidth={1.5} /></button>
             </div>

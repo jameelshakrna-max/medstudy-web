@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { queryKeys } from '../lib/queryKeys'
 import { FolderOpen } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
 import EmptyState from '../components/EmptyState'
@@ -38,27 +40,24 @@ const SUBJECTS = [
 
 export default function UWorldView({ onActivity }) {
   const { user } = useAuth()
-  const [blocks, setBlocks] = useState([])
+  const queryClient = useQueryClient()
   const [form, setForm] = useState({ block_name: '', total_questions: 40, correct: 0, mode: 'Tutor', subject_id: '', time_minutes: '', notes: '' })
   const [view, setView] = useState('blocks')
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => { loadData() }, [])
-
-  async function loadData() {
-    try {
+  const { data: blocks = [], isLoading } = useQuery({
+    queryKey: queryKeys.uworld.blocks(user?.id),
+    queryFn: async () => {
       const { data, error } = await supabase.from('uworld_blocks').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
-      if (error) console.error('Error loading blocks:', error)
-      setBlocks(data || [])
-    } catch (err) {
-      console.error('loadData error:', err)
-    }
-    setLoading(false)
-  }
+      if (error) throw error
+      return data || []
+    },
+    enabled: !!user,
+    staleTime: 15000,
+  })
 
-  async function addBlock() {
-    if (!form.block_name) return
-    try {
+  const addBlockMutation = useMutation({
+    mutationFn: async () => {
+      if (!form.block_name) return
       const pct = form.total_questions > 0 ? Math.round((form.correct / form.total_questions) * 100) : 0
       const grade = getGrade(pct)
       const today = new Date().toISOString().split('T')[0]
@@ -78,11 +77,12 @@ export default function UWorldView({ onActivity }) {
         date_completed: today,
       }).select()
 
-      if (error) {
-        console.error('Error adding block:', error)
-        alert('Error logging block: ' + error.message)
-        return
-      }
+      if (error) throw error
+      return data
+    },
+    onSuccess: async (data) => {
+      if (!form.block_name) return
+      const pct = form.total_questions > 0 ? Math.round((form.correct / form.total_questions) * 100) : 0
 
       if (onActivity && data?.[0]) {
         await onActivity({
@@ -96,16 +96,23 @@ export default function UWorldView({ onActivity }) {
 
       setForm({ block_name: '', total_questions: 40, correct: 0, mode: 'Tutor', subject_id: '', time_minutes: '', notes: '' })
       setView('blocks')
-      loadData()
-    } catch (err) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.uworld.all })
+    },
+    onError: (err) => {
       console.error('addBlock error:', err)
-    }
+      alert('Error logging block: ' + err.message)
+    },
+  })
+
+  function addBlock() {
+    if (!form.block_name) return
+    addBlockMutation.mutate()
   }
 
   const avg = blocks.length ? Math.round(blocks.reduce((s, b) => s + Number(b.percent_correct || 0), 0) / blocks.length) : 0
   const gradeColor = g => g === 'Excellent' ? 'var(--emerald)' : g === 'Good' ? 'var(--blue)' : g === 'Average' ? 'var(--amber)' : 'var(--red)'
 
-  if (loading) return <LoadingScreen fullPage={false} message="Loading UWorld..." />
+  if (isLoading) return <LoadingScreen fullPage={false} message="Loading UWorld..." />
 
   return (
     <div>

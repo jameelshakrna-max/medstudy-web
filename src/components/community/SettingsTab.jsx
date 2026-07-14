@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Virtuoso } from 'react-virtuoso'
 import { apiGet, apiPost, apiPut, apiDelete, formatDate, imageUrl } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
 import RoleBadge from '../RoleBadge'
@@ -262,6 +263,14 @@ export default function SettingsTab({ community, rules, settings, members, annou
     return acc
   }, {})
 
+  const flatItems = []
+  ROLE_ORDER.forEach(role => {
+    const groupMembers = groupedMembers[role]
+    if (!groupMembers || groupMembers.length === 0) return
+    flatItems.push({ type: 'header', role, count: groupMembers.length })
+    groupMembers.forEach(m => flatItems.push({ type: 'member', member: m }))
+  })
+
   return (
     <div className={s.settingsArea}>
       {/* ── Group: Community ── */}
@@ -509,17 +518,23 @@ export default function SettingsTab({ community, rules, settings, members, annou
               onChange={e => setMemberSearch(e.target.value)}
             />
           </div>
-          {ROLE_ORDER.map(role => {
-            const groupMembers = groupedMembers[role]
-            if (!groupMembers || groupMembers.length === 0) return null
-            return (
-              <div key={role} className={s.memberSection}>
-                <div className={s.memberSectionTitle}>
-                  <span>{ROLE_LABELS[role]}s</span>
-                  <span className={s.memberCount}>{groupMembers.length}</span>
-                </div>
-                <div className={s.memberList}>
-                  {groupMembers.map(m => (
+          <Virtuoso
+            style={{ height: 400 }}
+            totalCount={flatItems.length}
+            itemContent={(index) => {
+              const item = flatItems[index]
+              if (item.type === 'header') {
+                return (
+                  <div className={s.memberSection}>
+                    <div className={s.memberSectionTitle}>
+                      <span>{ROLE_LABELS[item.role]}s</span>
+                      <span className={s.memberCount}>{item.count}</span>
+                    </div>
+                  </div>
+                )
+              }
+              const m = item.member
+              return (
                     <div key={m.id} className={s.memberCard}>
                       <div className={s.memberAvatar}>
                         {m.user_name?.[0]?.toUpperCase() || '?'}
@@ -585,11 +600,9 @@ export default function SettingsTab({ community, rules, settings, members, annou
                         </div>
                       )}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
+              )
+            }}
+          />
           {filteredMembers.length === 0 && (
             <div className={s.emptyState}>
               <Users size={32} className={s.emptyIcon} />

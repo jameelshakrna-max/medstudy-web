@@ -63,15 +63,17 @@ export const queryKeys = {
     all: ['flashcards'],
     list: () => [...queryKeys.flashcards.all, 'list'],
     decks: () => [...queryKeys.flashcards.all, 'decks'],
+    forDeck: (deckId) => [...queryKeys.flashcards.all, 'forDeck', deckId],
     dueCount: () => [...queryKeys.flashcards.all, 'dueCount'],
   },
   goals: {
     all: ['goals'],
-    list: () => [...queryKeys.goals.all, 'list'],
+    list: (userId) => [...queryKeys.goals.all, 'list', userId],
+    data: (userId) => [...queryKeys.goals.all, 'data', userId],
   },
   sessions: {
     all: ['sessions'],
-    list: () => [...queryKeys.sessions.all, 'list'],
+    list: (userId) => [...queryKeys.sessions.all, 'list', userId],
   },
   curriculum: {
     all: ['curriculum'],
@@ -79,11 +81,22 @@ export const queryKeys = {
     subjects: () => [...queryKeys.curriculum.all, 'subjects'],
     topics: (limit) => [...queryKeys.curriculum.all, 'topics', limit],
   },
+  mrcp: {
+    all: ['mrcp'],
+    systems: (userId) => [...queryKeys.mrcp.all, 'systems', userId],
+    topics: (userId) => [...queryKeys.mrcp.all, 'topics', userId],
+  },
+  localBoard: {
+    all: ['localBoard'],
+    cases: (userId) => [...queryKeys.localBoard.all, 'cases', userId],
+  },
+  uworld: {
+    all: ['uworld'],
+    blocks: (userId) => [...queryKeys.uworld.all, 'blocks', userId],
+  },
   tracking: {
     all: ['tracking'],
-    uworld: () => [...queryKeys.tracking.all, 'uworld'],
-    mrcp: () => [...queryKeys.tracking.all, 'mrcp'],
-    localBoard: () => [...queryKeys.tracking.all, 'localBoard'],
+    report: (userId) => [...queryKeys.tracking.all, 'report', userId],
     activity: (limit) => [...queryKeys.tracking.all, 'activity', limit],
     goals: () => [...queryKeys.tracking.all, 'goals'],
   },
@@ -92,6 +105,7 @@ export const queryKeys = {
     list: (category, type, search, sort) => [...queryKeys.resources.all, 'list', category, type, search, sort],
     detail: (id) => [...queryKeys.resources.all, 'detail', id],
     comments: (id) => [...queryKeys.resources.all, 'comments', id],
+    pins: (userId) => [...queryKeys.resources.all, 'pins', userId],
   },
   categories: {
     all: ['categories'],
@@ -101,6 +115,10 @@ export const queryKeys = {
     all: ['settings'],
     notifPrefs: () => [...queryKeys.settings.all, 'notifPrefs'],
     profile: (userId) => [...queryKeys.settings.all, 'profile', userId],
+  },
+  dashboard: {
+    all: ['dashboard'],
+    stats: (userId) => [...queryKeys.dashboard.all, 'stats', userId],
   },
   user: {
     all: ['user'],

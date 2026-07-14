@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { queryKeys } from '../lib/queryKeys'
 import { FolderOpen, Plus, X, ChevronDown, ChevronRight } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
 import EmptyState from '../components/EmptyState'
@@ -17,71 +19,91 @@ const STATUS_COLORS = {
 
 export default function MRCPView({ onActivity }) {
   const { user } = useAuth()
-  const [systems, setSystems] = useState([])
-  const [topics, setTopics] = useState([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [expandedSystem, setExpandedSystem] = useState(null)
   const [showAdd, setShowAdd] = useState(false)
   const [addSystem, setAddSystem] = useState('')
   const [addTopic, setAddTopic] = useState({ name: '', syllabus_id: '' })
 
-  useEffect(() => { loadData() }, [])
+  const { data: systems = [], isLoading: systemsLoading } = useQuery({
+    queryKey: queryKeys.mrcp.systems(user?.id),
+    queryFn: async () => {
+      const { data, error } = await supabase.from('mrcp_syllabus').select('*').eq('user_id', user.id).order('name')
+      if (error) throw error
+      return data || []
+    },
+    enabled: !!user,
+    staleTime: 15000,
+  })
 
-  async function loadData() {
-    try {
-      const [sysRes, topRes] = await Promise.all([
-        supabase.from('mrcp_syllabus').select('*').eq('user_id', user.id).order('name'),
-        supabase.from('mrcp_topics').select('*').eq('user_id', user.id).order('name'),
-      ])
-      if (sysRes.error) console.error('Error loading MRCP systems:', sysRes.error)
-      if (topRes.error) console.error('Error loading MRCP topics:', topRes.error)
-      setSystems(sysRes.data || [])
-      setTopics(topRes.data || [])
-    } catch (err) {
-      console.error('loadData error:', err)
-    }
-    setLoading(false)
-  }
+  const { data: topics = [], isLoading: topicsLoading } = useQuery({
+    queryKey: queryKeys.mrcp.topics(user?.id),
+    queryFn: async () => {
+      const { data, error } = await supabase.from('mrcp_topics').select('*').eq('user_id', user.id).order('name')
+      if (error) throw error
+      return data || []
+    },
+    enabled: !!user,
+    staleTime: 15000,
+  })
 
-  async function addSystemFn() {
-    if (!addSystem.trim()) return
-    const { data, error } = await supabase.from('mrcp_syllabus').insert({
-      id: crypto.randomUUID(), user_id: user.id, name: addSystem.trim(), status: 'Not Started',
-    }).select()
-    if (error) { alert('Error: ' + error.message); return }
-    setSystems(prev => [...prev, data[0]])
-    setAddSystem('')
-    setShowAdd(false)
-  }
+  const addSystemMutation = useMutation({
+    mutationFn: async () => {
+      if (!addSystem.trim()) return
+      const { data, error } = await supabase.from('mrcp_syllabus').insert({
+        id: crypto.randomUUID(), user_id: user.id, name: addSystem.trim(), status: 'Not Started',
+      }).select()
+      if (error) throw error
+      return data[0]
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mrcp.all })
+      setAddSystem('')
+      setShowAdd(false)
+    },
+    onError: (err) => alert('Error: ' + err.message),
+  })
 
-  async function addTopicFn() {
-    if (!addTopic.name.trim() || !addTopic.syllabus_id) return
-    const { data, error } = await supabase.from('mrcp_topics').insert({
-      id: crypto.randomUUID(), user_id: user.id, syllabus_id: addTopic.syllabus_id, name: addTopic.name.trim(),
-      status: 'Not Started', confidence: 0, repetitions: 0,
-    }).select()
-    if (error) { alert('Error: ' + error.message); return }
-    setTopics(prev => [...prev, data[0]])
-    setAddTopic({ name: '', syllabus_id: '' })
-    setShowAdd(false)
-  }
+  const addTopicMutation = useMutation({
+    mutationFn: async () => {
+      if (!addTopic.name.trim() || !addTopic.syllabus_id) return
+      const { data, error } = await supabase.from('mrcp_topics').insert({
+        id: crypto.randomUUID(), user_id: user.id, syllabus_id: addTopic.syllabus_id, name: addTopic.name.trim(),
+        status: 'Not Started', confidence: 0, repetitions: 0,
+      }).select()
+      if (error) throw error
+      return data[0]
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mrcp.all })
+      setAddTopic({ name: '', syllabus_id: '' })
+      setShowAdd(false)
+    },
+    onError: (err) => alert('Error: ' + err.message),
+  })
 
-  async function updateTopic(id, updates) {
-    const { error } = await supabase.from('mrcp_topics').update(updates).eq('id', id)
-    if (error) { console.error('Error updating topic:', error); return }
-    setTopics(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t))
+  const updateTopicMutation = useMutation({
+    mutationFn: async ({ id, updates }) => {
+      const { error } = await supabase.from('mrcp_topics').update(updates).eq('id', id)
+      if (error) throw error
+      return { id, updates }
+    },
+    onSuccess: async ({ id, updates }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mrcp.all })
 
-    if (onActivity && updates.status) {
-      const topic = topics.find(t => t.id === id)
-      await onActivity({
-        module: 'MRCP',
-        action: 'topic_reviewed',
-        entity_id: id,
-        summary: `Reviewed MRCP topic "${topic?.name || id}" · Status: ${updates.status} · Confidence: ${updates.confidence ?? topic?.confidence ?? 0}`,
-        metadata: JSON.stringify({ topic_id: id, status: updates.status, confidence: updates.confidence }),
-      })
-    }
-  }
+      if (onActivity && updates.status) {
+        const topic = topics.find(t => t.id === id)
+        await onActivity({
+          module: 'MRCP',
+          action: 'topic_reviewed',
+          entity_id: id,
+          summary: `Reviewed MRCP topic "${topic?.name || id}" · Status: ${updates.status} · Confidence: ${updates.confidence ?? topic?.confidence ?? 0}`,
+          metadata: JSON.stringify({ topic_id: id, status: updates.status, confidence: updates.confidence }),
+        })
+      }
+    },
+    onError: (err) => console.error('Error updating topic:', err),
+  })
 
   function getSystemProgress(systemId) {
     const sysTopics = topics.filter(t => t.syllabus_id === systemId)
@@ -90,7 +112,9 @@ export default function MRCPView({ onActivity }) {
     return Math.round((completed / sysTopics.length) * 100)
   }
 
-  if (loading) return <LoadingScreen fullPage={false} message="Loading MRCP syllabus..." />
+  const isLoading = systemsLoading || topicsLoading
+
+  if (isLoading) return <LoadingScreen fullPage={false} message="Loading MRCP syllabus..." />
 
   return (
     <div>
@@ -115,7 +139,7 @@ export default function MRCPView({ onActivity }) {
             <label>New System</label>
             <div style={{ display: 'flex', gap: 8 }}>
               <input value={addSystem} onChange={e => setAddSystem(e.target.value)} placeholder="e.g. Cardiology" style={{ flex: 1 }} />
-              <button className={styles.tab} style={{ background: 'var(--blueL)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--blue)' }} onClick={addSystemFn}>
+               <button className={styles.tab} style={{ background: 'var(--blueL)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--blue)' }} onClick={() => addSystemMutation.mutate()}>
                 <Plus size={14} strokeWidth={2} /> Add
               </button>
             </div>
@@ -131,7 +155,7 @@ export default function MRCPView({ onActivity }) {
             <label>New Topic</label>
             <div style={{ display: 'flex', gap: 8 }}>
               <input value={addTopic.name} onChange={e => setAddTopic({ ...addTopic, name: e.target.value })} placeholder="e.g. Heart Failure" style={{ flex: 1 }} />
-              <button className={styles.tab} style={{ background: 'var(--blueL)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--blue)' }} onClick={addTopicFn}>
+               <button className={styles.tab} style={{ background: 'var(--blueL)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--blue)' }} onClick={() => addTopicMutation.mutate()}>
                 <Plus size={14} strokeWidth={2} /> Add
               </button>
             </div>
@@ -166,8 +190,8 @@ export default function MRCPView({ onActivity }) {
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                           <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{t.name}</span>
-                          <select value={t.status}
-                            onChange={e => updateTopic(t.id, { status: e.target.value })}
+                           <select value={t.status}
+                            onChange={e => updateTopicMutation.mutate({ id: t.id, updates: { status: e.target.value } })}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: STATUS_COLORS[t.status] || 'var(--mist)', outline: 'none' }}>
                             {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
@@ -178,12 +202,12 @@ export default function MRCPView({ onActivity }) {
                           {t.last_reviewed && <span>Last: {new Date(t.last_reviewed).toLocaleDateString()}</span>}
                         </div>
                         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                          <button className={styles.filterBtnSm}
-                            onClick={() => updateTopic(t.id, { confidence: Math.min(100, (t.confidence || 0) + 10) })}>
+                           <button className={styles.filterBtnSm}
+                            onClick={() => updateTopicMutation.mutate({ id: t.id, updates: { confidence: Math.min(100, (t.confidence || 0) + 10) } })}>
                             + Confidence
                           </button>
-                          <button className={styles.filterBtnSm}
-                            onClick={() => updateTopic(t.id, { repetitions: (t.repetitions || 0) + 1, last_reviewed: new Date().toISOString() })}>
+                           <button className={styles.filterBtnSm}
+                            onClick={() => updateTopicMutation.mutate({ id: t.id, updates: { repetitions: (t.repetitions || 0) + 1, last_reviewed: new Date().toISOString() } })}>
                             + Repetition
                           </button>
                         </div>

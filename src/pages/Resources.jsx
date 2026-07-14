@@ -1,7 +1,10 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { apiGet, apiPost } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 import {
   Upload, Search, ArrowUpDown, X, FileText, Image,
   Download, Eye, Plus, Loader2, FolderOpen
@@ -77,17 +80,6 @@ function formatDate(iso) {
   return d.toLocaleDateString()
 }
 
-async function apiJson(res) {
-  if (!res.ok) {
-    const text = await res.text()
-    let msg
-    try { msg = JSON.parse(text).error || text } catch { msg = text.slice(0, 300) }
-    throw new Error(msg || `Request failed (${res.status})`)
-  }
-  const text = await res.text()
-  try { return JSON.parse(text) } catch { throw new Error(text.slice(0, 300)) }
-}
-
 const CATEGORY_COLORS = {
   internal_medicine: 'var(--emerald)',
   surgery: 'var(--red)',
@@ -98,13 +90,12 @@ const CATEGORY_COLORS = {
 export default function Resources() {
   const navigate = useNavigate()
   const { profile } = useAuth()
-  const [resources, setResources] = useState([])
-  const [categories, setCategories] = useState([])
+  const queryClient = useQueryClient()
+
   const [selectedCategory, setSelectedCategory] = useState('')
   const [selectedType, setSelectedType] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [sort, setSort] = useState('created_at')
-  const [loading, setLoading] = useState(true)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -125,34 +116,24 @@ export default function Resources() {
   const [fileDragOver, setFileDragOver] = useState(false)
   const [imageDragOver, setImageDragOver] = useState(false)
 
-  const fetchCategories = useCallback(async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { console.warn('fetchCategories: no session'); return }
-      const res = await fetch(API + '/categories', {
-        headers: { Authorization: 'Bearer ' + session.access_token }
-      })
-      if (res.ok) setCategories(await apiJson(res))
-      else console.error('fetchCategories failed:', res.status, await res.text().catch(() => ''))
-    } catch (e) { console.error('fetchCategories error:', e) }
-  }, [])
+  const { data: categories = [], isLoading: categoriesLoading } = useQuery({
+    queryKey: queryKeys.categories.list(),
+    queryFn: () => apiGet('/categories'),
+    staleTime: 60_000,
+  })
 
-  const fetchResources = useCallback(async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
+  const { data: resources = [], isLoading: resourcesLoading } = useQuery({
+    queryKey: queryKeys.resources.list(selectedCategory, selectedType, searchQuery, sort),
+    queryFn: () => {
       const params = new URLSearchParams()
       if (selectedCategory) params.set('category', selectedCategory)
       if (selectedType) params.set('type', selectedType)
       if (searchQuery) params.set('search', searchQuery)
       params.set('sort', sort)
-      const res = await fetch(API + '/resources?' + params, {
-        headers: { Authorization: 'Bearer ' + session.access_token }
-      })
-      if (res.ok) setResources(await apiJson(res))
-    } catch {} // silently fail
-    setLoading(false)
-  }, [selectedCategory, selectedType, searchQuery, sort])
+      return apiGet('/resources?' + params)
+    },
+    staleTime: 15_000,
+  })
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -160,22 +141,13 @@ export default function Resources() {
     })
   }, [])
 
-  useEffect(() => { fetchCategories() }, [fetchCategories])
-  useEffect(() => { fetchResources() }, [fetchResources])
-
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) return
-    const { data: { session } } = await supabase.auth.getSession()
-    const res = await fetch(API + '/categories', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
-      body: JSON.stringify({ name: newCategoryName.trim() })
-    })
-    const cat = await apiJson(res)
-    setCategories(prev => [...prev, cat])
+    const cat = await apiPost('/categories', { name: newCategoryName.trim() })
     setFormCategory(cat.id)
     setShowNewCategory(false)
     setNewCategoryName('')
+    queryClient.invalidateQueries({ queryKey: queryKeys.categories.all })
   }
 
   const handleUpload = async () => {
@@ -214,7 +186,7 @@ export default function Resources() {
       })
       setUploadOpen(false)
       resetForm()
-      fetchResources()
+      queryClient.invalidateQueries({ queryKey: queryKeys.resources.all })
     } catch (err) {
       alert('Upload failed: ' + err.message)
     } finally {
@@ -315,7 +287,7 @@ export default function Resources() {
         ))}
       </div>
 
-      {loading ? (
+      {resourcesLoading ? (
         <div className={s.loading}><Loader2 size={24} className={s.spinner} /> Loading...</div>
       ) : resources.length === 0 ? (
         <div className={s.empty}>

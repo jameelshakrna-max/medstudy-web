@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useRef } from 'react'
 import { Target, Plus, Flag, Calendar, CheckCircle, Archive } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '../lib/queryKeys'
 import { supabase } from '../lib/supabase'
 import { apiPost } from '../lib/api'
 import LoadingScreen from '../components/LoadingScreen'
@@ -15,17 +17,16 @@ import './Page.module.css'
 
 export default function Goals() {
   const { user } = useAuth()
-  const [loading, setLoading] = useState(true)
-  const [goals, setGoals] = useState([])
-  const [report, setReport] = useState(null)
+  const queryClient = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [editingGoal, setEditingGoal] = useState(null)
   const [celebrationGoal, setCelebrationGoal] = useState(null)
-  const [prevGoals, setPrevGoals] = useState([])
+  const prevGoalsRef = useRef([])
 
-  const loadData = useCallback(async () => {
-    if (!user) return
-    try {
+  const { data, isLoading } = useQuery({
+    queryKey: queryKeys.goals.data(user?.id),
+    enabled: !!user,
+    queryFn: async () => {
       const [goalsRes, blocksRes, mrcpRes, boardRes, activityRes] = await Promise.all([
         supabase.from('goals').select('*').eq('user_id', user.id).order('sort_order', { ascending: true }).order('created_at', { ascending: false }),
         supabase.from('uworld_blocks').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
@@ -42,73 +43,83 @@ export default function Goals() {
         goals: goalsRes.data || [],
       })
 
-      setReport(perfReport)
       const enriched = perfReport.goals || []
-      setGoals(enriched)
-
-      if (prevGoals.length > 0) {
+      const prev = prevGoalsRef.current
+      if (prev.length > 0) {
         for (const g of enriched) {
-          const prev = prevGoals.find(p => p.id === g.id)
-          if (prev && prev.pct < 100 && g.pct >= 100) {
+          const p = prev.find(pg => pg.id === g.id)
+          if (p && p.pct < 100 && g.pct >= 100) {
             setCelebrationGoal(g)
             apiPost('/goals/complete', { title: g.title }).catch(() => {})
             break
           }
         }
       }
-      setPrevGoals(enriched)
-    } catch (err) {
-      console.error('loadData error:', err)
-    }
-    setLoading(false)
-  }, [user])
+      prevGoalsRef.current = enriched
 
-  useEffect(() => { loadData() }, [loadData])
+      return { goals: enriched, report: perfReport }
+    },
+  })
 
-  async function handleCreate(data) {
-    const id = crypto.randomUUID()
-    const insertData = {
-      id,
-      user_id: user.id,
-      title: data.title,
-      goal_type: data.goal_type,
-      target_value: data.target_value,
-      subject_id: data.subject_id || null,
-      module: data.module || null,
-      category: data.category || 'long_term',
-      deadline: data.deadline || null,
-    }
+  const goals = data?.goals || []
+  const report = data?.report || null
 
-    const { error } = await supabase.from('goals').insert(insertData)
-    if (error) { console.error('create goal error:', error); return }
-    setShowForm(false)
-    loadData()
-  }
+  const createMutation = useMutation({
+    mutationFn: async (formData) => {
+      const id = crypto.randomUUID()
+      const { error } = await supabase.from('goals').insert({
+        id,
+        user_id: user.id,
+        title: formData.title,
+        goal_type: formData.goal_type,
+        target_value: formData.target_value,
+        subject_id: formData.subject_id || null,
+        module: formData.module || null,
+        category: formData.category || 'long_term',
+        deadline: formData.deadline || null,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.goals.all })
+      setShowForm(false)
+    },
+  })
 
-  async function handleUpdate(data) {
-    if (!data.id) return
-    const updateData = {
-      title: data.title,
-      goal_type: data.goal_type,
-      target_value: data.target_value,
-      subject_id: data.subject_id || null,
-      module: data.module || null,
-      category: data.category || 'long_term',
-      deadline: data.deadline || null,
-      updated_at: new Date().toISOString(),
-    }
+  const updateMutation = useMutation({
+    mutationFn: async (formData) => {
+      if (!formData.id) return
+      const { error } = await supabase.from('goals').update({
+        title: formData.title,
+        goal_type: formData.goal_type,
+        target_value: formData.target_value,
+        subject_id: formData.subject_id || null,
+        module: formData.module || null,
+        category: formData.category || 'long_term',
+        deadline: formData.deadline || null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', formData.id).eq('user_id', user.id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.goals.all })
+      setEditingGoal(null)
+    },
+  })
 
-    const { error } = await supabase.from('goals').update(updateData).eq('id', data.id).eq('user_id', user.id)
-    if (error) { console.error('update goal error:', error); return }
-    setEditingGoal(null)
-    loadData()
-  }
+  const deleteMutation = useMutation({
+    mutationFn: async (id) => {
+      const { error } = await supabase.from('goals').delete().eq('id', id).eq('user_id', user.id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.goals.all })
+    },
+  })
 
-  async function handleDelete(id) {
-    const { error } = await supabase.from('goals').delete().eq('id', id).eq('user_id', user.id)
-    if (error) { console.error('delete goal error:', error); return }
-    loadData()
-  }
+  function handleCreate(data) { createMutation.mutate(data) }
+  function handleUpdate(data) { updateMutation.mutate(data) }
+  function handleDelete(id) { deleteMutation.mutate(id) }
 
   function handleTemplateSelect(tmpl) {
     setShowForm(true)
@@ -122,7 +133,7 @@ export default function Goals() {
     })
   }
 
-  if (loading) return <LoadingScreen fullPage={false} message="Loading goals..." />
+  if (isLoading) return <LoadingScreen fullPage={false} message="Loading goals..." />
 
   const activeGoals = goals.filter(g => g.status === 'active' || !g.status || g.status === 'active')
   const completedGoals = goals.filter(g => g.status === 'completed')

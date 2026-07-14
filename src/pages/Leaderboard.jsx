@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Virtuoso } from 'react-virtuoso'
 import { Trophy, Clock, BookOpen, Flame, BarChart3 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { apiGet, imageUrl } from '../lib/api'
@@ -63,8 +64,11 @@ export default function Leaderboard() {
       ) : entries.length === 0 ? (
         <div className={s.empty}>No rankings yet. Start studying to appear on the leaderboard!</div>
       ) : (
-        <div className={s.list}>
-          {entries.map((entry) => {
+        <Virtuoso
+          style={{ height: 500 }}
+          totalCount={entries.length}
+          itemContent={(index) => {
+            const entry = entries[index]
             const medal = entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : null
             return (
               <div
@@ -89,8 +93,8 @@ export default function Leaderboard() {
                 <div className={s.value}>{entry.value} {METRICS.find(m => m.key === metric)?.unit}</div>
               </div>
             )
-          })}
-        </div>
+          }}
+        />
       )}
     </div>
   )

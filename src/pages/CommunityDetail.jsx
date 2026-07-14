@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import * as Sentry from '@sentry/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSwipeable } from 'react-swipeable'
+import { Virtuoso } from 'react-virtuoso'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useCommunityRealtime } from '../hooks/useCommunityRealtime'
@@ -105,8 +107,6 @@ export default function CommunityDetail() {
     if (realtime.announcements) setAnnouncements(realtime.announcements)
   }, [realtime.announcements])
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chat.messages])
-
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchMessages), 300)
     return () => clearTimeout(timer)
@@ -182,7 +182,7 @@ export default function CommunityDetail() {
       const data = await apiPost('/communities/' + id + '/join', {})
       if (data.requires_approval) alert('Join request sent for approval')
       else queryClient.invalidateQueries({ queryKey: queryKeys.communities.detail(id) })
-    } catch (e) { alert(e.message) }
+    } catch (e) { Sentry.captureException(e); alert(e.message) }
   }
 
   const handleLeave = async () => {
@@ -190,7 +190,7 @@ export default function CommunityDetail() {
     try {
       await apiPost('/communities/' + id + '/leave', {})
       navigate('/communities')
-    } catch (e) { alert(e.message) }
+    } catch (e) { Sentry.captureException(e); alert(e.message) }
   }
 
   const handleCopyInvite = () => {
@@ -442,9 +442,6 @@ export default function CommunityDetail() {
               </div>
             ) : (
               <>
-                {chat.hasMore && (
-                  <button className={s.loadMore} onClick={chat.loadMore}>Load older messages</button>
-                )}
                 {pendingUploads.map(p => (
                   <div key={p.id} className={`${s.message} ${s.own} ${s.pendingMsg}`}>
                     <div className={s.msgMeta}>
@@ -467,49 +464,60 @@ export default function CommunityDetail() {
                     )}
                   </div>
                 ))}
-                {chat.messages.map(msg => {
-                  const isPinned = pins.some(p => p.message_id === msg.id)
-                  const pinRecord = pins.find(p => p.message_id === msg.id)
-                  return (
-                  <div key={msg.id} id={'msg-' + msg.id} className={`${s.message} ${s.msgRow} ${msg.deleted ? s.deleted : ''} ${msg.user_id === user?.id ? s.own : ''}`}>
-                    <div className={s.msgMeta}>
-                      <UserCard userId={msg.user_id}><span className={s.msgUser}>{msg.user_name}</span></UserCard>
-                      <RoleBadge role={msg.user_role} size="sm" />
-                      <span className={s.msgTime}>{formatDate(msg.created_at)}{msg.is_edited ? ' (edited)' : ''}</span>
-                    </div>
-                    {msg.deleted ? (
-                      <div className={s.msgDeleted}>This message was deleted.</div>
-                    ) : msg.message_type === 'system' ? (
-                      <div className={s.msgSystem}>{msg.content}</div>
-                    ) : msg.message_type === 'flashcard' ? (
-                      <FlashcardMessage msg={msg} onAddToDeck={handleAddToDeck} />
-                    ) : msg.message_type === 'file' ? (
-                      <FileMessage msg={msg} accessToken={accessToken} />
-                    ) : (
-                      <div className={s.msgContent}><MentionText text={msg.content} /></div>
-                    )}
-                    <div className={s.msgActions}>
-                      {isMod && !msg.deleted && msg.message_type !== 'system' && (
-                        <button className={`${s.msgActionBtn} ${s.msgActionBtnPin} ${isPinned ? s.msgActionBtnPinned : ''}`} onClick={() => isPinned ? handleUnpin(pinRecord.id) : handlePinMsg(msg.id)} title={isPinned ? 'Unpin' : 'Pin'}>
-                          <Pin size={12} strokeWidth={1.5} />
-                        </button>
-                      )}
-                      {(msg.user_id === user?.id || isMod) && !msg.deleted && (
-                        <button className={`${s.msgActionBtn} ${s.msgActionBtnDanger}`} onClick={() => handleDeleteMsg(msg.id)} title="Delete">
-                          <Trash2 size={12} strokeWidth={1.5} />
-                        </button>
-                      )}
-                    </div>
-                    {msg.message_type === 'flashcard' && msg.id && (
-                      <button className={s.addToDeckBtn} onClick={() => handleAddToDeck(msg.id)}>
-                        <BookOpen size={12} strokeWidth={1.5} />
-                        Add to My Deck
-                      </button>
-                    )}
-                  </div>
-                  )
-                })}
-                <div ref={messagesEndRef} />
+                <div style={{ flex: 1, minHeight: 0 }}>
+                  <Virtuoso
+                    style={{ height: '100%' }}
+                    totalCount={chat.messages.length}
+                    initialTopMostItemIndex={Math.max(0, chat.messages.length - 1)}
+                    followOutput="auto"
+                    startReached={() => {
+                      if (chat.hasMore && !chat.loading) chat.loadMore()
+                    }}
+                    itemContent={(index) => {
+                      const msg = chat.messages[index]
+                      const isPinned = pins.some(p => p.message_id === msg.id)
+                      const pinRecord = pins.find(p => p.message_id === msg.id)
+                      return (
+                      <div key={msg.id} id={'msg-' + msg.id} className={`${s.message} ${s.msgRow} ${msg.deleted ? s.deleted : ''} ${msg.user_id === user?.id ? s.own : ''}`}>
+                        <div className={s.msgMeta}>
+                          <UserCard userId={msg.user_id}><span className={s.msgUser}>{msg.user_name}</span></UserCard>
+                          <RoleBadge role={msg.user_role} size="sm" />
+                          <span className={s.msgTime}>{formatDate(msg.created_at)}{msg.is_edited ? ' (edited)' : ''}</span>
+                        </div>
+                        {msg.deleted ? (
+                          <div className={s.msgDeleted}>This message was deleted.</div>
+                        ) : msg.message_type === 'system' ? (
+                          <div className={s.msgSystem}>{msg.content}</div>
+                        ) : msg.message_type === 'flashcard' ? (
+                          <FlashcardMessage msg={msg} onAddToDeck={handleAddToDeck} />
+                        ) : msg.message_type === 'file' ? (
+                          <FileMessage msg={msg} accessToken={accessToken} />
+                        ) : (
+                          <div className={s.msgContent}><MentionText text={msg.content} /></div>
+                        )}
+                        <div className={s.msgActions}>
+                          {isMod && !msg.deleted && msg.message_type !== 'system' && (
+                            <button className={`${s.msgActionBtn} ${s.msgActionBtnPin} ${isPinned ? s.msgActionBtnPinned : ''}`} onClick={() => isPinned ? handleUnpin(pinRecord.id) : handlePinMsg(msg.id)} title={isPinned ? 'Unpin' : 'Pin'}>
+                              <Pin size={12} strokeWidth={1.5} />
+                            </button>
+                          )}
+                          {(msg.user_id === user?.id || isMod) && !msg.deleted && (
+                            <button className={`${s.msgActionBtn} ${s.msgActionBtnDanger}`} onClick={() => handleDeleteMsg(msg.id)} title="Delete">
+                              <Trash2 size={12} strokeWidth={1.5} />
+                            </button>
+                          )}
+                        </div>
+                        {msg.message_type === 'flashcard' && msg.id && (
+                          <button className={s.addToDeckBtn} onClick={() => handleAddToDeck(msg.id)}>
+                            <BookOpen size={12} strokeWidth={1.5} />
+                            Add to My Deck
+                          </button>
+                        )}
+                      </div>
+                      )
+                    }}
+                  />
+                </div>
               </>
             )}
           </div>

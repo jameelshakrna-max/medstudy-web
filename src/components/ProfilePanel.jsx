@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import * as Sentry from '@sentry/react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { UserPlus, UserMinus, MessageCircle, Link, Clock, BookOpen, Users, Trophy, Activity, ArrowRight } from 'lucide-react'
 import { useSwipeable } from 'react-swipeable'
@@ -147,6 +148,7 @@ export default function ProfilePanel() {
       closeProfile()
       navigate(`/messages/${result.conversation_id}`)
     } catch (err) {
+      Sentry.captureException(err)
       console.error('Failed to start DM:', err)
     }
   }

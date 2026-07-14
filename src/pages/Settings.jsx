@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { usePomodoroSettings } from '../context/PomodoroContext'
 import { supabase } from '../lib/supabase'
 import { apiGet } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 import { User, Lock, Bell, Palette, Clock, ShieldAlert, Medal, Loader2, Camera, MapPin, LinkIcon, AtSign, FileText, Award } from 'lucide-react'
 import AvatarUpload from '../components/AvatarUpload'
 import BannerUpload from '../components/BannerUpload'
@@ -17,11 +19,10 @@ const MONTH_NAMES = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug',
 export default function Settings() {
   const { user, profile, signOut } = useAuth()
   const { focusMins, setFocusMins, shortMins, setShortMins, longMins, setLongMins } = usePomodoroSettings()
+  const queryClient = useQueryClient()
   const [error, setError] = useState(null)
   const [message, setMessage] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [badges, setBadges] = useState([])
-  const [badgesLoading, setBadgesLoading] = useState(true)
 
   // ── Local state ──
   const [fullName, setFullName] = useState('')
@@ -37,7 +38,6 @@ export default function Settings() {
   const [usernameCooldown, setUsernameCooldown] = useState(null)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileStatus, setProfileStatus] = useState(null)
-  const [userProfile, setUserProfile] = useState(null)
   const [profileVisibility, setProfileVisibility] = useState('public')
   const [activityVisibility, setActivityVisibility] = useState('public')
   const [university, setUniversity] = useState('')
@@ -63,8 +63,6 @@ export default function Settings() {
   // Notifications
   const [pushEnabled, setPushEnabled] = useState(true)
   const [soundEnabled, setSoundEnabled] = useState(true)
-  const [notifPrefs, setNotifPrefs] = useState(null)
-  const [notifPrefsLoading, setNotifPrefsLoading] = useState(true)
   const [notifPrefsStatus, setNotifPrefsStatus] = useState(null)
 
   // Appearance
@@ -104,53 +102,56 @@ export default function Settings() {
     if (saved) setNameLastChanged(parseInt(saved, 10))
   }, [])
 
-  useEffect(() => {
-    if (!user?.id) return
-    setNotifPrefsLoading(true)
-    apiGet('/notifications/preferences').then(setNotifPrefs).catch(() => setNotifPrefs(null)).finally(() => setNotifPrefsLoading(false))
-  }, [user?.id])
+  const { data: notifPrefsData, isLoading: isNotifPrefsLoading } = useQuery({
+    queryKey: queryKeys.settings.notifPrefs(),
+    queryFn: () => apiGet('/notifications/preferences'),
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  })
 
-  useEffect(() => {
-    if (!user?.id) return
-    setBadgesLoading(true)
-    apiGet(`/users/${user.id}/badges`).then(setBadges).catch(() => setBadges([])).finally(() => setBadgesLoading(false))
-  }, [user?.id])
+  const { data: badgesData, isLoading: isBadgesLoading } = useQuery({
+    queryKey: queryKeys.profile.badges(user?.id),
+    queryFn: () => apiGet(`/users/${user.id}/badges`),
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  })
 
-  useEffect(() => {
-    if (!user?.id) return
-    const API = import.meta.env.VITE_API_URL || '/api'
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session?.access_token) return
-      fetch(`${API}/users/${user.id}/profile`, {
+  const { data: profileData } = useQuery({
+    queryKey: queryKeys.settings.profile(user?.id),
+    queryFn: async () => {
+      const API = import.meta.env.VITE_API_URL || '/api'
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) return null
+      const res = await fetch(`${API}/users/${user.id}/profile`, {
         headers: { 'Authorization': 'Bearer ' + session.access_token }
       })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data) {
-          setUserProfile(data)
-          setUsername(data.username || '')
-          setBio(data.bio || '')
-          setWebsite(data.website || '')
-          setLocation(data.location || '')
-          setActiveTitle(data.active_title || '')
-          setFullName(data.display_name || profile?.full_name || '')
-          setProfileVisibility(data.profile_visibility || 'public')
-          setActivityVisibility(data.activity_visibility || 'public')
-          setUniversity(data.university || '')
-          setGraduationYear(data.graduation_year || '')
-          setSpecialty(data.specialty || '')
-          try {
-            const langs = typeof data.languages === 'string' ? JSON.parse(data.languages) : data.languages
-            setLanguages(Array.isArray(langs) ? langs.join(', ') : '')
-          } catch { setLanguages('') }
-        }
-      })
-      .catch(() => {})
-    })
-  }, [user?.id])
+      return res.ok ? res.json() : null
+    },
+    enabled: !!user?.id,
+    staleTime: 30_000,
+  })
 
   useEffect(() => {
-    if (!username || username === userProfile?.username) {
+    if (!profileData) return
+    setUsername(profileData.username || '')
+    setBio(profileData.bio || '')
+    setWebsite(profileData.website || '')
+    setLocation(profileData.location || '')
+    setActiveTitle(profileData.active_title || '')
+    setFullName(profileData.display_name || profile?.full_name || '')
+    setProfileVisibility(profileData.profile_visibility || 'public')
+    setActivityVisibility(profileData.activity_visibility || 'public')
+    setUniversity(profileData.university || '')
+    setGraduationYear(profileData.graduation_year || '')
+    setSpecialty(profileData.specialty || '')
+    try {
+      const langs = typeof profileData.languages === 'string' ? JSON.parse(profileData.languages) : profileData.languages
+      setLanguages(Array.isArray(langs) ? langs.join(', ') : '')
+    } catch { setLanguages('') }
+  }, [profileData])
+
+  useEffect(() => {
+    if (!username || username === profileData?.username) {
       setUsernameStatus(null)
       return
     }
@@ -171,7 +172,7 @@ export default function Settings() {
       })
     }, 500)
     return () => clearTimeout(timer)
-  }, [username, userProfile?.username])
+  }, [username, profileData?.username])
 
   // ── Accordion toggle ──
   const toggleSection = (section) => {
@@ -307,9 +308,9 @@ export default function Settings() {
   }
 
   const handleNotifPrefToggle = async (key) => {
-    if (!notifPrefs) return
-    const updated = { ...notifPrefs, [key]: notifPrefs[key] ? 0 : 1 }
-    setNotifPrefs(updated)
+    if (!notifPrefsData) return
+    const updated = { ...notifPrefsData, [key]: notifPrefsData[key] ? 0 : 1 }
+    queryClient.setQueryData(queryKeys.settings.notifPrefs(), updated)
     setNotifPrefsStatus(null)
     try {
       const API = import.meta.env.VITE_API_URL || '/api'
@@ -322,7 +323,7 @@ export default function Settings() {
       if (!res.ok) throw new Error('Failed to save')
       setNotifPrefsStatus({ type: 'success', msg: 'Saved' })
     } catch (err) {
-      setNotifPrefs({ ...notifPrefs, [key]: notifPrefs[key] })
+      queryClient.setQueryData(queryKeys.settings.notifPrefs(), notifPrefsData)
       setNotifPrefsStatus({ type: 'error', msg: err.message })
     }
   }
@@ -393,6 +394,9 @@ export default function Settings() {
       setNameLastChanged(now)
       localStorage.setItem('medstudy-name-last-changed', String(now))
 
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.profile(user?.id) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile.all })
+
       setProfileStatus({ type: 'success', msg: 'Profile updated successfully!' })
     } catch (err) {
       setProfileStatus({ type: 'error', msg: err.message || 'Failed to update profile' })
@@ -410,8 +414,8 @@ export default function Settings() {
       content: (
         <>
           {/* Profile Completion */}
-          {userProfile?.profile_completion && (
-            <ProfileCompletion completion={userProfile.profile_completion} />
+          {profileData?.profile_completion && (
+            <ProfileCompletion completion={profileData.profile_completion} />
           )}
 
           {/* Banner Upload */}
@@ -419,10 +423,10 @@ export default function Settings() {
             <label className={s.label}>Profile Banner</label>
             <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid var(--card-border)' }}>
               <BannerUpload
-                url={userProfile?.banner_url}
+                url={profileData?.banner_url}
                 userId={user?.id}
                 editable={true}
-                onChange={(url) => setUserProfile(prev => ({ ...prev, banner_url: url }))}
+                onChange={(url) => queryClient.setQueryData(queryKeys.settings.profile(user?.id), prev => ({ ...prev, banner_url: url }))}
               />
             </div>
           </div>
@@ -430,12 +434,12 @@ export default function Settings() {
           {/* Avatar + Basic Info */}
           <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 20 }}>
             <AvatarUpload
-              url={userProfile?.avatar_url}
+              url={profileData?.avatar_url}
               size="lg"
               userName={fullName || profile?.full_name}
               userId={user?.id}
               editable={true}
-              onChange={(url) => setUserProfile(prev => ({ ...prev, avatar_url: url }))}
+              onChange={(url) => queryClient.setQueryData(queryKeys.settings.profile(user?.id), prev => ({ ...prev, avatar_url: url }))}
             />
             <div style={{ flex: 1 }}>
               <div className={s.field}>
@@ -748,9 +752,9 @@ export default function Settings() {
 
           <div style={{ borderTop: '1px solid var(--card-border)', marginTop: 12, paddingTop: 12 }}>
             <p className={s.label} style={{ marginBottom: 12 }}>In-App Notification Categories</p>
-            {notifPrefsLoading ? (
+            {isNotifPrefsLoading ? (
               <div style={{ fontSize: 13, color: 'var(--mist)' }}>Loading preferences...</div>
-            ) : notifPrefs ? (
+            ) : notifPrefsData ? (
               <>
                 {[
                   { key: 'mentions', label: 'Mentions', desc: 'When someone @mentions you in a community' },
@@ -771,7 +775,7 @@ export default function Settings() {
                       <p className={s.toggleDesc}>{desc}</p>
                     </div>
                     <label className={s.toggle}>
-                      <input type="checkbox" checked={!!notifPrefs[key]} onChange={() => handleNotifPrefToggle(key)} />
+                      <input type="checkbox" checked={!!notifPrefsData[key]} onChange={() => handleNotifPrefToggle(key)} />
                       <span className={s.slider} />
                     </label>
                   </div>
@@ -818,13 +822,13 @@ export default function Settings() {
       title: 'Badges',
       content: (
         <>
-          {badgesLoading ? (
+          {isBadgesLoading ? (
             <div className={s.badgesLoading}><Loader2 size={16} className={s.spinner} /> Loading badges...</div>
-          ) : badges.length === 0 ? (
+          ) : (badgesData || []).length === 0 ? (
             <p className={s.badgesEmpty}>No badges yet. Study hard and compete in community leaderboards to earn monthly badges!</p>
           ) : (
             <div className={s.badgesList}>
-              {badges.map(b => (
+              {badgesData.map(b => (
                 <div key={`${b.community_id}-${b.year}-${b.month}`} className={s.badgeCard}>
                   <span className={s.badgeEmoji}>{b.emoji}</span>
                   <div className={s.badgeInfo}>

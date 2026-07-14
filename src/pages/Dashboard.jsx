@@ -1,6 +1,8 @@
-import { useEffect, useState, memo } from 'react'
+import { memo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { queryKeys } from '../lib/queryKeys'
 import { Timer, BookOpen, BrainCircuit, Target, Lightbulb, ArrowRight, Check, ChevronRight } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
 import { calculateGoalProgress } from '../services/goalProgress'
@@ -34,14 +36,12 @@ const DashStatCards = memo(function DashStatCards({ stats }) {
 
 export default function Dashboard() {
   const { profile, user } = useAuth()
-  const [stats, setStats] = useState({ sessions: 0, pomodoros: 0, topicsInProgress: 0, cardsdue: 0 })
-  const [goalSummaries, setGoalSummaries] = useState([])
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => { if (user) loadStats() }, [user])
-
-  async function loadStats() {
-    try {
+  const { data, isLoading } = useQuery({
+    queryKey: queryKeys.dashboard.stats(user?.id),
+    enabled: !!user,
+    staleTime: 30_000,
+    queryFn: async () => {
       const today = new Date().toISOString().split('T')[0]
 
       const [s, p, t, goalsRes, blocksRes, mrcpRes, boardRes] = await Promise.all([
@@ -70,14 +70,15 @@ export default function Dashboard() {
         console.error('Dashboard due-count fetch error:', e)
       }
 
-      setStats({
+      const stats = {
         sessions: s.count || 0,
         pomodoros: p.count || 0,
         topicsInProgress: t.count || 0,
         cardsdue
-      })
+      }
 
       const goals = goalsRes.data || []
+      let goalSummaries = []
       if (goals.length > 0) {
         const blocks = blocksRes.data || []
         const mrcpTopics = mrcpRes.data || []
@@ -119,13 +120,15 @@ export default function Dashboard() {
           performance: perf,
         }
 
-        setGoalSummaries(goals.map(g => calculateGoalProgress(g, report)).filter(g => g.status !== 'expired'))
+        goalSummaries = goals.map(g => calculateGoalProgress(g, report)).filter(g => g.status !== 'expired')
       }
-    } catch (err) {
-      console.error('loadStats error:', err)
-    }
-    setLoading(false)
-  }
+
+      return { stats, goalSummaries }
+    },
+  })
+
+  const stats = data?.stats ?? { sessions: 0, pomodoros: 0, topicsInProgress: 0, cardsdue: 0 }
+  const goalSummaries = data?.goalSummaries ?? []
 
   const greeting = () => {
     const h = new Date().getHours()
@@ -134,7 +137,7 @@ export default function Dashboard() {
     return 'Good evening'
   }
 
-  if (loading) return <LoadingScreen fullPage={false} message="Loading..." />
+  if (isLoading) return <LoadingScreen fullPage={false} message="Loading..." />
 
   return (
     <div className={styles.page}>

@@ -1,6 +1,8 @@
-import { useEffect, useState, useMemo, memo } from 'react'
+import { useState, useMemo, memo, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { queryKeys } from '../lib/queryKeys'
 import { Flame, X } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
 import styles from './Page.module.css'
@@ -30,23 +32,20 @@ const StatsCards = memo(function StatsCards({ totalMin, totalSessions, avgDurati
 
 export default function Sessions() {
   const { user } = useAuth()
-  const [sessions, setSessions] = useState([])
+  const queryClient = useQueryClient()
   const [form, setForm] = useState({ label: '', date: '', duration_min: 60, session_type: 'Study', energy_level: 'High', focus_quality: 'Deep focus', goals_met: false, notes: '' })
   const [view, setView] = useState('list')
-  const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('week')
   const [typeFilter, setTypeFilter] = useState('all')
 
-  useEffect(() => { loadSessions(); setForm(f => ({ ...f, date: new Date().toISOString().split('T')[0] })) }, [])
+  useEffect(() => { setForm(f => ({ ...f, date: new Date().toISOString().split('T')[0] })) }, [])
 
-  async function loadSessions() {
-    try {
-      const { data, error } = await supabase.from('study_sessions').select('*').eq('user_id', user.id).order('date', { ascending: false }).order('created_at', { ascending: false }).limit(200)
-      if (error) console.error('Error loading sessions:', error)
-      setSessions(data || [])
-    } catch (err) { console.error('loadSessions error:', err) }
-    setLoading(false)
-  }
+  const { data: sessions = [], isLoading } = useQuery({
+    queryKey: queryKeys.sessions.list(user?.id),
+    queryFn: () => supabase.from('study_sessions').select('*').eq('user_id', user.id).order('date', { ascending: false }).order('created_at', { ascending: false }).limit(200).then(d => Array.isArray(d.data) ? d.data : []),
+    enabled: !!user,
+    staleTime: 15000,
+  })
 
   async function addSession() {
     if (!form.label) return
@@ -54,7 +53,7 @@ export default function Sessions() {
       const { error } = await supabase.from('study_sessions').insert({ user_id: user.id, label: form.label, date: form.date, duration_min: form.duration_min, session_type: form.session_type, energy_level: form.energy_level, focus_quality: form.focus_quality, goals_met: form.goals_met, notes: form.notes || null })
       if (error) { alert('Error logging session: ' + error.message); return }
       setForm(f => ({ ...f, label: '', notes: '', goals_met: false }))
-      loadSessions()
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all })
       setView('list')
     } catch (err) { console.error('addSession error:', err) }
   }
@@ -64,7 +63,7 @@ export default function Sessions() {
     try {
       const { error } = await supabase.from('study_sessions').delete().eq('id', id)
       if (error) { alert('Error deleting: ' + error.message); return }
-      loadSessions()
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all })
     } catch (err) { console.error('deleteSession error:', err) }
   }
 
@@ -144,7 +143,7 @@ export default function Sessions() {
     return count
   }, [sessions])
 
-  if (loading) return <LoadingScreen fullPage={false} message="Loading sessions..." />
+  if (isLoading) return <LoadingScreen fullPage={false} message="Loading sessions..." />
 
   return (
     <div className={styles.page}>

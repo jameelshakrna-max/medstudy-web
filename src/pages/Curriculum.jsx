@@ -1,44 +1,42 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { queryKeys } from '../lib/queryKeys'
 import { Trash2, Star, Plus, X } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
 import styles from './Page.module.css'
 
 export default function Curriculum() {
   const { user } = useAuth()
-  const [systems, setSystems] = useState([])
-  const [subjects, setSubjects] = useState([])
-  const [topics, setTopics] = useState([])
+  const queryClient = useQueryClient()
   const [view, setView] = useState('systems')
   const [showAdd, setShowAdd] = useState(false)
-  const [loading, setLoading] = useState(true)
 
-  // Add forms
   const [sysForm, setSysForm] = useState({ name: '', high_yield: false })
   const [subForm, setSubForm] = useState({ name: '', system_id: '', high_yield: false, difficulty: 'Medium' })
   const [topForm, setTopForm] = useState({ name: '', subject_id: '', high_yield: false, difficulty: 'Medium' })
 
-  useEffect(() => { loadData() }, [])
+  const { data: systems = [], isLoading: systemsLoading } = useQuery({
+    queryKey: queryKeys.curriculum.systems(),
+    queryFn: () => supabase.from('curriculum_systems').select('*').eq('user_id', user.id).order('name').then(d => Array.isArray(d.data) ? d.data : []),
+    enabled: !!user,
+    staleTime: 15000,
+  })
 
-  async function loadData() {
-    try {
-      const [sysRes, subRes, topRes] = await Promise.all([
-        supabase.from('curriculum_systems').select('*').eq('user_id', user.id).order('name'),
-        supabase.from('curriculum_subjects').select('*').eq('user_id', user.id).order('name'),
-        supabase.from('curriculum_topics').select('*').eq('user_id', user.id).order('name').limit(200),
-      ])
-      if (sysRes.error) console.error('Error loading systems:', sysRes.error)
-      if (subRes.error) console.error('Error loading subjects:', subRes.error)
-      if (topRes.error) console.error('Error loading topics:', topRes.error)
-      setSystems(sysRes.data || [])
-      setSubjects(subRes.data || [])
-      setTopics(topRes.data || [])
-    } catch (err) {
-      console.error('loadData error:', err)
-    }
-    setLoading(false)
-  }
+  const { data: subjects = [], isLoading: subjectsLoading } = useQuery({
+    queryKey: queryKeys.curriculum.subjects(),
+    queryFn: () => supabase.from('curriculum_subjects').select('*').eq('user_id', user.id).order('name').then(d => Array.isArray(d.data) ? d.data : []),
+    enabled: !!user,
+    staleTime: 15000,
+  })
+
+  const { data: topics = [], isLoading: topicsLoading } = useQuery({
+    queryKey: queryKeys.curriculum.topics(200),
+    queryFn: () => supabase.from('curriculum_topics').select('*').eq('user_id', user.id).order('name').limit(200).then(d => Array.isArray(d.data) ? d.data : []),
+    enabled: !!user,
+    staleTime: 15000,
+  })
 
   async function addSystem() {
     if (!sysForm.name.trim()) return
@@ -50,9 +48,9 @@ export default function Curriculum() {
       priority: 1,
     }).select()
     if (error) { alert('Error: ' + error.message); return }
-    setSystems(prev => [...prev, data[0]])
     setSysForm({ name: '', high_yield: false })
     setShowAdd(false)
+    queryClient.invalidateQueries({ queryKey: queryKeys.curriculum.all })
   }
 
   async function addSubject() {
@@ -66,9 +64,9 @@ export default function Curriculum() {
       status: 'Not Started',
     }).select()
     if (error) { alert('Error: ' + error.message); return }
-    setSubjects(prev => [...prev, data[0]])
     setSubForm({ name: '', system_id: '', high_yield: false, difficulty: 'Medium' })
     setShowAdd(false)
+    queryClient.invalidateQueries({ queryKey: queryKeys.curriculum.all })
   }
 
   async function addTopic() {
@@ -84,18 +82,16 @@ export default function Curriculum() {
       confidence: 0,
     }).select()
     if (error) { alert('Error: ' + error.message); return }
-    setTopics(prev => [...prev, data[0]])
     setTopForm({ name: '', subject_id: '', high_yield: false, difficulty: 'Medium' })
     setShowAdd(false)
+    queryClient.invalidateQueries({ queryKey: queryKeys.curriculum.all })
   }
 
   async function deleteItem(table, id) {
     if (!confirm('Delete this item?')) return
     const { error } = await supabase.from(table).delete().eq('id', id)
     if (error) { alert('Error: ' + error.message); return }
-    if (table === 'curriculum_systems') setSystems(prev => prev.filter(x => x.id !== id))
-    else if (table === 'curriculum_subjects') setSubjects(prev => prev.filter(x => x.id !== id))
-    else if (table === 'curriculum_topics') setTopics(prev => prev.filter(x => x.id !== id))
+    queryClient.invalidateQueries({ queryKey: queryKeys.curriculum.all })
   }
 
   async function updateTopicStatus(id, status) {
@@ -109,7 +105,7 @@ export default function Curriculum() {
         alert('Error updating topic: ' + error.message)
         return
       }
-      setTopics(prev => prev.map(t => t.id === id ? { ...t, status, completion_pct: completionPct } : t))
+      queryClient.invalidateQueries({ queryKey: queryKeys.curriculum.all })
     } catch (err) {
       console.error('updateTopicStatus error:', err)
     }
@@ -127,7 +123,7 @@ export default function Curriculum() {
 
   const statusColor = s => s === 'In Progress' ? 'var(--blue)' : s === 'Complete' ? 'var(--emerald)' : s === 'Reviewing' ? 'var(--indigo)' : 'var(--mist)'
 
-  if (loading) return <LoadingScreen fullPage={false} message="Loading curriculum..." />
+  if (systemsLoading) return <LoadingScreen fullPage={false} message="Loading curriculum..." />
 
   return (
     <div className={styles.page}>

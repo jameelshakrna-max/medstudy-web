@@ -1,5 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { ErrorBoundary } from 'react-error-boundary'
+import ErrorFallback from './components/ErrorFallback'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { AuthProvider, useAuth } from './context/AuthContext'
@@ -116,7 +118,9 @@ export default function App() {
             <PresenceProvider>
               <NotificationProvider>
                 <ProfilePanelProvider>
-                  <AppRoutes />
+                  <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => window.location.reload()}>
+                    <AppRoutes />
+                  </ErrorBoundary>
                   <ProfilePanel />
                 </ProfilePanelProvider>
               </NotificationProvider>
