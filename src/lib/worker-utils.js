@@ -189,3 +189,27 @@ export function mapResource(r) {
     updated_at: r.updated_at,
   }
 }
+
+/* ── Profile Visibility ── */
+
+export async function getProfileVisibility(env, userId) {
+  const { results } = await env.DB.prepare(
+    `SELECT profile_visibility FROM user_profiles WHERE user_id = ?`
+  ).bind(userId).all()
+  return results[0]?.profile_visibility || 'public'
+}
+
+export function isProfileVisible(visibility, viewerId, targetId) {
+  if (viewerId === targetId) return true
+  return visibility !== 'private'
+}
+
+export async function filterVisibleUsers(env, userIds, viewerId) {
+  if (!userIds.length) return []
+  const { results } = await env.DB.prepare(
+    `SELECT user_id, profile_visibility FROM user_profiles WHERE user_id IN (${userIds.map(() => '?').join(',')})`
+  ).bind(...userIds).all()
+  return results
+    .filter(r => isProfileVisible(r.profile_visibility, viewerId, r.user_id))
+    .map(r => r.user_id)
+}

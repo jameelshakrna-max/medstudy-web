@@ -2,6 +2,8 @@ import { ROLES, hasMinimumRole } from '../lib/permissions.js'
 import {
   json, uuid, log, corsHeaders, extractCommunityId, getMember, pageParams,
 } from '../lib/worker-utils.js'
+import { checkStreakMilestones } from './notifications.js'
+import { checkAndAwardAchievements } from './achievements.js'
 
 function badgeEmoji(rank) {
   if (rank === 1) return '🥇'
@@ -126,10 +128,12 @@ export async function handleMonthlyLeaderboard(request, env, user) {
   const nameMap = {}
   if (hours.length > 0) {
     const { results: nameRows } = await env.DB.prepare(
-      `SELECT user_id, user_name FROM user_profiles
+      `SELECT user_id, user_name, profile_visibility FROM user_profiles
        WHERE user_id IN (${hours.map(h => '?').join(',')})`
     ).bind(...hours.map(h => h.user_id)).all()
-    for (const r of nameRows) { nameMap[r.user_id] = r.user_name }
+    for (const r of nameRows) {
+      nameMap[r.user_id] = { name: r.user_name, hidden: r.profile_visibility === 'private' }
+    }
   }
 
   const { results: badges } = await env.DB.prepare(
@@ -155,13 +159,15 @@ export async function handleMonthlyLeaderboard(request, env, user) {
     for (const b of newBadges) { badgeMap[b.user_id] = b }
   }
 
-  const ranked = hours.map((h, i) => ({
+  const visible = hours.filter(h => !nameMap[h.user_id]?.hidden || h.user_id === user?.sub)
+
+  const ranked = visible.map((h, i) => ({
     rank: i + 1,
     user_id: h.user_id,
-    user_name: nameMap[h.user_id] || h.user_id?.slice(0, 8) || 'Unknown',
+    user_name: nameMap[h.user_id]?.hidden ? '[Private]' : (nameMap[h.user_id]?.name || h.user_id?.slice(0, 8) || 'Unknown'),
     hours: Math.round(h.hours * 10) / 10,
     badge: badgeMap[h.user_id] ? { emoji: badgeEmoji(badgeMap[h.user_id].rank), rank: badgeMap[h.user_id].rank, title: badgeMap[h.user_id].title || '' } : null,
-    is_me: h.user_id === user.sub,
+    is_me: h.user_id === user?.sub,
   }))
 
   return json(ranked)
@@ -274,18 +280,22 @@ export async function handleAllTimeLeaderboard(request, env, user) {
   const nameMap = {}
   if (allTime.length > 0) {
     const { results: nameRows } = await env.DB.prepare(
-      `SELECT user_id, user_name FROM user_profiles
+      `SELECT user_id, user_name, profile_visibility FROM user_profiles
        WHERE user_id IN (${allTime.map(h => '?').join(',')})`
     ).bind(...allTime.map(h => h.user_id)).all()
-    for (const r of nameRows) { nameMap[r.user_id] = r.user_name }
+    for (const r of nameRows) {
+      nameMap[r.user_id] = { name: r.user_name, hidden: r.profile_visibility === 'private' }
+    }
   }
 
-  const ranked = allTime.map((h, i) => ({
+  const visible = allTime.filter(h => !nameMap[h.user_id]?.hidden || h.user_id === user?.sub)
+
+  const ranked = visible.map((h, i) => ({
     rank: i + 1,
     user_id: h.user_id,
-    user_name: nameMap[h.user_id] || h.user_id?.slice(0, 8),
+    user_name: nameMap[h.user_id]?.hidden ? '[Private]' : (nameMap[h.user_id]?.name || h.user_id?.slice(0, 8)),
     hours: Math.round((h.hours || 0) * 10) / 10,
-    is_me: h.user_id === user.sub,
+    is_me: h.user_id === user?.sub,
   }))
 
   return json(ranked)
@@ -458,6 +468,13 @@ export async function handleUserBadges(request, env) {
   const parts = url.pathname.split('/')
   const targetUserId = parts[4]
 
+  const { results: visRows } = await env.DB.prepare(
+    `SELECT profile_visibility FROM user_profiles WHERE user_id = ?`
+  ).bind(targetUserId).all()
+  if (visRows.length && visRows[0].profile_visibility === 'private') {
+    return json([])
+  }
+
   const { results: badges } = await env.DB.prepare(
     `SELECT cmb.*, c.name as community_name
      FROM community_monthly_badges cmb
@@ -475,6 +492,51 @@ export async function handleUserBadges(request, env) {
     emoji: badgeEmoji(b.rank),
     title: b.title || '',
     awarded_at: b.awarded_at,
+  })))
+}
+
+// ── Global Leaderboard ──
+
+export async function handleGlobalLeaderboard(request, env, user) {
+  const url = new URL(request.url)
+  const metric = url.searchParams.get('metric') || 'study_hours'
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 100)
+
+  let q, orderCol
+  if (metric === 'questions') {
+    q = `SELECT user_id, questions_answered as value FROM user_stats WHERE questions_answered > 0 ORDER BY questions_answered DESC LIMIT ?`
+    orderCol = 'value'
+  } else if (metric === 'cards') {
+    q = `SELECT user_id, cards_reviewed as value FROM user_stats WHERE cards_reviewed > 0 ORDER BY cards_reviewed DESC LIMIT ?`
+    orderCol = 'value'
+  } else if (metric === 'streak') {
+    q = `SELECT user_id, current_streak as value FROM user_stats WHERE current_streak > 0 ORDER BY current_streak DESC LIMIT ?`
+    orderCol = 'value'
+  } else {
+    q = `SELECT user_id, study_hours as value FROM user_stats WHERE study_hours > 0 ORDER BY study_hours DESC LIMIT ?`
+    orderCol = 'value'
+  }
+
+  const { results } = await env.DB.prepare(q).bind(limit).all()
+  if (!results.length) return json([])
+
+  const nameMap = {}
+  const { results: nameRows } = await env.DB.prepare(
+    `SELECT user_id, user_name, avatar_url, profile_visibility FROM user_profiles WHERE user_id IN (${results.map(() => '?').join(',')})`
+  ).bind(...results.map(r => r.user_id)).all()
+  for (const r of nameRows) {
+    nameMap[r.user_id] = { name: r.user_name, avatar: r.avatar_url, hidden: r.profile_visibility === 'private' }
+  }
+
+  const visible = results.filter(r => !nameMap[r.user_id]?.hidden || r.user_id === user?.sub)
+
+  return json(visible.map((r, i) => ({
+    rank: i + 1,
+    user_id: r.user_id,
+    user_name: nameMap[r.user_id]?.hidden ? '[Private]' : (nameMap[r.user_id]?.name || r.user_id?.slice(0, 8)),
+    avatar_url: nameMap[r.user_id]?.hidden ? null : (nameMap[r.user_id]?.avatar || null),
+    value: Math.round((r.value || 0) * 10) / 10,
+    is_me: r.user_id === user?.sub,
   })))
 }
 
@@ -615,6 +677,17 @@ export async function refreshUserStats(env, userId) {
     current_streak: currentStreak,
     longest_streak: longestStreak,
   }
+}
+
+// Check streak milestones after refresh and fire notifications (best-effort)
+export async function refreshUserStatsAndNotify(env, userId) {
+  const stats = await refreshUserStats(env, userId)
+  if (stats?.current_streak > 0) {
+    await checkStreakMilestones(env, userId, stats.current_streak)
+  }
+  // Check achievements (best-effort)
+  checkAndAwardAchievements(env, userId).catch(() => {})
+  return stats
 }
 
 export async function logUserActivity(env, userId, type, entityId, entityType, metadata = {}) {

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Target, Plus, Flag, Calendar, CheckCircle, Archive } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { apiPost } from '../lib/api'
 import LoadingScreen from '../components/LoadingScreen'
 import GoalCard from '../components/GoalCard'
 import GoalForm from '../components/GoalForm'
@@ -50,6 +51,7 @@ export default function Goals() {
           const prev = prevGoals.find(p => p.id === g.id)
           if (prev && prev.pct < 100 && g.pct >= 100) {
             setCelebrationGoal(g)
+            apiPost('/goals/complete', { title: g.title }).catch(() => {})
             break
           }
         }

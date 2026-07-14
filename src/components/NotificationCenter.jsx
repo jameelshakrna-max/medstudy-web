@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Bell, CheckCheck, BookOpen, Users, Award, MessageCircle, Settings, Inbox, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { apiGet, apiPost, formatDate } from '../lib/api'
+import { useNotifications } from '../context/NotificationContext'
 import styles from './NotificationCenter.module.css'
 
 const CATEGORIES = [
@@ -29,6 +30,7 @@ const CATEGORY_ICONS = {
 }
 
 export default function NotificationCenter({ user }) {
+  const { unreadCount: ctxUnread, refreshUnread } = useNotifications()
   const [notifications, setNotifications] = useState([])
   const [unreadCounts, setUnreadCounts] = useState({})
   const [activeTab, setActiveTab] = useState('all')
@@ -36,7 +38,7 @@ export default function NotificationCenter({ user }) {
   const [loading, setLoading] = useState(false)
   const ref = useRef()
   const navigate = useNavigate()
-  const totalUnread = unreadCounts.all || 0
+  const totalUnread = ctxUnread || unreadCounts.all || 0
 
   const loadNotifications = useCallback(async (category) => {
     if (!user) return
@@ -51,32 +53,17 @@ export default function NotificationCenter({ user }) {
     setLoading(false)
   }, [user])
 
-  const loadCounts = useCallback(async () => {
-    if (!user) return
-    try {
-      const data = await apiGet('/notifications/unread-counts')
-      setUnreadCounts(data || {})
-    } catch {}
-  }, [user])
-
   useEffect(() => {
     if (user) {
       loadNotifications(activeTab)
-      loadCounts()
     }
-  }, [user, activeTab, loadNotifications, loadCounts])
-
-  useEffect(() => {
-    if (!user) return
-    const interval = setInterval(loadCounts, 30000)
-    return () => clearInterval(interval)
-  }, [user, loadCounts])
+  }, [user, activeTab, loadNotifications])
 
   const markAllRead = async () => {
     try {
       await apiPost('/notifications/read-all', {})
       setNotifications(prev => prev.map(n => ({ ...n, read: 1 })))
-      loadCounts()
+      refreshUnread()
     } catch {}
   }
 
@@ -84,7 +71,7 @@ export default function NotificationCenter({ user }) {
     try {
       await apiPost(`/notifications/${id}/read`, {})
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: 1 } : n))
-      loadCounts()
+      refreshUnread()
     } catch {}
   }
 

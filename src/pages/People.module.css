@@ -1,0 +1,56 @@
+.page { padding-bottom: 40px; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.title { font-family: 'DM Serif Display', serif; font-size: clamp(24px, 4vw, 36px); color: var(--text-primary); }
+
+.searchWrap { position: relative; margin-bottom: 28px; max-width: 520px; }
+.searchIcon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--mist); pointer-events: none; }
+.searchInput {
+  width: 100%; padding: 12px 40px 12px 40px;
+  background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 14px;
+  color: var(--text-primary); font-family: 'DM Sans', sans-serif; font-size: 15px; outline: none;
+}
+.searchInput:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blueL); }
+.clearBtn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--mist); cursor: pointer; }
+
+.section { margin-bottom: 32px; }
+.sectionTitle { font-size: 18px; font-weight: 700; color: var(--text-primary); margin-bottom: 16px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+
+.card {
+  background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
+  padding: 18px; display: flex; align-items: center; gap: 14px;
+  cursor: pointer; transition: all 0.3s; backdrop-filter: blur(12px);
+}
+.card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.2); border-color: var(--blueL); }
+
+.avatar {
+  width: 48px; height: 48px; border-radius: 14px; background: var(--blueL);
+  color: var(--blue); display: flex; align-items: center; justify-content: center;
+  overflow: hidden; flex-shrink: 0; font-weight: 700; font-size: 18px;
+}
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.info { flex: 1; min-width: 0; }
+.name { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.username { font-size: 12px; color: var(--mist); margin-bottom: 4px; }
+.bio { font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.4; }
+
+.sharedBadge {
+  padding: 3px 8px; background: var(--blueL); color: var(--blue);
+  border-radius: 100px; font-size: 10px; font-weight: 700; white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.loading { display: flex; align-items: center; gap: 10px; justify-content: center; padding: 60px 0; color: var(--mist); }
+.spinner { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.empty { text-align: center; padding: 60px 20px; color: var(--mist); }
+.empty p { margin-top: 12px; }
+
+.hint { font-size: 13px; color: var(--mist); text-align: center; padding: 40px 20px; }
+
+@media (max-width: 480px) {
+  .grid { grid-template-columns: 1fr; }
+}

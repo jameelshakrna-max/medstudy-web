@@ -21,6 +21,9 @@ import {
 } from 'lucide-react'
 import s from './CommunityDetail.module.css'
 import FlashcardShareModal from '../components/FlashcardShareModal'
+import MentionText from '../components/MentionText'
+import MentionInput from '../components/MentionInput'
+import UserCard from '../components/UserCard'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -420,7 +423,7 @@ export default function CommunityDetail() {
                   return (
                   <div key={msg.id} id={'msg-' + msg.id} className={`${s.message} ${s.msgRow} ${msg.deleted ? s.deleted : ''} ${msg.user_id === user?.id ? s.own : ''}`}>
                     <div className={s.msgMeta}>
-                      <span className={s.msgUser}>{msg.user_name}</span>
+                      <UserCard userId={msg.user_id}><span className={s.msgUser}>{msg.user_name}</span></UserCard>
                       <RoleBadge role={msg.user_role} size="sm" />
                       <span className={s.msgTime}>{formatDate(msg.created_at)}</span>
                     </div>
@@ -433,7 +436,7 @@ export default function CommunityDetail() {
                     ) : msg.message_type === 'file' ? (
                       <FileMessage msg={msg} accessToken={accessToken} />
                     ) : (
-                      <div className={s.msgContent}>{msg.content}</div>
+                      <div className={s.msgContent}><MentionText text={msg.content} /></div>
                     )}
                     <div className={s.msgActions}>
                       {isMod && !msg.deleted && msg.message_type !== 'system' && (
@@ -494,7 +497,7 @@ export default function CommunityDetail() {
                   return (
                   <div key={msg.id} id={'msg-' + msg.id} className={`${s.message} ${s.msgRow} ${msg.deleted ? s.deleted : ''} ${msg.user_id === user?.id ? s.own : ''}`}>
                     <div className={s.msgMeta}>
-                      <span className={s.msgUser}>{msg.user_name}</span>
+                      <UserCard userId={msg.user_id}><span className={s.msgUser}>{msg.user_name}</span></UserCard>
                       <RoleBadge role={msg.user_role} size="sm" />
                       <span className={s.msgTime}>{formatDate(msg.created_at)}{msg.is_edited ? ' (edited)' : ''}</span>
                     </div>
@@ -507,7 +510,7 @@ export default function CommunityDetail() {
                     ) : msg.message_type === 'file' ? (
                       <FileMessage msg={msg} accessToken={accessToken} />
                     ) : (
-                      <div className={s.msgContent}>{msg.content}</div>
+                      <div className={s.msgContent}><MentionText text={msg.content} /></div>
                     )}
                     <div className={s.msgActions}>
                       {isMod && !msg.deleted && msg.message_type !== 'system' && (
@@ -547,13 +550,11 @@ export default function CommunityDetail() {
             <button className={s.flashcardBtn} onClick={() => setShowFlashcardModal(true)}>
               <BookOpen size={16} strokeWidth={1.5} />
             </button>
-            <input
-              className={s.chatInput}
-              type="text"
-              placeholder="Type a message..."
+            <MentionInput
               value={messageInput}
-              onChange={e => setMessageInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); handleSend() } }}
+              onChange={setMessageInput}
+              onSubmit={handleSend}
+              placeholder="Type a message... Use @ to mention"
             />
             <button className={s.sendBtn} onClick={handleSend} disabled={!messageInput.trim() || sending}>
               {sending ? <Loader2 size={16} className={s.spinner} /> : <Send size={16} strokeWidth={1.5} />}

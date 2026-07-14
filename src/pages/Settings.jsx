@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { usePomodoroSettings } from '../context/PomodoroContext'
 import { supabase } from '../lib/supabase'
-import { User, Lock, Bell, Palette, Clock, ShieldAlert, Medal, Loader2, Camera, MapPin, LinkIcon, AtSign, FileText, Award } from 'lucide-react'
 import { apiGet } from '../lib/api'
+import { User, Lock, Bell, Palette, Clock, ShieldAlert, Medal, Loader2, Camera, MapPin, LinkIcon, AtSign, FileText, Award } from 'lucide-react'
 import AvatarUpload from '../components/AvatarUpload'
 import BannerUpload from '../components/BannerUpload'
 import ProfileCompletion from '../components/ProfileCompletion'
@@ -38,6 +38,12 @@ export default function Settings() {
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileStatus, setProfileStatus] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
+  const [profileVisibility, setProfileVisibility] = useState('public')
+  const [activityVisibility, setActivityVisibility] = useState('public')
+  const [university, setUniversity] = useState('')
+  const [graduationYear, setGraduationYear] = useState('')
+  const [specialty, setSpecialty] = useState('')
+  const [languages, setLanguages] = useState('')
 
   // Name change tracking
   const [nameLastChanged, setNameLastChanged] = useState(null)
@@ -57,6 +63,9 @@ export default function Settings() {
   // Notifications
   const [pushEnabled, setPushEnabled] = useState(true)
   const [soundEnabled, setSoundEnabled] = useState(true)
+  const [notifPrefs, setNotifPrefs] = useState(null)
+  const [notifPrefsLoading, setNotifPrefsLoading] = useState(true)
+  const [notifPrefsStatus, setNotifPrefsStatus] = useState(null)
 
   // Appearance
   const [theme, setTheme] = useState('dark')
@@ -97,6 +106,12 @@ export default function Settings() {
 
   useEffect(() => {
     if (!user?.id) return
+    setNotifPrefsLoading(true)
+    apiGet('/notifications/preferences').then(setNotifPrefs).catch(() => setNotifPrefs(null)).finally(() => setNotifPrefsLoading(false))
+  }, [user?.id])
+
+  useEffect(() => {
+    if (!user?.id) return
     setBadgesLoading(true)
     apiGet(`/users/${user.id}/badges`).then(setBadges).catch(() => setBadges([])).finally(() => setBadgesLoading(false))
   }, [user?.id])
@@ -119,6 +134,15 @@ export default function Settings() {
           setLocation(data.location || '')
           setActiveTitle(data.active_title || '')
           setFullName(data.display_name || profile?.full_name || '')
+          setProfileVisibility(data.profile_visibility || 'public')
+          setActivityVisibility(data.activity_visibility || 'public')
+          setUniversity(data.university || '')
+          setGraduationYear(data.graduation_year || '')
+          setSpecialty(data.specialty || '')
+          try {
+            const langs = typeof data.languages === 'string' ? JSON.parse(data.languages) : data.languages
+            setLanguages(Array.isArray(langs) ? langs.join(', ') : '')
+          } catch { setLanguages('') }
         }
       })
       .catch(() => {})
@@ -282,6 +306,27 @@ export default function Settings() {
     document.documentElement.setAttribute('data-theme', newTheme)
   }
 
+  const handleNotifPrefToggle = async (key) => {
+    if (!notifPrefs) return
+    const updated = { ...notifPrefs, [key]: notifPrefs[key] ? 0 : 1 }
+    setNotifPrefs(updated)
+    setNotifPrefsStatus(null)
+    try {
+      const API = import.meta.env.VITE_API_URL || '/api'
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`${API}/notifications/preferences`, {
+        method: 'PUT',
+        headers: { 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: updated[key] }),
+      })
+      if (!res.ok) throw new Error('Failed to save')
+      setNotifPrefsStatus({ type: 'success', msg: 'Saved' })
+    } catch (err) {
+      setNotifPrefs({ ...notifPrefs, [key]: notifPrefs[key] })
+      setNotifPrefsStatus({ type: 'error', msg: err.message })
+    }
+  }
+
   // ── Delete account ──
   const handleDeleteAccount = async () => {
     try {
@@ -331,6 +376,12 @@ export default function Settings() {
           website,
           location,
           active_title: activeTitle,
+          profile_visibility: profileVisibility,
+          activity_visibility: activityVisibility,
+          university,
+          graduation_year: graduationYear ? Number(graduationYear) : null,
+          specialty,
+          languages: languages ? JSON.stringify(languages.split(',').map(s => s.trim()).filter(Boolean)) : '[]',
         })
       })
       if (!res.ok) {
@@ -471,9 +522,85 @@ export default function Settings() {
             </div>
           </div>
 
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+            <div className={s.field}>
+              <label className={s.label}>University</label>
+              <input
+                className={s.input}
+                type="text"
+                value={university}
+                onChange={e => setUniversity(e.target.value)}
+                placeholder="e.g. Al-Quds University"
+                maxLength={100}
+              />
+            </div>
+            <div className={s.field}>
+              <label className={s.label}>Graduation Year</label>
+              <input
+                className={s.input}
+                type="number"
+                value={graduationYear}
+                onChange={e => setGraduationYear(e.target.value)}
+                placeholder="e.g. 2027"
+                min="2020"
+                max="2040"
+              />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className={s.field}>
+              <label className={s.label}>Specialty Interest</label>
+              <input
+                className={s.input}
+                type="text"
+                value={specialty}
+                onChange={e => setSpecialty(e.target.value)}
+                placeholder="e.g. Cardiology"
+                maxLength={100}
+              />
+            </div>
+            <div className={s.field}>
+              <label className={s.label}>Languages</label>
+              <input
+                className={s.input}
+                type="text"
+                value={languages}
+                onChange={e => setLanguages(e.target.value)}
+                placeholder="e.g. Arabic, English"
+                maxLength={200}
+              />
+            </div>
+          </div>
+
           <div className={s.field}>
             <label className={s.label}>Email</label>
             <input className={s.input} type="email" value={user?.email || ''} disabled />
+          </div>
+
+          <div className={s.field}>
+            <label className={s.label}>Profile Visibility</label>
+            <select
+              className={s.input}
+              value={profileVisibility}
+              onChange={e => setProfileVisibility(e.target.value)}
+            >
+              <option value="public">Public - Anyone can view your profile</option>
+              <option value="followers">Followers - Only followers can view your profile</option>
+              <option value="private">Private - Only you can view your profile</option>
+            </select>
+          </div>
+
+          <div className={s.field}>
+            <label className={s.label}>Activity Visibility</label>
+            <select
+              className={s.input}
+              value={activityVisibility}
+              onChange={e => setActivityVisibility(e.target.value)}
+            >
+              <option value="public">Public - Anyone can see your activity</option>
+              <option value="followers">Followers - Only followers can see your activity</option>
+              <option value="private">Private - No one can see your activity</option>
+            </select>
           </div>
 
           <div className={s.btnRow}>
@@ -617,6 +744,47 @@ export default function Settings() {
               <input type="checkbox" checked={soundEnabled} onChange={e => handleSoundToggle(e.target.checked)} />
               <span className={s.slider} />
             </label>
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--card-border)', marginTop: 12, paddingTop: 12 }}>
+            <p className={s.label} style={{ marginBottom: 12 }}>In-App Notification Categories</p>
+            {notifPrefsLoading ? (
+              <div style={{ fontSize: 13, color: 'var(--mist)' }}>Loading preferences...</div>
+            ) : notifPrefs ? (
+              <>
+                {[
+                  { key: 'mentions', label: 'Mentions', desc: 'When someone @mentions you in a community' },
+                  { key: 'dms', label: 'Direct Messages', desc: 'New DM conversations or messages' },
+                  { key: 'follows', label: 'Followers', desc: 'When someone follows you' },
+                  { key: 'community_messages', label: 'Community Messages', desc: 'New messages in your communities' },
+                  { key: 'community_mentions', label: 'Community Mentions', desc: 'Mentions in communities you belong to' },
+                  { key: 'announcements', label: 'Announcements', desc: 'Community announcements and updates' },
+                  { key: 'global', label: 'Global Notifications', desc: 'System-wide notifications and updates' },
+                  { key: 'study_streaks', label: 'Study Streaks', desc: 'Streak milestones (7, 30, 100 days)' },
+                  { key: 'flashcard_milestones', label: 'Flashcard Milestones', desc: 'Deck completion and card count milestones' },
+                  { key: 'uworld_milestones', label: 'UWorld Milestones', desc: 'Question completion and score milestones' },
+                  { key: 'goal_completed', label: 'Goal Completed', desc: 'When you hit a study goal' },
+                ].map(({ key, label, desc }) => (
+                  <div className={s.toggleRow} key={key}>
+                    <div className={s.toggleInfo}>
+                      <p className={s.toggleLabel}>{label}</p>
+                      <p className={s.toggleDesc}>{desc}</p>
+                    </div>
+                    <label className={s.toggle}>
+                      <input type="checkbox" checked={!!notifPrefs[key]} onChange={() => handleNotifPrefToggle(key)} />
+                      <span className={s.slider} />
+                    </label>
+                  </div>
+                ))}
+                {notifPrefsStatus && (
+                  <div className={`${s.statusMsg} ${notifPrefsStatus.type === 'success' ? s.statusSuccess : s.statusError}`}>
+                    {notifPrefsStatus.msg}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ fontSize: 13, color: 'var(--mist)' }}>Could not load preferences</div>
+            )}
           </div>
         </>
       )

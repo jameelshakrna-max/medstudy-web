@@ -87,3 +87,52 @@
   .section { padding: 18px 16px; }
   .pinnedBadges { flex-direction: column; }
 }
+
+.followingBtn {
+  background: var(--card-bg) !important;
+  color: var(--mist) !important;
+  border-color: var(--card-border) !important;
+}
+.followingBtn:hover {
+  border-color: var(--red) !important;
+  color: var(--red) !important;
+}
+.activityList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.activityItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+}
+.activityIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--navy2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--blue);
+  flex-shrink: 0;
+}
+.activityInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.activityText {
+  font-size: 13px;
+  color: var(--text);
+}
+.activityTime {
+  font-size: 11px;
+  color: var(--mist);
+}

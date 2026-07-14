@@ -82,3 +82,132 @@ export async function handleCleanupNotifications(request, env, user) {
   ).bind(user.sub, cutoff).run()
   return json({ deleted: results?.meta?.changes || 0 })
 }
+
+const DEFAULT_PREFS = {
+  mentions: 1, dms: 1, study_reminders: 1,
+  community_messages: 1, community_mentions: 1, follows: 1,
+  study_streaks: 0, flashcard_milestones: 0, uworld_milestones: 0,
+  goal_completed: 0, announcements: 1, global: 1,
+}
+
+export async function handleGetNotificationPreferences(request, env, user) {
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM notification_preferences WHERE user_id = ?'
+  ).bind(user.sub).all()
+  if (!results.length) return json(DEFAULT_PREFS)
+  const row = results[0]
+  return json({
+    mentions: row.mentions, dms: row.dms, study_reminders: row.study_reminders,
+    community_messages: row.community_messages, community_mentions: row.community_mentions,
+    follows: row.follows, study_streaks: row.study_streaks, flashcard_milestones: row.flashcard_milestones,
+    uworld_milestones: row.uworld_milestones, goal_completed: row.goal_completed,
+    announcements: row.announcements, global: row.global,
+  })
+}
+
+export async function handleUpdateNotificationPreferences(request, env, user) {
+  const body = await request.json()
+  const fields = ['mentions','dms','study_reminders','community_messages','community_mentions','follows','study_streaks','flashcard_milestones','uworld_milestones','goal_completed','announcements','global']
+  const updates = []
+  const params = []
+  for (const f of fields) {
+    if (f in body) {
+      updates.push(`${f} = ?`)
+      params.push(body[f] ? 1 : 0)
+    }
+  }
+  if (!updates.length) return json({ error: 'No fields to update' }, 400)
+  params.push(user.sub)
+  await env.DB.prepare(
+    `INSERT INTO notification_preferences (user_id, ${fields.join(',')}) VALUES (?, ${fields.map(() => 0).join(',')})
+     ON CONFLICT(user_id) DO UPDATE SET ${updates.join(', ')}`
+  ).bind(...params).run()
+  return json({ success: true })
+}
+
+// Helper: create a notification only if the user has that category enabled
+export async function createNotificationIfAllowed(env, userId, { type, title, body, category, priority, data, action_url, action_label, group_key }) {
+  if (!userId || !type || !title) return
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM notification_preferences WHERE user_id = ?'
+  ).bind(userId).all()
+  const prefs = results[0]
+  if (prefs) {
+    const prefKey = category === 'study_streak' ? 'study_streaks'
+      : category === 'flashcard_milestone' ? 'flashcard_milestones'
+      : category === 'uworld_milestone' ? 'uworld_milestones'
+      : category === 'goal' ? 'goal_completed'
+      : category === 'announcement' ? 'announcements'
+      : category
+    if (prefs[prefKey] === 0) return
+  }
+  const id = crypto.randomUUID()
+  await env.DB.prepare(
+    'INSERT INTO notifications (id, user_id, type, title, body, data, priority, category, action_url, action_label, group_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(id, userId, type, title, body || '', data ? JSON.stringify(data) : null, priority || 'info', category || 'system', action_url || '/dashboard', action_label || null, group_key || null).run()
+  return id
+}
+
+// Check and create streak milestone notifications
+export async function checkStreakMilestones(env, userId, newStreak) {
+  const milestones = [7, 30, 100]
+  for (const m of milestones) {
+    if (newStreak === m) {
+      await createNotificationIfAllowed(env, userId, {
+        type: 'streak_milestone',
+        title: `${m}-day study streak!`,
+        body: `You've studied for ${m} days in a row. Keep it up!`,
+        category: 'study_streak',
+        priority: m >= 30 ? 'high' : 'info',
+        action_url: '/tracking',
+        data: { streak: m },
+      })
+    }
+  }
+}
+
+// Notify all members of a community about a new announcement
+export async function notifyCommunityAnnouncement(env, communityId, communityName, announcementTitle, announcementId, authorName) {
+  const { results: members } = await env.DB.prepare(
+    'SELECT user_id FROM community_members WHERE community_id = ?'
+  ).bind(communityId).all()
+  for (const m of members) {
+    await createNotificationIfAllowed(env, m.user_id, {
+      type: 'announcement',
+      title: `New announcement in ${communityName}`,
+      body: announcementTitle,
+      category: 'announcement',
+      priority: 'info',
+      action_url: `/communities/${communityId}`,
+      group_key: `announcement_${announcementId}`,
+    })
+  }
+}
+
+// Notify user when a goal is completed
+export async function notifyGoalCompleted(env, userId, goalTitle) {
+  await createNotificationIfAllowed(env, userId, {
+    type: 'goal_completed',
+    title: 'Goal completed!',
+    body: `You've reached your goal: ${goalTitle}`,
+    category: 'goal',
+    priority: 'high',
+    action_url: '/goals',
+  })
+}
+
+// Notify user about flashcard milestone
+export async function notifyFlashcardMilestone(env, userId, count) {
+  const milestones = [50, 100, 250, 500, 1000]
+  if (milestones.includes(count)) {
+    await createNotificationIfAllowed(env, userId, {
+      type: 'flashcard_milestone',
+      title: `${count} flashcards reviewed!`,
+      body: `You've reviewed ${count} flashcards. Great work!`,
+      category: 'flashcard_milestone',
+      priority: 'info',
+      action_url: '/flashcards',
+      data: { count },
+    })
+  }
+}

@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Camera, Image, Loader2 } from 'lucide-react'
+import { Camera, Image as ImageIcon, Loader2 } from 'lucide-react'
 
 const MAX_W = 1200
 const MAX_H = 400
@@ -145,7 +145,7 @@ export default function BannerUpload({ url = null, onChange, editable = false, u
         <img className="bannerImg" src={displayUrl} alt="Banner" draggable={false} />
       ) : (
         <div className="bannerPlaceholder">
-          <Image size={36} strokeWidth={1.2} />
+          <ImageIcon size={36} strokeWidth={1.2} />
           <span>No banner</span>
         </div>
       )}

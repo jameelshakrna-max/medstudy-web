@@ -1,6 +1,7 @@
 import { createAuth } from './_auth.js'
 import { ROLES, PERM, hasPermission } from './lib/permissions.js'
 import { CommunityRealtimeRoom } from './do/CommunityRealtimeRoom.js'
+import { DMRealtimeRoom } from './do/DMRealtimeRoom.js'
 import {
   uuid, json, corsHeaders, extractId, safeString, pageParams, MAX, ALLOWED_MIME,
   ensureUserProfile, log, checkRate, mapCard, mapResource,
@@ -39,13 +40,46 @@ import {
   handleSyncStudyHours, handleMonthlyLeaderboard, handleLeaderboardPosition,
   handleSetLeaderboardTitle, handleAllTimeLeaderboard, handleUserBadges,
   handleHeatmap, handleSessionTimeline, handleRoomStats,
+  handleGlobalLeaderboard,
+  logUserActivity, refreshUserStatsAndNotify, incrementUserStats,
 } from './handlers/stats.js'
 
 import {
   handleListNotifications, handleCreateNotification,
   handleMarkAllRead, handleMarkNotificationRead, handleCleanupNotifications,
-  handleGetUnreadCounts,
+  handleGetUnreadCounts, handleGetNotificationPreferences, handleUpdateNotificationPreferences,
+  notifyGoalCompleted, notifyFlashcardMilestone,
 } from './handlers/notifications.js'
+
+import {
+  handleListConversations, handleCreateConversation, handleGetDMMessages,
+  handleSendDM, handleDeleteDM, handleMarkDMRead, handleStartDMWithUser,
+  handleDMWebSocketUpgrade,
+} from './handlers/dm.js'
+
+import {
+  handleUpdatePresence, handleGetBulkPresence, handleGetPresence,
+} from './handlers/presence.js'
+
+import {
+  parseMentions, handleMentionSearch,
+} from './handlers/mentions.js'
+
+import {
+  handleUserCard,
+} from './handlers/usercards.js'
+
+import {
+  handleGetPins, handlePinResource, handleUnpinResource,
+} from './handlers/pins.js'
+
+import {
+  handleGetUserAchievements, handleCheckAchievements,
+} from './handlers/achievements.js'
+
+import {
+  handleSearchUsers, handleSuggestedConnections,
+} from './handlers/people.js'
 
 export default {
   async fetch(request, env, ctx) {
@@ -68,6 +102,15 @@ export default {
         return handleWebSocketUpgrade(request, env)
       } catch (err) {
         console.error('WS upgrade error:', err)
+        return json({ error: err.message }, 500)
+      }
+    }
+
+    if (path.match(/^\/api\/dm\/[^\/]+\/ws$/) && request.method === 'GET') {
+      try {
+        return handleDMWebSocketUpgrade(request, env)
+      } catch (err) {
+        console.error('DM WS upgrade error:', err)
         return json({ error: err.message }, 500)
       }
     }
@@ -199,6 +242,8 @@ export default {
       }
 
       if (path === '/api/notifications/unread-counts' && request.method === 'GET') return handleGetUnreadCounts(request, env, user)
+      if (path === '/api/notifications/preferences' && request.method === 'GET') return handleGetNotificationPreferences(request, env, user)
+      if (path === '/api/notifications/preferences' && request.method === 'PUT') return handleUpdateNotificationPreferences(request, env, user)
       if (path === '/api/notifications' && request.method === 'GET') return handleListNotifications(request, env, user)
       if (path === '/api/notifications' && request.method === 'POST') return handleCreateNotification(request, env, user)
       if (path === '/api/notifications/read-all' && request.method === 'POST') return handleMarkAllRead(request, env, user)
@@ -251,7 +296,15 @@ export default {
       if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+\/level$/) && request.method === 'PUT') return handleAssignLevel(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+$/) && request.method === 'DELETE') return handleRemoveMember(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/members$/) && request.method === 'GET') return handleListMembers(request, env)
-      if (path.match(/^\/api\/communities\/[^\/]+\/join$/) && request.method === 'POST') return handleJoinCommunity(request, env, user, ctx)
+      if (path.match(/^\/api\/communities\/[^\/]+\/join$/) && request.method === 'POST') {
+        const res = await handleJoinCommunity(request, env, user, ctx)
+        if (res.status === 200 || res.status === undefined) {
+          const communityId = path.split('/')[3]
+          logUserActivity(env, user.sub, 'joined_community', communityId, 'community', {}).catch(() => {})
+          refreshUserStatsAndNotify(env, user.sub).catch(() => {})
+        }
+        return res
+      }
       if (path.match(/^\/api\/communities\/[^\/]+\/leave$/) && request.method === 'POST') return handleLeaveCommunity(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/invite-code$/) && request.method === 'POST') return handleRegenerateInviteCode(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/mod-dashboard$/) && request.method === 'GET') return handleGetModDashboard(request, env, user)
@@ -263,11 +316,24 @@ export default {
       if (path.match(/^\/api\/community\/messages\/[^\/]+\/add-to-deck$/) && request.method === 'POST') return handleAddFlashcardToDeck(request, env, user)
       if (path.match(/^\/api\/competitions\/[^\/]+\/approve$/) && request.method === 'PUT') return handleApproveCompetition(request, env, user)
       if (path.match(/^\/api\/competitions\/[^\/]+\/reject$/) && request.method === 'PUT') return handleRejectCompetition(request, env, user)
-      if (path.match(/^\/api\/competitions\/[^\/]+\/join$/) && (request.method === 'POST' || request.method === 'PUT')) return handleJoinCompetition(request, env, user)
+      if (path.match(/^\/api\/competitions\/[^\/]+\/join$/) && (request.method === 'POST' || request.method === 'PUT')) {
+        const res = await handleJoinCompetition(request, env, user)
+        if (res.status === 200 || res.status === undefined) {
+          const compId = path.split('/')[3]
+          logUserActivity(env, user.sub, 'joined_competition', compId, 'competition', {}).catch(() => {})
+          refreshUserStatsAndNotify(env, user.sub).catch(() => {})
+        }
+        return res
+      }
       if (path.match(/^\/api\/competitions\/[^\/]+\/leave$/) && (request.method === 'POST' || request.method === 'DELETE')) return handleLeaveCompetition(request, env, user)
       if (path.match(/^\/api\/competitions\/[^\/]+\/leaderboard$/) && request.method === 'GET') return handleGetCompetitionLeaderboard(request, env, user)
       if (path.match(/^\/api\/competitions\/[^\/]+\/end$/) && request.method === 'PUT') return handleEndCompetition(request, env, user)
-      if (path === '/api/study-hours/sync' && request.method === 'POST') return handleSyncStudyHours(request, env, user)
+      if (path === '/api/study-hours/sync' && request.method === 'POST') {
+        const res = await handleSyncStudyHours(request, env, user)
+        logUserActivity(env, user.sub, 'studied', null, 'session', {}).catch(() => {})
+        refreshUserStatsAndNotify(env, user.sub).catch(() => {})
+        return res
+      }
       if (path.match(/^\/api\/communities\/[^\/]+\/leaderboard\/monthly$/) && request.method === 'GET') return handleMonthlyLeaderboard(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/leaderboard\/position$/) && request.method === 'GET') return handleLeaderboardPosition(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/leaderboard\/title$/) && request.method === 'PUT') return handleSetLeaderboardTitle(request, env, user)
@@ -291,13 +357,71 @@ export default {
       if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/status$/) && (request.method === 'PUT' || request.method === 'POST')) return handleUpdateFocusStatus(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/stats$/) && request.method === 'GET') return handleRoomStats(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timeline$/) && request.method === 'GET') return handleSessionTimeline(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/profile$/) && request.method === 'GET') return handleUserProfile(request, env)
+      if (path.match(/^\/api\/users\/[^\/]+\/profile$/) && request.method === 'GET') return handleUserProfile(request, env, user)
       if (path.match(/^\/api\/users\/[^\/]+\/profile$/) && request.method === 'PUT') return handleUpdateUserProfile(request, env, user)
       if (path.match(/^\/api\/users\/[^\/]+\/avatar$/) && request.method === 'POST') return handleUploadUserAvatar(request, env, user)
       if (path.match(/^\/api\/users\/[^\/]+\/banner$/) && request.method === 'POST') return handleUploadUserBanner(request, env, user)
       if (path.match(/^\/api\/users\/username\/[^\/]+$/) && request.method === 'GET') return handleGetUserByUsername(request, env)
       if (path.match(/^\/api\/users\/check-username\/[^\/]+$/) && request.method === 'GET') return handleCheckUsername(request, env)
       if (path.match(/^\/api\/users\/[^\/]+\/activity$/) && request.method === 'GET') return handleGetUserActivity(request, env)
+      if (path.match(/^\/api\/users\/[^\/]+\/follow$/) && request.method === 'POST') return handleFollowUser(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/follow$/) && request.method === 'DELETE') return handleUnfollowUser(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/follow-status$/) && request.method === 'GET') return handleFollowStatus(request, env, user)
+
+      // ── DM Routes ──
+      if (path === '/api/dm/conversations' && request.method === 'GET') return handleListConversations(request, env, user)
+      if (path === '/api/dm/conversations' && request.method === 'POST') return handleCreateConversation(request, env, user)
+      if (path.match(/^\/api\/dm\/[^\/]+\/messages$/) && request.method === 'GET') return handleGetDMMessages(request, env, user)
+      if (path.match(/^\/api\/dm\/[^\/]+\/messages$/) && request.method === 'POST') return handleSendDM(request, env, user)
+      if (path.match(/^\/api\/dm\/[^\/]+\/messages\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteDM(request, env, user)
+      if (path.match(/^\/api\/dm\/[^\/]+\/read$/) && request.method === 'POST') return handleMarkDMRead(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/dm$/) && request.method === 'POST') return handleStartDMWithUser(request, env, user)
+
+      // ── Presence Routes ──
+      if (path === '/api/presence/status' && request.method === 'POST') return handleUpdatePresence(request, env, user)
+      if (path === '/api/presence/bulk' && request.method === 'POST') return handleGetBulkPresence(request, env, user)
+      if (path.match(/^\/api\/presence\/[^\/]+$/) && request.method === 'GET') return handleGetPresence(request, env, user)
+
+      // ── Heatmap ──
+      if (path.match(/^\/api\/users\/[^\/]+\/heatmap$/) && request.method === 'GET') return handleUserHeatmap(request, env)
+
+      // ── User Card ──
+      if (path.match(/^\/api\/users\/[^\/]+\/card$/) && request.method === 'GET') return handleUserCard(request, env, user)
+
+      // ── Mention Search ──
+      if (path === '/api/users/mention/search' && request.method === 'GET') return handleMentionSearch(request, env, user)
+
+      // ── Pinned Resources ──
+      if (path.match(/^\/api\/users\/[^\/]+\/pins$/) && request.method === 'GET') return handleGetPins(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/pins$/) && request.method === 'POST') return handlePinResource(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/pins\/[^\/]+$/) && request.method === 'DELETE') return handleUnpinResource(request, env, user)
+
+      // ── Goal Completion Notification ──
+      if (path === '/api/goals/complete' && request.method === 'POST') {
+        const { title } = await request.json()
+        if (!title) return json({ error: 'title required' }, 400)
+        await notifyGoalCompleted(env, user.sub, title)
+        return json({ success: true })
+      }
+
+      // ── Flashcard Milestone Notification ──
+      if (path === '/api/flashcards/milestone' && request.method === 'POST') {
+        const { count } = await request.json()
+        if (!count) return json({ error: 'count required' }, 400)
+        await notifyFlashcardMilestone(env, user.sub, count)
+        return json({ success: true })
+      }
+
+      // ── Achievements ──
+      if (path === '/api/achievements/check' && request.method === 'POST') return handleCheckAchievements(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/achievements$/) && request.method === 'GET') return handleGetUserAchievements(request, env)
+
+      // ── Global Leaderboard ──
+      if (path === '/api/leaderboard/global' && request.method === 'GET') return handleGlobalLeaderboard(request, env, user)
+
+      // ── People Search & Discovery ──
+      if (path === '/api/users/search' && request.method === 'GET') return handleSearchUsers(request, env, user)
+      if (path === '/api/users/suggested' && request.method === 'GET') return handleSuggestedConnections(request, env, user)
 
       return json({ error: 'Not found' }, 404)
     } catch (err) {
@@ -342,6 +466,7 @@ async function handleCreateFlashcards(request, env, user) {
   )
 
   await env.DB.batch(stmts)
+  logUserActivity(env, user.sub, 'created_cards', null, 'flashcard', { count: items.length }).catch(() => {})
   return json({ success: true, count: items.length, ids }, 201)
 }
 
@@ -630,7 +755,7 @@ async function handleUpdateUserProfile(request, env, user) {
   if (user.sub !== targetUserId) return json({ error: 'Forbidden' }, 403)
 
   const body = await request.json()
-  const { display_name, bio, website, location, active_title, pinned_badges, username } = body
+  const { display_name, bio, website, location, active_title, pinned_badges, username, profile_visibility, activity_visibility, university, graduation_year, specialty, languages } = body
 
   if (username !== undefined && username !== null && username !== '') {
     if (!isValidUsername(username)) {
@@ -652,6 +777,11 @@ async function handleUpdateUserProfile(request, env, user) {
   const safeUsername = username ? sanitizeUsername(username) : null
   const safePinned = pinned_badges ? JSON.stringify(pinned_badges) : null
 
+  const safeUniversity = safeString(university, 200)
+  const safeSpecialty = safeString(specialty, 100)
+  const safeLanguages = safeString(languages, 200)
+  const safeGradYear = graduation_year ? Number(graduation_year) : null
+
   await env.DB.prepare(`
     INSERT INTO user_profiles (user_id, display_name, username, bio, website, location, active_title, pinned_badges, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
@@ -663,6 +793,12 @@ async function handleUpdateUserProfile(request, env, user) {
       location = CASE WHEN ? != '' THEN ? ELSE user_profiles.location END,
       active_title = CASE WHEN ? != '' THEN ? ELSE user_profiles.active_title END,
       pinned_badges = CASE WHEN ? IS NOT NULL THEN ? ELSE user_profiles.pinned_badges END,
+      profile_visibility = CASE WHEN ? IS NOT NULL THEN ? ELSE user_profiles.profile_visibility END,
+      activity_visibility = CASE WHEN ? IS NOT NULL THEN ? ELSE user_profiles.activity_visibility END,
+      university = CASE WHEN ? != '' THEN ? ELSE user_profiles.university END,
+      graduation_year = CASE WHEN ? IS NOT NULL THEN ? ELSE user_profiles.graduation_year END,
+      specialty = CASE WHEN ? != '' THEN ? ELSE user_profiles.specialty END,
+      languages = CASE WHEN ? != '' THEN ? ELSE user_profiles.languages END,
       updated_at = datetime('now')
   `).bind(
     targetUserId, safeDisplayName, safeUsername, safeBio, safeWebsite, safeLocation, safeTitle, safePinned,
@@ -672,7 +808,13 @@ async function handleUpdateUserProfile(request, env, user) {
     safeWebsite, safeWebsite,
     safeLocation, safeLocation,
     safeTitle, safeTitle,
-    safePinned, safePinned
+    safePinned, safePinned,
+    profile_visibility || null, profile_visibility || null,
+    activity_visibility || null, activity_visibility || null,
+    safeUniversity, safeUniversity,
+    safeGradYear, safeGradYear,
+    safeSpecialty, safeSpecialty,
+    safeLanguages, safeLanguages
   ).run()
 
   return json({ success: true })
@@ -798,7 +940,74 @@ async function handleGetUserActivity(request, env) {
   })))
 }
 
-async function handleUserProfile(request, env) {
+async function handleUserHeatmap(request, env) {
+  const url = new URL(request.url)
+  const userId = url.pathname.split('/')[3]
+
+  const { results: visRows } = await env.DB.prepare(
+    `SELECT profile_visibility FROM user_profiles WHERE user_id = ?`
+  ).bind(userId).all()
+  if (visRows.length && visRows[0].profile_visibility === 'private') {
+    return json({ hidden: true })
+  }
+
+  const year = new Date().getFullYear()
+  const yearStart = `${year}-01-01`
+  const yearEnd = `${year}-12-31`
+
+  const { results: activityRows } = await env.DB.prepare(
+    `SELECT DATE(created_at) as day, type, COUNT(*) as cnt
+     FROM user_activity
+     WHERE user_id = ? AND created_at >= ? AND created_at <= ?
+     GROUP BY DATE(created_at), type`
+  ).bind(userId, yearStart, yearEnd).all()
+
+  const { results: sessionRows } = await env.DB.prepare(
+    `SELECT DATE(created_at) as day, SUM(COALESCE(duration_minutes, 0)) as total_minutes
+     FROM study_sessions_log
+     WHERE user_id = ? AND created_at >= ? AND created_at <= ?
+     GROUP BY DATE(created_at)`
+  ).bind(userId, yearStart, yearEnd).all()
+
+  const dayMap = {}
+
+  for (const row of activityRows) {
+    if (!dayMap[row.day]) dayMap[row.day] = { date: row.day, count: 0, minutes: 0, questions: 0, topics: 0, cases: 0 }
+    dayMap[row.day].count += row.cnt
+    if (row.type === 'question_review') dayMap[row.day].questions += row.cnt
+    else if (row.type === 'topic_progress') dayMap[row.day].topics += row.cnt
+    else if (row.type === 'case_review') dayMap[row.day].cases += row.cnt
+  }
+
+  for (const row of sessionRows) {
+    if (!dayMap[row.day]) dayMap[row.day] = { date: row.day, count: 0, minutes: 0, questions: 0, topics: 0, cases: 0 }
+    dayMap[row.day].minutes += row.total_minutes
+  }
+
+  const data = Object.values(dayMap).map(d => {
+    const totalMin = d.minutes
+    let level = 0
+    if (totalMin > 0 || d.count > 0) {
+      const score = d.count * 2 + totalMin / 15
+      if (score >= 20) level = 4
+      else if (score >= 10) level = 3
+      else if (score >= 5) level = 2
+      else level = 1
+    }
+    return { ...d, level }
+  })
+
+  const totalMinutes = data.reduce((s, d) => s + d.minutes, 0)
+  const totalHours = Math.round(totalMinutes / 60 * 10) / 10
+  const activeDays = data.filter(d => d.count > 0 || d.minutes > 0).length
+
+  return json({
+    data,
+    stats: { totalHours, activeDays, year },
+  })
+}
+
+async function handleUserProfile(request, env, viewerUser) {
   const url = new URL(request.url)
   const parts = url.pathname.split('/')
   const targetUserId = parts[3]
@@ -807,6 +1016,10 @@ async function handleUserProfile(request, env) {
     'SELECT * FROM user_profiles WHERE user_id = ?'
   ).bind(targetUserId).all()
   const profile = profileRows[0] || null
+
+  if (profile && profile.profile_visibility === 'private' && viewerUser?.sub !== targetUserId) {
+    return json({ hidden: true, display_name: 'Private Account', user_id: targetUserId })
+  }
 
   const { results: statsRows } = await env.DB.prepare(
     'SELECT * FROM user_stats WHERE user_id = ?'
@@ -850,6 +1063,12 @@ async function handleUserProfile(request, env) {
       study_hours: Number(hours[0]?.total) || 0,
       questions_answered: Number(questions[0]?.solved) || 0,
       current_streak: streak,
+      cards_reviewed: 0,
+      pomodoros_completed: 0,
+      competitions_joined: 0,
+      longest_streak: streak,
+      followers_count: 0,
+      following_count: 0,
     }
   }
 
@@ -867,6 +1086,25 @@ async function handleUserProfile(request, env) {
 
   const completion = calculateProfileCompletion(profile)
 
+  let shared_communities = []
+  if (viewerUser && viewerUser.sub !== targetUserId) {
+    try {
+      const { results } = await env.DB.prepare(
+        `SELECT c.id, c.name, c.avatar_url FROM community_members cm1
+         JOIN community_members cm2 ON cm1.community_id = cm2.community_id AND cm2.user_id = ?
+         JOIN communities c ON cm1.community_id = c.id
+         WHERE cm1.user_id = ? ORDER BY cm1.joined_at DESC LIMIT 10`
+      ).bind(viewerUser.sub, targetUserId).all()
+      shared_communities = results
+    } catch {}
+  }
+
+  if (viewerUser && viewerUser.sub !== targetUserId) {
+    await env.DB.prepare(
+      `INSERT INTO user_activity (id, user_id, type, entity_id, entity_type, created_at) VALUES (?, ?, 'profile_view', ?, 'user', datetime('now'))`
+    ).bind('act_' + uuid(), targetUserId, viewerUser.sub).catch(() => {})
+  }
+
   return json({
     user_id: targetUserId,
     username: profile?.username || null,
@@ -879,6 +1117,14 @@ async function handleUserProfile(request, env) {
     active_title: profile?.active_title || '',
     pinned_badges: JSON.parse(profile?.pinned_badges || '[]'),
     joined_at: profile?.joined_at || null,
+    university: profile?.university || '',
+    graduation_year: profile?.graduation_year || null,
+    specialty: profile?.specialty || '',
+    languages: profile?.languages || '',
+    favorite_subjects: JSON.parse(profile?.favorite_subjects || '[]'),
+    reputation: computedStats?.reputation || profile?.reputation || 0,
+    profile_visibility: profile?.profile_visibility || 'public',
+    activity_visibility: profile?.activity_visibility || 'public',
     profile_completion: completion,
     stats: {
       study_hours: computedStats?.study_hours || 0,
@@ -899,7 +1145,58 @@ async function handleUserProfile(request, env) {
       title: b.title || '',
     })),
     communities,
+    shared_communities,
   })
 }
 
-export { CommunityRealtimeRoom }
+/* ── Follow / Unfollow ── */
+
+async function handleFollowUser(request, env, user) {
+  const url = new URL(request.url)
+  const targetUserId = url.pathname.split('/')[3]
+  if (user.sub === targetUserId) return json({ error: 'Cannot follow yourself' }, 400)
+
+  const { results: target } = await env.DB.prepare('SELECT user_id FROM user_profiles WHERE user_id = ?').bind(targetUserId).all()
+  if (!target.length) return json({ error: 'User not found' }, 404)
+
+  const { results: existing } = await env.DB.prepare(
+    'SELECT id FROM user_followers WHERE follower_id = ? AND following_id = ?'
+  ).bind(user.sub, targetUserId).all()
+  if (existing.length > 0) return json({ error: 'Already following' }, 409)
+
+  await env.DB.prepare(
+    'INSERT INTO user_followers (id, follower_id, following_id) VALUES (?, ?, ?)'
+  ).bind(uuid(), user.sub, targetUserId).run()
+
+  await incrementUserStats(env, user.sub, 'following_count', 1).catch(() => {})
+  await incrementUserStats(env, targetUserId, 'followers_count', 1).catch(() => {})
+
+  return json({ success: true })
+}
+
+async function handleUnfollowUser(request, env, user) {
+  const url = new URL(request.url)
+  const targetUserId = url.pathname.split('/')[3]
+
+  await env.DB.prepare(
+    'DELETE FROM user_followers WHERE follower_id = ? AND following_id = ?'
+  ).bind(user.sub, targetUserId).run()
+
+  await incrementUserStats(env, user.sub, 'following_count', -1).catch(() => {})
+  await incrementUserStats(env, targetUserId, 'followers_count', -1).catch(() => {})
+
+  return json({ success: true })
+}
+
+async function handleFollowStatus(request, env, user) {
+  const url = new URL(request.url)
+  const targetUserId = url.pathname.split('/')[3]
+
+  const { results } = await env.DB.prepare(
+    'SELECT id FROM user_followers WHERE follower_id = ? AND following_id = ?'
+  ).bind(user.sub, targetUserId).all()
+
+  return json({ following: results.length > 0 })
+}
+
+export { CommunityRealtimeRoom, DMRealtimeRoom }

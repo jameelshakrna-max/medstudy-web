@@ -15,9 +15,17 @@ bucket_name = "card-images"
   name = "COMMUNITY_REALTIME_ROOM"
   class_name = "CommunityRealtimeRoom"
 
+[[durable_objects.bindings]]
+  name = "DM_REALTIME_ROOM"
+  class_name = "DMRealtimeRoom"
+
 [[migrations]]
   tag = "v1"
   new_sqlite_classes = ["CommunityRealtimeRoom"]
+
+[[migrations]]
+  tag = "v2"
+  new_sqlite_classes = ["DMRealtimeRoom"]
 
 [vars]
 SUPABASE_URL = "https://undakhccjrbcpzryfmot.supabase.co"

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import {
   LayoutDashboard, BookOpen, BrainCircuit,
   BarChart3, Timer, ClipboardList, Settings,
-  FolderOpen, LogOut, Menu, ChevronRight, Target, Users,
+  FolderOpen, LogOut, Menu, ChevronRight, Target, Users, UserSearch,
 } from 'lucide-react'
 import TopBar from './TopBar'
 import styles from './Layout.module.css'
@@ -17,6 +17,7 @@ const NAV = [
   { to: '/goals',      icon: Target,        label: 'Goals' },
   { to: '/pomodoro',   icon: Timer,         label: 'Pomodoro' },
   { to: '/communities', icon: Users,        label: 'Communities' },
+  { to: '/people',      icon: UserSearch,    label: 'People' },
   { to: '/resources',  icon: FolderOpen,    label: 'Resources' },
   { to: '/sessions',   icon: ClipboardList, label: 'Sessions' },
   { to: '/settings',   icon: Settings,      label: 'Settings' }

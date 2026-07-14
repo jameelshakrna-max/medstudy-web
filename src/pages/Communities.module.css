@@ -69,6 +69,31 @@
 .spinner { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.filterRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+.categoryChips { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
+.categoryChip {
+  display: flex; align-items: center; gap: 5px;
+  padding: 6px 12px; border: 1px solid var(--card-border); border-radius: 100px;
+  background: transparent; color: var(--mist); font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; font-family: 'DM Sans', sans-serif; white-space: nowrap;
+}
+.categoryChip:hover { border-color: var(--blue); color: var(--blue); background: var(--blueL); }
+.categoryChipActive { border-color: var(--blue); color: var(--blue); background: var(--blueL); }
+.categoryChipCount { font-size: 10px; opacity: 0.7; font-weight: 500; }
+.sortWrap { position: relative; flex-shrink: 0; }
+.sortSelect {
+  appearance: none; padding: 7px 30px 7px 12px;
+  background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 10px;
+  color: var(--text-primary); font-size: 12px; font-weight: 600; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; outline: none;
+}
+.sortSelect:focus { border-color: var(--blue); }
+.sortChevron { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--mist); }
+.cardCategory {
+  padding: 3px 8px; border: 1px solid; border-radius: 100px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+}
+
 .empty { text-align: center; padding: 60px 20px; color: var(--mist); }
 .empty p { margin: 12px 0 16px; }
 .emptyCreate {

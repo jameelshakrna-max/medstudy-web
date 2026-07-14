@@ -2,6 +2,10 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { PomodoroProvider, usePomodoro } from './context/PomodoroContext'
+import { PresenceProvider } from './context/PresenceContext'
+import { NotificationProvider } from './context/NotificationContext'
+import DMInbox from './components/DMInbox'
+import DMConversation from './components/DMConversation'
 import FloatingTimer from './components/FloatingTimer'
 import Layout from './components/Layout'
 import LoadingScreen from './components/LoadingScreen'
@@ -23,6 +27,8 @@ const Goals      = lazy(() => import('./pages/Goals'))
 const Communities = lazy(() => import('./pages/Communities'))
 const CommunityDetail = lazy(() => import('./pages/CommunityDetail'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
+const Leaderboard = lazy(() => import('./pages/Leaderboard'))
+const People = lazy(() => import('./pages/People'))
 
 const PAGE_LOADING = <LoadingScreen />
 
@@ -68,9 +74,13 @@ function AppRoutes() {
           <Route path="goals"     element={<Goals />} />
           <Route path="communities" element={<Communities />} />
           <Route path="communities/:id" element={<CommunityDetail />} />
+          <Route path="leaderboard" element={<Leaderboard />} />
+          <Route path="people" element={<People />} />
           <Route path="profile/:userId" element={<ProfilePage />} />
           <Route path="u/:username" element={<ProfilePage />} />
           <Route path="settings"   element={<Settings />} />
+          <Route path="messages" element={<DMInbox />} />
+          <Route path="messages/:conversationId" element={<DMConversation />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -84,7 +94,11 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <PomodoroProvider>
-          <AppRoutes />
+          <PresenceProvider>
+            <NotificationProvider>
+              <AppRoutes />
+            </NotificationProvider>
+          </PresenceProvider>
         </PomodoroProvider>
       </BrowserRouter>
     </AuthProvider>

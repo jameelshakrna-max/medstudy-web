@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import {
-  Search, Users, Plus, X, Loader2, UserPlus, Hash, Globe, Lock, Layout
+  Search, Users, Plus, X, Loader2, UserPlus, Hash, Globe, Lock, Layout,
+  ChevronDown, BookOpen, Stethoscope, GraduationCap, Brain, Pill, FlaskConical, Heart, Clock
 } from 'lucide-react'
 import s from './Communities.module.css'
 import communityTemplates from '../data/communityTemplates'
@@ -10,6 +11,22 @@ import TemplatePicker from '../components/community/TemplatePicker'
 import { imageUrl } from '../lib/api'
 
 const API = import.meta.env.VITE_API_URL || '/api'
+
+const CATEGORY_CONFIG = {
+  general: { label: 'General', icon: BookOpen, color: 'var(--blue)' },
+  clinical: { label: 'Clinical', icon: Stethoscope, color: 'var(--emerald)' },
+  exam_prep: { label: 'Exam Prep', icon: GraduationCap, color: '#F59E0B' },
+  anatomy: { label: 'Anatomy', icon: Brain, color: '#8B5CF6' },
+  pharmacology: { label: 'Pharmacology', icon: Pill, color: '#EC4899' },
+  pathology: { label: 'Pathology', icon: FlaskConical, color: '#EF4444' },
+  research: { label: 'Research', icon: FlaskConical, color: '#06B6D4' },
+  wellness: { label: 'Wellness', icon: Heart, color: '#F97316' },
+}
+const SORT_OPTIONS = [
+  { value: 'members', label: 'Most Members' },
+  { value: 'created', label: 'Newest' },
+  { value: 'activity', label: 'Most Active' },
+]
 
 async function apiJson(res) {
   if (!res.ok) {
@@ -67,17 +84,25 @@ export default function Communities() {
   const [createDesc, setCreateDesc] = useState('')
   const [createVisibility, setCreateVisibility] = useState('public')
   const [createJoinType, setCreateJoinType] = useState('anyone')
+  const [createCategory, setCreateCategory] = useState('general')
   const [creating, setCreating] = useState(false)
   const [avatarErrors, setAvatarErrors] = useState({})
+  const [activeCategory, setActiveCategory] = useState('all')
+  const [sortBy, setSortBy] = useState('members')
+  const [categoryCounts, setCategoryCounts] = useState([])
 
   const fetchCommunities = useCallback(async () => {
     try {
-      const data = await apiGet(`/communities?search=${encodeURIComponent(searchQuery)}&sort=members`)
+      const params = new URLSearchParams({ sort: sortBy })
+      if (searchQuery) params.set('search', searchQuery)
+      if (activeCategory !== 'all') params.set('category', activeCategory)
+      const data = await apiGet(`/communities?${params}`)
       setMyCommunities(data.mine || [])
       setPublicCommunities(data.communities || [])
+      if (data.categories) setCategoryCounts(data.categories)
     } catch {}
     setLoading(false)
-  }, [searchQuery])
+  }, [searchQuery, activeCategory, sortBy])
 
   useEffect(() => { fetchCommunities() }, [fetchCommunities])
 
@@ -105,6 +130,7 @@ export default function Communities() {
         description: createDesc.trim(),
         visibility: createVisibility,
         join_type: createJoinType,
+        category: createCategory,
       })
       if (data.id) navigate('/communities/' + data.id)
     } catch {}
@@ -173,6 +199,39 @@ export default function Communities() {
         {searchQuery && <X size={14} className={s.clearBtn} onClick={() => setSearchQuery('')} />}
       </div>
 
+      <div className={s.filterRow}>
+        <div className={s.categoryChips}>
+          <button
+            className={`${s.categoryChip} ${activeCategory === 'all' ? s.categoryChipActive : ''}`}
+            onClick={() => setActiveCategory('all')}
+          >
+            All
+          </button>
+          {Object.entries(CATEGORY_CONFIG).map(([key, cfg]) => {
+            const Icon = cfg.icon
+            const count = categoryCounts.find(c => c.category === key)?.count || 0
+            return (
+              <button
+                key={key}
+                className={`${s.categoryChip} ${activeCategory === key ? s.categoryChipActive : ''}`}
+                onClick={() => setActiveCategory(key)}
+                style={activeCategory === key ? { borderColor: cfg.color, color: cfg.color } : {}}
+              >
+                <Icon size={13} strokeWidth={1.5} />
+                {cfg.label}
+                {count > 0 && <span className={s.categoryChipCount}>{count}</span>}
+              </button>
+            )
+          })}
+        </div>
+        <div className={s.sortWrap}>
+          <select className={s.sortSelect} value={sortBy} onChange={e => setSortBy(e.target.value)}>
+            {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <ChevronDown size={14} className={s.sortChevron} />
+        </div>
+      </div>
+
       {loading ? (
         <div className={s.loading}><Loader2 size={24} className={s.spinner} /> Loading...</div>
       ) : (
@@ -194,7 +253,15 @@ export default function Communities() {
                     <h3 className={s.cardName}>{c.name}</h3>
                     <p className={s.cardDesc}>{c.description}</p>
                     <div className={s.cardMeta}>
+                      {c.category && c.category !== 'general' && (
+                        <span className={s.cardCategory} style={{ color: CATEGORY_CONFIG[c.category]?.color, borderColor: CATEGORY_CONFIG[c.category]?.color }}>
+                          {CATEGORY_CONFIG[c.category]?.label || c.category}
+                        </span>
+                      )}
                       <span>{c.member_count || 0} members</span>
+                      {sortBy === 'activity' && c.total_study_hours > 0 && (
+                        <span><Clock size={10} /> {Math.round(c.total_study_hours)}h</span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -203,7 +270,9 @@ export default function Communities() {
           )}
 
           <section className={s.section}>
-            <h2 className={s.sectionTitle}>{searchQuery ? 'Search Results' : 'Discover Communities'}</h2>
+            <h2 className={s.sectionTitle}>
+              {searchQuery ? 'Search Results' : activeCategory !== 'all' ? CATEGORY_CONFIG[activeCategory]?.label + ' Communities' : 'Discover Communities'}
+            </h2>
             {publicCommunities.length === 0 ? (
               <div className={s.empty}>
                 <Users size={40} strokeWidth={1} />
@@ -225,6 +294,11 @@ export default function Communities() {
                     <h3 className={s.cardName}>{c.name}</h3>
                     <p className={s.cardDesc}>{c.description}</p>
                     <div className={s.cardMeta}>
+                      {c.category && c.category !== 'general' && (
+                        <span className={s.cardCategory} style={{ color: CATEGORY_CONFIG[c.category]?.color, borderColor: CATEGORY_CONFIG[c.category]?.color }}>
+                          {CATEGORY_CONFIG[c.category]?.label || c.category}
+                        </span>
+                      )}
                       <span>{c.member_count || 0} members</span>
                     </div>
                   </div>
@@ -334,6 +408,16 @@ export default function Communities() {
                           <option value="invite_only">Invite Only</option>
                         </select>
                       </div>
+                    </div>
+                  )}
+                  {!selectedTemplate && (
+                    <div className={s.field}>
+                      <label>Category</label>
+                      <select value={createCategory} onChange={e => setCreateCategory(e.target.value)} disabled={creating}>
+                        {Object.entries(CATEGORY_CONFIG).map(([key, cfg]) => (
+                          <option key={key} value={key}>{cfg.label}</option>
+                        ))}
+                      </select>
                     </div>
                   )}
                 </div>

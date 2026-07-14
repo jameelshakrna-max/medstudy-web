@@ -5,6 +5,7 @@ import {
   extractCommunityId, extractNestedId, generateInviteCode,
   getMember, isBanned, updateMemberCount, ensureUserProfile, mapMessage,
 } from '../lib/worker-utils.js'
+import { notifyCommunityAnnouncement } from './notifications.js'
 
 function broadcastEvent(env, communityId, event) {
   try {
@@ -46,20 +47,29 @@ export async function handleWebSocketUpgrade(request, env) {
 export async function handleListCommunities(request, env, user) {
   const url = new URL(request.url)
   const search = url.searchParams.get('search')
+  const category = url.searchParams.get('category')
   const sort = url.searchParams.get('sort') || 'members'
   const page = Math.max(Number(url.searchParams.get('page')) || 1, 1)
   const limit = 20
   const offset = (page - 1) * limit
 
-  let sql, binds
+  const conditions = [`visibility = 'public'`]
+  const binds = []
+
   if (search) {
-    sql = `SELECT * FROM communities WHERE visibility = 'public' AND name LIKE ? ORDER BY member_count DESC LIMIT ? OFFSET ?`
-    binds = [`%${search}%`, limit, offset]
-  } else {
-    const order = sort === 'created' ? 'created_at DESC' : 'member_count DESC'
-    sql = `SELECT * FROM communities WHERE visibility = 'public' ORDER BY ${order} LIMIT ? OFFSET ?`
-    binds = [limit, offset]
+    conditions.push(`name LIKE ?`)
+    binds.push(`%${search}%`)
   }
+  if (category && category !== 'all') {
+    conditions.push(`category = ?`)
+    binds.push(category)
+  }
+
+  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : ''
+  const order = sort === 'created' ? 'created_at DESC' : sort === 'activity' ? 'total_study_hours DESC' : 'member_count DESC'
+
+  const sql = `SELECT * FROM communities ${where} ORDER BY ${order} LIMIT ? OFFSET ?`
+  binds.push(limit, offset)
 
   const { results } = await env.DB.prepare(sql).bind(...binds).all()
 
@@ -67,7 +77,11 @@ export async function handleListCommunities(request, env, user) {
     `SELECT c.* FROM communities c JOIN community_members m ON c.id = m.community_id WHERE m.user_id = ?`
   ).bind(user.sub).all()
 
-  return json({ communities: results, mine, page })
+  const { results: categories } = await env.DB.prepare(
+    `SELECT category, COUNT(*) as count FROM communities WHERE visibility = 'public' GROUP BY category ORDER BY count DESC`
+  ).all()
+
+  return json({ communities: results, mine, page, categories })
 }
 
 export async function handleCreateCommunityFromTemplate(request, env, user) {
@@ -139,19 +153,21 @@ export async function handleCreateCommunityFromTemplate(request, env, user) {
 
 export async function handleCreateCommunity(request, env, user) {
   const body = await request.json()
-  let { name, description, visibility, join_type } = body
+  let { name, description, visibility, join_type, category } = body
   name = safeString(name, MAX.NAME)
   description = safeString(description, MAX.DESC)
   if (!name) return json({ error: 'Name required' }, 400)
+  const validCategories = ['general','clinical','exam_prep','anatomy','pharmacology','pathology','research','wellness']
+  if (!validCategories.includes(category)) category = 'general'
 
   const id = uuid()
   const now = new Date().toISOString()
   const code = generateInviteCode()
 
   await env.DB.prepare(
-    `INSERT INTO communities (id, name, description, visibility, join_type, invite_code, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(id, name, description, visibility || 'public', join_type || 'anyone', code, user.sub, now, now).run()
+    `INSERT INTO communities (id, name, description, visibility, join_type, invite_code, category, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(id, name, description, visibility || 'public', join_type || 'anyone', code, category, user.sub, now, now).run()
 
   const memberId = uuid()
   await env.DB.prepare(
@@ -1241,6 +1257,11 @@ export async function handleCreateAnnouncement(request, env, user) {
     type: 'announcement:new',
     payload: { announcement }
   }).catch(() => {})
+
+  // Notify all community members
+  const { results: commRow } = await env.DB.prepare('SELECT name FROM communities WHERE id = ?').bind(communityId).all()
+  const { results: authorRow } = await env.DB.prepare('SELECT user_name FROM user_profiles WHERE user_id = ?').bind(user.sub).all()
+  notifyCommunityAnnouncement(env, communityId, commRow[0]?.name || 'Community', title, annId, authorRow[0]?.user_name || 'Someone').catch(() => {})
 
   return json(announcement, 201)
 }
