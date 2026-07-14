@@ -83,6 +83,7 @@ import {
 
 export default {
   async fetch(request, env, ctx) {
+    try {
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders() })
     }
@@ -427,6 +428,9 @@ export default {
       return json({ error: 'Not found' }, 404)
     } catch (err) {
       return json({ error: err.message }, 500)
+    }
+    } catch (outerErr) {
+      return json({ error: outerErr.message }, 500)
     }
   },
 }

@@ -141,7 +141,10 @@ export default function UserCard({ userId, children, placement = 'bottom' }) {
         </div>
       ) : cardData ? (
         <>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <div
+            style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}
+            onClick={() => { setVisible(false); navigate(cardData.username ? `/u/${cardData.username}` : `/profile/${userId}`) }}
+          >
             <div style={{ position: 'relative', flexShrink: 0 }}>
               {cardData.profile?.avatar_url ? (
                 <img
