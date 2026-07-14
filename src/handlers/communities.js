@@ -5,7 +5,7 @@ import {
   extractCommunityId, extractNestedId, generateInviteCode,
   getMember, isBanned, updateMemberCount, ensureUserProfile, mapMessage,
 } from '../lib/worker-utils.js'
-import { notifyCommunityAnnouncement } from './notifications.js'
+import { notifyCommunityAnnouncement, createNotificationIfAllowed } from './notifications.js'
 
 function broadcastEvent(env, communityId, event) {
   try {
@@ -341,7 +341,7 @@ export async function handleUpdateCommunity(request, env, user) {
   const updates = []
   const binds = []
 
-  for (const field of ['name', 'description', 'avatar_url', 'banner_url', 'visibility', 'join_type']) {
+  for (const field of ['name', 'description', 'avatar_url', 'banner_url', 'visibility', 'join_type', 'category']) {
     if (body[field] !== undefined) {
       updates.push(`${field} = ?`)
       binds.push(body[field])
@@ -1680,4 +1680,156 @@ export async function handleGetMutes(request, env, user) {
   ).bind(communityId).all()
 
   return json(results)
+}
+
+/* ── Invitations ── */
+
+export async function handleInviteUser(request, env, user) {
+  const { community_id, invitee_id } = await request.json()
+  if (!community_id || !invitee_id) return json({ error: 'community_id and invitee_id required' }, 400)
+
+  const inviterMember = await getMember(env, community_id, user.sub)
+  if (!inviterMember) return json({ error: 'Not a member' }, 403)
+
+  const { results: levelResults } = await env.DB.prepare(
+    'SELECT can_invite FROM member_levels WHERE id = ?'
+  ).bind(inviterMember.level_id).all()
+
+  const canInvite = levelResults.length > 0 ? levelResults[0].can_invite : hasMinimumRole(inviterMember.role, ROLES.SCHOLAR)
+  if (!canInvite) return json({ error: 'Your role does not allow inviting users' }, 403)
+
+  const { results: invitee } = await env.DB.prepare(
+    'SELECT user_id, user_name FROM user_profiles WHERE user_id = ?'
+  ).bind(invitee_id).all()
+  if (!invitee.length) return json({ error: 'User not found' }, 404)
+
+  const existingMember = await getMember(env, community_id, invitee_id)
+  if (existingMember) return json({ error: 'User is already a member' }, 409)
+
+  const { results: existingInvite } = await env.DB.prepare(
+    "SELECT id FROM community_invitations WHERE community_id = ? AND invitee_id = ? AND status = 'pending'"
+  ).bind(community_id, invitee_id).all()
+  if (existingInvite.length) return json({ error: 'Invitation already pending' }, 409)
+
+  const inviterProfile = await env.DB.prepare(
+    'SELECT user_name FROM user_profiles WHERE user_id = ?'
+  ).bind(user.sub).first()
+
+  const commRow = await env.DB.prepare(
+    'SELECT name FROM communities WHERE id = ?'
+  ).bind(community_id).first()
+
+  const inviterName = inviterProfile?.user_name || user.email?.split('@')[0] || 'Someone'
+  const communityName = commRow?.name || 'Community'
+
+  const id = crypto.randomUUID()
+  await env.DB.prepare(
+    'INSERT INTO community_invitations (id, community_id, inviter_id, invitee_id) VALUES (?, ?, ?, ?)'
+  ).bind(id, community_id, user.sub, invitee_id).run()
+
+  createNotificationIfAllowed(env, invitee_id, {
+    type: 'community_invite',
+    title: 'Community Invitation',
+    body: `${inviterName} invited you to ${communityName}`,
+    category: 'community',
+    priority: 'info',
+    action_url: `/communities/${community_id}`,
+    data: { community_id, inviter_id: user.sub },
+  }).catch(() => {})
+
+  return json({ ok: true, invitation_id: id })
+}
+
+export async function handleAcceptCommunityInvitation(request, env, user) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const invitationId = parts[3]
+
+  const { results } = await env.DB.prepare(
+    "SELECT * FROM community_invitations WHERE id = ? AND status = 'pending'"
+  ).bind(invitationId).all()
+  if (!results.length) return json({ error: 'Invitation not found' }, 404)
+
+  const invitation = results[0]
+  if (invitation.invitee_id !== user.sub) return json({ error: 'Not authorized' }, 403)
+
+  const now = new Date().toISOString()
+
+  await env.DB.prepare(
+    "UPDATE community_invitations SET status = 'accepted' WHERE id = ?"
+  ).bind(invitationId).run()
+
+  let levelId = null
+  const { results: levels } = await env.DB.prepare(
+    'SELECT id FROM member_levels WHERE community_id = ? ORDER BY level_number ASC LIMIT 1'
+  ).bind(invitation.community_id).all()
+  if (levels.length) levelId = levels[0].id
+
+  const memberId = crypto.randomUUID()
+  await env.DB.prepare(
+    'INSERT INTO community_members (id, community_id, user_id, level_id, role, joined_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(memberId, invitation.community_id, user.sub, levelId, ROLES.MEMBER, now).run()
+
+  await ensureUserProfile(env, user.sub, null)
+  await updateMemberCount(env, invitation.community_id)
+
+  const inviterProfile = await env.DB.prepare(
+    'SELECT user_name FROM user_profiles WHERE user_id = ?'
+  ).bind(invitation.inviter_id).first()
+
+  createNotificationIfAllowed(env, invitation.inviter_id, {
+    type: 'community_invite_accepted',
+    title: 'Invitation Accepted',
+    body: `${inviterProfile?.user_name || 'Someone'} accepted your invitation`,
+    category: 'community',
+    priority: 'info',
+    action_url: `/communities/${invitation.community_id}`,
+    data: { community_id: invitation.community_id, invitee_id: user.sub },
+  }).catch(() => {})
+
+  return json({ ok: true })
+}
+
+export async function handleDeclineCommunityInvitation(request, env, user) {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/')
+  const invitationId = parts[3]
+
+  const { results } = await env.DB.prepare(
+    "SELECT * FROM community_invitations WHERE id = ? AND status = 'pending'"
+  ).bind(invitationId).all()
+  if (!results.length) return json({ error: 'Invitation not found' }, 404)
+
+  const invitation = results[0]
+  if (invitation.invitee_id !== user.sub) return json({ error: 'Not authorized' }, 403)
+
+  await env.DB.prepare(
+    "UPDATE community_invitations SET status = 'declined' WHERE id = ?"
+  ).bind(invitationId).run()
+
+  return json({ ok: true })
+}
+
+export async function handleGetMyInvitations(request, env, user) {
+  const { results } = await env.DB.prepare(
+    `SELECT ci.*, c.name as community_name, c.avatar_url as community_avatar, c.member_count,
+            up.user_name as inviter_name
+     FROM community_invitations ci
+     JOIN communities c ON ci.community_id = c.id
+     LEFT JOIN user_profiles up ON ci.inviter_id = up.user_id
+     WHERE ci.invitee_id = ? AND ci.status = 'pending'
+     ORDER BY ci.created_at DESC`
+  ).bind(user.sub).all()
+
+  const entries = results.map(r => ({
+    id: r.id,
+    community_id: r.community_id,
+    community_name: r.community_name,
+    community_avatar: r.community_avatar || null,
+    inviter_id: r.inviter_id,
+    inviter_name: r.inviter_name || 'Someone',
+    created_at: r.created_at,
+  }))
+
+  return json(entries)
 }

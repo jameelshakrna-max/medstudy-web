@@ -449,9 +449,10 @@ CREATE TABLE IF NOT EXISTS community_rooms (
   type TEXT NOT NULL,
   provider TEXT DEFAULT 'livekit',
   status TEXT DEFAULT 'inactive',
+  category TEXT DEFAULT 'general',
   created_by TEXT NOT NULL,
   created_at TEXT DEFAULT (datetime('now')),
-  ended_at TEXT
+  updated_at TEXT DEFAULT (datetime('now'))
 );
 
 -- Shared Pomodoro timer per voice room
@@ -694,6 +695,25 @@ CREATE TABLE IF NOT EXISTS community_leaderboard_snapshots (
   ranking TEXT NOT NULL, -- JSON array: [{"user_id":"...","rank":1,"hours":12.5},...]
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(community_id, snapshot_date)
+);
+
+-- Global (cross-community) daily leaderboard snapshots
+CREATE TABLE IF NOT EXISTS global_leaderboard_snapshots (
+  id TEXT PRIMARY KEY,
+  snapshot_date TEXT NOT NULL UNIQUE,
+  ranking TEXT NOT NULL, -- JSON array: [{"user_id":"...","rank":1,"hours":12.5},...]
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Community invitations (invite user by ID)
+CREATE TABLE IF NOT EXISTS community_invitations (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  inviter_id TEXT NOT NULL,
+  invitee_id TEXT NOT NULL,
+  status TEXT DEFAULT 'pending', -- pending, accepted, declined
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(community_id, invitee_id)
 );
 
 -- ════════════════════════════════════════════════════════════

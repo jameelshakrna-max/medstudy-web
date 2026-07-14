@@ -34,6 +34,8 @@ import {
   handleJoinCompetition, handleLeaveCompetition, handleGetCompetitionLeaderboard, handleEndCompetition,
   handleMuteMember, handleGetMutes, handleUnmuteMember,
   handleWebSocketUpgrade, handleGetModDashboard,
+  handleInviteUser, handleAcceptCommunityInvitation,
+  handleDeclineCommunityInvitation, handleGetMyInvitations,
 } from './handlers/communities.js'
 
 import {
@@ -41,6 +43,8 @@ import {
   handleSetLeaderboardTitle, handleAllTimeLeaderboard, handleUserBadges,
   handleHeatmap, handleSessionTimeline, handleRoomStats,
   handleGlobalLeaderboard,
+  handleGlobalMonthlyLeaderboard, handleCommunitiesMonthlyLeaderboard,
+  handleGlobalLeaderboardStats, handleLeaderboardSearch, handleCommunityHallOfFame,
   logUserActivity, refreshUserStatsAndNotify, refreshUserStats, incrementUserStats,
 } from './handlers/stats.js'
 
@@ -431,6 +435,21 @@ export default {
 
       // ── Global Leaderboard ──
       if (path === '/api/leaderboard/global' && request.method === 'GET') return handleGlobalLeaderboard(request, env, user)
+
+      // ── Leaderboard Rankings ──
+      if (path === '/api/leaderboard/users/monthly' && request.method === 'GET') return handleGlobalMonthlyLeaderboard(request, env, user)
+      if (path === '/api/leaderboard/communities/monthly' && request.method === 'GET') return handleCommunitiesMonthlyLeaderboard(request, env, user)
+      if (path === '/api/leaderboard/stats' && request.method === 'GET') return handleGlobalLeaderboardStats(request, env, user)
+      if (path === '/api/leaderboard/search' && request.method === 'GET') return handleLeaderboardSearch(request, env, user)
+
+      // ── Invitations ──
+      if (path === '/api/invitations' && request.method === 'GET') return handleGetMyInvitations(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/invite-user$/) && request.method === 'POST') return handleInviteUser(request, env, user)
+      if (path.match(/^\/api\/invitations\/[^\/]+\/accept$/) && request.method === 'POST') return handleAcceptCommunityInvitation(request, env, user)
+      if (path.match(/^\/api\/invitations\/[^\/]+\/decline$/) && request.method === 'POST') return handleDeclineCommunityInvitation(request, env, user)
+
+      // ── Hall of Fame ──
+      if (path.match(/^\/api\/communities\/[^\/]+\/hall-of-fame$/) && request.method === 'GET') return handleCommunityHallOfFame(request, env, user)
 
       // ── People Search & Discovery ──
       if (path === '/api/users/search' && request.method === 'GET') return handleSearchUsers(request, env, user)

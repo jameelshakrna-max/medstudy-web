@@ -149,6 +149,44 @@
   color: var(--text-primary);
 }
 
+.inviteDropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  min-width: 180px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  padding: 4px;
+}
+.inviteOption {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: 'DM Sans', sans-serif;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.inviteOption:hover {
+  background: var(--input-bg);
+}
+.inviteSent {
+  background: var(--emerald, #10b981) !important;
+  color: #fff !important;
+  border-color: var(--emerald, #10b981) !important;
+}
+
 .stats {
   display: flex;
   justify-content: center;

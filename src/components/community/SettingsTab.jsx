@@ -9,6 +9,17 @@ import s from '../../pages/CommunityDetail.module.css'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
+const CATEGORIES = [
+  { value: 'general', label: 'General' },
+  { value: 'clinical', label: 'Clinical' },
+  { value: 'exam_prep', label: 'Exam Prep' },
+  { value: 'anatomy', label: 'Anatomy' },
+  { value: 'pharmacology', label: 'Pharmacology' },
+  { value: 'pathology', label: 'Pathology' },
+  { value: 'research', label: 'Research' },
+  { value: 'wellness', label: 'Wellness' },
+]
+
 function RefreshCw({ size, strokeWidth }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
@@ -34,6 +45,7 @@ export default function SettingsTab({ community, rules, settings, members, annou
   const [editDesc, setEditDesc] = useState(community.description || '')
   const [editVisibility, setEditVisibility] = useState(community.visibility)
   const [editJoinType, setEditJoinType] = useState(community.join_type)
+  const [editCategory, setEditCategory] = useState(community.category || 'general')
   const [saving, setSaving] = useState(false)
   const [newRule, setNewRule] = useState('')
   const [suggestedRules, setSuggestedRules] = useState([])
@@ -84,6 +96,7 @@ export default function SettingsTab({ community, rules, settings, members, annou
         description: (overrides.description ?? editDesc).trim(),
         visibility: overrides.visibility ?? editVisibility,
         join_type: overrides.joinType ?? editJoinType,
+        category: overrides.category ?? editCategory,
       })
       onUpdate()
     } catch {}
@@ -318,6 +331,14 @@ export default function SettingsTab({ community, rules, settings, members, annou
                 <option value="invite_only">Invite Only</option>
               </select>
             </div>
+          </div>
+          <div className={s.field}>
+            <label>Category</label>
+            <select value={editCategory} onChange={e => setEditCategory(e.target.value)} disabled={!isMod}>
+              {CATEGORIES.map(c => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
           </div>
           {isMod && (
             <div className={s.fieldGrid} style={{ marginTop: 12 }}>

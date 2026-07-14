@@ -18,6 +18,7 @@ import ModDashboardTab from '../components/community/ModDashboardTab'
 import AnnouncementsTab from '../components/community/AnnouncementsTab'
 import VoiceRooms from '../components/community/VoiceRooms'
 import CalendarHeatmap from '../components/community/CalendarHeatmap.jsx'
+import HallOfFameTab from '../components/community/HallOfFameTab'
 import {
   MessageSquare, Users, Trophy, Settings, Send, Paperclip, Upload,
   Plus, X, Loader2, ChevronLeft, Shield, ShieldAlert, UserMinus, UserCog, Star,
@@ -38,6 +39,7 @@ const TABS = [
   { id: 'competitions', icon: Trophy, label: 'Competitions' },
   { id: 'voice', icon: Headphones, label: 'Voice' },
   { id: 'stats', icon: BarChart3, label: 'Stats' },
+  { id: 'hall-of-fame', icon: Crown, label: 'Hall of Fame' },
   { id: 'settings', icon: Settings, label: 'Settings' },
 ]
 
@@ -598,6 +600,10 @@ export default function CommunityDetail() {
         <div style={{ padding: '20px 0' }}>
           <CalendarHeatmap communityId={id} />
         </div>
+      )}
+
+      {activeTab === 'hall-of-fame' && (
+        <HallOfFameTab communityId={id} />
       )}
 
       {activeTab === 'mod' && (

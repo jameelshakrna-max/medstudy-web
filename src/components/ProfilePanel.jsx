@@ -22,6 +22,10 @@ export default function ProfilePanel() {
 
   const { open, userId } = panelState
   const [swipeOffset, setSwipeOffset] = useState(0)
+  const [showInviteDropdown, setShowInviteDropdown] = useState(false)
+  const [inviting, setInviting] = useState(false)
+  const [inviteSent, setInviteSent] = useState(false)
+  const [userCommunities, setUserCommunities] = useState([])
 
   const swipeHandlers = useSwipeable({
     onSwipedDown: (_e) => {
@@ -156,6 +160,33 @@ export default function ProfilePanel() {
     }
   }
 
+  const handleToggleInvite = async () => {
+    if (showInviteDropdown) {
+      setShowInviteDropdown(false)
+      return
+    }
+    try {
+      const data = await apiGet('/communities')
+      const list = Array.isArray(data) ? data : (data?.communities || [])
+      setUserCommunities(list)
+    } catch {
+      setUserCommunities([])
+    }
+    setShowInviteDropdown(true)
+  }
+
+  const handleInviteToCommunity = async (communityId) => {
+    setInviting(true)
+    try {
+      await apiPost(`/communities/${communityId}/invite-user`, { invitee_id: userId })
+      setInviteSent(true)
+      setShowInviteDropdown(false)
+      setTimeout(() => setInviteSent(false), 2000)
+    } catch {
+    }
+    setInviting(false)
+  }
+
   if (!open) return null
 
   const displayName = profile?.display_name || profile?.user_name || 'Student'
@@ -224,6 +255,36 @@ export default function ProfilePanel() {
                 <button className={s.linkBtn} onClick={handleCopyLink} title="Copy profile link">
                   <Link size={16} />
                 </button>
+                <div style={{ position: 'relative' }}>
+                  <button
+                    className={`${s.linkBtn} ${inviteSent ? s.inviteSent : ''}`}
+                    onClick={handleToggleInvite}
+                    title="Invite to community"
+                    disabled={inviting}
+                  >
+                    <UserPlus size={16} />
+                  </button>
+                  {showInviteDropdown && (
+                    <div className={s.inviteDropdown}>
+                      {userCommunities.length === 0 ? (
+                        <div className={s.inviteOption} style={{ color: 'var(--text-secondary)', cursor: 'default' }}>
+                          No communities found
+                        </div>
+                      ) : (
+                        userCommunities.map(c => (
+                          <button
+                            key={c.id}
+                            className={s.inviteOption}
+                            onClick={() => handleInviteToCommunity(c.id)}
+                            disabled={inviting}
+                          >
+                            {c.name}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

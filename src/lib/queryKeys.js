@@ -44,6 +44,15 @@ export const queryKeys = {
     communityMonthly: (id, year, month, filter) => [...queryKeys.leaderboard.all, 'communityMonthly', id, year, month, filter],
     communityAllTime: (id) => [...queryKeys.leaderboard.all, 'communityAllTime', id],
     position: (id) => [...queryKeys.leaderboard.all, 'position', id],
+    usersMonthly: (year, month, limit) => [...queryKeys.leaderboard.all, 'usersMonthly', year, month, limit],
+    communitiesMonthly: (year, month, category, limit) => [...queryKeys.leaderboard.all, 'communitiesMonthly', year, month, category, limit],
+    stats: (year, month) => [...queryKeys.leaderboard.all, 'stats', year, month],
+    search: (q, year, month, type) => [...queryKeys.leaderboard.all, 'search', q, year, month, type],
+    hallOfFame: (communityId) => [...queryKeys.leaderboard.all, 'hallOfFame', communityId],
+  },
+  invitations: {
+    all: ['invitations'],
+    list: () => [...queryKeys.invitations.all, 'list'],
   },
   competitions: {
     all: ['competitions'],
