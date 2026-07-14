@@ -1,6 +1,8 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
+import { createContext, useContext, useEffect, useRef, useMemo } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from './AuthContext'
 import { apiGet } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 
 const NotificationContext = createContext(null)
 
@@ -10,23 +12,18 @@ export function useNotifications() {
 
 export function NotificationProvider({ children }) {
   const { user } = useAuth()
-  const [unreadCount, setUnreadCount] = useState(0)
+  const queryClient = useQueryClient()
   const originalTitle = useRef(document.title)
 
-  const refreshUnread = useCallback(async () => {
-    if (!user) { setUnreadCount(0); return }
-    try {
-      const data = await apiGet('/notifications/unread-counts')
-      setUnreadCount(data?.all || 0)
-    } catch {}
-  }, [user])
+  const { data: unreadCounts, refetch: refreshUnread } = useQuery({
+    queryKey: queryKeys.notifications.unreadByCategory(),
+    queryFn: () => apiGet('/notifications/unread-counts'),
+    enabled: !!user,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  })
 
-  useEffect(() => {
-    if (!user) { setUnreadCount(0); return }
-    refreshUnread()
-    const interval = setInterval(refreshUnread, 30000)
-    return () => clearInterval(interval)
-  }, [user, refreshUnread])
+  const unreadCount = unreadCounts?.all || 0
 
   useEffect(() => {
     if (unreadCount > 0) {
@@ -37,8 +34,16 @@ export function NotificationProvider({ children }) {
     return () => { document.title = originalTitle.current }
   }, [unreadCount])
 
+  const value = useMemo(() => ({
+    unreadCount,
+    refreshUnread: () => {
+      refreshUnread()
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all })
+    },
+  }), [unreadCount, refreshUnread, queryClient])
+
   return (
-    <NotificationContext.Provider value={{ unreadCount, refreshUnread }}>
+    <NotificationContext.Provider value={value}>
       {children}
     </NotificationContext.Provider>
   )

@@ -21,6 +21,9 @@ export async function apiGet(path) {
   return apiJson(res)
 }
 
+/** queryFn adapter for useQuery — wraps apiGet */
+export const queryFn = (path) => () => apiGet(path)
+
 export async function apiPost(path, body) {
   const { data: { session } } = await supabase.auth.getSession()
   const res = await fetch(API + path, {

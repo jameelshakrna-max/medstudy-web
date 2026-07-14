@@ -1,16 +1,15 @@
-import { useEffect, useState, useCallback } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Search, Users, Plus, X, Loader2, UserPlus, Hash, Globe, Lock, Layout,
   ChevronDown, BookOpen, Stethoscope, GraduationCap, Brain, Pill, FlaskConical, Heart, Clock
 } from 'lucide-react'
+import { apiGet, apiPost, imageUrl } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 import s from './Communities.module.css'
 import communityTemplates from '../data/communityTemplates'
 import TemplatePicker from '../components/community/TemplatePicker'
-import { imageUrl } from '../lib/api'
-
-const API = import.meta.env.VITE_API_URL || '/api'
 
 const CATEGORY_CONFIG = {
   general: { label: 'General', icon: BookOpen, color: 'var(--blue)' },
@@ -28,55 +27,12 @@ const SORT_OPTIONS = [
   { value: 'activity', label: 'Most Active' },
 ]
 
-async function apiJson(res) {
-  if (!res.ok) {
-    const text = await res.text()
-    let msg
-    try { msg = JSON.parse(text).error || text } catch { msg = text.slice(0, 300) }
-    throw new Error(msg || `Request failed (${res.status})`)
-  }
-  const text = await res.text()
-  try { return JSON.parse(text) } catch { throw new Error(text.slice(0, 300)) }
-}
-
-async function apiGet(path) {
-  const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(API + path, {
-    headers: { Authorization: 'Bearer ' + session.access_token }
-  })
-  return apiJson(res)
-}
-
-async function apiPost(path, body) {
-  const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(API + path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
-    body: JSON.stringify(body)
-  })
-  return apiJson(res)
-}
-
-function formatDate(iso) {
-  if (!iso) return ''
-  const normalized = iso.replace(' ', 'T') + (iso.includes('Z') || iso.includes('+') ? '' : 'Z')
-  const d = new Date(normalized)
-  const now = new Date()
-  const diff = now - d
-  if (diff < 86400000) return 'Today'
-  if (diff < 604800000) return Math.floor(diff / 86400000) + 'd ago'
-  return d.toLocaleDateString()
-}
-
 export default function Communities() {
   const navigate = useNavigate()
-  const [myCommunities, setMyCommunities] = useState([])
-  const [publicCommunities, setPublicCommunities] = useState([])
+  const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState('')
-  const [loading, setLoading] = useState(true)
   const [joinCode, setJoinCode] = useState('')
   const [joinError, setJoinError] = useState('')
-  const [joining, setJoining] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState(null)
@@ -85,70 +41,84 @@ export default function Communities() {
   const [createVisibility, setCreateVisibility] = useState('public')
   const [createJoinType, setCreateJoinType] = useState('anyone')
   const [createCategory, setCreateCategory] = useState('general')
-  const [creating, setCreating] = useState(false)
   const [avatarErrors, setAvatarErrors] = useState({})
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortBy, setSortBy] = useState('members')
-  const [categoryCounts, setCategoryCounts] = useState([])
 
-  const fetchCommunities = useCallback(async () => {
-    try {
+  const { data = {}, isLoading } = useQuery({
+    queryKey: queryKeys.communities.list(sortBy, searchQuery, activeCategory),
+    queryFn: async () => {
       const params = new URLSearchParams({ sort: sortBy })
       if (searchQuery) params.set('search', searchQuery)
       if (activeCategory !== 'all') params.set('category', activeCategory)
-      const data = await apiGet(`/communities?${params}`)
-      setMyCommunities(data.mine || [])
-      setPublicCommunities(data.communities || [])
-      if (data.categories) setCategoryCounts(data.categories)
-    } catch {}
-    setLoading(false)
-  }, [searchQuery, activeCategory, sortBy])
+      return apiGet(`/communities?${params}`)
+    },
+    staleTime: 15_000,
+  })
 
-  useEffect(() => { fetchCommunities() }, [fetchCommunities])
+  const myCommunities = data.mine || []
+  const publicCommunities = data.communities || []
+  const categoryCounts = data.categories || []
 
-  const handleJoinByCode = async () => {
+  const joinMutation = useMutation({
+    mutationFn: (code) => apiPost('/communities/join-by-code', { code }),
+    onSuccess: (result) => {
+      if (result.community) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.communities.all })
+        navigate('/communities/' + result.community.id)
+      } else if (result.requires_approval) {
+        setJoinError('Join request sent for approval')
+      } else {
+        setJoinError(result.error || 'Failed to join')
+      }
+    },
+    onError: (err) => setJoinError(err.message || 'Failed to join'),
+  })
+
+  const createMutation = useMutation({
+    mutationFn: (body) => apiPost('/communities', body),
+    onSuccess: (result) => {
+      if (result.id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.communities.all })
+        navigate('/communities/' + result.id)
+      }
+    },
+  })
+
+  const createFromTemplateMutation = useMutation({
+    mutationFn: (body) => apiPost('/communities/from-template', body),
+    onSuccess: (result) => {
+      if (result.id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.communities.all })
+        navigate('/communities/' + result.id)
+      }
+    },
+  })
+
+  const handleJoinByCode = () => {
     if (!joinCode.trim()) return
-    setJoining(true)
     setJoinError('')
-    try {
-      const data = await apiPost('/communities/join-by-code', { code: joinCode.trim() })
-      if (data.community) navigate('/communities/' + data.community.id)
-      else if (data.requires_approval) setJoinError('Join request sent for approval')
-      else setJoinError(data.error || 'Failed to join')
-    } catch (e) {
-      setJoinError(e.message || 'Failed to join')
-    }
-    setJoining(false)
+    joinMutation.mutate(joinCode.trim())
   }
 
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!createName.trim()) return
-    setCreating(true)
-    try {
-      const data = await apiPost('/communities', {
-        name: createName.trim(),
-        description: createDesc.trim(),
-        visibility: createVisibility,
-        join_type: createJoinType,
-        category: createCategory,
-      })
-      if (data.id) navigate('/communities/' + data.id)
-    } catch {}
-    setCreating(false)
+    createMutation.mutate({
+      name: createName.trim(),
+      description: createDesc.trim(),
+      visibility: createVisibility,
+      join_type: createJoinType,
+      category: createCategory,
+    })
   }
 
-  const handleCreateFromTemplate = async () => {
+  const handleCreateFromTemplate = () => {
     if (!createName.trim() || !selectedTemplate) return
-    setCreating(true)
-    try {
-      const data = await apiPost('/communities/from-template', {
-        templateId: selectedTemplate.id,
-        name: createName.trim(),
-        description: createDesc.trim(),
-      })
-      if (data.id) navigate('/communities/' + data.id)
-    } catch {}
-    setCreating(false)
+    createFromTemplateMutation.mutate({
+      templateId: selectedTemplate.id,
+      name: createName.trim(),
+      description: createDesc.trim(),
+    })
   }
 
   const handleSelectTemplate = (tmpl) => {
@@ -157,6 +127,8 @@ export default function Communities() {
     setCreateVisibility(tmpl.defaults.type === 'private' ? 'private' : 'public')
     setCreateJoinType(tmpl.defaults.settings.require_approval ? 'approval' : 'anyone')
   }
+
+  const creating = createMutation.isPending || createFromTemplateMutation.isPending
 
   return (
     <div className={s.page}>
@@ -179,8 +151,8 @@ export default function Communities() {
             onChange={e => { setJoinCode(e.target.value); setJoinError('') }}
             onKeyDown={e => e.key === 'Enter' && handleJoinByCode()}
           />
-          <button className={s.joinBtn} onClick={handleJoinByCode} disabled={!joinCode.trim() || joining}>
-            {joining ? <Loader2 size={14} className={s.spinner} /> : <UserPlus size={14} strokeWidth={1.5} />}
+          <button className={s.joinBtn} onClick={handleJoinByCode} disabled={!joinCode.trim() || joinMutation.isPending}>
+            {joinMutation.isPending ? <Loader2 size={14} className={s.spinner} /> : <UserPlus size={14} strokeWidth={1.5} />}
             Join
           </button>
         </div>
@@ -232,7 +204,7 @@ export default function Communities() {
         </div>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className={s.loading}><Loader2 size={24} className={s.spinner} /> Loading...</div>
       ) : (
         <>

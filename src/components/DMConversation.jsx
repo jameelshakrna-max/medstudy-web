@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Send, Paperclip } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { apiGet, apiPost, imageUrl } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 import styles from './DMConversation.module.css'
 
 const API = import.meta.env.VITE_API_URL || '/api'
@@ -42,12 +44,8 @@ export default function DMConversation() {
   const { user } = useAuth()
   const { conversationId } = useParams()
   const navigate = useNavigate()
-  const [messages, setMessages] = useState([])
-  const [otherUser, setOtherUser] = useState(null)
-  const [presence, setPresence] = useState(null)
+  const queryClient = useQueryClient()
   const [content, setContent] = useState('')
-  const [sending, setSending] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
   const messagesEndRef = useRef(null)
@@ -58,48 +56,43 @@ export default function DMConversation() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
-  useEffect(() => {
-    if (!user || !conversationId) return
-    let cancelled = false
-    async function load() {
-      try {
-        const [msgs, convos] = await Promise.all([
-          apiGet(`/dm/${conversationId}/messages?limit=50`),
-          apiGet('/dm/conversations')
-        ])
-        if (cancelled) return
-        const list = Array.isArray(msgs) ? msgs : []
-        setMessages(list.reverse())
+  const { data: messages = [], isLoading } = useQuery({
+    queryKey: queryKeys.dm.messages(conversationId, 50),
+    queryFn: async () => {
+      const msgs = await apiGet(`/dm/${conversationId}/messages?limit=50`)
+      return (Array.isArray(msgs) ? msgs : []).reverse()
+    },
+    enabled: !!user && !!conversationId,
+    staleTime: Infinity,
+  })
 
-        const convo = Array.isArray(convos)
-          ? convos.find(c => String(c.id) === String(conversationId))
-          : null
-        if (convo?.other_user) setOtherUser(convo.other_user)
+  const { data: conversations = [] } = useQuery({
+    queryKey: queryKeys.dm.conversations(),
+    queryFn: () => apiGet('/dm/conversations').then(d => Array.isArray(d) ? d : []),
+    enabled: !!user,
+    staleTime: 10_000,
+  })
 
-        if (convo?.other_user?.user_id) {
-          try {
-            const pres = await apiPost('/presence/bulk', { user_ids: [convo.other_user.user_id] })
-            if (!cancelled && pres?.presences?.[convo.other_user.user_id]) {
-              setPresence(pres.presences[convo.other_user.user_id])
-            }
-          } catch {}
-        }
+  const otherUser = conversations.find(c => String(c.id) === String(conversationId))?.other_user || null
 
-        apiPost(`/dm/${conversationId}/read`, {}).catch(() => {})
-      } catch {}
-      if (!cancelled) setLoading(false)
-    }
-    load()
-    return () => { cancelled = true }
-  }, [user, conversationId])
+  const sendMutation = useMutation({
+    mutationFn: async (trimmed) => {
+      return apiPost(`/dm/${conversationId}/messages`, { content: trimmed })
+    },
+    onSuccess: (msg) => {
+      queryClient.setQueryData(queryKeys.dm.messages(conversationId, 50), prev => [...prev, msg])
+      setContent('')
+      setTimeout(scrollToBottom, 50)
+    },
+  })
 
   useEffect(() => {
-    if (!loading) scrollToBottom()
-  }, [messages, loading, scrollToBottom])
+    if (!isLoading) scrollToBottom()
+  }, [messages, isLoading, scrollToBottom])
 
   useEffect(() => {
-    if (!loading) inputRef.current?.focus()
-  }, [loading])
+    if (!isLoading) inputRef.current?.focus()
+  }, [isLoading])
 
   useEffect(() => {
     if (!user || !conversationId) return
@@ -120,9 +113,14 @@ export default function DMConversation() {
         try {
           const evt = JSON.parse(e.data)
           if (evt.type === 'message:new' && evt.message) {
-            setMessages(prev => prev.some(m => m.id === evt.message.id) ? prev : [...prev, evt.message])
+            queryClient.setQueryData(queryKeys.dm.messages(conversationId, 50), prev => {
+              if (prev.some(m => m.id === evt.message.id)) return prev
+              return [...prev, evt.message]
+            })
           } else if (evt.type === 'message:delete' && evt.message_id) {
-            setMessages(prev => prev.map(m => m.id === evt.message_id ? { ...m, deleted_at: new Date().toISOString() } : m))
+            queryClient.setQueryData(queryKeys.dm.messages(conversationId, 50), prev =>
+              prev.map(m => m.id === evt.message_id ? { ...m, deleted_at: new Date().toISOString() } : m)
+            )
           }
         } catch {}
       }
@@ -139,19 +137,12 @@ export default function DMConversation() {
       cancelled = true
       ws?.close()
     }
-  }, [user, conversationId])
+  }, [user, conversationId, queryClient])
 
   const send = async () => {
     const trimmed = content.trim()
-    if (!trimmed || sending) return
-    setSending(true)
-    try {
-      const msg = await apiPost(`/dm/${conversationId}/messages`, { content: trimmed })
-      setMessages(prev => [...prev, msg])
-      setContent('')
-      setTimeout(scrollToBottom, 50)
-    } catch {}
-    setSending(false)
+    if (!trimmed || sendMutation.isPending) return
+    sendMutation.mutate(trimmed)
   }
 
   const sendFile = async (file) => {
@@ -170,7 +161,7 @@ export default function DMConversation() {
       })
       if (res.ok) {
         const msg = await res.json()
-        setMessages(prev => [...prev, msg])
+        queryClient.setQueryData(queryKeys.dm.messages(conversationId, 50), prev => [...prev, msg])
         setTimeout(scrollToBottom, 50)
       }
     } catch {}
@@ -195,8 +186,6 @@ export default function DMConversation() {
   const initials = (otherUser?.display_name || otherUser?.username || '?')
     .split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 
-  const statusLabel = presence?.status === 'online' ? 'Online' : presence?.status === 'idle' ? 'Idle' : 'Offline'
-
   return (
     <div className={styles.page}>
       <div className={styles.header}>
@@ -210,12 +199,11 @@ export default function DMConversation() {
         )}
         <div className={styles.headerInfo}>
           <div className={styles.headerName}>{otherUser?.display_name || otherUser?.username || 'Conversation'}</div>
-          <div className={styles.headerStatus}>{statusLabel}</div>
         </div>
       </div>
 
       <div className={styles.messages} ref={containerRef}>
-        {loading ? null : messages.length === 0 ? (
+        {isLoading ? null : messages.length === 0 ? (
           <div className={styles.empty}>Send a message to start the conversation.</div>
         ) : (
           messages.map((msg, i) => {
@@ -262,7 +250,7 @@ export default function DMConversation() {
         <button
           className={styles.sendBtn}
           onClick={send}
-          disabled={(!content.trim() && !uploading) || sending}
+          disabled={(!content.trim() && !uploading) || sendMutation.isPending}
         >
           <Send size={18} />
         </button>

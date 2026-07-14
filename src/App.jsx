@@ -1,5 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { PomodoroProvider, usePomodoro } from './context/PomodoroContext'
 import { PresenceProvider } from './context/PresenceContext'
@@ -11,6 +13,20 @@ import DMConversation from './components/DMConversation'
 import FloatingTimer from './components/FloatingTimer'
 import Layout from './components/Layout'
 import LoadingScreen from './components/LoadingScreen'
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: true,
+      retry: 1,
+    },
+    mutations: {
+      retry: 0,
+    },
+  },
+})
 
 const Landing    = lazy(() => import('./pages/Landing'))
 const Login      = lazy(() => import('./pages/Login'))
@@ -93,19 +109,22 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <PomodoroProvider>
-          <PresenceProvider>
-            <NotificationProvider>
-              <ProfilePanelProvider>
-                <AppRoutes />
-                <ProfilePanel />
-              </ProfilePanelProvider>
-            </NotificationProvider>
-          </PresenceProvider>
-        </PomodoroProvider>
-      </BrowserRouter>
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <BrowserRouter>
+          <PomodoroProvider>
+            <PresenceProvider>
+              <NotificationProvider>
+                <ProfilePanelProvider>
+                  <AppRoutes />
+                  <ProfilePanel />
+                </ProfilePanelProvider>
+              </NotificationProvider>
+            </PresenceProvider>
+          </PomodoroProvider>
+        </BrowserRouter>
+      </AuthProvider>
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
   )
 }

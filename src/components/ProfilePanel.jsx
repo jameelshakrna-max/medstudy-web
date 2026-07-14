@@ -1,9 +1,11 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { UserPlus, UserMinus, MessageCircle, Link, Clock, BookOpen, Users, Trophy, Activity, ArrowRight, Loader2 } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { UserPlus, UserMinus, MessageCircle, Link, Clock, BookOpen, Users, Trophy, Activity, ArrowRight } from 'lucide-react'
 import { useProfilePanel } from '../context/ProfilePanelContext'
 import { useAuth } from '../context/AuthContext'
-import { imageUrl, formatDate, apiPost, apiDelete } from '../lib/api'
+import { apiGet, apiPost, apiDelete, imageUrl, formatDate } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 import { ProfilePanelSkeleton } from './profile/Skeleton'
 import s from './ProfilePanel.module.css'
 
@@ -18,10 +20,84 @@ export default function ProfilePanel() {
   const { panelState, closeProfile } = useProfilePanel()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const panelRef = useRef(null)
   const previousFocusRef = useRef(null)
 
-  const { open, userId, data, loading } = panelState
+  const { open, userId } = panelState
+
+  const { data: profile, isLoading: profileLoading } = useQuery({
+    queryKey: queryKeys.profile.detail(userId),
+    queryFn: () => apiGet(`/users/${userId}/profile`),
+    enabled: open && !!userId,
+    staleTime: 30_000,
+  })
+
+  const { data: activityData = [], isLoading: activityLoading } = useQuery({
+    queryKey: queryKeys.profile.activity(userId, 10),
+    queryFn: () => apiGet(`/users/${userId}/activity?limit=10`).then(d => Array.isArray(d) ? d : []),
+    enabled: open && !!userId,
+    staleTime: 30_000,
+  })
+
+  const { data: followData } = useQuery({
+    queryKey: queryKeys.follow.status(userId),
+    queryFn: () => apiGet(`/users/${userId}/follow-status`),
+    enabled: open && !!userId && user?.id !== userId,
+    staleTime: 30_000,
+  })
+
+  const { data: achievements = [] } = useQuery({
+    queryKey: queryKeys.profile.achievements(userId),
+    queryFn: () => apiGet(`/users/${userId}/achievements`).then(d => Array.isArray(d) ? d : []),
+    enabled: open && !!userId,
+    staleTime: 30_000,
+  })
+
+  const isFollowing = followData?.following || false
+  const isOwnProfile = user?.id === userId
+  const loading = profileLoading || !profile
+
+  const followMutation = useMutation({
+    mutationFn: async () => {
+      if (isFollowing) {
+        await apiDelete(`/users/${userId}/follow`)
+      } else {
+        await apiPost(`/users/${userId}/follow`)
+      }
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.follow.status(userId) })
+      const prev = queryClient.getQueryData(queryKeys.follow.status(userId))
+      queryClient.setQueryData(queryKeys.follow.status(userId), { following: !isFollowing })
+
+      await queryClient.cancelQueries({ queryKey: queryKeys.profile.detail(userId) })
+      const prevProfile = queryClient.getQueryData(queryKeys.profile.detail(userId))
+      if (prevProfile?.stats) {
+        queryClient.setQueryData(queryKeys.profile.detail(userId), {
+          ...prevProfile,
+          stats: {
+            ...prevProfile.stats,
+            followers_count: Math.max(0, (prevProfile.stats.followers_count || 0) + (isFollowing ? -1 : 1)),
+          },
+        })
+      }
+
+      return { prev, prevProfile }
+    },
+    onError: (err, _vars, context) => {
+      if (err.message === 'Already following') {
+        queryClient.setQueryData(queryKeys.follow.status(userId), { following: true })
+      } else {
+        if (context?.prev) queryClient.setQueryData(queryKeys.follow.status(userId), context.prev)
+        if (context?.prevProfile) queryClient.setQueryData(queryKeys.profile.detail(userId), context.prevProfile)
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.follow.status(userId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile.detail(userId) })
+    },
+  })
 
   useEffect(() => {
     if (open) {
@@ -45,37 +121,6 @@ export default function ProfilePanel() {
   const handleBackdropClick = useCallback((e) => {
     if (e.target === e.currentTarget) closeProfile()
   }, [closeProfile])
-
-  if (!open) return null
-
-  const profile = data?.profile
-  const activity = data?.activity || []
-  const isFollowing = data?.isFollowing || false
-  const achievements = data?.achievements || []
-  const isOwnProfile = user?.id === userId
-
-  const handleFollowToggle = async () => {
-    if (!userId || !profile) return
-    try {
-      if (isFollowing) {
-        await apiDelete(`/users/${userId}/follow`)
-      } else {
-        await apiPost(`/users/${userId}/follow`)
-      }
-      if (data) {
-        data.isFollowing = !isFollowing
-        if (profile.stats) {
-          profile.stats.followers_count = Math.max(0, (profile.stats.followers_count || 0) + (isFollowing ? -1 : 1))
-        }
-      }
-    } catch (err) {
-      if (err.message === 'Already following') {
-        if (data) data.isFollowing = true
-      } else {
-        console.error('Follow toggle failed:', err)
-      }
-    }
-  }
 
   const handleStartDM = async () => {
     if (!userId) return
@@ -104,6 +149,8 @@ export default function ProfilePanel() {
     }
   }
 
+  if (!open) return null
+
   const displayName = profile?.display_name || profile?.user_name || 'Student'
   const initials = displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
 
@@ -116,7 +163,7 @@ export default function ProfilePanel() {
         role="dialog"
         aria-label="User profile"
       >
-        {loading || !profile ? (
+        {loading ? (
           <ProfilePanelSkeleton />
         ) : profile.hidden ? (
           <div className={s.errorState}>
@@ -151,9 +198,16 @@ export default function ProfilePanel() {
               <div className={s.actions}>
                 <button
                   className={`${s.followBtn} ${isFollowing ? s.following : ''}`}
-                  onClick={handleFollowToggle}
+                  onClick={() => followMutation.mutate()}
+                  disabled={followMutation.isPending}
                 >
-                  {isFollowing ? <><UserMinus size={14} /> Following</> : <><UserPlus size={14} /> Follow</>}
+                  {followMutation.isPending ? (
+                    <span className={s.spinner} />
+                  ) : isFollowing ? (
+                    <><UserMinus size={14} /> Following</>
+                  ) : (
+                    <><UserPlus size={14} /> Follow</>
+                  )}
                 </button>
                 <button className={s.msgBtn} onClick={handleStartDM} title="Send message">
                   <MessageCircle size={16} />
@@ -213,11 +267,11 @@ export default function ProfilePanel() {
               </div>
             )}
 
-            {activity.length > 0 && (
+            {activityData.length > 0 && (
               <div className={s.section}>
                 <h3 className={s.sectionTitle}>Recent Activity</h3>
                 <div className={s.activityList}>
-                  {activity.slice(0, 5).map(a => {
+                  {activityData.slice(0, 5).map(a => {
                     const Icon = ACTIVITY_ICONS[a.type] || Activity
                     return (
                       <div key={a.id} className={s.activity}>

@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
-import { Trophy, Clock, BookOpen, Flame, BarChart3, Medal } from 'lucide-react'
+import { useState } from 'react'
+import { Trophy, Clock, BookOpen, Flame, BarChart3 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { apiGet, imageUrl } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 import { useAuth } from '../context/AuthContext'
 import { useProfilePanel } from '../context/ProfilePanelContext'
 import s from './Leaderboard.module.css'
@@ -16,16 +18,12 @@ export default function Leaderboard() {
   const { user } = useAuth()
   const { openProfile, preloadProfile, cancelPreload } = useProfilePanel()
   const [metric, setMetric] = useState('study_hours')
-  const [entries, setEntries] = useState([])
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    setLoading(true)
-    apiGet(`/leaderboard/global?metric=${metric}&limit=50`)
-      .then(data => setEntries(Array.isArray(data) ? data : []))
-      .catch(() => setEntries([]))
-      .finally(() => setLoading(false))
-  }, [metric])
+  const { data: entries = [], isLoading } = useQuery({
+    queryKey: queryKeys.leaderboard.global(metric, 50),
+    queryFn: () => apiGet(`/leaderboard/global?metric=${metric}&limit=50`).then(d => Array.isArray(d) ? d : []),
+    staleTime: 30_000,
+  })
 
   const myRank = entries.find(e => e.is_me)
 
@@ -36,7 +34,6 @@ export default function Leaderboard() {
         <p className={s.subtitle}>Top learners across all communities</p>
       </div>
 
-      {/* Metric Tabs */}
       <div className={s.tabs}>
         {METRICS.map(m => {
           const Icon = m.icon
@@ -53,7 +50,6 @@ export default function Leaderboard() {
         })}
       </div>
 
-      {/* My Position */}
       {myRank && (
         <div className={s.myCard}>
           <div className={s.myRank}>#{myRank.rank}</div>
@@ -62,14 +58,13 @@ export default function Leaderboard() {
         </div>
       )}
 
-      {/* Rankings */}
-      {loading ? (
+      {isLoading ? (
         <div className={s.loading}>Loading rankings...</div>
       ) : entries.length === 0 ? (
         <div className={s.empty}>No rankings yet. Start studying to appear on the leaderboard!</div>
       ) : (
         <div className={s.list}>
-          {entries.map((entry, i) => {
+          {entries.map((entry) => {
             const medal = entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : null
             return (
               <div

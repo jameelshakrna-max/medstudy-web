@@ -1,30 +1,23 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { apiGet, imageUrl, formatDate } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 import styles from './DMInbox.module.css'
 
 export default function DMInbox() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const { conversationId } = useParams()
-  const [conversations, setConversations] = useState([])
   const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (!user) return
-    let cancelled = false
-    async function load() {
-      try {
-        const data = await apiGet('/dm/conversations')
-        if (!cancelled) setConversations(Array.isArray(data) ? data : [])
-      } catch {}
-      if (!cancelled) setLoading(false)
-    }
-    load()
-    return () => { cancelled = true }
-  }, [user])
+  const { data: conversations = [], isLoading } = useQuery({
+    queryKey: queryKeys.dm.conversations(),
+    queryFn: () => apiGet('/dm/conversations').then(d => Array.isArray(d) ? d : []),
+    enabled: !!user,
+    staleTime: 10_000,
+  })
 
   const filtered = conversations.filter(c => {
     if (!search) return true
@@ -45,7 +38,7 @@ export default function DMInbox() {
         value={search}
         onChange={e => setSearch(e.target.value)}
       />
-      {loading ? null : filtered.length === 0 ? (
+      {isLoading ? null : filtered.length === 0 ? (
         <div className={styles.empty}>
           No conversations yet. Start a conversation from a user's profile.
         </div>

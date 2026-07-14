@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiDelete } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
+import { queryKeys } from '../lib/queryKeys'
 import { ChevronLeft, Lock, Users } from 'lucide-react'
 import StudyHeatmap from '../components/StudyHeatmap'
 import PinnedResources from '../components/PinnedResources'
@@ -17,96 +19,91 @@ export default function ProfilePage() {
   const { userId: paramId, username: paramUsername } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const queryClient = useQueryClient()
+
   const [resolvedUserId, setResolvedUserId] = useState(null)
-  const [activity, setActivity] = useState([])
-  const [activityLoading, setActivityLoading] = useState(false)
-  const [isFollowing, setIsFollowing] = useState(false)
-  const [followLoading, setFollowLoading] = useState(false)
-  const [achievements, setAchievements] = useState([])
+
+  const { data: usernameData, isLoading: resolvingUsername } = useQuery({
+    queryKey: queryKeys.profile.byUsername(paramUsername),
+    queryFn: () => apiGet(`/users/username/${paramUsername}`),
+    enabled: !!paramUsername && !paramId,
+  })
 
   useEffect(() => {
-    setLoading(true)
-    setProfile(null)
-    setError('')
-
-    const loadProfile = async () => {
-      try {
-        let userId = paramId
-
-        if (paramUsername && !paramId) {
-          const usernameData = await apiGet(`/users/username/${paramUsername}`)
-          userId = usernameData.user_id
-        }
-
-        if (!userId) {
-          setError('User not found')
-          setLoading(false)
-          return
-        }
-
-        setResolvedUserId(userId)
-        const data = await apiGet(`/users/${userId}/profile`)
-        setProfile(data)
-      } catch {
-        setError('User not found')
-      } finally {
-        setLoading(false)
-      }
+    if (paramId) {
+      setResolvedUserId(paramId)
+    } else if (usernameData?.user_id) {
+      setResolvedUserId(usernameData.user_id)
     }
+  }, [paramId, usernameData])
 
-    loadProfile()
-  }, [paramId, paramUsername])
+  const { data: profile, isLoading: profileLoading, error: profileError } = useQuery({
+    queryKey: queryKeys.profile.detail(resolvedUserId),
+    queryFn: () => apiGet(`/users/${resolvedUserId}/profile`),
+    enabled: !!resolvedUserId,
+  })
 
-  useEffect(() => {
-    if (!resolvedUserId) return
-    setActivityLoading(true)
-    apiGet(`/users/${resolvedUserId}/activity?limit=20`).then(data => {
-      setActivity(Array.isArray(data) ? data : [])
-    }).catch(() => setActivity([])).finally(() => setActivityLoading(false))
-  }, [resolvedUserId])
+  const { data: activity = [], isLoading: activityLoading } = useQuery({
+    queryKey: queryKeys.profile.activity(resolvedUserId, 20),
+    queryFn: () => apiGet(`/users/${resolvedUserId}/activity?limit=20`).then(d => Array.isArray(d) ? d : []),
+    enabled: !!resolvedUserId,
+  })
 
+  const { data: followData } = useQuery({
+    queryKey: queryKeys.follow.status(resolvedUserId),
+    queryFn: () => apiGet(`/users/${resolvedUserId}/follow-status`),
+    enabled: !!resolvedUserId && user?.id !== resolvedUserId,
+  })
+
+  const { data: achievements = [] } = useQuery({
+    queryKey: queryKeys.profile.achievements(resolvedUserId),
+    queryFn: () => apiGet(`/users/${resolvedUserId}/achievements`).then(d => Array.isArray(d) ? d : []),
+    enabled: !!resolvedUserId,
+  })
+
+  const isFollowing = followData?.following || false
   const isOwnProfile = user?.id === resolvedUserId
 
-  useEffect(() => {
-    if (!resolvedUserId || isOwnProfile) return
-    apiGet(`/users/${resolvedUserId}/follow-status`).then(data => {
-      setIsFollowing(data?.following || false)
-    }).catch(() => setIsFollowing(false))
-  }, [resolvedUserId, isOwnProfile])
-
-  useEffect(() => {
-    if (!resolvedUserId) return
-    apiGet(`/users/${resolvedUserId}/achievements`).then(data => {
-      setAchievements(Array.isArray(data) ? data : [])
-    }).catch(() => setAchievements([]))
-  }, [resolvedUserId])
-
-  const handleFollowToggle = async () => {
-    if (followLoading) return
-    setFollowLoading(true)
-    try {
+  const followMutation = useMutation({
+    mutationFn: async () => {
       if (isFollowing) {
         await apiDelete(`/users/${resolvedUserId}/follow`)
-        setIsFollowing(false)
-        setProfile(prev => prev ? { ...prev, stats: { ...prev.stats, followers_count: Math.max(0, (prev.stats?.followers_count || 1) - 1) } } : prev)
       } else {
         await apiPost(`/users/${resolvedUserId}/follow`)
-        setIsFollowing(true)
-        setProfile(prev => prev ? { ...prev, stats: { ...prev.stats, followers_count: (prev.stats?.followers_count || 0) + 1 } } : prev)
       }
-    } catch (err) {
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.follow.status(resolvedUserId) })
+      const prev = queryClient.getQueryData(queryKeys.follow.status(resolvedUserId))
+      queryClient.setQueryData(queryKeys.follow.status(resolvedUserId), { following: !isFollowing })
+
+      await queryClient.cancelQueries({ queryKey: queryKeys.profile.detail(resolvedUserId) })
+      const prevProfile = queryClient.getQueryData(queryKeys.profile.detail(resolvedUserId))
+      if (prevProfile?.stats) {
+        queryClient.setQueryData(queryKeys.profile.detail(resolvedUserId), {
+          ...prevProfile,
+          stats: {
+            ...prevProfile.stats,
+            followers_count: Math.max(0, (prevProfile.stats.followers_count || 0) + (isFollowing ? -1 : 1)),
+          },
+        })
+      }
+
+      return { prev, prevProfile }
+    },
+    onError: (err, _vars, context) => {
       if (err.message === 'Already following') {
-        setIsFollowing(true)
+        queryClient.setQueryData(queryKeys.follow.status(resolvedUserId), { following: true })
       } else {
-        console.error('Follow toggle failed:', err)
+        if (context?.prev) queryClient.setQueryData(queryKeys.follow.status(resolvedUserId), context.prev)
+        if (context?.prevProfile) queryClient.setQueryData(queryKeys.profile.detail(resolvedUserId), context.prevProfile)
       }
-    } finally {
-      setFollowLoading(false)
-    }
-  }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.follow.status(resolvedUserId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile.detail(resolvedUserId) })
+    },
+  })
 
   const handleStartDM = async () => {
     try {
@@ -117,15 +114,17 @@ export default function ProfilePage() {
     }
   }
 
-  if (loading) return (
+  const isLoading = profileLoading || resolvingUsername || !resolvedUserId
+
+  if (isLoading) return (
     <div className={s.loading}>
       <div className={s.loadingSpinner} /> Loading profile...
     </div>
   )
 
-  if (error) return (
+  if (profileError) return (
     <div style={{ textAlign: 'center', padding: '80px 20px' }}>
-      <div style={{ color: 'var(--red)', marginBottom: 12 }}>{error}</div>
+      <div style={{ color: 'var(--red)', marginBottom: 12 }}>User not found</div>
       <button onClick={() => navigate(-1)} style={{ color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>Go Back</button>
     </div>
   )
@@ -152,9 +151,9 @@ export default function ProfilePage() {
         userId={resolvedUserId}
         isOwnProfile={isOwnProfile}
         isFollowing={isFollowing}
-        followLoading={followLoading}
+        followLoading={followMutation.isPending}
         user={user}
-        onFollowToggle={handleFollowToggle}
+        onFollowToggle={() => followMutation.mutate()}
         onStartDM={handleStartDM}
       />
 

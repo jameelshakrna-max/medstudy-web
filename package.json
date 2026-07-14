@@ -11,6 +11,8 @@
         "@cloudflare/realtimekit-react-ui": "^2.0.0",
         "@radix-ui/react-select": "^2.3.2",
         "@supabase/supabase-js": "^2.39.0",
+        "@tanstack/react-query": "^5.101.2",
+        "@tanstack/react-query-devtools": "^5.101.2",
         "canvas-confetti": "^1.9.4",
         "fsrs.js": "^1.2.2",
         "jose": "^6.2.3",

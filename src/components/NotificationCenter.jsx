@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bell, CheckCheck, BookOpen, Users, Award, MessageCircle, Settings, Inbox, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { apiGet, apiPost, formatDate } from '../lib/api'
 import { useNotifications } from '../context/NotificationContext'
+import { queryKeys } from '../lib/queryKeys'
 import styles from './NotificationCenter.module.css'
 
 const CATEGORIES = [
@@ -30,53 +32,44 @@ const CATEGORY_ICONS = {
 }
 
 export default function NotificationCenter({ user }) {
-  const { unreadCount: ctxUnread, refreshUnread } = useNotifications()
-  const [notifications, setNotifications] = useState([])
-  const [unreadCounts, setUnreadCounts] = useState({})
+  const { unreadCount: ctxUnread } = useNotifications()
+  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('all')
   const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
   const ref = useRef()
   const navigate = useNavigate()
+
+  const notifPath = activeTab === 'all'
+    ? '/notifications?limit=50'
+    : `/notifications?limit=50&category=${activeTab}`
+
+  const { data: notifData, isLoading } = useQuery({
+    queryKey: queryKeys.notifications.list(activeTab, 50),
+    queryFn: () => apiGet(notifPath),
+    enabled: !!user && open,
+    staleTime: 10_000,
+  })
+
+  const notifications = notifData?.notifications || notifData || []
+  const unreadCounts = notifData?.unreadCounts || {}
   const totalUnread = ctxUnread || unreadCounts.all || 0
 
-  const loadNotifications = useCallback(async (category) => {
-    if (!user) return
-    setLoading(true)
-    try {
-      let path = '/notifications?limit=50'
-      if (category && category !== 'all') path += `&category=${category}`
-      const data = await apiGet(path)
-      setNotifications(data?.notifications || data || [])
-      if (data?.unreadCounts) setUnreadCounts(data.unreadCounts)
-    } catch {}
-    setLoading(false)
-  }, [user])
+  const markAllMutation = useMutation({
+    mutationFn: () => apiPost('/notifications/read-all', {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all })
+    },
+  })
 
-  useEffect(() => {
-    if (user) {
-      loadNotifications(activeTab)
-    }
-  }, [user, activeTab, loadNotifications])
-
-  const markAllRead = async () => {
-    try {
-      await apiPost('/notifications/read-all', {})
-      setNotifications(prev => prev.map(n => ({ ...n, read: 1 })))
-      refreshUnread()
-    } catch {}
-  }
-
-  const markRead = async (id) => {
-    try {
-      await apiPost(`/notifications/${id}/read`, {})
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: 1 } : n))
-      refreshUnread()
-    } catch {}
-  }
+  const markReadMutation = useMutation({
+    mutationFn: (id) => apiPost(`/notifications/${id}/read`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all })
+    },
+  })
 
   const handleAction = (notif) => {
-    markRead(notif.id)
+    markReadMutation.mutate(notif.id)
     setOpen(false)
     navigate(notif.action_url || '/dashboard')
   }
@@ -107,7 +100,11 @@ export default function NotificationCenter({ user }) {
           <div className={styles.panelHeader}>
             <span className={styles.panelTitle}>Notifications</span>
             {totalUnread > 0 && (
-              <button onClick={markAllRead} className={styles.markAllBtn}>
+              <button
+                onClick={() => markAllMutation.mutate()}
+                className={styles.markAllBtn}
+                disabled={markAllMutation.isPending}
+              >
                 <CheckCheck size={14} /> Mark all read
               </button>
             )}
@@ -130,7 +127,7 @@ export default function NotificationCenter({ user }) {
           </div>
 
           <div className={styles.list}>
-            {loading ? (
+            {isLoading ? (
               <div className={styles.loadingState}>
                 <Loader2 size={20} className={styles.spinner} />
               </div>

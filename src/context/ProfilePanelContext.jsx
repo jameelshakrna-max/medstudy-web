@@ -1,40 +1,40 @@
 import { createContext, useContext, useState, useCallback, useRef } from 'react'
-import { fetchProfile } from '../lib/profileCache'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '../lib/queryKeys'
 
 const ProfilePanelContext = createContext(null)
 
 export function ProfilePanelProvider({ children }) {
-  const [panelState, setPanelState] = useState({ open: false, userId: null, data: null, loading: false })
+  const [panelState, setPanelState] = useState({ open: false, userId: null })
   const preloadTimerRef = useRef(null)
-  const currentUserIdRef = useRef(null)
+  const queryClient = useQueryClient()
 
-  const openProfile = useCallback(async (userId) => {
+  const openProfile = useCallback((userId) => {
     if (preloadTimerRef.current) {
       clearTimeout(preloadTimerRef.current)
       preloadTimerRef.current = null
     }
-    currentUserIdRef.current = userId
-    setPanelState({ open: true, userId, data: null, loading: true })
-    try {
-      const data = await fetchProfile(userId)
-      if (currentUserIdRef.current === userId) {
-        setPanelState({ open: true, userId, data, loading: false })
-      }
-    } catch (err) {
-      console.error('Profile panel fetch failed:', err)
-      if (currentUserIdRef.current === userId) {
-        setPanelState({ open: true, userId, data: null, loading: false })
-      }
-    }
+    setPanelState({ open: true, userId })
   }, [])
 
   const preloadProfile = useCallback((userId) => {
     if (preloadTimerRef.current) clearTimeout(preloadTimerRef.current)
     preloadTimerRef.current = setTimeout(() => {
-      fetchProfile(userId).catch(() => {})
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.profile.detail(userId),
+        staleTime: 5 * 60_000,
+      })
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.profile.activity(userId, 10),
+        staleTime: 5 * 60_000,
+      })
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.profile.achievements(userId),
+        staleTime: 5 * 60_000,
+      })
       preloadTimerRef.current = null
     }, 400)
-  }, [])
+  }, [queryClient])
 
   const cancelPreload = useCallback(() => {
     if (preloadTimerRef.current) {
@@ -48,8 +48,7 @@ export function ProfilePanelProvider({ children }) {
       clearTimeout(preloadTimerRef.current)
       preloadTimerRef.current = null
     }
-    currentUserIdRef.current = null
-    setPanelState({ open: false, userId: null, data: null, loading: false })
+    setPanelState({ open: false, userId: null })
   }, [])
 
   return (

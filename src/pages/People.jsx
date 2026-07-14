@@ -1,60 +1,37 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, X, Loader2, Users, UserPlus } from 'lucide-react'
-import { supabase } from '../lib/supabase'
-import { imageUrl } from '../lib/api'
+import { useQuery } from '@tanstack/react-query'
+import { imageUrl, apiGet } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 import { useProfilePanel } from '../context/ProfilePanelContext'
 import s from './People.module.css'
-
-const API = import.meta.env.VITE_API_URL || '/api'
-
-async function apiJson(res) {
-  if (!res.ok) {
-    const text = await res.text()
-    let msg
-    try { msg = JSON.parse(text).error || text } catch { msg = text.slice(0, 200) }
-    throw new Error(msg || `Request failed (${res.status})`)
-  }
-  return res.json()
-}
-
-async function apiGet(path) {
-  const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(API + path, {
-    headers: { Authorization: 'Bearer ' + session.access_token }
-  })
-  return apiJson(res)
-}
 
 export default function People() {
   const { openProfile, preloadProfile, cancelPreload } = useProfilePanel()
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState([])
-  const [suggested, setSuggested] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [searching, setSearching] = useState(false)
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [avatarErrors, setAvatarErrors] = useState({})
 
   useEffect(() => {
-    apiGet('/users/suggested?limit=10')
-      .then(data => setSuggested(data.users || []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
-
-  const doSearch = useCallback(async (q) => {
-    if (!q || q.length < 2) { setResults([]); return }
-    setSearching(true)
-    try {
-      const data = await apiGet(`/users/search?q=${encodeURIComponent(q)}`)
-      setResults(data.users || [])
-    } catch {}
-    setSearching(false)
-  }, [])
-
-  useEffect(() => {
-    const timer = setTimeout(() => doSearch(query), 300)
+    const timer = setTimeout(() => setDebouncedQuery(query), 300)
     return () => clearTimeout(timer)
-  }, [query, doSearch])
+  }, [query])
+
+  const { data: suggestedData, isLoading } = useQuery({
+    queryKey: queryKeys.people.suggested(10),
+    queryFn: () => apiGet('/users/suggested?limit=10').then(d => d.users || []),
+    staleTime: 60_000,
+  })
+
+  const { data: searchData, isLoading: searching } = useQuery({
+    queryKey: queryKeys.people.search(debouncedQuery),
+    queryFn: () => apiGet(`/users/search?q=${encodeURIComponent(debouncedQuery)}`).then(d => d.users || []),
+    enabled: debouncedQuery.length >= 2,
+    staleTime: 10_000,
+  })
+
+  const suggested = suggestedData || []
+  const results = searchData || []
 
   const renderCard = (user, extra) => (
     <div
@@ -96,12 +73,12 @@ export default function People() {
           onChange={e => setQuery(e.target.value)}
           autoFocus
         />
-        {query && <X size={14} className={s.clearBtn} onClick={() => { setQuery(''); setResults([]) }} />}
+        {query && <X size={14} className={s.clearBtn} onClick={() => { setQuery(''); setDebouncedQuery('') }} />}
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className={s.loading}><Loader2 size={24} className={s.spinner} /> Loading...</div>
-      ) : query.length >= 2 ? (
+      ) : debouncedQuery.length >= 2 ? (
         searching ? (
           <div className={s.loading}><Loader2 size={20} className={s.spinner} /> Searching...</div>
         ) : results.length === 0 ? (
