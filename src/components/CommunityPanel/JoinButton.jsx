@@ -10,8 +10,8 @@ export default function JoinButton({ communityId, community, members }) {
   const queryClient = useQueryClient()
   const [optimisticJoined, setOptimisticJoined] = useState(false)
 
-  const isAlreadyMember = members.some(m => m.user_id === user?.sub) || optimisticJoined
-  const isOwner = community.created_by === user?.sub
+  const isAlreadyMember = members.some(m => m.user_id === user?.id) || optimisticJoined
+  const isOwner = community.created_by === user?.id
 
   const joinMutation = useMutation({
     onMutate: () => {

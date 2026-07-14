@@ -216,8 +216,9 @@ export async function handleGetCommunityFull(request, env, user) {
 
   const [membersRes, levelsRes, rulesRes, pinsRes, announcementsRes, settingsRes, compRes] = await Promise.all([
     env.DB.prepare(
-      `SELECT m.*, l.level_name FROM community_members m
+      `SELECT m.*, l.level_name, u.user_name, u.avatar_url, u.username FROM community_members m
        LEFT JOIN member_levels l ON m.level_id = l.id
+       LEFT JOIN user_profiles u ON m.user_id = u.user_id
        WHERE m.community_id = ? ORDER BY m.role ASC, m.total_study_hours DESC`
     ).bind(communityId).all(),
 

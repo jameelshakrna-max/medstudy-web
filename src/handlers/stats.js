@@ -708,16 +708,14 @@ export async function handleGlobalMonthlyLeaderboard(request, env, user) {
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 100)
 
   const { results } = await env.DB.prepare(
-    `SELECT cmh.user_id, SUM(cmh.total_hours) as hours
-     FROM community_monthly_hours cmh
-     WHERE cmh.year = ? AND cmh.month = ?
-     GROUP BY cmh.user_id
-     HAVING hours > 0
-     ORDER BY hours DESC
+    `SELECT up.user_id, COALESCE(SUM(cmh.total_hours), 0) as hours
+     FROM user_profiles up
+     LEFT JOIN community_monthly_hours cmh
+       ON up.user_id = cmh.user_id AND cmh.year = ? AND cmh.month = ?
+     GROUP BY up.user_id
+     ORDER BY hours DESC, up.user_name ASC
      LIMIT ?`
   ).bind(year, month, limit).all()
-
-  if (!results.length) return json({ entries: [], my_rank: null })
 
   const userIds = results.map(r => r.user_id)
 
@@ -770,8 +768,8 @@ export async function handleGlobalMonthlyLeaderboard(request, env, user) {
   }
 
   const { results: totalUsers } = await env.DB.prepare(
-    `SELECT COUNT(DISTINCT user_id) as cnt FROM community_monthly_hours WHERE year = ? AND month = ? AND total_hours > 0`
-  ).bind(year, month).all()
+    `SELECT COUNT(*) as cnt FROM user_profiles`
+  ).all()
 
   const totalCount = totalUsers[0]?.cnt || 0
 
@@ -786,21 +784,19 @@ export async function handleGlobalMonthlyLeaderboard(request, env, user) {
       myHours = results[myIdx].hours
     } else {
       const { results: myRow } = await env.DB.prepare(
-        `SELECT SUM(cmh.total_hours) as hours,
-                (SELECT COUNT(DISTINCT user_id) FROM community_monthly_hours WHERE year = ? AND month = ? AND total_hours > 0) as total_users
+        `SELECT COALESCE(SUM(cmh.total_hours), 0) as hours
          FROM community_monthly_hours cmh
          WHERE cmh.year = ? AND cmh.month = ? AND cmh.user_id = ?`
-      ).bind(year, month, year, month, user.sub).all()
+      ).bind(year, month, user.sub).all()
 
       myHours = myRow[0]?.hours || 0
-      if (myHours > 0) {
-        const { results: rankRow } = await env.DB.prepare(
-          `SELECT COUNT(*) + 1 as rank FROM community_monthly_hours
-           WHERE year = ? AND month = ? AND total_hours > 0
-           AND total_hours > (SELECT COALESCE(SUM(total_hours), 0) FROM community_monthly_hours WHERE year = ? AND month = ? AND user_id = ?)`
-        ).bind(year, month, year, month, user.sub).all()
-        myRank = rankRow[0]?.rank || totalCount
-      }
+      const { results: rankRow } = await env.DB.prepare(
+        `SELECT COUNT(*) + 1 as rank FROM user_profiles up
+         LEFT JOIN community_monthly_hours cmh
+           ON up.user_id = cmh.user_id AND cmh.year = ? AND cmh.month = ?
+         WHERE COALESCE(cmh.total_hours, 0) > ?`
+      ).bind(year, month, myHours).all()
+      myRank = rankRow[0]?.rank || totalCount
     }
     if (myRank && totalCount) {
       myPercentile = Math.round((1 - myRank / totalCount) * 100)
@@ -844,11 +840,14 @@ export async function handleCommunitiesMonthlyLeaderboard(request, env, user) {
   const category = url.searchParams.get('category') || 'all'
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 100)
 
-  let q = `SELECT cmh.community_id, SUM(cmh.total_hours) as total_hours, COUNT(DISTINCT cmh.user_id) as active_members
-    FROM community_monthly_hours cmh
-    JOIN communities c ON c.id = cmh.community_id
-    WHERE cmh.year = ? AND cmh.month = ?`
+  let q = `SELECT c.id as community_id, c.name, c.avatar_url, c.category, c.member_count, c.visibility,
+    COALESCE(SUM(cmh.total_hours), 0) as total_hours,
+    COUNT(DISTINCT cmh.user_id) as active_members
+    FROM communities c
+    LEFT JOIN community_monthly_hours cmh ON cmh.community_id = c.id AND cmh.year = ? AND cmh.month = ?`
   const params = [year, month]
+
+  q += ` WHERE 1=1`
 
   if (category && category !== 'all') {
     q += ` AND c.category = ?`
@@ -862,7 +861,7 @@ export async function handleCommunitiesMonthlyLeaderboard(request, env, user) {
     q += ` AND c.visibility = 'public'`
   }
 
-  q += ` GROUP BY cmh.community_id ORDER BY total_hours DESC LIMIT ?`
+  q += ` GROUP BY c.id ORDER BY total_hours DESC, c.name ASC LIMIT ?`
   params.push(limit)
 
   const { results } = await env.DB.prepare(q).bind(...params).all()
@@ -871,18 +870,8 @@ export async function handleCommunitiesMonthlyLeaderboard(request, env, user) {
 
   const communityIds = results.map(r => r.community_id)
 
-  const { results: communities } = await env.DB.prepare(
-    `SELECT id, name, avatar_url, category, member_count, visibility FROM communities
-     WHERE id IN (${communityIds.map(() => '?').join(',')})`
-  ).bind(...communityIds).all()
-
-  const commMap = {}
-  for (const c of communities) {
-    commMap[c.id] = c
-  }
-
   let memberSet = new Set()
-  if (user?.sub) {
+  if (user?.sub && communityIds.length) {
     const { results: myMemberships } = await env.DB.prepare(
       `SELECT community_id FROM community_members WHERE user_id = ? AND community_id IN (${communityIds.map(() => '?').join(',')})`
     ).bind(user.sub, ...communityIds).all()
@@ -894,7 +883,6 @@ export async function handleCommunitiesMonthlyLeaderboard(request, env, user) {
   const topAvg = topActive > 0 ? topHours / topActive : 1
 
   const entries = results.map((r, i) => {
-    const comm = commMap[r.community_id]
     const hoursPct = r.total_hours / topHours
     const activePct = r.active_members / topActive
     const avgHours = r.active_members > 0 ? r.total_hours / r.active_members : 0
@@ -904,12 +892,12 @@ export async function handleCommunitiesMonthlyLeaderboard(request, env, user) {
     return {
       rank: i + 1,
       community_id: r.community_id,
-      name: comm?.name || '',
-      avatar_url: comm?.avatar_url || null,
-      category: comm?.category || 'general',
+      name: r.name || '',
+      avatar_url: r.avatar_url || null,
+      category: r.category || 'general',
       total_hours: Math.round(r.total_hours * 10) / 10,
       active_members: r.active_members,
-      member_count: comm?.member_count || 0,
+      member_count: r.member_count || 0,
       avg_hours: Math.round(avgHours * 10) / 10,
       community_score: communityScore,
       is_member: memberSet.has(r.community_id),
