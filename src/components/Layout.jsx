@@ -1,6 +1,7 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
+import { useSwipeable } from 'react-swipeable'
 import {
   LayoutDashboard, BookOpen, BrainCircuit,
   BarChart3, Timer, ClipboardList, Settings,
@@ -30,6 +31,15 @@ export default function Layout() {
   const { user, profile, signOut } = useAuth()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const sidebarSwipe = useSwipeable({
+    onSwipedRight: () => { if (window.innerWidth <= 768 && !mobileOpen) setMobileOpen(true) },
+    onSwipedLeft: () => { if (window.innerWidth <= 768 && mobileOpen) setMobileOpen(false) },
+    delta: 40,
+    trackTouch: true,
+    trackMouse: false,
+    preventScrollOnSwipe: false,
+  })
 
   async function handleSignOut() {
     await signOut()
@@ -77,7 +87,7 @@ export default function Layout() {
       {mobileOpen && <div className={styles.overlay} onClick={() => setMobileOpen(false)} />}
 
       {/* Main */}
-      <main className={styles.main}>
+      <main className={styles.main} {...sidebarSwipe}>
         <div className={styles.mobileHeader}>
           <button className={styles.menuBtn} onClick={() => setMobileOpen(!mobileOpen)}>
             <Menu size={20} strokeWidth={1.5} />

@@ -1,7 +1,8 @@
-import { useEffect, useCallback, useRef } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { UserPlus, UserMinus, MessageCircle, Link, Clock, BookOpen, Users, Trophy, Activity, ArrowRight } from 'lucide-react'
+import { useSwipeable } from 'react-swipeable'
 import { useProfilePanel } from '../context/ProfilePanelContext'
 import { useAuth } from '../context/AuthContext'
 import { apiGet, apiPost, apiDelete, imageUrl, formatDate } from '../lib/api'
@@ -25,6 +26,23 @@ export default function ProfilePanel() {
   const previousFocusRef = useRef(null)
 
   const { open, userId } = panelState
+  const [swipeOffset, setSwipeOffset] = useState(0)
+
+  const swipeHandlers = useSwipeable({
+    onSwipedDown: (_e) => {
+      setSwipeOffset(0)
+      closeProfile()
+    },
+    onSwiping: (_e) => {
+      const dy = _e.deltaY
+      if (dy > 0) setSwipeOffset(dy)
+    },
+    onSwipedUp: () => setSwipeOffset(0),
+    delta: 10,
+    trackTouch: true,
+    trackMouse: false,
+    preventScrollOnSwipe: true,
+  })
 
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: queryKeys.profile.detail(userId),
@@ -162,6 +180,8 @@ export default function ProfilePanel() {
         tabIndex={-1}
         role="dialog"
         aria-label="User profile"
+        {...swipeHandlers}
+        style={swipeOffset > 0 ? { transform: `translateY(${swipeOffset}px)`, transition: 'none', opacity: Math.max(0.3, 1 - swipeOffset / 400) } : undefined}
       >
         {loading ? (
           <ProfilePanelSkeleton />

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSwipeable } from 'react-swipeable'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useCommunityRealtime } from '../hooks/useCommunityRealtime'
@@ -255,12 +256,22 @@ export default function CommunityDetail() {
 
   const fetchCommunity = handleRefreshTab
 
+  const backSwipeHandlers = useSwipeable({
+    onSwipedRight: () => {
+      if (window.innerWidth <= 768) navigate('/communities')
+    },
+    delta: 50,
+    trackTouch: true,
+    trackMouse: false,
+    preventScrollOnSwipe: false,
+  })
+
   if (isLoading) return <div className={s.page}><div className={s.loading}><Loader2 size={24} className={s.spinner} /> Loading community...</div></div>
   if (fetchError) return <div className={s.page}><div className={s.error}>Failed to load community</div></div>
   if (!community) return <div className={s.page}><div className={s.error}>Community not found</div></div>
 
   return (
-    <div className={s.page}>
+    <div className={s.page} {...backSwipeHandlers}>
       <div className={s.backRow}>
         <button className={s.backBtn} onClick={() => navigate('/communities')}>
           <ChevronLeft size={16} strokeWidth={1.5} />
