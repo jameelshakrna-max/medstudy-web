@@ -2,10 +2,12 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { apiGet, apiPost, imageUrl } from '../lib/api'
+import { useProfilePanel } from '../context/ProfilePanelContext'
 import StatusIndicator from './StatusIndicator'
 
 export default function UserCard({ userId, children, placement = 'bottom' }) {
   const navigate = useNavigate()
+  const { openProfile } = useProfilePanel()
   const triggerRef = useRef(null)
   const popoverRef = useRef(null)
   const [visible, setVisible] = useState(false)
@@ -143,7 +145,7 @@ export default function UserCard({ userId, children, placement = 'bottom' }) {
         <>
           <div
             style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}
-            onClick={() => { setVisible(false); navigate(cardData.username ? `/u/${cardData.username}` : `/profile/${userId}`) }}
+            onClick={() => { setVisible(false); openProfile(userId) }}
           >
             <div style={{ position: 'relative', flexShrink: 0 }}>
               {cardData.profile?.avatar_url ? (

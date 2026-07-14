@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
 import { Trophy, Clock, BookOpen, Flame, BarChart3, Medal } from 'lucide-react'
 import { apiGet, imageUrl } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
+import { useProfilePanel } from '../context/ProfilePanelContext'
 import s from './Leaderboard.module.css'
 
 const METRICS = [
@@ -14,6 +14,7 @@ const METRICS = [
 
 export default function Leaderboard() {
   const { user } = useAuth()
+  const { openProfile, preloadProfile, cancelPreload } = useProfilePanel()
   const [metric, setMetric] = useState('study_hours')
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
@@ -71,10 +72,13 @@ export default function Leaderboard() {
           {entries.map((entry, i) => {
             const medal = entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : null
             return (
-              <Link
+              <div
                 key={entry.user_id}
-                to={`/profile/${entry.user_id}`}
                 className={`${s.row} ${entry.is_me ? s.rowMe : ''}`}
+                onClick={() => openProfile(entry.user_id)}
+                onMouseEnter={() => preloadProfile(entry.user_id)}
+                onMouseLeave={cancelPreload}
+                style={{ cursor: 'pointer' }}
               >
                 <div className={s.rank}>
                   {medal ? <span className={s.medal}>{medal}</span> : <span className={s.rankNum}>{entry.rank}</span>}
@@ -88,7 +92,7 @@ export default function Leaderboard() {
                 </div>
                 <div className={s.name}>{entry.user_name}</div>
                 <div className={s.value}>{entry.value} {METRICS.find(m => m.key === metric)?.unit}</div>
-              </Link>
+              </div>
             )
           })}
         </div>

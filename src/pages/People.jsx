@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Search, X, Loader2, Users, UserPlus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { imageUrl } from '../lib/api'
+import { useProfilePanel } from '../context/ProfilePanelContext'
 import s from './People.module.css'
 
 const API = import.meta.env.VITE_API_URL || '/api'
@@ -26,7 +26,7 @@ async function apiGet(path) {
 }
 
 export default function People() {
-  const navigate = useNavigate()
+  const { openProfile, preloadProfile, cancelPreload } = useProfilePanel()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [suggested, setSuggested] = useState([])
@@ -57,7 +57,13 @@ export default function People() {
   }, [query, doSearch])
 
   const renderCard = (user, extra) => (
-    <div key={user.user_id} className={s.card} onClick={() => navigate('/profile/' + user.user_id)}>
+    <div
+      key={user.user_id}
+      className={s.card}
+      onClick={() => openProfile(user.user_id)}
+      onMouseEnter={() => preloadProfile(user.user_id)}
+      onMouseLeave={cancelPreload}
+    >
       <div className={s.avatar}>
         {!avatarErrors[user.user_id] && user.avatar_url ? (
           <img src={imageUrl(user.avatar_url)} alt="" onError={() => setAvatarErrors(p => ({...p, [user.user_id]: true}))} />

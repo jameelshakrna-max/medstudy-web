@@ -4,6 +4,8 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { PomodoroProvider, usePomodoro } from './context/PomodoroContext'
 import { PresenceProvider } from './context/PresenceContext'
 import { NotificationProvider } from './context/NotificationContext'
+import { ProfilePanelProvider } from './context/ProfilePanelContext'
+import ProfilePanel from './components/ProfilePanel'
 import DMInbox from './components/DMInbox'
 import DMConversation from './components/DMConversation'
 import FloatingTimer from './components/FloatingTimer'
@@ -96,7 +98,10 @@ export default function App() {
         <PomodoroProvider>
           <PresenceProvider>
             <NotificationProvider>
-              <AppRoutes />
+              <ProfilePanelProvider>
+                <AppRoutes />
+                <ProfilePanel />
+              </ProfilePanelProvider>
             </NotificationProvider>
           </PresenceProvider>
         </PomodoroProvider>

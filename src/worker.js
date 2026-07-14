@@ -81,8 +81,19 @@ import {
   handleSearchUsers, handleSuggestedConnections,
 } from './handlers/people.js'
 
+function ensureCORS(response) {
+  const h = response.headers
+  if (!h.get('access-control-allow-origin')) {
+    h.set('access-control-allow-origin', '*')
+    h.set('access-control-allow-methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    h.set('access-control-allow-headers', 'Content-Type, Authorization')
+  }
+  return response
+}
+
 export default {
   async fetch(request, env, ctx) {
+    const requestId = crypto.randomUUID().slice(0, 8)
     try {
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders() })
@@ -92,19 +103,19 @@ export default {
     const path = url.pathname
 
     if (!path.startsWith('/api/')) {
-      return json({ error: 'Not found' }, 404)
+      return ensureCORS(json({ error: 'Not found' }, 404))
     }
     if (path.startsWith('/api/images/')) {
-      try { return await handleGetImage(request, env) }
-      catch (err) { return json({ error: err.message }, 500) }
+      try { return ensureCORS(await handleGetImage(request, env)) }
+      catch (err) { console.error(`[${requestId}] images:`, err); return ensureCORS(json({ error: err.message, requestId }, 500)) }
     }
 
     if (path.match(/^\/api\/communities\/[^\/]+\/ws$/) && request.method === 'GET') {
       try {
         return handleWebSocketUpgrade(request, env)
       } catch (err) {
-        console.error('WS upgrade error:', err)
-        return json({ error: err.message }, 500)
+        console.error(`[${requestId}] ws:`, err)
+        return ensureCORS(json({ error: err.message, requestId }, 500))
       }
     }
 
@@ -112,8 +123,8 @@ export default {
       try {
         return handleDMWebSocketUpgrade(request, env)
       } catch (err) {
-        console.error('DM WS upgrade error:', err)
-        return json({ error: err.message }, 500)
+        console.error(`[${requestId}] dm-ws:`, err)
+        return ensureCORS(json({ error: err.message, requestId }, 500))
       }
     }
 
@@ -359,7 +370,7 @@ export default {
       if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/status$/) && (request.method === 'PUT' || request.method === 'POST')) return handleUpdateFocusStatus(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/stats$/) && request.method === 'GET') return handleRoomStats(request, env, user)
       if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timeline$/) && request.method === 'GET') return handleSessionTimeline(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/profile$/) && request.method === 'GET') return handleUserProfile(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/profile$/) && request.method === 'GET') return handleUserProfile(request, env, user, ctx)
       if (path.match(/^\/api\/users\/[^\/]+\/profile$/) && request.method === 'PUT') return handleUpdateUserProfile(request, env, user)
       if (path.match(/^\/api\/users\/[^\/]+\/avatar$/) && request.method === 'POST') return handleUploadUserAvatar(request, env, user)
       if (path.match(/^\/api\/users\/[^\/]+\/banner$/) && request.method === 'POST') return handleUploadUserBanner(request, env, user)
@@ -385,7 +396,7 @@ export default {
       if (path.match(/^\/api\/presence\/[^\/]+$/) && request.method === 'GET') return handleGetPresence(request, env, user)
 
       // ── Heatmap ──
-      if (path.match(/^\/api\/users\/[^\/]+\/heatmap$/) && request.method === 'GET') return handleUserHeatmap(request, env)
+      if (path.match(/^\/api\/users\/[^\/]+\/heatmap$/) && request.method === 'GET') return handleUserHeatmap(request, env, user)
 
       // ── User Card ──
       if (path.match(/^\/api\/users\/[^\/]+\/card$/) && request.method === 'GET') return handleUserCard(request, env, user)
@@ -427,10 +438,12 @@ export default {
 
       return json({ error: 'Not found' }, 404)
     } catch (err) {
-      return json({ error: err.message }, 500)
+      console.error(`[${requestId}]`, err)
+      return ensureCORS(json({ error: 'Internal Server Error', requestId }, 500))
     }
     } catch (outerErr) {
-      return json({ error: outerErr.message }, 500)
+      console.error(`[${requestId}] outer:`, outerErr)
+      return ensureCORS(json({ error: 'Internal Server Error', requestId }, 500))
     }
   },
 }
@@ -945,14 +958,14 @@ async function handleGetUserActivity(request, env) {
   })))
 }
 
-async function handleUserHeatmap(request, env) {
+async function handleUserHeatmap(request, env, viewerUser) {
   const url = new URL(request.url)
   const userId = url.pathname.split('/')[3]
 
   const { results: visRows } = await env.DB.prepare(
     `SELECT profile_visibility FROM user_profiles WHERE user_id = ?`
   ).bind(userId).all()
-  if (visRows.length && visRows[0].profile_visibility === 'private') {
+  if (visRows.length && visRows[0].profile_visibility === 'private' && viewerUser?.sub !== userId) {
     return json({ hidden: true })
   }
 
@@ -968,7 +981,7 @@ async function handleUserHeatmap(request, env) {
   ).bind(userId, yearStart, yearEnd).all()
 
   const { results: sessionRows } = await env.DB.prepare(
-    `SELECT DATE(created_at) as day, SUM(COALESCE(duration_minutes, 0)) as total_minutes
+    `SELECT DATE(created_at) as day, SUM(COALESCE(minutes, 0)) as total_minutes
      FROM study_sessions_log
      WHERE user_id = ? AND created_at >= ? AND created_at <= ?
      GROUP BY DATE(created_at)`
@@ -1012,40 +1025,35 @@ async function handleUserHeatmap(request, env) {
   })
 }
 
-async function handleUserProfile(request, env, viewerUser) {
+async function handleUserProfile(request, env, viewerUser, ctx) {
   const url = new URL(request.url)
   const parts = url.pathname.split('/')
   const targetUserId = parts[3]
+  const isOtherUser = viewerUser && viewerUser.sub !== targetUserId
 
-  const { results: profileRows } = await env.DB.prepare(
-    'SELECT * FROM user_profiles WHERE user_id = ?'
-  ).bind(targetUserId).all()
-  const profile = profileRows[0] || null
+  // Batch 1: profile + stats (2 queries in 1 round-trip)
+  const [profileRes, statsRes] = await env.DB.batch([
+    env.DB.prepare('SELECT * FROM user_profiles WHERE user_id = ?').bind(targetUserId),
+    env.DB.prepare('SELECT * FROM user_stats WHERE user_id = ?').bind(targetUserId),
+  ])
+  const profile = profileRes.results[0] || null
+  const stats = statsRes.results[0] || null
 
-  if (profile && profile.profile_visibility === 'private' && viewerUser?.sub !== targetUserId) {
+  if (profile && profile.profile_visibility === 'private' && isOtherUser) {
     return json({ hidden: true, display_name: 'Private Account', user_id: targetUserId })
   }
 
-  const { results: statsRows } = await env.DB.prepare(
-    'SELECT * FROM user_stats WHERE user_id = ?'
-  ).bind(targetUserId).all()
-  const stats = statsRows[0] || null
-
   let computedStats = stats
   if (!stats) {
-    const { results: hours } = await env.DB.prepare(
-      'SELECT COALESCE(SUM(total_study_hours), 0) as total FROM community_members WHERE user_id = ?'
-    ).bind(targetUserId).all()
-
-    const { results: questions } = await env.DB.prepare(
-      'SELECT COALESCE(SUM(correct), 0) as solved FROM uworld_blocks WHERE user_id = ?'
-    ).bind(targetUserId).all()
+    // Batch 1b: fallback stats when user_stats row missing (3 queries in 1 round-trip)
+    const [hoursRes, questionsRes, sessionDaysRes] = await env.DB.batch([
+      env.DB.prepare('SELECT COALESCE(SUM(total_study_hours), 0) as total FROM community_members WHERE user_id = ?').bind(targetUserId),
+      env.DB.prepare('SELECT COALESCE(SUM(correct), 0) as solved FROM uworld_blocks WHERE user_id = ?').bind(targetUserId),
+      env.DB.prepare('SELECT DISTINCT DATE(created_at) as day FROM study_sessions_log WHERE user_id = ? ORDER BY day DESC').bind(targetUserId),
+    ])
 
     let streak = 0
-    const { results: sessionDays } = await env.DB.prepare(
-      'SELECT DISTINCT DATE(created_at) as day FROM study_sessions_log WHERE user_id = ? ORDER BY day DESC'
-    ).bind(targetUserId).all()
-
+    const sessionDays = sessionDaysRes.results
     if (sessionDays.length > 0) {
       const today = new Date()
       today.setHours(0, 0, 0, 0)
@@ -1065,8 +1073,8 @@ async function handleUserProfile(request, env, viewerUser) {
     }
 
     computedStats = {
-      study_hours: Number(hours[0]?.total) || 0,
-      questions_answered: Number(questions[0]?.solved) || 0,
+      study_hours: Number(hoursRes.results[0]?.total) || 0,
+      questions_answered: Number(questionsRes.results[0]?.solved) || 0,
       current_streak: streak,
       cards_reviewed: 0,
       pomodoros_completed: 0,
@@ -1077,37 +1085,41 @@ async function handleUserProfile(request, env, viewerUser) {
     }
   }
 
-  const { results: badges } = await env.DB.prepare(
-    `SELECT cmb.*, c.name as community_name FROM community_monthly_badges cmb
-     JOIN communities c ON cmb.community_id = c.id
-     WHERE cmb.user_id = ? ORDER BY cmb.year DESC, cmb.month DESC`
-  ).bind(targetUserId).all()
+  // Batch 2: badges + communities [+ shared_communities if viewing another user] (2-3 queries in 1 round-trip)
+  const batch2Stmts = [
+    env.DB.prepare(`SELECT cmb.*, c.name as community_name FROM community_monthly_badges cmb JOIN communities c ON cmb.community_id = c.id WHERE cmb.user_id = ? ORDER BY cmb.year DESC, cmb.month DESC`).bind(targetUserId),
+    env.DB.prepare(`SELECT cm.role, cm.title, cm.total_study_hours, cm.joined_at, c.id, c.name, c.avatar_url FROM community_members cm JOIN communities c ON cm.community_id = c.id WHERE cm.user_id = ? ORDER BY cm.joined_at DESC`).bind(targetUserId),
+  ]
+  if (isOtherUser) {
+    batch2Stmts.push(
+      env.DB.prepare(`SELECT c.id, c.name, c.avatar_url FROM community_members cm1 JOIN community_members cm2 ON cm1.community_id = cm2.community_id AND cm2.user_id = ? JOIN communities c ON cm1.community_id = c.id WHERE cm1.user_id = ? ORDER BY cm1.joined_at DESC LIMIT 10`).bind(viewerUser.sub, targetUserId)
+    )
+  }
 
-  const { results: communities } = await env.DB.prepare(
-    `SELECT cm.role, cm.title, cm.total_study_hours, cm.joined_at, c.id, c.name, c.avatar_url
-     FROM community_members cm JOIN communities c ON cm.community_id = c.id
-     WHERE cm.user_id = ? ORDER BY cm.joined_at DESC`
-  ).bind(targetUserId).all()
+  let shared_communities = []
+  let badges, communities
+  try {
+    const batch2Results = await env.DB.batch(batch2Stmts)
+    badges = batch2Results[0].results
+    communities = batch2Results[1].results
+    if (isOtherUser) shared_communities = batch2Results[2]?.results || []
+  } catch {
+    // Fallback: run queries individually if batch fails
+    const { results: b } = await env.DB.prepare(`SELECT cmb.*, c.name as community_name FROM community_monthly_badges cmb JOIN communities c ON cmb.community_id = c.id WHERE cmb.user_id = ? ORDER BY cmb.year DESC, cmb.month DESC`).bind(targetUserId).all()
+    badges = b
+    const { results: c } = await env.DB.prepare(`SELECT cm.role, cm.title, cm.total_study_hours, cm.joined_at, c.id, c.name, c.avatar_url FROM community_members cm JOIN communities c ON cm.community_id = c.id WHERE cm.user_id = ? ORDER BY cm.joined_at DESC`).bind(targetUserId).all()
+    communities = c
+  }
 
   const completion = calculateProfileCompletion(profile)
 
-  let shared_communities = []
-  if (viewerUser && viewerUser.sub !== targetUserId) {
-    try {
-      const { results } = await env.DB.prepare(
-        `SELECT c.id, c.name, c.avatar_url FROM community_members cm1
-         JOIN community_members cm2 ON cm1.community_id = cm2.community_id AND cm2.user_id = ?
-         JOIN communities c ON cm1.community_id = c.id
-         WHERE cm1.user_id = ? ORDER BY cm1.joined_at DESC LIMIT 10`
-      ).bind(viewerUser.sub, targetUserId).all()
-      shared_communities = results
-    } catch {}
-  }
-
-  if (viewerUser && viewerUser.sub !== targetUserId) {
-    await env.DB.prepare(
-      `INSERT INTO user_activity (id, user_id, type, entity_id, entity_type, created_at) VALUES (?, ?, 'profile_view', ?, 'user', datetime('now'))`
-    ).bind('act_' + uuid(), targetUserId, viewerUser.sub).catch(() => {})
+  // Fire-and-forget: log profile view (not on critical path)
+  if (isOtherUser && ctx) {
+    ctx.waitUntil(
+      env.DB.prepare(
+        `INSERT INTO user_activity (id, user_id, type, entity_id, entity_type, created_at) VALUES (?, ?, 'profile_view', ?, 'user', datetime('now'))`
+      ).bind('act_' + uuid(), targetUserId, viewerUser.sub).run().catch(() => {})
+    )
   }
 
   return json({

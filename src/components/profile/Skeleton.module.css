@@ -1,0 +1,54 @@
+.circle {
+  border-radius: 50%;
+  background: var(--input-bg);
+  position: relative;
+  overflow: hidden;
+}
+.circle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+  animation: shimmer 1.6s infinite;
+}
+
+.bar {
+  background: var(--input-bg);
+  position: relative;
+  overflow: hidden;
+}
+.bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+  animation: shimmer 1.6s infinite;
+}
+
+.rect {
+  background: var(--input-bg);
+  position: relative;
+  overflow: hidden;
+}
+.rect::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+  animation: shimmer 1.6s infinite;
+}
+
+.panel {
+  width: 340px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--card-bg);
+  border-radius: 16px;
+  border: 1px solid var(--card-border);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}

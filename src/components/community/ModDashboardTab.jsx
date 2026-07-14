@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Users, UserPlus, Ban, MessageSquare, Activity, Search, UserCog, UserMinus, VolumeX, Volume2, ExternalLink, Check, X, Loader2 } from 'lucide-react'
 import { apiGet, apiPut, apiPost, apiDelete } from '../../lib/api'
+import { useProfilePanel } from '../../context/ProfilePanelContext'
 import AnnouncementsTab from './AnnouncementsTab'
 import RoleBadge from '../RoleBadge'
 import s from '../../pages/CommunityDetail.module.css'
@@ -19,7 +19,7 @@ const FILTER_TABS = [
 ]
 
 export default function ModDashboardTab({ communityId, members, announcements, setAnnouncements, myId, isMod, isAdmin, onRefresh }) {
-  const navigate = useNavigate()
+  const { openProfile } = useProfilePanel()
   const [error, setError] = useState('')
   const [stats, setStats] = useState(null)
   const [joinReqs, setJoinReqs] = useState([])
@@ -287,7 +287,7 @@ export default function ModDashboardTab({ communityId, members, announcements, s
                   </button>
                 )}
 
-                <button className={s.actionBtn} title="View profile" onClick={() => navigate(`/profile/${uid}`)}>
+                <button className={s.actionBtn} title="View profile" onClick={() => openProfile(uid)}>
                   <ExternalLink size={14} />
                 </button>
               </div>
