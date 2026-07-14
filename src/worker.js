@@ -1196,7 +1196,13 @@ async function handleFollowUser(request, env, user) {
     priority: 'info',
     action_url: `/profile/${user.sub}`,
     data: { follower_id: user.sub },
-  }).catch(() => {})
+  }).catch((err) => {
+    console.error('[follow-notification]', {
+      followerId: user.sub,
+      followedUserId: targetUserId,
+      error: err,
+    })
+  })
 
   return json({ success: true })
 }
