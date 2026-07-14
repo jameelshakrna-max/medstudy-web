@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useCommunityRealtime } from '../hooks/useCommunityRealtime'
 import { ROLES, PERM, hasPermission, hasMinimumRole } from '../lib/permissions'
 import { apiGet, apiPost, apiPut, apiDelete, apiJson, formatDate, imageUrl } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 import RoleBadge from '../components/RoleBadge'
 import CompetitionsTab from '../components/community/CompetitionsTab'
 import LeaderboardTab from '../components/community/LeaderboardTab'
@@ -40,33 +42,42 @@ export default function CommunityDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const [community, setCommunity] = useState(null)
-  const [members, setMembers] = useState([])
-  const [myMembership, setMyMembership] = useState(null)
+  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('chat')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [rules, setRules] = useState([])
-  const [pins, setPins] = useState([])
-  const [announcements, setAnnouncements] = useState([])
-  const [settings, setSettings] = useState(null)
-  const [competitions, setCompetitions] = useState([])
-  const [joinRequests, setJoinRequests] = useState([])
-  const [bans, setBans] = useState([])
   const [avatarError, setAvatarError] = useState(false)
+
+  const { data: fullData, isLoading, error: fetchError } = useQuery({
+    queryKey: queryKeys.communities.detail(id),
+    queryFn: () => apiGet('/communities/' + id + '/full'),
+    enabled: !!id,
+    staleTime: 30_000,
+  })
+
+  const community = fullData?.community || null
+  const members = Array.isArray(fullData?.members) ? fullData.members : []
+  const rules = Array.isArray(fullData?.rules) ? fullData.rules : []
+  const settings = fullData?.settings || null
+  const bans = Array.isArray(fullData?.bans) ? fullData.bans : []
+  const joinRequests = Array.isArray(fullData?.joinRequests) ? fullData.joinRequests : []
+  const myMembership = members.find(m => m.user_id === user?.id) || null
+  const isAdmin = hasMinimumRole(myMembership?.role, ROLES.ADMINISTRATOR)
+  const isMod = hasMinimumRole(myMembership?.role, ROLES.MODERATOR)
 
   const realtime = useCommunityRealtime(id)
   const chat = realtime
+  const [pins, setPins] = useState([])
+  const [announcements, setAnnouncements] = useState([])
+  const [competitions, setCompetitions] = useState([])
   const [messageInput, setMessageInput] = useState('')
   const [sending, setSending] = useState(false)
   const [searchMessages, setSearchMessages] = useState('')
-  const [searchResults, setSearchResults] = useState([])
-  const [searching, setSearching] = useState(false)
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [showFlashcardModal, setShowFlashcardModal] = useState(false)
   const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)
   const [uploading, setUploading] = useState(false)
   const [accessToken, setAccessToken] = useState('')
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.access_token) setAccessToken(session.access_token)
@@ -76,31 +87,6 @@ export default function CommunityDetail() {
     })
     return () => listener?.subscription.unsubscribe()
   }, [])
-
-    const isAdmin = hasMinimumRole(myMembership?.role, ROLES.ADMINISTRATOR)
-    const isMod = hasMinimumRole(myMembership?.role, ROLES.MODERATOR)
-
-  const fetchCommunity = useCallback(async () => {
-    try {
-      const data = await apiGet('/communities/' + id + '/full')
-      setCommunity(data.community)
-      setMembers(Array.isArray(data.members) ? data.members : [])
-      setCompetitions(Array.isArray(data.competitions) ? data.competitions : [])
-      setRules(Array.isArray(data.rules) ? data.rules : [])
-      setPins(Array.isArray(data.pins) ? data.pins : [])
-      setAnnouncements(Array.isArray(data.announcements) ? data.announcements : [])
-      setSettings(data.settings || null)
-      setBans(Array.isArray(data.bans) ? data.bans : [])
-      setJoinRequests(Array.isArray(data.joinRequests) ? data.joinRequests : [])
-      const me = Array.isArray(data.members) ? data.members.find(m => m.user_id === user?.id) : null
-      setMyMembership(me || null)
-    } catch (e) {
-      setError('Failed to load community')
-    }
-    setLoading(false)
-  }, [id, user])
-
-  useEffect(() => { fetchCommunity() }, [fetchCommunity])
 
   useEffect(() => {
     chat.setActive(activeTab === 'chat')
@@ -121,20 +107,16 @@ export default function CommunityDetail() {
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chat.messages])
 
   useEffect(() => {
-    if (!searchMessages.trim()) {
-      setSearchResults([])
-      return
-    }
-    const timer = setTimeout(async () => {
-      setSearching(true)
-      try {
-        const data = await apiGet(`/communities/${id}/messages?q=${encodeURIComponent(searchMessages)}`)
-        setSearchResults(Array.isArray(data) ? data : [])
-      } catch {}
-      setSearching(false)
-    }, 300)
+    const timer = setTimeout(() => setDebouncedSearch(searchMessages), 300)
     return () => clearTimeout(timer)
-  }, [searchMessages, id])
+  }, [searchMessages])
+
+  const { data: searchResults = [], isLoading: searching } = useQuery({
+    queryKey: queryKeys.communities.messages(id, debouncedSearch),
+    queryFn: () => apiGet(`/communities/${id}/messages?q=${encodeURIComponent(debouncedSearch)}`).then(d => Array.isArray(d) ? d : []),
+    enabled: !!debouncedSearch.trim(),
+    staleTime: 5_000,
+  })
 
   const handleSend = async () => {
     if (!messageInput.trim() || sending) return
@@ -198,7 +180,7 @@ export default function CommunityDetail() {
     try {
       const data = await apiPost('/communities/' + id + '/join', {})
       if (data.requires_approval) alert('Join request sent for approval')
-      else fetchCommunity()
+      else queryClient.invalidateQueries({ queryKey: queryKeys.communities.detail(id) })
     } catch (e) { alert(e.message) }
   }
 
@@ -258,40 +240,23 @@ export default function CommunityDetail() {
   const handleRegenerateCode = async () => {
     try {
       const data = await apiPost('/communities/' + id + '/invite-code', {})
-      if (data.invite_code) setCommunity(prev => ({ ...prev, invite_code: data.invite_code }))
-    } catch {}
-  }
-
-  const handleRefreshTab = async (tab) => {
-    try {
-      if (tab === 'competitions') {
-        const c = await apiGet('/communities/' + id + '/competitions')
-        setCompetitions(Array.isArray(c) ? c : [])
-      }
-      if (tab === 'mod') {
-        fetchCommunity()
-      }
-      if (tab === 'settings') {
-        const r = await apiGet('/communities/' + id + '/rules')
-        setRules(Array.isArray(r) ? r : [])
-        const m = await apiGet('/communities/' + id + '/members')
-        setMembers(Array.isArray(m) ? m : [])
-        setSettings(await apiGet('/communities/' + id + '/settings'))
-        if (isMod) {
-          const jr = await apiGet('/communities/' + id + '/join-requests')
-          setJoinRequests(Array.isArray(jr) ? jr : [])
-          const bn = await apiGet('/communities/' + id + '/bans')
-          setBans(Array.isArray(bn) ? bn : [])
-        } else {
-          setJoinRequests([])
-          setBans([])
-        }
+      if (data.invite_code) {
+        queryClient.setQueryData(queryKeys.communities.detail(id), prev => ({
+          ...prev,
+          community: { ...prev?.community, invite_code: data.invite_code },
+        }))
       }
     } catch {}
   }
 
-  if (loading) return <div className={s.page}><div className={s.loading}><Loader2 size={24} className={s.spinner} /> Loading community...</div></div>
-  if (error) return <div className={s.page}><div className={s.error}>{error}</div></div>
+  const handleRefreshTab = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.communities.detail(id) })
+  }, [queryClient, id])
+
+  const fetchCommunity = handleRefreshTab
+
+  if (isLoading) return <div className={s.page}><div className={s.loading}><Loader2 size={24} className={s.spinner} /> Loading community...</div></div>
+  if (fetchError) return <div className={s.page}><div className={s.error}>Failed to load community</div></div>
   if (!community) return <div className={s.page}><div className={s.error}>Community not found</div></div>
 
   return (
@@ -354,7 +319,7 @@ export default function CommunityDetail() {
           <button
             key={t.id}
             className={`${s.tab} ${activeTab === t.id ? s.tabActive : ''}`}
-            onClick={() => { setActiveTab(t.id); handleRefreshTab(t.id) }}
+            onClick={() => { setActiveTab(t.id); handleRefreshTab() }}
           >
             <t.icon size={16} strokeWidth={1.5} />
             <span>{t.label}</span>
@@ -399,7 +364,7 @@ export default function CommunityDetail() {
             />
             {searching && <Loader2 size={14} className={s.spinner} />}
             {searchMessages && !searching && (
-              <button className={s.searchClear} onClick={() => setSearchMessages('')}>
+              <button className={s.searchClear} onClick={() => { setSearchMessages(''); setDebouncedSearch('') }}>
                 <X size={14} strokeWidth={1.5} />
               </button>
             )}
@@ -596,7 +561,7 @@ export default function CommunityDetail() {
           isAdmin={isAdmin}
           isMod={isMod}
           myMembership={myMembership}
-          onRefresh={() => handleRefreshTab('competitions')}
+          onRefresh={handleRefreshTab}
           realtimeConnected={realtime.connected}
         />
       )}
@@ -625,7 +590,7 @@ export default function CommunityDetail() {
           myId={user?.id}
           isMod={isMod}
           isAdmin={isAdmin}
-          onRefresh={() => handleRefreshTab('mod')}
+          onRefresh={handleRefreshTab}
         />
       )}
 
@@ -644,7 +609,7 @@ export default function CommunityDetail() {
           communityId={id}
           myId={user?.id}
           onUpdate={fetchCommunity}
-          onRefresh={() => handleRefreshTab('settings')}
+          onRefresh={handleRefreshTab}
           onRegenerateCode={handleRegenerateCode}
         />
       )}
@@ -717,5 +682,3 @@ function FileMessage({ msg, accessToken }) {
     </div>
   )
 }
-
-
