@@ -55,7 +55,7 @@ export default function DMInbox() {
                 onClick={() => navigate(`/messages/${conv.id}`)}
               >
                 {u?.avatar_url ? (
-                  <img className={styles.avatar} src={imageUrl(u.avatar_url)} alt="" />
+                  <img className={styles.avatar} src={imageUrl(u.avatar_url)} alt="" loading="lazy" />
                 ) : (
                   <div className={styles.avatarFallback}>{initials}</div>
                 )}

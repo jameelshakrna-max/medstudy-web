@@ -80,7 +80,7 @@ export default function Leaderboard() {
                 </div>
                 <div className={s.avatar}>
                   {entry.avatar_url ? (
-                    <img src={imageUrl(entry.avatar_url)} alt="" />
+                    <img src={imageUrl(entry.avatar_url)} alt="" loading="lazy" />
                   ) : (
                     <div className={s.avatarFallback}>{entry.user_name?.[0]?.toUpperCase() || '?'}</div>
                   )}

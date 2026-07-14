@@ -216,7 +216,7 @@ export default function Communities() {
                   <div key={c.id} className={s.card} onClick={() => navigate('/communities/' + c.id)}>
                     <div className={s.cardTop}>
                       <div className={s.cardAvatar}>
-                        {!avatarErrors[c.id] && c.avatar_url ? <img key={c.avatar_url} src={imageUrl(c.avatar_url)} onError={() => setAvatarErrors(p => ({...p, [c.id]: true}))} alt="" /> : <Users size={20} />}
+                        {!avatarErrors[c.id] && c.avatar_url ? <img key={c.avatar_url} src={imageUrl(c.avatar_url)} onError={() => setAvatarErrors(p => ({...p, [c.id]: true}))} alt="" loading="lazy" /> : <Users size={20} />}
                       </div>
                       <div className={s.cardVisibility}>
                         {c.visibility === 'private' ? <Lock size={12} /> : <Globe size={12} />}
@@ -257,7 +257,7 @@ export default function Communities() {
                   <div key={c.id} className={s.card} onClick={() => navigate('/communities/' + c.id)}>
                     <div className={s.cardTop}>
                       <div className={s.cardAvatar}>
-                        {!avatarErrors[c.id] && c.avatar_url ? <img key={c.avatar_url} src={imageUrl(c.avatar_url)} onError={() => setAvatarErrors(p => ({...p, [c.id]: true}))} alt="" /> : <Users size={20} />}
+                        {!avatarErrors[c.id] && c.avatar_url ? <img key={c.avatar_url} src={imageUrl(c.avatar_url)} onError={() => setAvatarErrors(p => ({...p, [c.id]: true}))} alt="" loading="lazy" /> : <Users size={20} />}
                       </div>
                       <div className={s.cardVisibility}>
                         {c.visibility === 'private' ? <Lock size={12} /> : <Globe size={12} />}

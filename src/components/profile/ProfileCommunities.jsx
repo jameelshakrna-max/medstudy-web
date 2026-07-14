@@ -19,7 +19,7 @@ export default function ProfileCommunities({ communities, sharedCommunities, sho
             {communities.map(c => (
               <Link key={c.id} to={`/communities/${c.id}`} className={s.communityItem}>
                 <div className={s.communityAvatar}>
-                  {c.avatar_url ? <img src={imageUrl(c.avatar_url)} alt="" /> : (c.name?.[0]?.toUpperCase() || 'C')}
+                  {c.avatar_url ? <img src={imageUrl(c.avatar_url)} alt="" loading="lazy" /> : (c.name?.[0]?.toUpperCase() || 'C')}
                 </div>
                 <div className={s.communityInfo}>
                   <div className={s.communityName}>{c.name}</div>
@@ -42,7 +42,7 @@ export default function ProfileCommunities({ communities, sharedCommunities, sho
             {sharedCommunities.map(c => (
               <Link key={c.id} to={`/communities/${c.id}`} className={s.communityItem}>
                 <div className={s.communityAvatar}>
-                  {c.avatar_url ? <img src={imageUrl(c.avatar_url)} alt="" /> : (c.name?.[0]?.toUpperCase() || 'C')}
+                  {c.avatar_url ? <img src={imageUrl(c.avatar_url)} alt="" loading="lazy" /> : (c.name?.[0]?.toUpperCase() || 'C')}
                 </div>
                 <div className={s.communityInfo}>
                   <div className={s.communityName}>{c.name}</div>

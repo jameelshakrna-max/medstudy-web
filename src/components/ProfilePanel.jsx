@@ -278,7 +278,7 @@ export default function ProfilePanel() {
                       onClick={() => { closeProfile(); navigate(`/communities/${c.id}`) }}
                     >
                       <div className={s.communityAvatar}>
-                        {c.avatar_url ? <img src={imageUrl(c.avatar_url)} alt="" /> : (c.name?.[0]?.toUpperCase() || 'C')}
+                        {c.avatar_url ? <img src={imageUrl(c.avatar_url)} alt="" loading="lazy" /> : (c.name?.[0]?.toUpperCase() || 'C')}
                       </div>
                       <span className={s.communityName}>{c.name}</span>
                     </div>

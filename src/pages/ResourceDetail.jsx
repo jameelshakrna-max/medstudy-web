@@ -297,7 +297,7 @@ export default function ResourceDetail() {
         <div className={s.sideSection}>
           {resource.image_key && (
             <div className={s.coverWrap}>
-              <img src={API + '/resources/' + id + '/image?token=' + sessionToken} alt="" className={s.coverImage} />
+              <img src={API + '/resources/' + id + '/image?token=' + sessionToken} alt="" className={s.coverImage} loading="lazy" />
             </div>
           )}
 

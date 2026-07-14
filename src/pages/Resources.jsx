@@ -334,7 +334,7 @@ export default function Resources() {
             >
               {r.image_key ? (
                 <div className={s.cardImageWrap}>
-                  <img src={API + '/resources/' + r.id + '/image?token=' + sessionToken} alt="" className={s.cardImage} />
+                  <img src={API + '/resources/' + r.id + '/image?token=' + sessionToken} alt="" className={s.cardImage} loading="lazy" />
                 </div>
               ) : (
                 <div className={s.cardImagePlaceholder} style={{ background: CATEGORY_COLORS[r.category] || 'var(--blue)' }}>

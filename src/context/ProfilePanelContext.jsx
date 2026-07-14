@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useRef } from 'react'
+import { createContext, useContext, useState, useCallback, useRef, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../lib/queryKeys'
 
@@ -51,8 +51,10 @@ export function ProfilePanelProvider({ children }) {
     setPanelState({ open: false, userId: null })
   }, [])
 
+  const value = useMemo(() => ({ panelState, openProfile, closeProfile, preloadProfile, cancelPreload }), [panelState, openProfile, closeProfile, preloadProfile, cancelPreload])
+
   return (
-    <ProfilePanelContext.Provider value={{ panelState, openProfile, closeProfile, preloadProfile, cancelPreload }}>
+    <ProfilePanelContext.Provider value={value}>
       {children}
     </ProfilePanelContext.Provider>
   )

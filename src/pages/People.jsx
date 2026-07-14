@@ -43,7 +43,7 @@ export default function People() {
     >
       <div className={s.avatar}>
         {!avatarErrors[user.user_id] && user.avatar_url ? (
-          <img src={imageUrl(user.avatar_url)} alt="" onError={() => setAvatarErrors(p => ({...p, [user.user_id]: true}))} />
+          <img src={imageUrl(user.avatar_url)} alt="" onError={() => setAvatarErrors(p => ({...p, [user.user_id]: true}))} loading="lazy" />
         ) : (
           (user.display_name || user.user_name || '?')[0]?.toUpperCase()
         )}

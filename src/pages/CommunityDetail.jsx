@@ -677,7 +677,7 @@ function FileMessage({ msg, accessToken }) {
     <div className={s.fileMsg}>
       {isImage ? (
         <>
-          <img src={fileUrl} alt={msg.file_name} className={s.filePreview} onClick={() => setShowLightbox(true)} />
+          <img src={fileUrl} alt={msg.file_name} className={s.filePreview} onClick={() => setShowLightbox(true)} loading="lazy" />
           {showLightbox && <Lightbox src={fileUrl} fileName={msg.file_name} accessToken={accessToken} onClose={() => setShowLightbox(false)} />}
         </>
       ) : (

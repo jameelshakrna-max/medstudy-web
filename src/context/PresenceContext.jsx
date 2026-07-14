@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { apiPost } from '../lib/api'
 import { useAuth } from './AuthContext'
 
@@ -57,8 +57,10 @@ export function PresenceProvider({ children }) {
     return result
   }, [])
 
+  const value = useMemo(() => ({ myStatus, updateStatus, getBulkPresence }), [myStatus, updateStatus, getBulkPresence])
+
   return (
-    <PresenceContext.Provider value={{ myStatus, updateStatus, getBulkPresence }}>
+    <PresenceContext.Provider value={value}>
       {children}
     </PresenceContext.Provider>
   )
