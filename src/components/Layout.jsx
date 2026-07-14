@@ -5,7 +5,7 @@ import { useSwipeable } from 'react-swipeable'
 import {
   LayoutDashboard, BookOpen, BrainCircuit,
   BarChart3, Timer, ClipboardList, Settings,
-  FolderOpen, LogOut, Menu, ChevronRight, Target, Users, UserSearch,
+  FolderOpen, LogOut, Menu, ChevronRight, Target, Users, UserSearch, Trophy,
 } from 'lucide-react'
 import TopBar from './TopBar'
 import BottomNav from './BottomNav'
@@ -20,6 +20,7 @@ const NAV = [
   { to: '/pomodoro',   icon: Timer,         label: 'Pomodoro' },
   { to: '/communities', icon: Users,        label: 'Communities' },
   { to: '/people',      icon: UserSearch,    label: 'People' },
+  { to: '/leaderboard', icon: Trophy,        label: 'Leaderboard' },
   { to: '/resources',  icon: FolderOpen,    label: 'Resources' },
   { to: '/sessions',   icon: ClipboardList, label: 'Sessions' },
   { to: '/settings',   icon: Settings,      label: 'Settings' }
