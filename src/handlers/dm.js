@@ -94,7 +94,8 @@ export async function handleCreateConversation(request, env, user) {
 export async function handleGetDMMessages(request, env, user) {
   try {
     const url = new URL(request.url)
-    const conversationId = extractId(request.url)
+    const parts = url.pathname.split('/')
+    const conversationId = parts[4]
     const before = url.searchParams.get('before')
     const limit = Math.min(Math.max(1, parseInt(url.searchParams.get('limit') || '20')), 100)
 
@@ -136,7 +137,8 @@ export async function handleGetDMMessages(request, env, user) {
 
 export async function handleSendDM(request, env, user) {
   try {
-    const conversationId = extractId(request.url)
+    const parts = new URL(request.url).pathname.split('/')
+    const conversationId = parts[4]
 
     const { results: member } = await env.DB.prepare(
       'SELECT id FROM conversation_members WHERE conversation_id = ? AND user_id = ?'
@@ -239,7 +241,8 @@ export async function handleDeleteDM(request, env, user) {
 
 export async function handleMarkDMRead(request, env, user) {
   try {
-    const conversationId = extractId(request.url)
+    const parts = new URL(request.url).pathname.split('/')
+    const conversationId = parts[4]
 
     const { results: member } = await env.DB.prepare(
       'SELECT id FROM conversation_members WHERE conversation_id = ? AND user_id = ?'

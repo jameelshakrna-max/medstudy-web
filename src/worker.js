@@ -48,7 +48,7 @@ import {
   handleListNotifications, handleCreateNotification,
   handleMarkAllRead, handleMarkNotificationRead, handleCleanupNotifications,
   handleGetUnreadCounts, handleGetNotificationPreferences, handleUpdateNotificationPreferences,
-  notifyGoalCompleted, notifyFlashcardMilestone,
+  notifyGoalCompleted, notifyFlashcardMilestone, createNotificationIfAllowed,
 } from './handlers/notifications.js'
 
 import {
@@ -1187,6 +1187,16 @@ async function handleFollowUser(request, env, user) {
 
   await incrementUserStats(env, user.sub, 'following_count', 1).catch(() => {})
   await incrementUserStats(env, targetUserId, 'followers_count', 1).catch(() => {})
+
+  createNotificationIfAllowed(env, targetUserId, {
+    type: 'follow',
+    title: 'New follower',
+    body: `${user.email?.split('@')[0] || 'Someone'} started following you`,
+    category: 'follows',
+    priority: 'info',
+    action_url: `/profile/${user.sub}`,
+    data: { follower_id: user.sub },
+  }).catch(() => {})
 
   return json({ success: true })
 }
