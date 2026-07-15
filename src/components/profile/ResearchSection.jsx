@@ -12,10 +12,10 @@ import ResearchProfileEditor from './ResearchProfileEditor'
 import styles from './ResearchSection.module.css'
 
 const LEVEL_CONFIG = {
-  beginner:      { label: 'Beginner',      color: styles.levelBeginner,      barColor: '#9ca3af', threshold: 100 },
-  intermediate:  { label: 'Intermediate',  color: styles.levelIntermediate,  barColor: 'var(--blue)',  threshold: 400 },
-  advanced:      { label: 'Advanced',      color: styles.levelAdvanced,      barColor: 'var(--green)', threshold: 900 },
-  expert:        { label: 'Expert',        color: styles.levelExpert,        barColor: '#f59e0b',      threshold: Infinity },
+  beginner:      { label: 'Beginner',      stars: 2, title: 'Beginner Research Contributor',      color: styles.levelBeginner,      barColor: '#9ca3af', threshold: 100 },
+  intermediate:  { label: 'Intermediate',  stars: 3, title: 'Intermediate Research Contributor',  color: styles.levelIntermediate,  barColor: 'var(--blue)',  threshold: 400 },
+  advanced:      { label: 'Advanced',      stars: 4, title: 'Advanced Research Contributor',      color: styles.levelAdvanced,      barColor: 'var(--green)', threshold: 900 },
+  expert:        { label: 'Expert',        stars: 5, title: 'Expert Research Contributor',        color: styles.levelExpert,        barColor: '#f59e0b',      threshold: Infinity },
 }
 
 function getLevel(score) {
@@ -50,6 +50,13 @@ const PROFICIENCY_DOT = {
   intermediate: styles.dotIntermediate,
   advanced: styles.dotAdvanced,
   expert: styles.dotExpert,
+}
+
+const PROFICIENCY_LABEL = {
+  beginner: 'Beginner',
+  intermediate: 'Intermediate',
+  advanced: 'Advanced',
+  expert: 'Expert',
 }
 
 const ACHIEVEMENT_ICONS = {
@@ -179,8 +186,15 @@ export default function ResearchSection({ userId, isOwnProfile }) {
       {stats && stats.score > 0 && (
         <div className={styles.section}>
           <div className={styles.repCard}>
+            <div className={styles.repStars}>
+              {Array.from({ length: 5 }, (_, i) => (
+                <span key={i} className={i < levelConfig.stars ? styles.starFilled : styles.starEmpty}>
+                  ★
+                </span>
+              ))}
+            </div>
+            <div className={`${styles.repLevel} ${levelConfig.color}`}>{levelConfig.title}</div>
             <div className={styles.repScore}>{score}</div>
-            <div className={`${styles.repLevel} ${levelConfig.color}`}>{levelConfig.label}</div>
             {nextThreshold && (
               <>
                 <div className={styles.repProgress}>
@@ -234,6 +248,7 @@ export default function ResearchSection({ userId, isOwnProfile }) {
               <span key={s.skill_id || i} className={styles.skillPill}>
                 <span className={`${styles.skillDot} ${PROFICIENCY_DOT[s.proficiency] || styles.dotBeginner}`} />
                 {s.skill}
+                <span className={styles.skillLabel}>{PROFICIENCY_LABEL[s.proficiency] || 'Beginner'}</span>
               </span>
             ))}
           </div>
@@ -311,8 +326,8 @@ export default function ResearchSection({ userId, isOwnProfile }) {
         )}
       </div>
 
-      {/* Research Profile Links */}
-      {profileLinks.length > 0 && (
+      {/* Research Profile */}
+      {(profileLinks.length > 0 || researchProfile?.institution || researchProfile?.department || researchProfile?.research_interests || researchProfile?.bio || isOwnProfile) && (
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
             <div className={styles.sectionTitle} style={{ marginBottom: 0 }}>
@@ -322,16 +337,43 @@ export default function ResearchSection({ userId, isOwnProfile }) {
               <button className={styles.editBtn} onClick={() => setEditingProfile(true)}>Edit</button>
             )}
           </div>
-          <div className={styles.profileLinks}>
-            {profileLinks.map(link => {
-              const Icon = LINK_ICONS[link.key] || ExternalLink
-              return (
-                <a key={link.key} className={styles.profileLink} href={link.url} target="_blank" rel="noopener noreferrer">
-                  <Icon size={14} /> {link.label}
-                </a>
-              )
-            })}
-          </div>
+          {researchProfile?.bio && (
+            <div className={styles.profileBio}>{researchProfile.bio}</div>
+          )}
+          {(researchProfile?.institution || researchProfile?.department) && (
+            <div className={styles.profileInfoGrid}>
+              {researchProfile.institution && (
+                <div className={styles.profileInfoItem}>
+                  <div className={styles.profileInfoLabel}>Institution</div>
+                  <div className={styles.profileInfoValue}>{researchProfile.institution}</div>
+                </div>
+              )}
+              {researchProfile.department && (
+                <div className={styles.profileInfoItem}>
+                  <div className={styles.profileInfoLabel}>Department</div>
+                  <div className={styles.profileInfoValue}>{researchProfile.department}</div>
+                </div>
+              )}
+            </div>
+          )}
+          {researchProfile?.research_interests && (
+            <div className={styles.profileInterests}>
+              <div className={styles.profileInfoLabel}>Research Interests</div>
+              <div className={styles.profileInfoValue}>{researchProfile.research_interests}</div>
+            </div>
+          )}
+          {profileLinks.length > 0 && (
+            <div className={styles.profileLinks}>
+              {profileLinks.map(link => {
+                const Icon = LINK_ICONS[link.key] || ExternalLink
+                return (
+                  <a key={link.key} className={styles.profileLink} href={link.url} target="_blank" rel="noopener noreferrer">
+                    <Icon size={14} /> {link.label}
+                  </a>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 

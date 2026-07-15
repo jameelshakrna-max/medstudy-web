@@ -3,8 +3,12 @@
 .sectionHeader { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 
 .repCard { text-align: center; padding: 16px; }
+.repStars { display: flex; justify-content: center; gap: 4px; margin-bottom: 6px; }
+.starFilled { font-size: 20px; color: #f59e0b; }
+.starEmpty { font-size: 20px; color: var(--border); }
 .repScore { font-size: 36px; font-weight: 800; color: var(--text); }
-.repLevel { font-size: 14px; font-weight: 600; margin-top: 4px; }
+.repLevel { font-size: 14px; font-weight: 600; margin-top: 2px; }
+.repContributor { font-size: 12px; color: var(--mist); margin-top: 2px; }
 .levelBeginner { color: #9ca3af; }
 .levelIntermediate { color: var(--blue); }
 .levelAdvanced { color: var(--green); }
@@ -21,6 +25,7 @@
 .skillsList { display: flex; flex-wrap: wrap; gap: 6px; }
 .skillPill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; background: var(--bg); border: 1px solid var(--border); color: var(--text); }
 .skillDot { width: 6px; height: 6px; border-radius: 50%; }
+.skillLabel { font-size: 10px; color: var(--mist); font-weight: 400; }
 .dotBeginner { background: #9ca3af; }
 .dotIntermediate { background: var(--blue); }
 .dotAdvanced { background: var(--green); }
@@ -46,6 +51,12 @@
 .profileLinks { display: flex; flex-wrap: wrap; gap: 8px; }
 .profileLink { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; color: var(--text); text-decoration: none; }
 .profileLink:hover { border-color: var(--blue); color: var(--blue); }
+.profileBio { font-size: 13px; color: var(--text); line-height: 1.5; margin-bottom: 12px; }
+.profileInfoGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.profileInfoItem {}
+.profileInfoLabel { font-size: 11px; color: var(--mist); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
+.profileInfoValue { font-size: 13px; color: var(--text); }
+.profileInterests { margin-bottom: 12px; }
 
 .editBtn { padding: 4px 10px; background: none; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--mist); cursor: pointer; }
 .editBtn:hover { border-color: var(--blue); color: var(--blue); }
