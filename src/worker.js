@@ -85,6 +85,20 @@ import {
   handleSearchUsers, handleSuggestedConnections,
 } from './handlers/people.js'
 
+import {
+  handleListResearchPosts, handleCreateResearchPost, handleGetResearchPost,
+  handleUpdateResearchPost, handleDeleteResearchPost, handleVoteOnPost,
+  handleGetResearchComments, handleAddResearchComment, handleDeleteResearchComment,
+  handleMarkHelped, handleGetHelpedMarks,
+  handleToggleBookmark, handleGetBookmarks,
+  handleReportPost,
+  handleGetResearchProfile, handleUpdateResearchProfile,
+  handleGetResearchSkills, handleAddResearchSkill, handleDeleteResearchSkill,
+  handleGetPredefinedSkills,
+  handleGetResearchStats, handleGetResearchEvents,
+  handleGetPortfolio, handleAddPortfolioEntry, handleUpdatePortfolioEntry, handleDeletePortfolioEntry,
+} from './handlers/research.js'
+
 function ensureCORS(response) {
   const h = response.headers
   if (!h.get('access-control-allow-origin')) {
@@ -454,6 +468,38 @@ export default {
       // ── People Search & Discovery ──
       if (path === '/api/users/search' && request.method === 'GET') return handleSearchUsers(request, env, user)
       if (path === '/api/users/suggested' && request.method === 'GET') return handleSuggestedConnections(request, env, user)
+
+      // ── Research Hub ──
+      if (path === '/api/research' && request.method === 'GET') return handleListResearchPosts(request, env, user)
+      if (path === '/api/research' && request.method === 'POST') return handleCreateResearchPost(request, env, user)
+      if (path === '/api/research/bookmarks' && request.method === 'GET') return handleGetBookmarks(request, env, user)
+      if (path === '/api/research/skills/predefined' && request.method === 'GET') return handleGetPredefinedSkills(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+\/vote$/) && request.method === 'POST') return handleVoteOnPost(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+\/comments$/) && request.method === 'GET') return handleGetResearchComments(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+\/comments$/) && request.method === 'POST') return handleAddResearchComment(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+\/comments\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteResearchComment(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+\/help$/) && request.method === 'POST') return handleMarkHelped(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+\/helped$/) && request.method === 'GET') return handleGetHelpedMarks(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+\/bookmark$/) && request.method === 'POST') return handleToggleBookmark(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+\/report$/) && request.method === 'POST') return handleReportPost(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+$/) && request.method === 'GET') return handleGetResearchPost(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+$/) && request.method === 'PUT') return handleUpdateResearchPost(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteResearchPost(request, env, user)
+
+      // ── Research Profile & Skills ──
+      if (path.match(/^\/api\/users\/[^\/]+\/research-profile$/) && request.method === 'GET') return handleGetResearchProfile(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/research-profile$/) && request.method === 'PUT') return handleUpdateResearchProfile(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/research-skills$/) && request.method === 'GET') return handleGetResearchSkills(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/research-skills$/) && request.method === 'POST') return handleAddResearchSkill(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/research-skills\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteResearchSkill(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/research-stats$/) && request.method === 'GET') return handleGetResearchStats(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/research-events$/) && request.method === 'GET') return handleGetResearchEvents(request, env, user)
+
+      // ── Research Portfolio ──
+      if (path.match(/^\/api\/users\/[^\/]+\/portfolio$/) && request.method === 'GET') return handleGetPortfolio(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/portfolio$/) && request.method === 'POST') return handleAddPortfolioEntry(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/portfolio\/[^\/]+$/) && request.method === 'PUT') return handleUpdatePortfolioEntry(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/portfolio\/[^\/]+$/) && request.method === 'DELETE') return handleDeletePortfolioEntry(request, env, user)
 
       return json({ error: 'Not found' }, 404)
     } catch (err) {

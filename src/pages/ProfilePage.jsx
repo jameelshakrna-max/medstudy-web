@@ -12,6 +12,7 @@ import FavoriteSubjects from '../components/FavoriteSubjects'
 import ProfileHeader from '../components/profile/ProfileHeader'
 import ProfileBadges from '../components/profile/ProfileBadges'
 import ProfileCommunities from '../components/profile/ProfileCommunities'
+import ResearchSection from '../components/profile/ResearchSection'
 import s from './ProfilePage.module.css'
 
 export default function ProfilePage() {
@@ -201,6 +202,8 @@ export default function ProfilePage() {
       )}
 
       <PinnedResources userId={resolvedUserId} isOwnProfile={isOwnProfile} />
+
+      <ResearchSection userId={resolvedUserId} isOwnProfile={isOwnProfile} />
 
       <ProfileBadges
         pinnedBadges={profile.pinned_badges}

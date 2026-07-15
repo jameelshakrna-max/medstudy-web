@@ -57,6 +57,48 @@ const ACHIEVEMENTS = [
     const { results } = await env.DB.prepare('SELECT profile_completion FROM user_profiles WHERE user_id = ?').bind(userId).all()
     return (results[0]?.profile_completion || 0) >= 100
   }},
+  // Research achievements
+  { type: 'research_first_post', title: 'First Research Post', description: 'Shared your first research post', icon: '🟢', check: async (env, userId) => {
+    const { results } = await env.DB.prepare('SELECT COUNT(*) as c FROM research_posts WHERE user_id = ?').bind(userId).all()
+    return results[0]?.c > 0
+  }},
+  { type: 'research_survey_master', title: 'Survey Master', description: 'Shared 10 questionnaires', icon: '📊', check: async (env, userId) => {
+    const { results } = await env.DB.prepare("SELECT COUNT(*) as c FROM research_posts WHERE user_id = ? AND category = 'questionnaire'").bind(userId).all()
+    return results[0]?.c >= 10
+  }},
+  { type: 'research_literature_expert', title: 'Literature Expert', description: 'Shared 10 papers or literature', icon: '📚', check: async (env, userId) => {
+    const { results } = await env.DB.prepare("SELECT COUNT(*) as c FROM research_posts WHERE user_id = ? AND category IN ('paper', 'literature')").bind(userId).all()
+    return results[0]?.c >= 10
+  }},
+  { type: 'research_statistician', title: 'Statistician', description: 'Has 3+ statistics-related skills', icon: '📈', check: async (env, userId) => {
+    const { results } = await env.DB.prepare("SELECT COUNT(*) as c FROM user_research_skills WHERE user_id = ? AND skill IN ('SPSS', 'R', 'Python', 'Biostatistics', 'Data Analysis', 'Meta-analysis', 'Data Visualization')").bind(userId).all()
+    return results[0]?.c >= 3
+  }},
+  { type: 'research_clinical', title: 'Clinical Researcher', description: 'Has clinical trials skill', icon: '🧪', check: async (env, userId) => {
+    const { results } = await env.DB.prepare("SELECT COUNT(*) as c FROM user_research_skills WHERE user_id = ? AND skill = 'Clinical Trials'").bind(userId).all()
+    return results[0]?.c > 0
+  }},
+  { type: 'research_collaborator', title: 'Collaboration Expert', description: 'Joined 5 collaborations', icon: '🤝', check: async (env, userId) => {
+    const { results } = await env.DB.prepare("SELECT COUNT(*) as c FROM research_helped_marks WHERE helper_id = ? AND help_type = 'collaborated'").bind(userId).all()
+    return results[0]?.c >= 5
+  }},
+  { type: 'research_top_helper', title: 'Top Research Helper', description: 'Research score reached 500', icon: '⭐', check: async (env, userId) => {
+    const { results } = await env.DB.prepare('SELECT score FROM user_research_stats WHERE user_id = ?').bind(userId).all()
+    return (results[0]?.score || 0) >= 500
+  }},
+  { type: 'research_100_surveys', title: '100 Surveys Completed', description: 'Completed 100 surveys', icon: '🔥', check: async (env, userId) => {
+    const { results } = await env.DB.prepare('SELECT surveys_completed FROM user_research_stats WHERE user_id = ?').bind(userId).all()
+    return (results[0]?.surveys_completed || 0) >= 100
+  }},
+  { type: 'research_hospital_collab', title: 'Hospital Collaborator', description: 'Data collection skill with collaboration', icon: '🏥', check: async (env, userId) => {
+    const { results: skills } = await env.DB.prepare("SELECT COUNT(*) as c FROM user_research_skills WHERE user_id = ? AND skill = 'Data Collection'").bind(userId).all()
+    const { results: collabs } = await env.DB.prepare("SELECT COUNT(*) as c FROM research_helped_marks WHERE helper_id = ? AND help_type = 'collaborated'").bind(userId).all()
+    return (skills[0]?.c || 0) > 0 && (collabs[0]?.c || 0) > 0
+  }},
+  { type: 'research_community_fav', title: 'Community Favorite', description: 'Received 50 helpful marks', icon: '🏅', check: async (env, userId) => {
+    const { results } = await env.DB.prepare('SELECT helpful_marks FROM user_research_stats WHERE user_id = ?').bind(userId).all()
+    return (results[0]?.helpful_marks || 0) >= 50
+  }},
 ]
 
 export async function checkAndAwardAchievements(env, userId) {

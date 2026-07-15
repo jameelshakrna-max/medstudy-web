@@ -13,6 +13,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,ico,wasm}'],
         globIgnores: ['**/CommunityDetail-*.js', '**/TrackingHub-*.js'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             urlPattern: /^https?:\/\/.*\/api\//,
@@ -28,7 +30,7 @@ export default defineConfig({
             options: {
               cacheName: 'medstudy-hashed-assets',
               expiration: { maxEntries: 200, maxAgeSeconds: 30 * 24 * 60 * 60 },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
             },
           },
           {
@@ -36,7 +38,7 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'medstudy-navigation',
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
             },
           },
           {
@@ -45,7 +47,7 @@ export default defineConfig({
             options: {
               cacheName: 'medstudy-general',
               expiration: { maxEntries: 100, maxAgeSeconds: 7 * 24 * 60 * 60 },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
             },
           },
         ],

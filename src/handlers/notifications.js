@@ -211,3 +211,75 @@ export async function notifyFlashcardMilestone(env, userId, count) {
     })
   }
 }
+
+// Research Hub notifications
+export async function notifyResearchComment(env, postOwnerId, commenterName, postId, postTitle) {
+  if (postOwnerId === commenterName) return
+  await createNotificationIfAllowed(env, postOwnerId, {
+    type: 'research_comment',
+    title: `${commenterName} commented on your research post`,
+    body: postTitle,
+    category: 'research',
+    priority: 'info',
+    action_url: `/research`,
+    data: { postId },
+  })
+}
+
+export async function notifyResearchUpvote(env, postOwnerUserId, voterName, postId, postTitle) {
+  if (postOwnerUserId === voterName) return
+  await createNotificationIfAllowed(env, postOwnerUserId, {
+    type: 'research_upvote',
+    title: `${voterName} upvoted your research post`,
+    body: postTitle,
+    category: 'research',
+    priority: 'info',
+    action_url: `/research`,
+    data: { postId },
+  })
+}
+
+export async function notifyResearchHelped(env, helperUserId, markerName, postId, postTitle, helpType) {
+  const typeLabels = {
+    helped: 'marked you as helpful',
+    completed_survey: 'confirmed you completed a survey',
+    collaborated: 'confirmed a collaboration',
+    reviewed_paper: 'confirmed you reviewed a paper',
+    statistical_help: 'confirmed your statistical help',
+    data_collection: 'confirmed your data collection help',
+  }
+  await createNotificationIfAllowed(env, helperUserId, {
+    type: 'research_helped',
+    title: `${markerName} ${typeLabels[helpType] || 'marked you as helpful'}`,
+    body: postTitle,
+    category: 'research',
+    priority: 'high',
+    action_url: `/research`,
+    data: { postId, helpType },
+  })
+}
+
+export async function notifyResearchCollaboration(env, targetUserId, inviterName, postId, postTitle) {
+  await createNotificationIfAllowed(env, targetUserId, {
+    type: 'research_collaboration',
+    title: `${inviterName} wants to collaborate`,
+    body: postTitle,
+    category: 'research',
+    priority: 'high',
+    action_url: `/research`,
+    data: { postId },
+  })
+}
+
+export async function notifyResearchBookmark(env, postOwnerId, bookmarkerName, postId, postTitle) {
+  if (postOwnerId === bookmarkerName) return
+  await createNotificationIfAllowed(env, postOwnerId, {
+    type: 'research_bookmark',
+    title: `${bookmarkerName} bookmarked your research post`,
+    body: postTitle,
+    category: 'research',
+    priority: 'info',
+    action_url: `/research`,
+    data: { postId },
+  })
+}

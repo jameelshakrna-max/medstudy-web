@@ -1,0 +1,73 @@
+.section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius, 12px); padding: 20px; margin-bottom: 16px; }
+.sectionTitle { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.sectionHeader { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+
+.repCard { text-align: center; padding: 16px; }
+.repScore { font-size: 36px; font-weight: 800; color: var(--text); }
+.repLevel { font-size: 14px; font-weight: 600; margin-top: 4px; }
+.levelBeginner { color: #9ca3af; }
+.levelIntermediate { color: var(--blue); }
+.levelAdvanced { color: var(--green); }
+.levelExpert { color: #f59e0b; }
+.repProgress { height: 6px; background: var(--border); border-radius: 3px; margin-top: 12px; overflow: hidden; }
+.repProgressBar { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+.repNextLevel { font-size: 11px; color: var(--mist); margin-top: 6px; }
+
+.statsGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; }
+.statCard { text-align: center; padding: 12px 8px; background: var(--bg); border-radius: 8px; }
+.statNumber { font-size: 20px; font-weight: 700; color: var(--text); }
+.statLabel { font-size: 11px; color: var(--mist); margin-top: 2px; }
+
+.skillsList { display: flex; flex-wrap: wrap; gap: 6px; }
+.skillPill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; background: var(--bg); border: 1px solid var(--border); color: var(--text); }
+.skillDot { width: 6px; height: 6px; border-radius: 50%; }
+.dotBeginner { background: #9ca3af; }
+.dotIntermediate { background: var(--blue); }
+.dotAdvanced { background: var(--green); }
+.dotExpert { background: #f59e0b; }
+
+.badgesList { display: flex; flex-wrap: wrap; gap: 8px; }
+.badge { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--bg); border-radius: 8px; font-size: 12px; color: var(--text); }
+.badgeIcon { font-size: 16px; }
+
+.portfolioList { display: flex; flex-direction: column; gap: 10px; }
+.portfolioItem { padding: 12px; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
+.portfolioTitle { font-size: 14px; font-weight: 600; color: var(--text); }
+.portfolioMeta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.portfolioBadge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.roleBadge { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
+.statusBadge { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+.statusOngoing { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+.portfolioLinks { display: flex; gap: 8px; margin-top: 8px; }
+.portfolioLink { font-size: 12px; color: var(--blue); text-decoration: none; display: flex; align-items: center; gap: 4px; }
+.portfolioLink:hover { text-decoration: underline; }
+.portfolioJournal { font-size: 12px; color: var(--mist); font-style: italic; }
+
+.profileLinks { display: flex; flex-wrap: wrap; gap: 8px; }
+.profileLink { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; color: var(--text); text-decoration: none; }
+.profileLink:hover { border-color: var(--blue); color: var(--blue); }
+
+.editBtn { padding: 4px 10px; background: none; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--mist); cursor: pointer; }
+.editBtn:hover { border-color: var(--blue); color: var(--blue); }
+.addBtn { padding: 6px 12px; background: var(--blue); border: none; border-radius: 6px; font-size: 12px; color: white; cursor: pointer; font-weight: 600; }
+
+.editorOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.editorPanel { background: var(--surface); border-radius: 12px; padding: 24px; width: 90%; max-width: 480px; max-height: 85vh; overflow-y: auto; }
+.editorTitle { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+.editorField { margin-bottom: 14px; }
+.editorLabel { display: block; font-size: 12px; font-weight: 600; color: var(--mist); margin-bottom: 4px; }
+.editorInput { width: 100%; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-size: 13px; color: var(--text); outline: none; }
+.editorInput:focus { border-color: var(--blue); }
+.editorTextarea { composes: editorInput; min-height: 60px; resize: vertical; font-family: inherit; }
+.editorSelect { composes: editorInput; appearance: none; cursor: pointer; }
+.editorActions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.cancelBtn { padding: 6px 14px; background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--text); cursor: pointer; font-size: 13px; }
+.saveBtn { padding: 6px 14px; background: var(--blue); border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 13px; font-weight: 600; }
+.saveBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.skillRow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.skillRemove { background: none; border: none; color: var(--red, #ef4444); cursor: pointer; padding: 2px; }
+.skillSearch { position: relative; }
+.skillSuggestions { position: absolute; top: 100%; left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; max-height: 150px; overflow-y: auto; z-index: 10; }
+.skillSuggestion { display: block; width: 100%; text-align: left; padding: 8px 10px; background: none; border: none; color: var(--text); font-size: 13px; cursor: pointer; }
+.skillSuggestion:hover { background: var(--surface-hover, rgba(255,255,255,0.05)); }
