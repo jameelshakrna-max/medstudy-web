@@ -3,6 +3,7 @@ import { ROLES, PERM, hasPermission } from '../../lib/permissions'
 import { apiGet, apiPost, apiPut, formatDate, formatCountdown } from '../../lib/api'
 import { Search, Trophy, Plus, X, Loader2, Check, Flag, UserPlus, Clock, Users, BarChart3 } from 'lucide-react'
 import s from '../../pages/CommunityDetail.module.css'
+import Modal from '../ui/Modal/Modal'
 
 const COMPETITION_DURATIONS = [
   { value: '1_week', label: '1 Week' },
@@ -356,62 +357,54 @@ export default function CompetitionsTab({ competitions, communityId, myId, isAdm
         </div>
       )}
 
-      {showCreate && (
-        <div className={s.modalOverlay} onClick={() => !creating && (setShowCreate(false), setCreateError(''))}>
-          <div className={s.modal} onClick={e => e.stopPropagation()}>
-            <div className={s.modalHeader}>
-              <h3 className={s.modalTitle}>{isAdmin ? 'Create Competition' : 'Request Competition'}</h3>
-              {!creating && <X size={18} className={s.modalClose} onClick={() => { setShowCreate(false); setCreateError('') }} />}
-            </div>
-            <div className={s.modalBody}>
-              {createError && <div className={s.createError}>{createError}</div>}
-              <div className={s.field}>
-                <label>Title *</label>
-                <input type="text" placeholder="Competition name" value={title} onChange={e => setTitle(e.target.value)} disabled={creating} />
-              </div>
-              <div className={s.field}>
-                <label>Description</label>
-                <textarea rows={3} placeholder="Rules or description" value={desc} onChange={e => setDesc(e.target.value)} disabled={creating} />
-              </div>
-              <div className={s.field}>
-                <label>Duration</label>
-                <select value={duration} onChange={e => setDuration(e.target.value)} disabled={creating}>
-                  {COMPETITION_DURATIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className={s.modalFooter}>
-              <button className={s.cancelBtn} onClick={() => setShowCreate(false)} disabled={creating}>Cancel</button>
-              <button className={s.submitBtn} onClick={handleCreate} disabled={!title.trim() || creating}>
-                {creating ? 'Creating...' : isAdmin ? 'Create' : 'Request'}
-              </button>
-            </div>
+      <Modal open={showCreate} onOpenChange={(v) => { if (!v && !creating) { setShowCreate(false); setCreateError('') } }} size="md">
+        <div className={s.modalHeader}>
+          <h3 className={s.modalTitle}>{isAdmin ? 'Create Competition' : 'Request Competition'}</h3>
+          {!creating && <X size={18} className={s.modalClose} onClick={() => { setShowCreate(false); setCreateError('') }} />}
+        </div>
+        <div className={s.modalBody}>
+          {createError && <div className={s.createError}>{createError}</div>}
+          <div className={s.field}>
+            <label>Title *</label>
+            <input type="text" placeholder="Competition name" value={title} onChange={e => setTitle(e.target.value)} disabled={creating} />
+          </div>
+          <div className={s.field}>
+            <label>Description</label>
+            <textarea rows={3} placeholder="Rules or description" value={desc} onChange={e => setDesc(e.target.value)} disabled={creating} />
+          </div>
+          <div className={s.field}>
+            <label>Duration</label>
+            <select value={duration} onChange={e => setDuration(e.target.value)} disabled={creating}>
+              {COMPETITION_DURATIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+            </select>
           </div>
         </div>
-      )}
+        <div className={s.modalFooter}>
+          <button className={s.cancelBtn} onClick={() => setShowCreate(false)} disabled={creating}>Cancel</button>
+          <button className={s.submitBtn} onClick={handleCreate} disabled={!title.trim() || creating}>
+            {creating ? 'Creating...' : isAdmin ? 'Create' : 'Request'}
+          </button>
+        </div>
+      </Modal>
 
-      {rejecting && (
-        <div className={s.modalOverlay} onClick={() => { setRejecting(null); setRejectReason('') }}>
-          <div className={s.modal} onClick={e => e.stopPropagation()}>
-            <div className={s.modalHeader}>
-              <h3 className={s.modalTitle}>Reject &ldquo;{rejecting.title}&rdquo;</h3>
-              <X size={18} className={s.modalClose} onClick={() => { setRejecting(null); setRejectReason('') }} />
-            </div>
-            <div className={s.modalBody}>
-              <div className={s.field}>
-                <label>Reason (optional)</label>
-                <textarea rows={3} placeholder="Why is this being rejected?" value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
-              </div>
-            </div>
-            <div className={s.modalFooter}>
-              <button className={s.cancelBtn} onClick={() => { setRejecting(null); setRejectReason('') }}>Cancel</button>
-              <button className={s.rejectBtn} onClick={() => handleReject(rejecting.id)}>
-                <X size={12} strokeWidth={1.5} /> Reject
-              </button>
-            </div>
+      <Modal open={!!rejecting} onOpenChange={(v) => { if (!v) { setRejecting(null); setRejectReason('') } }} size="sm">
+        <div className={s.modalHeader}>
+          <h3 className={s.modalTitle}>Reject &ldquo;{rejecting?.title}&rdquo;</h3>
+          <X size={18} className={s.modalClose} onClick={() => { setRejecting(null); setRejectReason('') }} />
+        </div>
+        <div className={s.modalBody}>
+          <div className={s.field}>
+            <label>Reason (optional)</label>
+            <textarea rows={3} placeholder="Why is this being rejected?" value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
           </div>
         </div>
-      )}
+        <div className={s.modalFooter}>
+          <button className={s.cancelBtn} onClick={() => { setRejecting(null); setRejectReason('') }}>Cancel</button>
+          <button className={s.rejectBtn} onClick={() => handleReject(rejecting?.id)}>
+            <X size={12} strokeWidth={1.5} /> Reject
+          </button>
+        </div>
+      </Modal>
     </div>
   )
 }

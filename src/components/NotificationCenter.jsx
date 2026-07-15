@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bell, CheckCheck, BookOpen, Users, Award, MessageCircle, Settings, Inbox, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { apiGet, apiPost, formatDate } from '../lib/api'
 import { useNotifications } from '../context/NotificationContext'
 import { queryKeys } from '../lib/queryKeys'
+import Dropdown from './ui/Dropdown/Dropdown'
 import styles from './NotificationCenter.module.css'
 
 const CATEGORIES = [
@@ -35,8 +36,6 @@ export default function NotificationCenter({ user }) {
   const { unreadCount: ctxUnread } = useNotifications()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('all')
-  const [open, setOpen] = useState(false)
-  const ref = useRef()
   const navigate = useNavigate()
 
   const notifPath = activeTab === 'all'
@@ -46,7 +45,7 @@ export default function NotificationCenter({ user }) {
   const { data: notifData, isLoading } = useQuery({
     queryKey: queryKeys.notifications.list(activeTab, 50),
     queryFn: () => apiGet(notifPath),
-    enabled: !!user && open,
+    enabled: !!user,
     staleTime: 10_000,
   })
 
@@ -70,33 +69,23 @@ export default function NotificationCenter({ user }) {
 
   const handleAction = (notif) => {
     markReadMutation.mutate(notif.id)
-    setOpen(false)
     navigate(notif.action_url || '/dashboard')
   }
-
-  useEffect(() => {
-    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
 
   if (!user) return null
 
   return (
-    <div ref={ref} className={styles.wrapper}>
-      <button
-        onClick={() => setOpen(!open)}
-        className={styles.bellBtn}
-        aria-label="Notifications"
-      >
-        <Bell size={20} strokeWidth={1.5} />
-        {totalUnread > 0 && (
-          <span className={styles.badge}>{totalUnread > 99 ? '99+' : totalUnread}</span>
-        )}
-      </button>
-
-      {open && (
-        <div className={styles.panel}>
+    <div className={styles.wrapper}>
+      <Dropdown>
+        <Dropdown.Trigger asChild>
+          <button className={styles.bellBtn} aria-label="Notifications">
+            <Bell size={20} strokeWidth={1.5} />
+            {totalUnread > 0 && (
+              <span className={styles.badge}>{totalUnread > 99 ? '99+' : totalUnread}</span>
+            )}
+          </button>
+        </Dropdown.Trigger>
+        <Dropdown.Content className={styles.panel} sideOffset={8}>
           <div className={styles.panelHeader}>
             <span className={styles.panelTitle}>Notifications</span>
             {totalUnread > 0 && (
@@ -169,8 +158,8 @@ export default function NotificationCenter({ user }) {
               ))
             )}
           </div>
-        </div>
-      )}
+        </Dropdown.Content>
+      </Dropdown>
     </div>
   )
 }

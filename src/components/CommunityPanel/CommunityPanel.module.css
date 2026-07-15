@@ -1,34 +1,8 @@
-.backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 900;
-  animation: fadeIn 0.15s ease;
-}
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.panel {
-  position: fixed;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 380px;
-  background: var(--card-bg);
-  border-left: 1px solid var(--card-border);
-  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.25);
-  z-index: 901;
+.panelInner {
   display: flex;
   flex-direction: column;
+  height: 100%;
   overflow-y: auto;
-  animation: slideIn 0.2s ease;
-  outline: none;
-}
-@keyframes slideIn {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
 }
 
 .header {
@@ -365,18 +339,4 @@
   50% { opacity: 0.8; }
 }
 
-@media (max-width: 480px) {
-  .panel {
-    width: 100%;
-    top: auto;
-    bottom: 0;
-    max-height: 85vh;
-    border-radius: 20px 20px 0 0;
-    border-left: none;
-    animation: slideUp 0.25s ease;
-  }
-  @keyframes slideUp {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
-  }
-}
+

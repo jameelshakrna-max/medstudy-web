@@ -4,7 +4,7 @@
   background: var(--card-bg);
   border-right: 1px solid var(--card-border);
   display: flex; flex-direction: column;
-  position: fixed; left: 0; top: 0; bottom: 0; z-index: 50;
+  position: fixed; left: 0; top: 0; bottom: 0; z-index: var(--z-sidebar, 300);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   backdrop-filter: blur(20px);
 }
@@ -24,7 +24,7 @@
 .signOutBtn { width: 100%; padding: 9px 12px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 10px; color: var(--mist); font-size: 13px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 8px; justify-content: center; }
 .signOutBtn:hover { border-color: var(--red); color: var(--red); background: var(--redL); }
 .main { flex: 1; margin-left: 260px; min-height: 100vh; display: flex; flex-direction: column; }
-.mobileHeader { display: none; align-items: center; gap: 14px; padding: 12px 20px; border-bottom: 1px solid var(--card-border); background: var(--page-bg); position: sticky; top: 0; z-index: 40; backdrop-filter: blur(16px); }
+.mobileHeader { display: none; align-items: center; gap: 14px; padding: 12px 20px; border-bottom: 1px solid var(--card-border); background: var(--page-bg); position: sticky; top: 0; z-index: var(--z-header, 200); backdrop-filter: blur(16px); }
 .menuBtn { background: none; border: none; color: var(--text-secondary); font-size: 22px; cursor: pointer; padding: 4px; }
 .content { padding: 36px 40px; max-width: 1200px; flex: 1; }
 .overlay { display: none; }
@@ -34,7 +34,7 @@
   .main { margin-left: 0; }
   .mobileHeader { display: flex; }
   .content { padding: 24px 20px 80px; }
-  .overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; backdrop-filter: blur(4px); }
+  .overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: var(--z-header, 200); backdrop-filter: blur(4px); }
 }
 @media (max-width: 480px) {
   .content { padding: 20px 16px; }

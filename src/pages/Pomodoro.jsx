@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { usePomodoro, usePomodoroSettings } from '../context/PomodoroContext'
 import { Timer, Coffee, Moon, Play, Pause, Leaf, BookOpen, SkipForward, Check, RefreshCw } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import Modal from '../components/ui/Modal/Modal'
 import s from './Pomodoro.module.css'
 
 const MODES = ['study','break','long']
@@ -474,41 +475,41 @@ export default function Pomodoro() {
 
       {/* ═══ Finish Modal ═══ */}
       {showFinish && (
-        <div className={s.modalOverlay}>
-          <div className={s.modal}>
-            <div className={s.modalTitle}>Session Complete!</div>
-            <div className={s.modalSummary}>
-              <div><Timer size={14} strokeWidth={1.5} /> {sessionPomodoros} Pomodoro{sessionPomodoros > 1 ? 's' : ''}</div>
-              <div>⏱ {totalMin} minutes ({(totalMin / 60).toFixed(1)} hours)</div>
-              {topicInfo && <div><BookOpen size={14} strokeWidth={1.5} /> {topicInfo.name}</div>}
-            </div>
-            {selectedTopic && (
-              <div className={s.modalField}>
-                <label>How's this topic?</label>
-                <div className={s.statusOptions}>
-                  {['In Progress','Reviewing','Complete'].map(st => (
-                    <button key={st}
-                      className={`${s.statusOpt} ${topicStatus === st ? s.statusOptOn : ''}`}
-                      onClick={() => setTopicStatus(st)}>
-                      {st}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {saveError && (
-              <div style={{ color: 'var(--red)', fontSize: '13px', textAlign: 'center', padding: '8px', background: 'var(--redL)', borderRadius: '8px', marginTop: '8px' }}>
-                {saveError}
-              </div>
-            )}
-            <div className={s.modalActions}>
-              <button className={s.modalCancel} onClick={() => setShowFinish(false)}>Cancel</button>
-              <button className={s.modalSave} onClick={confirmFinish} disabled={saving}>
-                {saving ? 'Saving...' : 'Save Session'}
-              </button>
-            </div>
+        <Modal open={showFinish} onOpenChange={(v) => { if (!v) setShowFinish(false) }} size="sm">
+          <Modal.Title style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 16 }}>
+            Session Complete!
+          </Modal.Title>
+          <div className={s.modalSummary}>
+            <div><Timer size={14} strokeWidth={1.5} /> {sessionPomodoros} Pomodoro{sessionPomodoros > 1 ? 's' : ''}</div>
+            <div>⏱ {totalMin} minutes ({(totalMin / 60).toFixed(1)} hours)</div>
+            {topicInfo && <div><BookOpen size={14} strokeWidth={1.5} /> {topicInfo.name}</div>}
           </div>
-        </div>
+          {selectedTopic && (
+            <div className={s.modalField}>
+              <label>How's this topic?</label>
+              <div className={s.statusOptions}>
+                {['In Progress','Reviewing','Complete'].map(st => (
+                  <button key={st}
+                    className={`${s.statusOpt} ${topicStatus === st ? s.statusOptOn : ''}`}
+                    onClick={() => setTopicStatus(st)}>
+                    {st}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {saveError && (
+            <div style={{ color: 'var(--red)', fontSize: '13px', textAlign: 'center', padding: '8px', background: 'var(--redL)', borderRadius: '8px', marginTop: '8px' }}>
+              {saveError}
+            </div>
+          )}
+          <div className={s.modalActions}>
+            <button className={s.modalCancel} onClick={() => setShowFinish(false)}>Cancel</button>
+            <button className={s.modalSave} onClick={confirmFinish} disabled={saving}>
+              {saving ? 'Saving...' : 'Save Session'}
+            </button>
+          </div>
+        </Modal>
       )}
 
     </div>

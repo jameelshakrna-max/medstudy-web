@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiDelete } from '../../lib/api'
 import { queryKeys } from '../../lib/queryKeys'
 import { X, Plus, Search } from 'lucide-react'
+import Modal from '../ui/Modal/Modal'
 import styles from './ResearchSection.module.css'
 
 const PROFICIENCY_OPTIONS = ['beginner', 'intermediate', 'advanced', 'expert']
@@ -84,9 +85,8 @@ export default function SkillEditor({ userId, skills: initialSkills, onClose, on
   const isSaving = addSkillMutation.isPending || removeSkillMutation.isPending
 
   return (
-    <div className={styles.editorOverlay} onClick={onClose}>
-      <div className={styles.editorPanel} onClick={e => e.stopPropagation()}>
-        <div className={styles.editorTitle}>Edit Research Skills</div>
+    <Modal open={true} onOpenChange={(v) => { if (!v) onClose() }} size="lg">
+      <Modal.Title className={styles.editorTitle}>Edit Research Skills</Modal.Title>
 
         {currentSkills.length > 0 && (
           <div style={{ marginBottom: 12 }}>
@@ -173,7 +173,6 @@ export default function SkillEditor({ userId, skills: initialSkills, onClose, on
             {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

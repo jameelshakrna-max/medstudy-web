@@ -98,13 +98,7 @@
 .retryBtn { display: flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; border: none; background: var(--redL); color: var(--red); font-size: 11px; cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 600; }
 .retryBtn:hover { background: var(--red); color: var(--navy); }
 
-/* ── Lightbox ── */
-.lightboxOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 200; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); animation: lbFadeIn 0.2s ease; cursor: zoom-out; }
-@keyframes lbFadeIn { from { opacity: 0; } to { opacity: 1; } }
-.lightboxImage { max-width: 90vw; max-height: 90vh; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); cursor: default; object-fit: contain; }
-.lightboxClose { position: fixed; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(255,255,255,0.1); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 20px; backdrop-filter: blur(4px); transition: all 0.2s; z-index: 201; }
-.lightboxClose:hover { background: rgba(255,255,255,0.2); transform: scale(1.1); }
-.lightboxInfo { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.7); font-size: 13px; background: rgba(0,0,0,0.5); padding: 8px 16px; border-radius: 8px; backdrop-filter: blur(4px); }
+/* ── Lightbox (now uses Modal component) ── */
 
 /* ── Members ── */
 .membersSections { display: flex; flex-direction: column; gap: 24px; }
@@ -344,9 +338,7 @@
 @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .fadeIn { animation: fadeUp 0.35s ease forwards; opacity: 0; }
 
-/* ── Shared modal styles (for inline modals in comps/settings) ── */
-.modalOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); padding: 20px; }
-.modal { background: var(--page-bg); border: 1px solid var(--card-border); border-radius: 24px; width: 100%; max-width: 480px; backdrop-filter: blur(16px); overflow: hidden; }
+/* ── Shared modal content styles (for inline modals in comps/settings) ── */
 .modalHeader { display: flex; justify-content: space-between; align-items: center; padding: 24px 28px 0; }
 .modalTitle { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--text-primary); }
 .modalClose { color: var(--mist); cursor: pointer; padding: 4px; border-radius: 8px; }

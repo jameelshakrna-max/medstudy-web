@@ -1,0 +1,70 @@
+.content {
+  position: fixed;
+  outline: none;
+}
+
+/* Scale animation (default modal) */
+.contentScale {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: contentScaleIn var(--duration-normal, 200ms) var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)) forwards;
+}
+
+@keyframes contentScaleIn {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* Slide from right (drawer) */
+.contentSlideRight {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  animation: contentSlideRightIn var(--duration-slow, 300ms) var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)) forwards;
+}
+
+@keyframes contentSlideRightIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+/* Slide from left */
+.contentSlideLeft {
+  top: 0;
+  left: 0;
+  bottom: 0;
+  animation: contentSlideLeftIn var(--duration-slow, 300ms) var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)) forwards;
+}
+
+@keyframes contentSlideLeftIn {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+/* Slide from bottom (bottom sheet) */
+.contentSlideUp {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  animation: contentSlideUpIn var(--duration-slow, 300ms) var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)) forwards;
+}
+
+@keyframes contentSlideUpIn {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* Data attributes for CSS-based animations */
+.content[data-state="open"] {
+  visibility: visible;
+}
+
+.content[data-state="closed"] {
+  animation: contentFadeOut var(--duration-fast, 120ms) ease-in forwards;
+}
+
+@keyframes contentFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}

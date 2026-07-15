@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { ErrorBoundary } from 'react-error-boundary'
+import { LayerProvider } from './context/LayerContext'
 import ErrorFallback from './components/ErrorFallback'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
@@ -118,7 +119,8 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <BrowserRouter>
-          <PomodoroProvider>
+          <LayerProvider>
+            <PomodoroProvider>
             <PresenceProvider>
               <NotificationProvider>
                 <CommunityPanelProvider>
@@ -133,6 +135,7 @@ export default function App() {
               </NotificationProvider>
             </PresenceProvider>
           </PomodoroProvider>
+          </LayerProvider>
         </BrowserRouter>
       </AuthProvider>
       <ReactQueryDevtools initialIsOpen={false} />

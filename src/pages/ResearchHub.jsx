@@ -8,6 +8,7 @@ import {
   Search, Plus, ExternalLink, ArrowUp, MessageSquare, CheckCircle,
   Bookmark, BookmarkCheck, Flag, Loader2, X, Send, ChevronDown, Clock, Users, Trash2
 } from 'lucide-react'
+import Modal from '../components/ui/Modal/Modal'
 import s from './ResearchHub.module.css'
 
 const CATEGORIES = [
@@ -707,121 +708,121 @@ export default function ResearchHub() {
         )
       )}
       {showNewPostModal && (
-        <div className={s.modalOverlay} onClick={() => setShowNewPostModal(false)}>
-          <div className={s.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={s.modalTitle}>Share Research</div>
-            <form onSubmit={handleSubmitPost}>
-              <div className={s.modalField}>
-                <label className={s.modalLabel}>Title *</label>
+        <Modal open={showNewPostModal} onOpenChange={(v) => { if (!v) setShowNewPostModal(false) }} size="lg">
+          <Modal.Title style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: 'var(--text-primary)', marginBottom: 20 }}>
+            Share Research
+          </Modal.Title>
+          <form onSubmit={handleSubmitPost}>
+            <div className={s.modalField}>
+              <label className={s.modalLabel}>Title *</label>
+              <input
+                className={s.modalInput}
+                placeholder="Research title"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className={s.modalField}>
+              <label className={s.modalLabel}>URL</label>
+              <input
+                className={s.modalInput}
+                placeholder="https://..."
+                value={newUrl}
+                onChange={(e) => setNewUrl(e.target.value)}
+              />
+            </div>
+
+            <div className={s.modalField}>
+              <label className={s.modalLabel}>Description</label>
+              <textarea
+                className={`${s.modalInput} ${s.modalTextarea}`}
+                placeholder="Describe your research or what you're looking for..."
+                value={newDesc}
+                onChange={(e) => setNewDesc(e.target.value)}
+              />
+            </div>
+
+            <div className={s.modalField}>
+              <label className={s.modalLabel}>Category</label>
+              <select
+                className={`${s.modalInput} ${s.modalSelect}`}
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+              >
+                {CATEGORIES.filter((c) => c.value !== 'all').map((cat) => (
+                  <option key={cat.value} value={cat.value}>{cat.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className={s.modalField}>
+              <label className={s.modalLabel}>Tags</label>
+              <div className={s.tagsInput}>
+                {newTags.map((tag) => (
+                  <span key={tag} className={s.tagPill}>
+                    {tag}
+                    <button type="button" className={s.tagRemove} onClick={() => handleRemoveTag(tag)}>
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
                 <input
-                  className={s.modalInput}
-                  placeholder="Research title"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  required
+                  className={s.tagsField}
+                  placeholder={newTags.length === 0 ? 'Add tags...' : ''}
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={handleTagKeyDown}
+                  onBlur={() => { if (tagInput.trim()) handleAddTag(tagInput) }}
                 />
               </div>
-
-              <div className={s.modalField}>
-                <label className={s.modalLabel}>URL</label>
-                <input
-                  className={s.modalInput}
-                  placeholder="https://..."
-                  value={newUrl}
-                  onChange={(e) => setNewUrl(e.target.value)}
-                />
-              </div>
-
-              <div className={s.modalField}>
-                <label className={s.modalLabel}>Description</label>
-                <textarea
-                  className={`${s.modalInput} ${s.modalTextarea}`}
-                  placeholder="Describe your research or what you're looking for..."
-                  value={newDesc}
-                  onChange={(e) => setNewDesc(e.target.value)}
-                />
-              </div>
-
-              <div className={s.modalField}>
-                <label className={s.modalLabel}>Category</label>
-                <select
-                  className={`${s.modalInput} ${s.modalSelect}`}
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
-                >
-                  {CATEGORIES.filter((c) => c.value !== 'all').map((cat) => (
-                    <option key={cat.value} value={cat.value}>{cat.label}</option>
+              {filteredSuggestions.length > 0 && (
+                <div className={s.tagSuggestions}>
+                  {filteredSuggestions.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      className={s.tagSuggestion}
+                      onMouseDown={(e) => { e.preventDefault(); handleAddTag(tag) }}
+                    >
+                      + {tag.replace(/_/g, ' ')}
+                    </button>
                   ))}
-                </select>
-              </div>
-
-              <div className={s.modalField}>
-                <label className={s.modalLabel}>Tags</label>
-                <div className={s.tagsInput}>
-                  {newTags.map((tag) => (
-                    <span key={tag} className={s.tagPill}>
-                      {tag}
-                      <button type="button" className={s.tagRemove} onClick={() => handleRemoveTag(tag)}>
-                        <X size={10} />
-                      </button>
-                    </span>
-                  ))}
-                  <input
-                    className={s.tagsField}
-                    placeholder={newTags.length === 0 ? 'Add tags...' : ''}
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={handleTagKeyDown}
-                    onBlur={() => { if (tagInput.trim()) handleAddTag(tagInput) }}
-                  />
                 </div>
-                {filteredSuggestions.length > 0 && (
-                  <div className={s.tagSuggestions}>
-                    {filteredSuggestions.map((tag) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        className={s.tagSuggestion}
-                        onMouseDown={(e) => { e.preventDefault(); handleAddTag(tag) }}
-                      >
-                        + {tag.replace(/_/g, ' ')}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              )}
+            </div>
 
-              <div className={s.modalField}>
-                <label className={s.modalLabel}>Expiration Date (optional)</label>
-                <input
-                  type="date"
-                  className={s.modalInput}
-                  value={newExpiration}
-                  onChange={(e) => setNewExpiration(e.target.value)}
-                />
-              </div>
+            <div className={s.modalField}>
+              <label className={s.modalLabel}>Expiration Date (optional)</label>
+              <input
+                type="date"
+                className={s.modalInput}
+                value={newExpiration}
+                onChange={(e) => setNewExpiration(e.target.value)}
+              />
+            </div>
 
-              <div className={s.modalActions}>
-                <button type="button" className={s.cancelBtn} onClick={() => setShowNewPostModal(false)}>
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className={s.submitBtn}
-                  disabled={createMutation.isPending || !newTitle.trim()}
-                >
-                  {createMutation.isPending ? <Loader2 className={s.spin} size={14} /> : 'Share Research'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div className={s.modalActions}>
+              <button type="button" className={s.cancelBtn} onClick={() => setShowNewPostModal(false)}>
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className={s.submitBtn}
+                disabled={createMutation.isPending || !newTitle.trim()}
+              >
+                {createMutation.isPending ? <Loader2 className={s.spin} size={14} /> : 'Share Research'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {/* Post Detail */}
       {selectedPost && (
-        <div className={s.modalOverlay} onClick={() => { setSelectedPost(null); setCommentInput(''); setShowHelpDropdown(null) }}>
-          <div className={s.detailPanel} onClick={(e) => e.stopPropagation()}>
+        <Modal open={!!selectedPost} onOpenChange={(v) => { if (!v) { setSelectedPost(null); setCommentInput(''); setShowHelpDropdown(null) } }} size="lg">
+          <div className={s.detailPanel}>
             {detailLoading ? (
               <div className={s.loading}><Loader2 className={s.spin} size={20} /> Loading...</div>
             ) : postDetail ? (
@@ -996,7 +997,7 @@ export default function ResearchHub() {
               </>
             ) : null}
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

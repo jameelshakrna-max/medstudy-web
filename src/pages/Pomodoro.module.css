@@ -164,8 +164,6 @@
 .finishBtn:hover { opacity: 0.9; }
 .finishBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.modalOverlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
-.modal { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 1.5rem; max-width: 400px; width: 100%; color: var(--text-primary); }
 .modalTitle { font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; text-align: center; color: var(--text-primary); }
 .modalSummary { display: flex; flex-direction: column; gap: 0.3rem; background: var(--input-bg); border-radius: 8px; padding: 0.8rem; margin-bottom: 1rem; font-size: 0.85rem; color: var(--text-secondary); text-align: center; }
 .modalField { margin-bottom: 1rem; }
@@ -214,7 +212,6 @@
   height: 55%;
   background: linear-gradient(135deg, rgba(255,255,255,0.14) 0%, transparent 55%);
   pointer-events: none;
-  z-index: 0;
   transform: rotate(-3deg);
 }
 [data-theme="light"] .stars { display: block; opacity: 0.22; }

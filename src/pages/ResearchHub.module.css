@@ -355,28 +355,7 @@
   color: var(--mist);
 }
 
-/* ── Modal / Overlay ── */
-.modalOverlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(4px);
-}
-.modal {
-  background: var(--navy2);
-  border: 1px solid var(--card-border);
-  border-radius: 20px;
-  padding: 28px;
-  width: 90%;
-  max-width: 560px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-lg);
-}
+/* ── Modal ── */
 .modalTitle {
   font-family: 'DM Serif Display', serif;
   font-size: 20px;
@@ -822,7 +801,6 @@
   .filterBar { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
   .searchWrap { width: 140px; }
   .categories { flex: unset; }
-  .modal { width: 95%; padding: 20px; border-radius: 16px; }
   .detailPanel { width: 95%; padding: 20px; border-radius: 16px; }
   .postFooter { gap: 12px; }
 }

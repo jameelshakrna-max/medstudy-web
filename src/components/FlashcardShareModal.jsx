@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { queryKeys } from '../lib/queryKeys'
 import { X, Loader2, Search, BrainCircuit, ChevronLeft, ChevronRight } from 'lucide-react'
+import Modal from './ui/Modal/Modal'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -26,17 +27,6 @@ async function apiGet(path) {
 }
 
 const styles = {
-  overlay: {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 110,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    backdropFilter: 'blur(4px)', padding: 20,
-  },
-  modal: {
-    background: 'var(--page-bg)', border: '1px solid var(--card-border)',
-    borderRadius: 24, width: '100%', maxWidth: 520,
-    maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-    backdropFilter: 'blur(16px)', overflow: 'hidden',
-  },
   header: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     padding: '24px 28px 0',
@@ -135,16 +125,19 @@ export default function FlashcardShareModal({ communityId, onShare, onClose }) {
   }
 
   return (
-    <div style={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={styles.modal}>
-        <div style={styles.header}>
-          <h2 style={styles.title}>Share Flashcard</h2>
-          <div style={styles.close} onClick={onClose}>
+    <Modal open={true} onOpenChange={(v) => { if (!v) onClose() }} size="md">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <Modal.Title style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: 'var(--text-primary)', margin: 0 }}>
+          Share Flashcard
+        </Modal.Title>
+        <Modal.Close asChild>
+          <div style={{ color: 'var(--mist)', cursor: 'pointer', padding: 4, borderRadius: 8 }}>
             <X size={18} />
           </div>
-        </div>
+        </Modal.Close>
+      </div>
 
-        <div style={styles.body}>
+      <div style={styles.body}>
           {selectedDeck ? (
             <>
               <div style={styles.navRow}>
@@ -222,7 +215,6 @@ export default function FlashcardShareModal({ communityId, onShare, onClose }) {
             Share to Chat
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

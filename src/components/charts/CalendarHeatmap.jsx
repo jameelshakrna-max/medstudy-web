@@ -115,7 +115,7 @@ export default function CalendarHeatmap({ data = [] }) {
         .hmLegend { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 10px; color: var(--mist); justify-content: flex-end; }
         .hmLegendSwatch { width: 12px; height: 12px; border-radius: 3px; }
         .hmTooltip {
-          position: fixed; pointer-events: none; z-index: 1000;
+          position: fixed; pointer-events: none; z-index: var(--z-tooltip, 1200);
           background: var(--card-bg); border: 1px solid var(--card-border);
           border-radius: 10px; padding: 10px 14px; font-size: 13px;
           box-shadow: 0 8px 32px rgba(0,0,0,0.4);

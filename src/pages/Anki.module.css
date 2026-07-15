@@ -858,7 +858,7 @@
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 9999;
+  z-index: var(--z-toast, 1600);
   padding: 10px 20px;
   border-radius: 10px;
   font-size: 13px;

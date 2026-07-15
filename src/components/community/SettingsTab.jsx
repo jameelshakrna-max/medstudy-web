@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import RoleBadge from '../RoleBadge'
 import { X, Plus, Loader2, Check, Copy, FileText, Settings, Link, ScrollText, SlidersHorizontal, Trophy, UserPlus, Ban, Clock, AlertTriangle, Users, UserCog, UserMinus, Star, Search, Camera } from 'lucide-react'
 import s from '../../pages/CommunityDetail.module.css'
+import Modal from '../ui/Modal/Modal'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -837,35 +838,30 @@ export default function SettingsTab({ community, rules, settings, members, annou
         </div>
       )}
 
-      {/* ── Delete Confirmation Modal ── */}
-      {showDeleteConfirm && (
-        <div className={s.modalOverlay} onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); setDeleteError('') }}>
-          <div className={s.modal} onClick={e => e.stopPropagation()}>
-            <div className={s.modalHeader}>
-              <h3 className={s.modalTitle}>Delete Community</h3>
-              {!deleting && <X size={18} className={s.modalClose} onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); setDeleteError('') }} />}
-            </div>
-            <div className={s.modalBody}>
-              {deleteError && <div className={s.createError}>{deleteError}</div>}
-              <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 12 }}>
-                This will permanently delete <strong>{community.name}</strong> and all messages, members, and data. Type <strong>{community.name}</strong> to confirm.
-              </p>
-              <input
-                className={s.fieldInput}
-                value={deleteConfirmText}
-                onChange={e => setDeleteConfirmText(e.target.value)}
-                placeholder={community.name}
-              />
-            </div>
-            <div className={s.modalFooter}>
-              <button className={s.cancelBtn} onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); setDeleteError('') }} disabled={deleting}>Cancel</button>
-              <button className={s.deleteBtn} onClick={handleDeleteCommunity} disabled={deleteConfirmText !== community.name || deleting}>
-                {deleting ? 'Deleting...' : 'Delete Community'}
-              </button>
-            </div>
-          </div>
+      <Modal open={showDeleteConfirm} onOpenChange={(v) => { if (!v && !deleting) { setShowDeleteConfirm(false); setDeleteConfirmText(''); setDeleteError('') } }} size="sm">
+        <div className={s.modalHeader}>
+          <h3 className={s.modalTitle}>Delete Community</h3>
+          {!deleting && <X size={18} className={s.modalClose} onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); setDeleteError('') }} />}
         </div>
-      )}
+        <div className={s.modalBody}>
+          {deleteError && <div className={s.createError}>{deleteError}</div>}
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 12 }}>
+            This will permanently delete <strong>{community.name}</strong> and all messages, members, and data. Type <strong>{community.name}</strong> to confirm.
+          </p>
+          <input
+            className={s.fieldInput}
+            value={deleteConfirmText}
+            onChange={e => setDeleteConfirmText(e.target.value)}
+            placeholder={community.name}
+          />
+        </div>
+        <div className={s.modalFooter}>
+          <button className={s.cancelBtn} onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); setDeleteError('') }} disabled={deleting}>Cancel</button>
+          <button className={s.deleteBtn} onClick={handleDeleteCommunity} disabled={deleteConfirmText !== community.name || deleting}>
+            {deleting ? 'Deleting...' : 'Delete Community'}
+          </button>
+        </div>
+      </Modal>
     </div>
   )
 }

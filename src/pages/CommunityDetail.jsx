@@ -25,6 +25,7 @@ import {
   Crown, Flag, Clock, Hash, Link as LinkIcon, Check, AlertTriangle,
   Copy, Ban, Pin, FileText, BookOpen, UserPlus, Search, Trash2, Megaphone, Headphones, BarChart3
 } from 'lucide-react'
+import Modal from '../components/ui/Modal/Modal'
 import s from './CommunityDetail.module.css'
 import FlashcardShareModal from '../components/FlashcardShareModal'
 import MentionText from '../components/MentionText'
@@ -666,18 +667,18 @@ function FlashcardMessage({ msg, onAddToDeck }) {
 }
 
 function Lightbox({ src, fileName, accessToken, onClose }) {
-  useEffect(() => {
-    const handleKey = (e) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
-  }, [onClose])
-
   return (
-    <div className={s.lightboxOverlay} onClick={onClose}>
-      <button className={s.lightboxClose} onClick={onClose} aria-label="Close">&times;</button>
-      <img src={src} alt={fileName} className={s.lightboxImage} onClick={e => e.stopPropagation()} />
-      {fileName && <div className={s.lightboxInfo}>{fileName}</div>}
-    </div>
+    <Modal open={true} onOpenChange={(v) => { if (!v) onClose() }} size="xl">
+      <button
+        onClick={onClose}
+        aria-label="Close"
+        style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'white', fontSize: 24, cursor: 'pointer', zIndex: 1 }}
+      >
+        &times;
+      </button>
+      <img src={src} alt={fileName} style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 8, display: 'block', margin: '0 auto' }} onClick={e => e.stopPropagation()} />
+      {fileName && <div style={{ textAlign: 'center', marginTop: 12, color: 'var(--mist)', fontSize: 13 }}>{fileName}</div>}
+    </Modal>
   )
 }
 

@@ -1,4 +1,3 @@
-import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate, Link } from 'react-router-dom'
 import { ChevronDown, LogOut, Settings, User, LayoutDashboard, MessageCircle } from 'lucide-react'
@@ -8,13 +7,12 @@ import { queryKeys } from '../lib/queryKeys'
 import NotificationCenter from './NotificationCenter'
 import StatusIndicator from './StatusIndicator'
 import { usePresence } from '../context/PresenceContext'
+import Dropdown from './ui/Dropdown/Dropdown'
 import styles from './TopBar.module.css'
 
 export default function TopBar() {
   const { user, profile, userProfile, signOut } = useAuth()
   const navigate = useNavigate()
-  const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef()
   const { myStatus } = usePresence() || {}
 
   const { data: dmUnread = 0 } = useQuery({
@@ -24,12 +22,6 @@ export default function TopBar() {
     enabled: !!user,
     staleTime: 15_000,
   })
-
-  useEffect(() => {
-    const handler = e => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false) }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
 
   const avatarUrl = userProfile?.avatar_url
   const initials = (userProfile?.display_name || profile?.full_name || profile?.email || 'S')
@@ -50,45 +42,47 @@ export default function TopBar() {
           <MessageCircle size={20} />
           {dmUnread > 0 && <span style={{ position: 'absolute', top: -4, right: -4, background: '#ef4444', color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600 }}>{dmUnread}</span>}
         </Link>
-        <div className={styles.userMenu} ref={menuRef}>
-          <button className={styles.userBtn} onClick={() => setMenuOpen(!menuOpen)}>
-            <div style={{ position: 'relative' }}>
-              {avatarUrl ? (
-                <img
-                  className={styles.userAvatar}
-                  src={avatarUrl}
-                  alt=""
-                  onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex' }}
-                />
-              ) : null}
-              <div
-                className={styles.userAvatar}
-                style={{ display: avatarUrl ? 'none' : 'flex' }}
-              >
-                {initials}
-              </div>
-              <StatusIndicator status={myStatus || 'online'} />
-            </div>
-            <span className={styles.userName}>{displayName}</span>
-            <ChevronDown size={14} className={`${styles.chevron} ${menuOpen ? styles.chevronOpen : ''}`} />
-          </button>
-          {menuOpen && (
-            <div className={styles.dropdown}>
-              <button className={styles.dropdownItem} onClick={() => { setMenuOpen(false); navigate(userProfile?.username ? `/u/${userProfile.username}` : `/profile/${user?.id}`) }}>
+        <div className={styles.userMenu}>
+          <Dropdown>
+            <Dropdown.Trigger asChild>
+              <button className={styles.userBtn}>
+                <div style={{ position: 'relative' }}>
+                  {avatarUrl ? (
+                    <img
+                      className={styles.userAvatar}
+                      src={avatarUrl}
+                      alt=""
+                      onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex' }}
+                    />
+                  ) : null}
+                  <div
+                    className={styles.userAvatar}
+                    style={{ display: avatarUrl ? 'none' : 'flex' }}
+                  >
+                    {initials}
+                  </div>
+                  <StatusIndicator status={myStatus || 'online'} />
+                </div>
+                <span className={styles.userName}>{displayName}</span>
+                <ChevronDown size={14} className={styles.chevron} />
+              </button>
+            </Dropdown.Trigger>
+            <Dropdown.Content>
+              <Dropdown.Item onSelect={() => navigate(userProfile?.username ? `/u/${userProfile.username}` : `/profile/${user?.id}`)}>
                 <User size={15} /> Profile
-              </button>
-              <button className={styles.dropdownItem} onClick={() => { setMenuOpen(false); navigate('/dashboard') }}>
+              </Dropdown.Item>
+              <Dropdown.Item onSelect={() => navigate('/dashboard')}>
                 <LayoutDashboard size={15} /> Dashboard
-              </button>
-              <button className={styles.dropdownItem} onClick={() => { setMenuOpen(false); navigate('/settings') }}>
+              </Dropdown.Item>
+              <Dropdown.Item onSelect={() => navigate('/settings')}>
                 <Settings size={15} /> Settings
-              </button>
-              <div className={styles.dropdownDivider} />
-              <button className={`${styles.dropdownItem} ${styles.dropdownDanger}`} onClick={async () => { await signOut(); navigate('/') }}>
+              </Dropdown.Item>
+              <Dropdown.Separator />
+              <Dropdown.Item className={styles.dropdownDanger} onSelect={async () => { await signOut(); navigate('/') }}>
                 <LogOut size={15} /> Sign Out
-              </button>
-            </div>
-          )}
+              </Dropdown.Item>
+            </Dropdown.Content>
+          </Dropdown>
         </div>
       </div>
     </div>

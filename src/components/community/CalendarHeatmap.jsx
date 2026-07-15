@@ -321,7 +321,7 @@ export default function CalendarHeatmap({ communityId }) {
             fontSize: '12px',
             color: 'var(--text-primary)',
             pointerEvents: 'none',
-            zIndex: 9999,
+            zIndex: 1200,
             whiteSpace: 'nowrap',
             boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
           }}

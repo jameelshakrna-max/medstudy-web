@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiPut } from '../../lib/api'
 import { queryKeys } from '../../lib/queryKeys'
+import Modal from '../ui/Modal/Modal'
 import styles from './ResearchSection.module.css'
 
 const INITIAL_FORM = {
@@ -51,9 +52,8 @@ export default function ResearchProfileEditor({ userId, profile, onClose, onSave
   const isSaving = updateMutation.isPending
 
   return (
-    <div className={styles.editorOverlay} onClick={onClose}>
-      <div className={styles.editorPanel} onClick={e => e.stopPropagation()}>
-        <div className={styles.editorTitle}>Edit Research Profile</div>
+    <Modal open={true} onOpenChange={(v) => { if (!v) onClose() }} size="lg">
+      <Modal.Title className={styles.editorTitle}>Edit Research Profile</Modal.Title>
 
         <div className={styles.editorField}>
           <label className={styles.editorLabel}>Bio</label>
@@ -121,7 +121,6 @@ export default function ResearchProfileEditor({ userId, profile, onClose, onSave
             {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

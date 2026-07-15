@@ -1,0 +1,47 @@
+:root {
+  /* Z-Index layers */
+  --z-base: 0;
+  --z-sticky: 100;
+  --z-header: 200;
+  --z-sidebar: 300;
+  --z-dropdown: 1000;
+  --z-popover: 1100;
+  --z-tooltip: 1200;
+  --z-drawer: 1300;
+  --z-panel: 1400;
+  --z-modal: 1500;
+  --z-toast: 1600;
+  --z-loading: 1700;
+  --z-float: 1800;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Shadows (supplement existing --shadow-sm/md/lg) */
+  --shadow-overlay: 0 8px 32px rgba(0,0,0,0.4);
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* Animation durations */
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+
+  /* Easing */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Overlay */
+  --overlay-bg: rgba(0, 0, 0, 0.5);
+}

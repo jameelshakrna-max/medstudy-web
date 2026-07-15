@@ -1,34 +1,25 @@
 import { useEffect, useState } from 'react'
-import { PartyPopper, X } from 'lucide-react'
-import styles from './GoalCelebration.module.css'
+import Toast from './ui/Toast/Toast'
 
 export default function GoalCelebration({ goal, onDismiss }) {
-  const [visible, setVisible] = useState(false)
+  const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    requestAnimationFrame(() => setVisible(true))
-    const timer = setTimeout(() => {
-      setVisible(false)
-      setTimeout(onDismiss, 400)
-    }, 4000)
-    return () => clearTimeout(timer)
-  }, [goal, onDismiss])
+    requestAnimationFrame(() => setOpen(true))
+  }, [])
+
+  const handleOpenChange = (nextOpen) => {
+    setOpen(nextOpen)
+    if (!nextOpen) onDismiss()
+  }
 
   return (
-    <div className={`${styles.toast} ${visible ? styles.visible : styles.hidden}`}>
-      <div className={styles.inner}>
-        <div className={styles.iconWrap}>
-          <PartyPopper size={20} color="#0B1120" />
-        </div>
-        <div className={styles.body}>
-          <div className={styles.heading}>Goal Complete!</div>
-          <div className={styles.title}>{goal.title}</div>
-          <div className={styles.meta}>{goal.pct}% achieved</div>
-        </div>
-        <button onClick={onDismiss} className={styles.dismissBtn}>
-          <X size={16} />
-        </button>
-      </div>
-    </div>
+    <>
+      <Toast open={open} onOpenChange={handleOpenChange} variant="success" duration={4000}>
+        <Toast.Title>Goal Complete!</Toast.Title>
+        <Toast.Description>{goal.title} — {goal.pct}% achieved</Toast.Description>
+      </Toast>
+      <Toast.Viewport />
+    </>
   )
 }

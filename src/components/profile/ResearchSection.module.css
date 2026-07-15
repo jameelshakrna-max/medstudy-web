@@ -67,8 +67,6 @@
 .emptyState p { font-size: 13px; color: var(--mist); margin-bottom: 12px; }
 .emptyActions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 
-.editorOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.editorPanel { background: var(--surface); border-radius: 12px; padding: 24px; width: 90%; max-width: 480px; max-height: 85vh; overflow-y: auto; }
 .editorTitle { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
 .editorField { margin-bottom: 14px; }
 .editorLabel { display: block; font-size: 12px; font-weight: 600; color: var(--mist); margin-bottom: 4px; }

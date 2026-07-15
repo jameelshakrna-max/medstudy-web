@@ -1,0 +1,31 @@
+/* Overlay fade */
+@keyframes overlayFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes overlayFadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+/* Content scale */
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes scaleOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.96); } }
+
+/* Slide from right (drawers) */
+@keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes slideOutRight { from { transform: translateX(0); } to { transform: translateX(100%); } }
+
+/* Slide from left */
+@keyframes slideInLeft { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@keyframes slideOutLeft { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+
+/* Slide from bottom (bottom sheets, toasts) */
+@keyframes slideInUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes slideOutDown { from { transform: translateY(0); } to { transform: translateY(100%); } }
+
+/* Utility animation classes */
+.anim-overlay-enter { animation: overlayFadeIn var(--duration-normal) var(--ease-out) forwards; }
+.anim-overlay-exit { animation: overlayFadeOut var(--duration-fast) ease-in forwards; }
+.anim-content-enter { animation: scaleIn var(--duration-normal) var(--ease-out) forwards; }
+.anim-content-exit { animation: scaleOut var(--duration-fast) ease-in forwards; }
+.anim-drawer-enter { animation: slideInRight var(--duration-slow) var(--ease-out) forwards; }
+.anim-drawer-exit { animation: slideOutRight var(--duration-normal) ease-in forwards; }
+.anim-drawer-left-enter { animation: slideInLeft var(--duration-slow) var(--ease-out) forwards; }
+.anim-drawer-left-exit { animation: slideOutLeft var(--duration-normal) ease-in forwards; }
+.anim-toast-enter { animation: slideInUp var(--duration-slow) var(--ease-out) forwards; }
+.anim-toast-exit { animation: slideOutDown var(--duration-normal) ease-in forwards; }

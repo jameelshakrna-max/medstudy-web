@@ -1,19 +1,19 @@
 import { X, ExternalLink } from 'lucide-react'
 import { PARTNERS, RESOURCES } from '../data/partners'
+import Modal from './ui/Modal/Modal'
 import s from './ResourcesModal.module.css'
 
 export default function ResourcesModal({ open, onClose }) {
-  if (!open) return null
-
   return (
-    <div className={s.overlay} onClick={onClose}>
-      <div className={s.modal} onClick={e => e.stopPropagation()}>
-        <div className={s.header}>
-          <h2 className={s.title}>Study Resources</h2>
-          <X size={18} className={s.close} onClick={onClose} />
-        </div>
+    <Modal open={open} onOpenChange={(v) => { if (!v) onClose() }} size="lg">
+      <div className={s.header}>
+        <Modal.Title className={s.title}>Study Resources</Modal.Title>
+        <Modal.Close asChild>
+          <X size={18} className={s.close} />
+        </Modal.Close>
+      </div>
 
-        <div className={s.body}>
+      <div className={s.body}>
           {/* Success Partners */}
           <div className={s.section}>
             <h3 className={s.sectionTitle}>Success Partners</h3>
@@ -50,7 +50,6 @@ export default function ResourcesModal({ open, onClose }) {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

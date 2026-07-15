@@ -9,6 +9,7 @@ import {
   Upload, Search, ArrowUpDown, X, FileText, Image,
   Download, Eye, Plus, Loader2, FolderOpen
 } from 'lucide-react'
+import Modal from '../components/ui/Modal/Modal'
 import s from './Resources.module.css'
 
 const API = import.meta.env.VITE_API_URL || '/api'
@@ -347,8 +348,7 @@ export default function Resources() {
       )}
 
       {uploadOpen && (
-        <div className={s.modalOverlay} onClick={() => !uploading && setUploadOpen(false)}>
-          <div className={s.modal} onClick={e => e.stopPropagation()}>
+        <Modal open={uploadOpen} onOpenChange={(v) => { if (!v && !uploading) { setUploadOpen(false); resetForm() } }} size="lg">
             <div className={s.modalHeader}>
               <h2 className={s.modalTitle}>Upload Resource</h2>
               {!uploading && <X size={18} className={s.modalClose} onClick={() => { setUploadOpen(false); resetForm() }} />}
@@ -491,8 +491,7 @@ export default function Resources() {
                 {uploading ? 'Uploading...' : 'Upload'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

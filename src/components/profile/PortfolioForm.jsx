@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiPost, apiPut } from '../../lib/api'
 import { queryKeys } from '../../lib/queryKeys'
+import Modal from '../ui/Modal/Modal'
 import styles from './ResearchSection.module.css'
 
 const RESEARCH_TYPES = ['Original Study', 'Review', 'Meta-Analysis', 'Case Report', 'Letter', 'Editorial', 'Other']
@@ -77,9 +78,10 @@ export default function PortfolioForm({ userId, entry, onClose, onSaved }) {
   const isDisabled = !form.title.trim() || isSaving
 
   return (
-    <div className={styles.editorOverlay} onClick={onClose}>
-      <div className={styles.editorPanel} onClick={e => e.stopPropagation()}>
-        <div className={styles.editorTitle}>{isEditing ? 'Edit Project' : 'Add Project'}</div>
+    <Modal open={true} onOpenChange={(v) => { if (!v) onClose() }} size="lg">
+      <Modal.Title className={styles.editorTitle}>
+        {isEditing ? 'Edit Project' : 'Add Project'}
+      </Modal.Title>
 
         <div className={styles.editorField}>
           <label className={styles.editorLabel}>Title *</label>
@@ -161,7 +163,6 @@ export default function PortfolioForm({ userId, entry, onClose, onSaved }) {
             {isSaving ? 'Saving...' : isEditing ? 'Update' : 'Add'}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

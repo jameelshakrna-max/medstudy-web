@@ -132,7 +132,7 @@ export default function UserCard({ userId, children, placement = 'bottom' }) {
         boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
         padding: 16,
         width: 280,
-        zIndex: 1000,
+        zIndex: 1100,
         color: 'var(--text-primary)',
         fontFamily: 'inherit',
       }}

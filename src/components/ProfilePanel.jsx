@@ -1,14 +1,15 @@
-import { useEffect, useCallback, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { UserPlus, UserMinus, MessageCircle, Link, Users, ArrowRight, Crown, Shield } from 'lucide-react'
+import { UserPlus, UserMinus, MessageCircle, Link, ArrowRight, Crown, Shield } from 'lucide-react'
 import { useSwipeable } from 'react-swipeable'
 import { useProfilePanel } from '../context/ProfilePanelContext'
 import { useAuth } from '../context/AuthContext'
 import { apiGet, apiPost, apiDelete, imageUrl } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import { ProfilePanelSkeleton } from './profile/Skeleton'
+import Drawer from './ui/Drawer/Drawer'
 import s from './ProfilePanel.module.css'
 
 
@@ -17,8 +18,6 @@ export default function ProfilePanel() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const panelRef = useRef(null)
-  const previousFocusRef = useRef(null)
 
   const { open, userId } = panelState
   const [swipeOffset, setSwipeOffset] = useState(0)
@@ -109,29 +108,6 @@ export default function ProfilePanel() {
     },
   })
 
-  useEffect(() => {
-    if (open) {
-      previousFocusRef.current = document.activeElement
-      const timer = setTimeout(() => panelRef.current?.focus(), 50)
-      return () => clearTimeout(timer)
-    } else if (previousFocusRef.current) {
-      previousFocusRef.current.focus()
-    }
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    const handler = (e) => {
-      if (e.key === 'Escape') closeProfile()
-    }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [open, closeProfile])
-
-  const handleBackdropClick = useCallback((e) => {
-    if (e.target === e.currentTarget) closeProfile()
-  }, [closeProfile])
-
   const handleStartDM = async () => {
     if (!userId) return
     try {
@@ -187,19 +163,13 @@ export default function ProfilePanel() {
     setInviting(false)
   }
 
-  if (!open) return null
-
   const displayName = profile?.display_name || profile?.user_name || 'Student'
   const initials = displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
 
   return (
-    <div className={s.backdrop} onClick={handleBackdropClick}>
+    <Drawer open={open} onOpenChange={(v) => { if (!v) closeProfile() }} side="right" width={360}>
       <div
-        ref={panelRef}
-        className={s.panel}
-        tabIndex={-1}
-        role="dialog"
-        aria-label="User profile"
+        className={s.panelInner}
         {...swipeHandlers}
         style={swipeOffset > 0 ? { transform: `translateY(${swipeOffset}px)`, transition: 'none', opacity: Math.max(0.3, 1 - swipeOffset / 400) } : undefined}
       >
@@ -357,6 +327,6 @@ export default function ProfilePanel() {
           </>
         )}
       </div>
-    </div>
+    </Drawer>
   )
 }

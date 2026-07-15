@@ -101,8 +101,6 @@
   border: none; border-radius: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 14px;
 }
 
-.modalOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); padding: 20px; }
-.modal { background: var(--page-bg); border: 1px solid var(--card-border); border-radius: 24px; width: 100%; max-width: 520px; backdrop-filter: blur(16px); overflow: hidden; }
 .modalHeader { display: flex; justify-content: space-between; align-items: center; padding: 24px 28px 0; }
 .modalTitle { font-family: 'DM Serif Display', serif; font-size: 22px; color: var(--text-primary); }
 .modalClose { color: var(--mist); cursor: pointer; padding: 4px; border-radius: 8px; transition: all 0.2s; }
