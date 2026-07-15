@@ -82,7 +82,7 @@ function truncateUrl(url) {
 }
 
 export default function ResearchHub() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const queryClient = useQueryClient()
   const { openProfile } = useProfilePanel()
 
@@ -131,58 +131,182 @@ export default function ResearchHub() {
 
   const posts = data?.posts || []
 
+  const listKey = queryKeys.research.list(activeCategory, searchQuery, sortBy, 'all', null, 1)
+
+  function patchPostInList(old, postId, patcher) {
+    if (!old?.posts) return old
+    return { ...old, posts: old.posts.map(p => p.id === postId ? { ...p, ...patcher(p) } : p) }
+  }
+
+  function patchDetail(old, postId, patcher) {
+    if (!old || old.id !== postId) return old
+    return { ...old, ...patcher(old) }
+  }
+
   const createMutation = useMutation({
     mutationFn: (body) => apiPost('/research', body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
+    onMutate: async (body) => {
+      await queryClient.cancelQueries({ queryKey: listKey })
+      const previous = queryClient.getQueryData(listKey)
+      const optimisticPost = {
+        id: '__optimistic_' + Date.now(),
+        user_id: user?.id,
+        title: body.title,
+        description: body.description,
+        url: body.url,
+        category: body.category,
+        tags: body.tags,
+        upvotes_count: 0, comments_count: 0, helped_count: 0,
+        user_vote: 0, is_bookmarked: false,
+        created_at: new Date().toISOString(),
+        username: profile?.username || profile?.user_name || 'You',
+        avatar_url: profile?.avatar_url || null,
+      }
+      queryClient.setQueryData(listKey, (old) => old ? { ...old, posts: [optimisticPost, ...old.posts] } : old)
+      return { previous }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(listKey, ctx.previous)
+    },
+    onSuccess: (data, body) => {
+      queryClient.setQueryData(listKey, (old) => {
+        if (!old?.posts) return old
+        const optimistic = old.posts.find(p => String(p.id).startsWith('__optimistic_'))
+        if (optimistic && data?.post) {
+          return { ...old, posts: old.posts.map(p => p.id === optimistic.id ? { ...data.post, tags: body?.tags || [] } : p) }
+        }
+        return old
+      })
       setShowNewPostModal(false)
       resetNewPostForm()
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
     },
   })
 
   const voteMutation = useMutation({
     mutationFn: ({ postId, vote }) => apiPost(`/research/${postId}/vote`, { vote }),
-    onSuccess: () => {
+    onMutate: async ({ postId, vote }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.research.all })
+      const prevList = queryClient.getQueryData(listKey)
+      const prevDetail = selectedPost === postId ? queryClient.getQueryData(queryKeys.research.detail(postId)) : null
+      queryClient.setQueryData(listKey, (old) => patchPostInList(old, postId, (p) => {
+        const wasVoted = p.user_vote === 1
+        const newVote = wasVoted ? 0 : 1
+        const delta = wasVoted ? -1 : 1
+        return { user_vote: newVote, upvotes_count: (p.upvotes_count || 0) + delta }
+      }))
+      if (prevDetail) {
+        queryClient.setQueryData(queryKeys.research.detail(postId), (old) => patchDetail(old, postId, (p) => {
+          const wasVoted = p.user_vote === 1
+          const newVote = wasVoted ? 0 : 1
+          const delta = wasVoted ? -1 : 1
+          return { user_vote: newVote, upvotes_count: (p.upvotes_count || 0) + delta }
+        }))
+      }
+      return { prevList, prevDetail }
+    },
+    onError: (_err, { postId }, ctx) => {
+      if (ctx?.prevList) queryClient.setQueryData(listKey, ctx.prevList)
+      if (ctx?.prevDetail) queryClient.setQueryData(queryKeys.research.detail(postId), ctx.prevDetail)
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
     },
   })
 
   const bookmarkMutation = useMutation({
     mutationFn: (postId) => apiPost(`/research/${postId}/bookmark`, {}),
-    onSuccess: () => {
+    onMutate: async (postId) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.research.all })
+      const prevList = queryClient.getQueryData(listKey)
+      queryClient.setQueryData(listKey, (old) => patchPostInList(old, postId, (p) => ({
+        is_bookmarked: !p.is_bookmarked,
+      })))
+      return { prevList }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prevList) queryClient.setQueryData(listKey, ctx.prevList)
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
     },
   })
 
   const deletePostMutation = useMutation({
     mutationFn: (postId) => apiDelete(`/research/${postId}`),
-    onSuccess: (_, deletedPostId) => {
-      queryClient.setQueryData(
-        queryKeys.research.list(activeCategory, searchQuery, sortBy, 'all', null, 1),
-        (old) => old ? { ...old, posts: old.posts.filter(p => p.id !== deletedPostId) } : old
-      )
-      queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
+    onMutate: async (postId) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.research.all })
+      const prevList = queryClient.getQueryData(listKey)
+      queryClient.setQueryData(listKey, (old) => old ? { ...old, posts: old.posts.filter(p => p.id !== postId) } : old)
+      return { prevList }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prevList) queryClient.setQueryData(listKey, ctx.prevList)
+    },
+    onSuccess: () => {
       setSelectedPost(null)
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
     },
   })
 
   const commentMutation = useMutation({
     mutationFn: ({ postId, content }) => apiPost(`/research/${postId}/comments`, { content }),
-    onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.research.detail(vars.postId) })
-      queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
+    onMutate: async ({ postId, content }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.research.detail(postId) })
+      const previous = queryClient.getQueryData(queryKeys.research.detail(postId))
+      const optimisticComment = {
+        id: '__optimistic_c_' + Date.now(),
+        post_id: postId,
+        user_id: user?.id,
+        content,
+        created_at: new Date().toISOString(),
+        username: profile?.username || profile?.user_name || 'You',
+        avatar_url: profile?.avatar_url || null,
+      }
+      queryClient.setQueryData(queryKeys.research.detail(postId), (old) => {
+        if (!old) return old
+        return { ...old, comments: [...(old.comments || []), optimisticComment], comments_count: (old.comments_count || 0) + 1 }
+      })
+      return { previous, postId }
+    },
+    onError: (_err, { postId }, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(queryKeys.research.detail(postId), ctx.previous)
+    },
+    onSuccess: () => {
       setCommentInput('')
+    },
+    onSettled: (_data, _err, { postId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.research.detail(postId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
     },
   })
 
   const markHelpedMutation = useMutation({
     mutationFn: ({ postId, helpType, note }) => apiPost(`/research/${postId}/help`, { help_type: helpType, note }),
-    onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.research.detail(vars.postId) })
-      queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
+    onMutate: async ({ postId }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.research.detail(postId) })
+      const previous = queryClient.getQueryData(queryKeys.research.detail(postId))
+      queryClient.setQueryData(queryKeys.research.detail(postId), (old) => {
+        if (!old) return old
+        return { ...old, helped_count: (old.helped_count || 0) + 1 }
+      })
+      return { previous, postId }
+    },
+    onError: (_err, { postId }, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(queryKeys.research.detail(postId), ctx.previous)
+    },
+    onSuccess: () => {
       setShowHelpDropdown(null)
       setHelpType('')
       setHelpNote('')
+    },
+    onSettled: (_data, _err, { postId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.research.detail(postId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
     },
   })
 
@@ -794,7 +918,7 @@ export default function ResearchHub() {
                     <Clock size={11} /> {timeAgo(postDetail.created_at)}
                   </span>
 
-                  {user?.sub === postDetail.user_id && (
+                  {user?.id === postDetail.user_id && (
                     <div className={s.helpWrap}>
                       <button
                         className={s.postAction}
