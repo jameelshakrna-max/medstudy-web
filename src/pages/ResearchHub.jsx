@@ -430,7 +430,7 @@ export default function ResearchHub() {
                 <Clock size={11} /> {timeAgo(post.created_at)}
               </span>
 
-              {user && post.user_id === user.sub && post.id && (
+              {user && post.user_id === user.sub && (
                 <button
                   className={`${s.postAction} ${s.deleteAction}`}
                   onClick={(e) => {
@@ -565,7 +565,7 @@ export default function ResearchHub() {
                 <Clock size={11} /> {timeAgo(post.created_at)}
               </span>
 
-              {user && post.user_id === user.sub && post.id && (
+              {user && post.user_id === user.sub && (
                 <button
                   className={`${s.postAction} ${s.deleteAction}`}
                   onClick={(e) => {
