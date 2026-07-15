@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useProfilePanel } from '../context/ProfilePanelContext'
 import {
   Search, Plus, ExternalLink, ArrowUp, MessageSquare, CheckCircle,
-  Bookmark, BookmarkCheck, Flag, Loader2, X, Send, ChevronDown, Clock, Users
+  Bookmark, BookmarkCheck, Flag, Loader2, X, Send, ChevronDown, Clock, Users, Trash2
 } from 'lucide-react'
 import s from './ResearchHub.module.css'
 
@@ -150,6 +150,14 @@ export default function ResearchHub() {
     mutationFn: (postId) => apiPost(`/research/${postId}/bookmark`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
+    },
+  })
+
+  const deletePostMutation = useMutation({
+    mutationFn: (postId) => apiDelete(`/research/${postId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
+      setSelectedPost(null)
     },
   })
 
@@ -410,6 +418,18 @@ export default function ResearchHub() {
                 </button>
               )}
 
+              {user && post.user_id === user.sub && (
+                <button
+                  className={`${s.postAction} ${s.deleteAction}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (confirm('Delete this post?')) deletePostMutation.mutate(post.id)
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+
               {post.is_expired && <span className={`${s.statusBadge} ${s.expired}`}>Expired</span>}
               {post.is_closed && <span className={`${s.statusBadge} ${s.closed}`}>Closed</span>}
 
@@ -529,6 +549,18 @@ export default function ResearchHub() {
                   }}
                 >
                   {post.is_bookmarked ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
+                </button>
+              )}
+
+              {user && post.user_id === user.sub && (
+                <button
+                  className={`${s.postAction} ${s.deleteAction}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (confirm('Delete this post?')) deletePostMutation.mutate(post.id)
+                  }}
+                >
+                  <Trash2 size={14} />
                 </button>
               )}
 
@@ -696,6 +728,18 @@ export default function ResearchHub() {
                 </div>
                 <h2 className={s.detailTitle}>{postDetail?.title}</h2>
               </div>
+              {user && postDetail?.user_id === user.sub && (
+                <button
+                  className={s.detailDelete}
+                  onClick={() => {
+                    if (confirm('Delete this post?')) {
+                      deletePostMutation.mutate(postDetail.id)
+                    }
+                  }}
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
               <button className={s.detailClose} onClick={() => { setSelectedPost(null); setCommentInput('') }}>
                 <X size={20} />
               </button>
