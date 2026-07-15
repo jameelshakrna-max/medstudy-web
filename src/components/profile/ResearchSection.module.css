@@ -79,9 +79,4 @@
 .saveBtn { padding: 6px 14px; background: var(--blue); border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 13px; font-weight: 600; }
 .saveBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.skillRow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.skillRemove { background: none; border: none; color: var(--red, #ef4444); cursor: pointer; padding: 2px; }
-.skillSearch { position: relative; }
-.skillSuggestions { position: absolute; top: 100%; left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; max-height: 150px; overflow-y: auto; z-index: 10; }
-.skillSuggestion { display: block; width: 100%; text-align: left; padding: 8px 10px; background: none; border: none; color: var(--text); font-size: 13px; cursor: pointer; }
-.skillSuggestion:hover { background: var(--surface-hover, rgba(255,255,255,0.05)); }
+

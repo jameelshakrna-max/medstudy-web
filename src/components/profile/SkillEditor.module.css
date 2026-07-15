@@ -1,0 +1,26 @@
+.editorTitle { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+
+.skillRow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.skillRemove { background: none; border: none; color: var(--red, #ef4444); cursor: pointer; padding: 2px; }
+
+.skillSearch { position: relative; }
+.skillInputWrapper { display: flex; gap: 6px; }
+.skillInputContainer { position: relative; flex: 1; display: flex; align-items: center; }
+.skillInputIcon { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: var(--mist); pointer-events: none; z-index: 1; }
+.skillInput { width: 100%; padding: 8px 10px 8px 28px !important; }
+
+.customRow { display: flex; gap: 6px; margin-top: 8px; }
+.customInput { flex: 1; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-size: 13px; color: var(--text); outline: none; font-family: 'DM Sans', sans-serif; }
+.customInput:focus { border-color: var(--blue); }
+.addBtn { padding: 6px 12px; background: var(--blue); border: none; border-radius: 6px; font-size: 12px; color: white; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.addBtn:hover { opacity: 0.9; }
+.addBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.editorSelect { width: auto; padding: 4px 8px; font-size: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); outline: none; appearance: none; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+
+.editorActions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); position: sticky; bottom: 0; background: var(--navy2); padding-bottom: 4px; z-index: 1; }
+.cancelBtn { padding: 6px 14px; background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--text); cursor: pointer; font-size: 13px; font-family: 'DM Sans', sans-serif; }
+.saveBtn { padding: 6px 14px; background: var(--blue); border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 13px; font-weight: 600; font-family: 'DM Sans', sans-serif; }
+.saveBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.autocompleteDot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
