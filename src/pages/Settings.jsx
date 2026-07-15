@@ -3,12 +3,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { usePomodoroSettings } from '../context/PomodoroContext'
 import { supabase } from '../lib/supabase'
-import { apiGet } from '../lib/api'
+import { apiGet, apiPost, apiPut, apiDelete } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
-import { User, Lock, Bell, Palette, Clock, ShieldAlert, Medal, Loader2, Camera, MapPin, LinkIcon, AtSign, FileText, Award } from 'lucide-react'
+import { User, Lock, Bell, Palette, Clock, ShieldAlert, Medal, Loader2, Camera, MapPin, LinkIcon, AtSign, FileText, Award, FlaskConical } from 'lucide-react'
 import AvatarUpload from '../components/AvatarUpload'
 import BannerUpload from '../components/BannerUpload'
 import ProfileCompletion from '../components/ProfileCompletion'
+import SkillEditor from '../components/profile/SkillEditor'
+import PortfolioForm from '../components/profile/PortfolioForm'
 import s from './Settings.module.css'
 
 const APP_VERSION = '1.0.0'
@@ -44,6 +46,20 @@ export default function Settings() {
   const [graduationYear, setGraduationYear] = useState('')
   const [specialty, setSpecialty] = useState('')
   const [languages, setLanguages] = useState('')
+
+  // Research Profile
+  const [researchBio, setResearchBio] = useState('')
+  const [institution, setInstitution] = useState('')
+  const [department, setDepartment] = useState('')
+  const [researchInterests, setResearchInterests] = useState('')
+  const [orcid, setOrcid] = useState('')
+  const [googleScholar, setGoogleScholar] = useState('')
+  const [researchgate, setResearchgate] = useState('')
+  const [linkedin, setLinkedin] = useState('')
+  const [researchSaving, setResearchSaving] = useState(false)
+  const [researchStatus, setResearchStatus] = useState(null)
+  const [editingResearchSkills, setEditingResearchSkills] = useState(false)
+  const [addingResearchPortfolio, setAddingResearchPortfolio] = useState(false)
 
   // Name change tracking
   const [nameLastChanged, setNameLastChanged] = useState(null)
@@ -131,6 +147,27 @@ export default function Settings() {
     staleTime: 30_000,
   })
 
+  const { data: researchProfileData } = useQuery({
+    queryKey: queryKeys.research.profile(user?.id),
+    queryFn: () => apiGet(`/users/${user.id}/research-profile`),
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  })
+
+  const { data: researchSkillsData } = useQuery({
+    queryKey: queryKeys.research.skills(user?.id),
+    queryFn: () => apiGet(`/users/${user.id}/research-skills`).then(d => d.skills || []),
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  })
+
+  const { data: researchPortfolioData } = useQuery({
+    queryKey: queryKeys.research.portfolio(user?.id),
+    queryFn: () => apiGet(`/users/${user.id}/research-portfolio`).then(d => d.entries || []),
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  })
+
   useEffect(() => {
     if (!profileData) return
     setUsername(profileData.username || '')
@@ -149,6 +186,18 @@ export default function Settings() {
       setLanguages(Array.isArray(langs) ? langs.join(', ') : '')
     } catch { setLanguages('') }
   }, [profileData])
+
+  useEffect(() => {
+    if (!researchProfileData) return
+    setResearchBio(researchProfileData.bio || '')
+    setInstitution(researchProfileData.institution || '')
+    setDepartment(researchProfileData.department || '')
+    setResearchInterests(researchProfileData.research_interests || '')
+    setOrcid(researchProfileData.orcid || '')
+    setGoogleScholar(researchProfileData.google_scholar || '')
+    setResearchgate(researchProfileData.researchgate || '')
+    setLinkedin(researchProfileData.linkedin || '')
+  }, [researchProfileData])
 
   useEffect(() => {
     if (!username || username === profileData?.username) {
@@ -405,6 +454,43 @@ export default function Settings() {
     }
   }
 
+  // ── Research profile save ──
+  const handleSaveResearchProfile = async () => {
+    setResearchSaving(true)
+    setResearchStatus(null)
+    try {
+      const API = import.meta.env.VITE_API_URL || '/api'
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`${API}/users/${user.id}/research-profile`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': 'Bearer ' + session.access_token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          bio: researchBio,
+          institution,
+          department,
+          research_interests: researchInterests,
+          orcid,
+          google_scholar: googleScholar,
+          researchgate,
+          linkedin,
+        })
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to update research profile')
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.research.profile(user?.id) })
+      setResearchStatus({ type: 'success', msg: 'Research profile updated!' })
+    } catch (err) {
+      setResearchStatus({ type: 'error', msg: err.message || 'Failed to update research profile' })
+    } finally {
+      setResearchSaving(false)
+    }
+  }
+
   // ── Accordion sections config ──
   const sections = [
     {
@@ -621,6 +707,216 @@ export default function Settings() {
             <div className={`${s.statusMsg} ${profileStatus.type === 'success' ? s.statusSuccess : s.statusError}`}>
               {profileStatus.msg}
             </div>
+          )}
+        </>
+      )
+    },
+    {
+      key: 'research',
+      icon: FlaskConical,
+      title: 'Research Profile',
+      content: (
+        <>
+          <div className={s.field}>
+            <label className={s.label}>Research Bio</label>
+            <textarea
+              className={s.input}
+              value={researchBio}
+              onChange={e => setResearchBio(e.target.value.slice(0, 500))}
+              placeholder="Describe your research background and interests..."
+              rows={3}
+              maxLength={500}
+              style={{ resize: 'vertical', minHeight: 80 }}
+            />
+            <p className={s.fieldHint}>{researchBio.length}/500</p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className={s.field}>
+              <label className={s.label}>Institution</label>
+              <input
+                className={s.input}
+                type="text"
+                value={institution}
+                onChange={e => setInstitution(e.target.value)}
+                placeholder="e.g. Harvard Medical School"
+                maxLength={150}
+              />
+            </div>
+            <div className={s.field}>
+              <label className={s.label}>Department</label>
+              <input
+                className={s.input}
+                type="text"
+                value={department}
+                onChange={e => setDepartment(e.target.value)}
+                placeholder="e.g. Cardiology"
+                maxLength={150}
+              />
+            </div>
+          </div>
+
+          <div className={s.field}>
+            <label className={s.label}>Research Interests</label>
+            <textarea
+              className={s.input}
+              value={researchInterests}
+              onChange={e => setResearchInterests(e.target.value)}
+              placeholder="e.g. Clinical trials, epidemiology, medical AI..."
+              rows={2}
+              style={{ resize: 'vertical', minHeight: 60 }}
+            />
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--card-border)', marginTop: 12, paddingTop: 12, marginBottom: 4 }}>
+            <p className={s.label}>External Links</p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className={s.field}>
+              <label className={s.label}>ORCID</label>
+              <input
+                className={s.input}
+                type="text"
+                value={orcid}
+                onChange={e => setOrcid(e.target.value)}
+                placeholder="e.g. 0000-0002-1234-5678"
+                maxLength={50}
+              />
+            </div>
+            <div className={s.field}>
+              <label className={s.label}>Google Scholar</label>
+              <input
+                className={s.input}
+                type="text"
+                value={googleScholar}
+                onChange={e => setGoogleScholar(e.target.value)}
+                placeholder="Google Scholar profile URL"
+                maxLength={300}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className={s.field}>
+              <label className={s.label}>ResearchGate</label>
+              <input
+                className={s.input}
+                type="text"
+                value={researchgate}
+                onChange={e => setResearchgate(e.target.value)}
+                placeholder="ResearchGate profile URL"
+                maxLength={300}
+              />
+            </div>
+            <div className={s.field}>
+              <label className={s.label}>LinkedIn</label>
+              <input
+                className={s.input}
+                type="text"
+                value={linkedin}
+                onChange={e => setLinkedin(e.target.value)}
+                placeholder="LinkedIn profile URL"
+                maxLength={300}
+              />
+            </div>
+          </div>
+
+          <div className={s.btnRow}>
+            <button
+              className={`${s.btn} ${s.btnPrimary}`}
+              onClick={handleSaveResearchProfile}
+              disabled={researchSaving}
+            >
+              {researchSaving ? 'Saving...' : 'Save Research Profile'}
+            </button>
+          </div>
+
+          {researchStatus && (
+            <div className={`${s.statusMsg} ${researchStatus.type === 'success' ? s.statusSuccess : s.statusError}`}>
+              {researchStatus.msg}
+            </div>
+          )}
+
+          <div style={{ borderTop: '1px solid var(--card-border)', marginTop: 12, paddingTop: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <p className={s.label}>Research Skills</p>
+              <button
+                onClick={() => setEditingResearchSkills(true)}
+                style={{ padding: '4px 10px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 6, background: 'none', color: 'var(--text)', cursor: 'pointer' }}
+              >
+                Edit Skills
+              </button>
+            </div>
+            {(researchSkillsData || []).length === 0 ? (
+              <p style={{ fontSize: 13, color: 'var(--mist)' }}>No skills added yet</p>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {researchSkillsData?.map(sk => (
+                  <span key={sk.skill_id || sk.skill} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)' }}>
+                    {sk.skill}
+                    <span style={{ fontSize: 10, color: 'var(--mist)' }}>{sk.proficiency}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--card-border)', marginTop: 12, paddingTop: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <p className={s.label}>Research Portfolio</p>
+              <button
+                onClick={() => setAddingResearchPortfolio(true)}
+                style={{ padding: '4px 10px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 6, background: 'none', color: 'var(--text)', cursor: 'pointer' }}
+              >
+                Add Entry
+              </button>
+            </div>
+            {(researchPortfolioData || []).length === 0 ? (
+              <p style={{ fontSize: 13, color: 'var(--mist)' }}>No portfolio entries yet</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {researchPortfolioData?.map(entry => (
+                  <div key={entry.pid} style={{ padding: 10, background: 'var(--bg)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{entry.title}</div>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                      {entry.research_type && (
+                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}>{entry.research_type}</span>
+                      )}
+                      {entry.role && (
+                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: 'rgba(16,185,129,0.15)', color: '#34d399' }}>{entry.role}</span>
+                      )}
+                      {entry.status && (
+                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: entry.status === 'ongoing' ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', color: entry.status === 'ongoing' ? '#fbbf24' : '#34d399' }}>{entry.status}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {editingResearchSkills && (
+            <SkillEditor
+              userId={user.id}
+              skills={researchSkillsData || []}
+              onClose={() => setEditingResearchSkills(false)}
+              onSaved={() => {
+                setEditingResearchSkills(false)
+                queryClient.invalidateQueries({ queryKey: queryKeys.research.skills(user?.id) })
+              }}
+            />
+          )}
+          {addingResearchPortfolio && (
+            <PortfolioForm
+              userId={user.id}
+              entry={null}
+              onClose={() => setAddingResearchPortfolio(false)}
+              onSaved={() => {
+                setAddingResearchPortfolio(false)
+                queryClient.invalidateQueries({ queryKey: queryKeys.research.portfolio(user?.id) })
+              }}
+            />
           )}
         </>
       )

@@ -533,7 +533,7 @@ export async function handleReportPost(request, env, user) {
 
 export async function handleGetResearchProfile(request, env, user) {
   const url = new URL(request.url)
-  const userId = url.pathname.split('/')[4]
+  const userId = url.pathname.split('/')[3]
   if (!userId) return json({ error: 'User ID required' }, 400)
 
   const { results } = await env.DB.prepare('SELECT * FROM user_research_profile WHERE user_id = ?').bind(userId).all()
@@ -561,7 +561,7 @@ export async function handleUpdateResearchProfile(request, env, user) {
   if (!user?.sub) return json({ error: 'Unauthorized' }, 401)
 
   const url = new URL(request.url)
-  const userId = url.pathname.split('/')[4]
+  const userId = url.pathname.split('/')[3]
   if (!userId) return json({ error: 'User ID required' }, 400)
   if (user.sub !== userId) return json({ error: 'Forbidden' }, 403)
 
@@ -602,7 +602,7 @@ export async function handleUpdateResearchProfile(request, env, user) {
 
 export async function handleGetResearchSkills(request, env, user) {
   const url = new URL(request.url)
-  const userId = url.pathname.split('/')[4]
+  const userId = url.pathname.split('/')[3]
   if (!userId) return json({ error: 'User ID required' }, 400)
 
   const { results } = await env.DB.prepare('SELECT * FROM user_research_skills WHERE user_id = ? ORDER BY skill').bind(userId).all()
@@ -614,7 +614,7 @@ export async function handleAddResearchSkill(request, env, user) {
   if (!user?.sub) return json({ error: 'Unauthorized' }, 401)
 
   const url = new URL(request.url)
-  const userId = url.pathname.split('/')[4]
+  const userId = url.pathname.split('/')[3]
   if (!userId) return json({ error: 'User ID required' }, 400)
   if (user.sub !== userId) return json({ error: 'Forbidden' }, 403)
 
@@ -635,8 +635,8 @@ export async function handleDeleteResearchSkill(request, env, user) {
 
   const url = new URL(request.url)
   const parts = url.pathname.split('/')
-  const userId = parts[4]
-  const skillId = parts[6]
+  const userId = parts[3]
+  const skillId = parts[5]
   if (!userId || !skillId) return json({ error: 'User ID and Skill ID required' }, 400)
   if (user.sub !== userId) return json({ error: 'Forbidden' }, 403)
 
@@ -659,7 +659,7 @@ export async function handleGetPredefinedSkills(request, env, user) {
 
 export async function handleGetResearchStats(request, env, user) {
   const url = new URL(request.url)
-  const userId = url.pathname.split('/')[4]
+  const userId = url.pathname.split('/')[3]
   if (!userId) return json({ error: 'User ID required' }, 400)
 
   const { results } = await env.DB.prepare('SELECT * FROM user_research_stats WHERE user_id = ?').bind(userId).all()
@@ -690,7 +690,7 @@ export async function handleGetResearchStats(request, env, user) {
 
 export async function handleGetResearchEvents(request, env, user) {
   const url = new URL(request.url)
-  const userId = url.pathname.split('/')[4]
+  const userId = url.pathname.split('/')[3]
   if (!userId) return json({ error: 'User ID required' }, 400)
 
   const { results } = await env.DB.prepare(
@@ -702,7 +702,7 @@ export async function handleGetResearchEvents(request, env, user) {
 
 export async function handleGetPortfolio(request, env, user) {
   const url = new URL(request.url)
-  const userId = url.pathname.split('/')[4]
+  const userId = url.pathname.split('/')[3]
   if (!userId) return json({ error: 'User ID required' }, 400)
 
   const { results } = await env.DB.prepare(
@@ -716,7 +716,7 @@ export async function handleAddPortfolioEntry(request, env, user) {
   if (!user?.sub) return json({ error: 'Unauthorized' }, 401)
 
   const url = new URL(request.url)
-  const userId = url.pathname.split('/')[4]
+  const userId = url.pathname.split('/')[3]
   if (!userId) return json({ error: 'User ID required' }, 400)
   if (user.sub !== userId) return json({ error: 'Forbidden' }, 403)
 
@@ -743,8 +743,8 @@ export async function handleUpdatePortfolioEntry(request, env, user) {
 
   const url = new URL(request.url)
   const parts = url.pathname.split('/')
-  const userId = parts[4]
-  const pid = parts[6]
+  const userId = parts[3]
+  const pid = parts[5]
   if (!userId || !pid) return json({ error: 'User ID and Project ID required' }, 400)
   if (user.sub !== userId) return json({ error: 'Forbidden' }, 403)
 
@@ -787,8 +787,8 @@ export async function handleDeletePortfolioEntry(request, env, user) {
 
   const url = new URL(request.url)
   const parts = url.pathname.split('/')
-  const userId = parts[4]
-  const pid = parts[6]
+  const userId = parts[3]
+  const pid = parts[5]
   if (!userId || !pid) return json({ error: 'User ID and Project ID required' }, 400)
   if (user.sub !== userId) return json({ error: 'Forbidden' }, 403)
 

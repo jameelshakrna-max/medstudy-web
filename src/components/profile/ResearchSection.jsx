@@ -233,25 +233,33 @@ export default function ResearchSection({ userId, isOwnProfile }) {
       )}
 
       {/* Research Skills */}
-      {skills.length > 0 && (
+      {(skills.length > 0 || isOwnProfile) && (
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
             <div className={styles.sectionTitle} style={{ marginBottom: 0 }}>
               <GraduationCap size={16} /> Research Skills
             </div>
             {isOwnProfile && (
-              <button className={styles.editBtn} onClick={() => setEditingSkills(true)}>Edit Skills</button>
+              <button className={styles.addBtn} onClick={() => setEditingSkills(true)} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Plus size={14} /> {skills.length > 0 ? 'Edit Skills' : 'Add Skills'}
+              </button>
             )}
           </div>
-          <div className={styles.skillsList}>
-            {skills.map((s, i) => (
-              <span key={s.skill_id || i} className={styles.skillPill}>
-                <span className={`${styles.skillDot} ${PROFICIENCY_DOT[s.proficiency] || styles.dotBeginner}`} />
-                {s.skill}
-                <span className={styles.skillLabel}>{PROFICIENCY_LABEL[s.proficiency] || 'Beginner'}</span>
-              </span>
-            ))}
-          </div>
+          {skills.length > 0 ? (
+            <div className={styles.skillsList}>
+              {skills.map((s, i) => (
+                <span key={s.skill_id || i} className={styles.skillPill}>
+                  <span className={`${styles.skillDot} ${PROFICIENCY_DOT[s.proficiency] || styles.dotBeginner}`} />
+                  {s.skill}
+                  <span className={styles.skillLabel}>{PROFICIENCY_LABEL[s.proficiency] || 'Beginner'}</span>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, color: 'var(--mist)', textAlign: 'center', padding: '12px 0' }}>
+              No research skills added yet.
+            </div>
+          )}
         </div>
       )}
 
