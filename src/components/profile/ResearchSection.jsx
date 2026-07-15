@@ -126,7 +126,33 @@ export default function ResearchSection({ userId, isOwnProfile }) {
     portfolio.length > 0 ||
     (researchProfile && (researchProfile.bio || researchProfile.institution || researchProfile.orcid))
 
-  if (!hasActivity) return null
+  if (!hasActivity) {
+    if (!isOwnProfile) return null
+    return (
+      <div className={styles.section}>
+        <div className={styles.sectionTitle}>
+          <BarChart3 size={16} /> Research
+        </div>
+        <div className={styles.emptyState}>
+          <p>No research activity yet.</p>
+          <div className={styles.emptyActions}>
+            <button className={styles.addBtn} onClick={() => setEditingSkills(true)}>Add Skills</button>
+            <button className={styles.addBtn} onClick={() => setAddingProject(true)}>Add Project</button>
+            <button className={styles.editBtn} onClick={() => setEditingProfile(true)}>Edit Research Profile</button>
+          </div>
+        </div>
+        {editingSkills && (
+          <SkillEditor userId={userId} skills={skills} onClose={() => setEditingSkills(false)} onSaved={() => setEditingSkills(false)} />
+        )}
+        {addingProject && (
+          <PortfolioForm userId={userId} entry={null} onClose={() => setAddingProject(false)} onSaved={() => setAddingProject(false)} />
+        )}
+        {editingProfile && (
+          <ResearchProfileEditor userId={userId} profile={researchProfile} onClose={() => setEditingProfile(false)} onSaved={() => setEditingProfile(false)} />
+        )}
+      </div>
+    )
+  }
 
   const level = getLevel(stats?.score || 0)
   const levelConfig = LEVEL_CONFIG[level]
