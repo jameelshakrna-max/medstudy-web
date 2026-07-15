@@ -190,7 +190,7 @@ export async function handleGetResearchPost(request, env, user) {
   if (!postId) return json({ error: 'Post ID required' }, 400)
 
   const { results } = await env.DB.prepare(`
-    SELECT p.*, up.user_name, up.avatar_url, up.username
+    SELECT p.*, up.user_name, up.avatar_url, up.username, up.reputation
     FROM research_posts p
     LEFT JOIN user_profiles up ON up.user_id = p.user_id
     WHERE p.id = ?

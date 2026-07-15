@@ -61,6 +61,7 @@ const SORT_OPTIONS = [
 ]
 
 function timeAgo(dateStr) {
+  if (!dateStr) return ''
   const now = new Date()
   const date = new Date(dateStr + 'Z')
   const seconds = Math.floor((now - date) / 1000)
@@ -155,7 +156,11 @@ export default function ResearchHub() {
 
   const deletePostMutation = useMutation({
     mutationFn: (postId) => apiDelete(`/research/${postId}`),
-    onSuccess: () => {
+    onSuccess: (_, deletedPostId) => {
+      queryClient.setQueryData(
+        queryKeys.research.list(activeCategory, searchQuery, sortBy, 'all', null, 1),
+        (old) => old ? { ...old, posts: old.posts.filter(p => p.id !== deletedPostId) } : old
+      )
       queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
       setSelectedPost(null)
     },
@@ -418,7 +423,14 @@ export default function ResearchHub() {
                 </button>
               )}
 
-              {user && post.user_id === user.sub && (
+              {post.is_expired && <span className={`${s.statusBadge} ${s.expired}`}>Expired</span>}
+              {post.is_closed && <span className={`${s.statusBadge} ${s.closed}`}>Closed</span>}
+
+              <span className={s.postTimestamp}>
+                <Clock size={11} /> {timeAgo(post.created_at)}
+              </span>
+
+              {user && post.user_id === user.sub && post.id && (
                 <button
                   className={`${s.postAction} ${s.deleteAction}`}
                   onClick={(e) => {
@@ -430,12 +442,6 @@ export default function ResearchHub() {
                 </button>
               )}
 
-              {post.is_expired && <span className={`${s.statusBadge} ${s.expired}`}>Expired</span>}
-              {post.is_closed && <span className={`${s.statusBadge} ${s.closed}`}>Closed</span>}
-
-              <span className={s.postTimestamp}>
-                <Clock size={11} /> {timeAgo(post.created_at)}
-              </span>
             </div>
           </div>
         ))
@@ -552,7 +558,14 @@ export default function ResearchHub() {
                 </button>
               )}
 
-              {user && post.user_id === user.sub && (
+              {post.is_expired && <span className={`${s.statusBadge} ${s.expired}`}>Expired</span>}
+              {post.is_closed && <span className={`${s.statusBadge} ${s.closed}`}>Closed</span>}
+
+              <span className={s.postTimestamp}>
+                <Clock size={11} /> {timeAgo(post.created_at)}
+              </span>
+
+              {user && post.user_id === user.sub && post.id && (
                 <button
                   className={`${s.postAction} ${s.deleteAction}`}
                   onClick={(e) => {
@@ -564,12 +577,6 @@ export default function ResearchHub() {
                 </button>
               )}
 
-              {post.is_expired && <span className={`${s.statusBadge} ${s.expired}`}>Expired</span>}
-              {post.is_closed && <span className={`${s.statusBadge} ${s.closed}`}>Closed</span>}
-
-              <span className={s.postTimestamp}>
-                <Clock size={11} /> {timeAgo(post.created_at)}
-              </span>
             </div>
           </div>
         ))
@@ -691,64 +698,64 @@ export default function ResearchHub() {
       {selectedPost && (
         <div className={s.modalOverlay} onClick={() => { setSelectedPost(null); setCommentInput(''); setShowHelpDropdown(null) }}>
           <div className={s.detailPanel} onClick={(e) => e.stopPropagation()}>
-            <div className={s.detailHeader}>
-              <div>
-                <div className={s.detailMeta}>
-                  {postDetail?.avatar_url ? (
-                    <img
-                      src={postDetail.avatar_url}
-                      alt=""
-                      className={s.avatar}
-                      onClick={() => openProfile(postDetail.user_id)}
-                      style={{ cursor: 'pointer' }}
-                    />
-                  ) : (
-                    <div className={s.avatarFallback}>
-                      {(postDetail?.username || '?')[0].toUpperCase()}
-                    </div>
-                  )}
-                  <span
-                    className={s.postUser}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => openProfile(postDetail?.user_id)}
-                  >
-                    {postDetail?.username}
-                  </span>
-                  {postDetail?.reputation > 0 && (
-                    <span className={s.postRep}>{postDetail.reputation} rep</span>
-                  )}
-                  {postDetail?.category && (
-                    <span
-                      className={s.categoryBadge}
-                      style={{ background: CATEGORY_COLORS[postDetail.category] || CATEGORY_COLORS.other }}
-                    >
-                      {postDetail.category.replace(/_/g, ' ')}
-                    </span>
-                  )}
-                </div>
-                <h2 className={s.detailTitle}>{postDetail?.title}</h2>
-              </div>
-              {user && postDetail?.user_id === user.sub && (
-                <button
-                  className={s.detailDelete}
-                  onClick={() => {
-                    if (confirm('Delete this post?')) {
-                      deletePostMutation.mutate(postDetail.id)
-                    }
-                  }}
-                >
-                  <Trash2 size={16} />
-                </button>
-              )}
-              <button className={s.detailClose} onClick={() => { setSelectedPost(null); setCommentInput('') }}>
-                <X size={20} />
-              </button>
-            </div>
-
             {detailLoading ? (
               <div className={s.loading}><Loader2 className={s.spin} size={20} /> Loading...</div>
             ) : postDetail ? (
               <>
+                <div className={s.detailHeader}>
+                  <div>
+                    <div className={s.detailMeta}>
+                      {postDetail.avatar_url ? (
+                        <img
+                          src={postDetail.avatar_url}
+                          alt=""
+                          className={s.avatar}
+                          onClick={() => openProfile(postDetail.user_id)}
+                          style={{ cursor: 'pointer' }}
+                        />
+                      ) : (
+                        <div className={s.avatarFallback}>
+                          {(postDetail.username || '?')[0].toUpperCase()}
+                        </div>
+                      )}
+                      <span
+                        className={s.postUser}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => openProfile(postDetail.user_id)}
+                      >
+                        {postDetail.username}
+                      </span>
+                      {postDetail.reputation > 0 && (
+                        <span className={s.postRep}>{postDetail.reputation} rep</span>
+                      )}
+                      {postDetail.category && (
+                        <span
+                          className={s.categoryBadge}
+                          style={{ background: CATEGORY_COLORS[postDetail.category] || CATEGORY_COLORS.other }}
+                        >
+                          {postDetail.category.replace(/_/g, ' ')}
+                        </span>
+                      )}
+                    </div>
+                    <h2 className={s.detailTitle}>{postDetail.title}</h2>
+                  </div>
+                  {user && postDetail.user_id === user.sub && (
+                    <button
+                      className={s.detailDelete}
+                      onClick={() => {
+                        if (confirm('Delete this post?')) {
+                          deletePostMutation.mutate(postDetail.id)
+                        }
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                  <button className={s.detailClose} onClick={() => { setSelectedPost(null); setCommentInput('') }}>
+                    <X size={20} />
+                  </button>
+                </div>
+
                 {postDetail.url && (
                   <a className={s.detailUrl} href={postDetail.url} target="_blank" rel="noopener noreferrer">
                     <ExternalLink size={14} /> {postDetail.url}
@@ -787,7 +794,7 @@ export default function ResearchHub() {
                     <Clock size={11} /> {timeAgo(postDetail.created_at)}
                   </span>
 
-                  {user?.id === postDetail.user_id && (
+                  {user?.sub === postDetail.user_id && (
                     <div className={s.helpWrap}>
                       <button
                         className={s.postAction}
