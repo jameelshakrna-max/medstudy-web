@@ -79,16 +79,6 @@ export function LayerProvider({ children }) {
     return () => document.removeEventListener('keydown', handler)
   }, [hasOverlays, closeTopmost])
 
-  // Body scroll lock — locked when any overlay is open
-  useEffect(() => {
-    if (!hasOverlays) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [hasOverlays])
-
   return (
     <LayerContext.Provider value={{ openOverlay, closeOverlay, closeTopmost, closeAll, isTopOverlay, hasOverlays, overlayCount: overlays.size }}>
       {children}

@@ -21,7 +21,7 @@
   align-items: center;
   justify-content: center;
   background: var(--page-bg);
-  z-index: 9999;
+  z-index: var(--z-loading, 1700);
 }
 
 .inline {

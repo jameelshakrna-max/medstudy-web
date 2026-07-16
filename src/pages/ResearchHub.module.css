@@ -717,7 +717,7 @@
   border: 1px solid var(--card-border);
   border-radius: 12px;
   padding: 4px;
-  z-index: 10;
+  z-index: var(--z-dropdown, 1000);
   min-width: 220px;
   box-shadow: var(--shadow-md);
 }

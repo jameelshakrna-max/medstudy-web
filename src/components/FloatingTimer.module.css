@@ -6,7 +6,7 @@
 /* ── Expanded floating panel ── */
 .floating {
   position: fixed;
-  z-index: 9999;
+  z-index: var(--z-float, 1800);
   width: 196px;
   border-radius: 18px;
   background: var(--float-bg);
@@ -172,7 +172,7 @@
 /* ── Minimized floating circle ── */
 .mini {
   position: fixed;
-  z-index: 9999;
+  z-index: var(--z-float, 1800);
   width: 56px;
   height: 56px;
   border-radius: 50%;

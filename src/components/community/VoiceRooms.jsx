@@ -592,7 +592,7 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
 
   if (joinedRoom && meeting) {
     return (
-      <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#0a0a0f', display: 'flex' }}>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-float, 1800)', background: '#0a0a0f', display: 'flex' }}>
         <div className="voice-timer-sidebar" style={{
           width: 280, flexShrink: 0,
           background: 'var(--card-bg, #172032)',
@@ -881,7 +881,7 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
                 </button>
                 {showStatusPicker && (
                   <div style={{
-                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 'var(--z-dropdown, 1000)',
                     background: 'var(--navy2, #172032)', border: '1px solid var(--card-border, #2a3448)',
                     borderRadius: 8, padding: 4, marginTop: 4,
                   }}>

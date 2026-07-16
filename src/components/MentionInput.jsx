@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { apiGet } from '../lib/api'
 
 export default function MentionInput({ value, onChange, onSubmit, placeholder, onMentionSelect }) {
@@ -142,7 +143,7 @@ export default function MentionInput({ value, onChange, onSubmit, placeholder, o
           setTimeout(() => setShowDropdown(false), 150)
         }}
       />
-      {showDropdown && results.length > 0 && (
+      {showDropdown && results.length > 0 && createPortal(
         <div
           ref={dropdownRef}
           style={{
@@ -155,7 +156,7 @@ export default function MentionInput({ value, onChange, onSubmit, placeholder, o
             boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
             maxHeight: 200,
             overflowY: 'auto',
-            zIndex: 100,
+            zIndex: 'var(--z-dropdown, 1000)',
             minWidth: 220,
           }}
         >
@@ -200,7 +201,8 @@ export default function MentionInput({ value, onChange, onSubmit, placeholder, o
               </div>
             </div>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

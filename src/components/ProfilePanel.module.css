@@ -144,7 +144,7 @@
   min-width: 180px;
   max-height: 200px;
   overflow-y: auto;
-  z-index: 10;
+  z-index: var(--z-dropdown, 1000);
   padding: 4px;
 }
 .inviteOption {

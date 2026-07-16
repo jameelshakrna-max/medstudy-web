@@ -266,4 +266,59 @@ test.describe('Overlay Layering System', () => {
     const response = await page.goto('/')
     expect(response?.status()).toBe(200)
   })
+
+  test('no CSS contains hardcoded z-index: 9999', async ({ page }) => {
+    await page.goto('/')
+
+    // Fetch all loaded stylesheets and scan for z-index: 9999
+    const violations = await page.evaluate(() => {
+      const found: string[] = []
+      for (const sheet of Array.from(document.styleSheets)) {
+        try {
+          for (const rule of Array.from(sheet.cssRules)) {
+            const text = rule.cssText || ''
+            if (/z-index\s*:\s*9999/.test(text)) {
+              found.push(text.slice(0, 120))
+            }
+          }
+        } catch {
+          // Cross-origin stylesheets — skip
+        }
+      }
+      return found
+    })
+
+    expect(violations).toEqual([])
+  })
+
+  test('all z-index values use CSS custom properties', async ({ page }) => {
+    await page.goto('/')
+
+    const hardcoded = await page.evaluate(() => {
+      const found: string[] = []
+      for (const sheet of Array.from(document.styleSheets)) {
+        try {
+          for (const rule of Array.from(sheet.cssRules)) {
+            const text = rule.cssText || ''
+            // Match z-index: <number> but NOT z-index: var(--z-*)
+            const match = text.match(/z-index\s*:\s*(\d+)/g)
+            if (match) {
+              for (const m of match) {
+                // Allow low values (0-1) as they're harmless defaults
+                const num = parseInt(m.match(/\d+/)?.[0] || '0', 10)
+                if (num > 1) {
+                  found.push(m)
+                }
+              }
+            }
+          }
+        } catch {
+          // Cross-origin — skip
+        }
+      }
+      return found
+    })
+
+    expect(hardcoded).toEqual([])
+  })
 })
