@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Trophy, X } from "lucide-react";
+
+const DISMISS_KEY = "medstudy-profile-complete-dismissed";
 
 const CHECK_LABELS = {
   avatar: "Profile Photo",
@@ -22,11 +24,36 @@ function getMessage(pct) {
 export default function ProfileCompletion({ completion, onDismiss }) {
   const { percentage = 0, checks = {} } = completion || {};
   const [mounted, setMounted] = useState(false);
+  const [hidden, setHidden] = useState(() => {
+    try { return localStorage.getItem(DISMISS_KEY) === "true"; }
+    catch { return false; }
+  });
+  const timerRef = useRef(null);
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => setMounted(true));
     return () => cancelAnimationFrame(raf);
   }, []);
+
+  useEffect(() => {
+    if (hidden) return;
+    if (percentage >= 100) {
+      timerRef.current = setTimeout(() => {
+        try { localStorage.setItem(DISMISS_KEY, "true"); } catch {}
+        setHidden(true);
+      }, 3000);
+    }
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [percentage, hidden]);
+
+  const dismiss = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    try { localStorage.setItem(DISMISS_KEY, "true"); } catch {}
+    setHidden(true);
+    if (onDismiss) onDismiss();
+  };
+
+  if (hidden) return null;
 
   return (
     <>
@@ -48,35 +75,33 @@ export default function ProfileCompletion({ completion, onDismiss }) {
           boxSizing: "border-box",
         }}
       >
-        {onDismiss && (
-          <button
-            onClick={onDismiss}
-            aria-label="Dismiss"
-            style={{
-              position: "absolute",
-              top: 12,
-              right: 12,
-              background: "none",
-              border: "none",
-              color: "var(--mist)",
-              cursor: "pointer",
-              padding: 4,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 6,
-              transition: "color 0.15s",
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.color = "var(--text-primary)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.color = "var(--mist)")
-            }
-          >
-            <X size={16} />
-          </button>
-        )}
+        <button
+          onClick={dismiss}
+          aria-label="Dismiss"
+          style={{
+            position: "absolute",
+            top: 12,
+            right: 12,
+            background: "none",
+            border: "none",
+            color: "var(--mist)",
+            cursor: "pointer",
+            padding: 4,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 6,
+            transition: "color 0.15s",
+          }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.color = "var(--text-primary)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.color = "var(--mist)")
+          }
+        >
+          <X size={16} />
+        </button>
 
         <div
           style={{
