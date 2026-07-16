@@ -852,33 +852,6 @@
   border-radius: 6px;
 }
 
-/* ─── Optimistic UI: Toast ─── */
-.toast {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: var(--z-toast, 1600);
-  padding: 10px 20px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  animation: toastIn 0.3s ease-out;
-  max-width: 90vw;
-  text-align: center;
-  pointer-events: none;
-}
-.toastError {
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: var(--red);
-  backdrop-filter: blur(12px);
-}
-@keyframes toastIn {
-  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
-}
-
 /* Optimistic UI: saving indicator */
 .savingDot {
   display: inline-block;

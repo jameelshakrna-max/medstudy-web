@@ -9,6 +9,7 @@ import {
   ChevronDown, ChevronRight, BarChart3, Activity,
 } from 'lucide-react'
 import s from '../../pages/CommunityDetail.module.css'
+import Dropdown from '../ui/Dropdown/Dropdown'
 
 const roomCard = {
   background: 'var(--card-bg)',
@@ -864,42 +865,32 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
             </div>
 
             {/* Focus Status */}
-            <div style={{ marginBottom: 16, position: 'relative' }}>
+            <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
                 Your Status
               </div>
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setShowStatusPicker(!showStatusPicker)} style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '6px 12px', borderRadius: 8, border: 'none',
-                  background: 'var(--navy2, #172032)',
-                  color: 'var(--text-primary)', fontSize: 12, fontWeight: 600,
-                  cursor: 'pointer', width: '100%',
-                }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: focusStatusColor(focusStatus), display: 'inline-block' }} />
-                  {focusStatuses.find(f => f.key === focusStatus)?.label || focusStatus}
-                </button>
-                {showStatusPicker && (
-                  <div style={{
-                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 'var(--z-dropdown, 1000)',
-                    background: 'var(--navy2, #172032)', border: '1px solid var(--card-border, #2a3448)',
-                    borderRadius: 8, padding: 4, marginTop: 4,
+              <Dropdown open={showStatusPicker} onOpenChange={setShowStatusPicker}>
+                <Dropdown.Trigger asChild>
+                  <button style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '6px 12px', borderRadius: 8, border: 'none',
+                    background: 'var(--navy2, #172032)',
+                    color: 'var(--text-primary)', fontSize: 12, fontWeight: 600,
+                    cursor: 'pointer', width: '100%',
                   }}>
-                    {focusStatuses.map(f => (
-                      <button key={f.key} onClick={() => updateFocusStatus(f.key)} style={{
-                        display: 'flex', alignItems: 'center', gap: 8,
-                        padding: '6px 10px', borderRadius: 6, border: 'none',
-                        background: focusStatus === f.key ? 'rgba(79,140,255,0.1)' : 'transparent',
-                        color: 'var(--text-primary)', fontSize: 12, fontWeight: 500,
-                        cursor: 'pointer', width: '100%', textAlign: 'left',
-                      }}>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: f.color, display: 'inline-block' }} />
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: focusStatusColor(focusStatus), display: 'inline-block' }} />
+                    {focusStatuses.find(f => f.key === focusStatus)?.label || focusStatus}
+                  </button>
+                </Dropdown.Trigger>
+                <Dropdown.Content>
+                  {focusStatuses.map(f => (
+                    <Dropdown.Item key={f.key} onSelect={() => updateFocusStatus(f.key)}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: f.color, display: 'inline-block' }} />
+                      {f.label}
+                    </Dropdown.Item>
+                  ))}
+                </Dropdown.Content>
+              </Dropdown>
             </div>
 
             {/* Participants */}

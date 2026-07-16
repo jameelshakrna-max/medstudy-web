@@ -307,7 +307,7 @@ export default function CalendarHeatmap({ communityId }) {
       </div>
 
       {/* Tooltip */}
-      {tooltip && (
+      {tooltip && createPortal(
         <div
           style={{
             position: 'fixed',
@@ -321,7 +321,7 @@ export default function CalendarHeatmap({ communityId }) {
             fontSize: '12px',
             color: 'var(--text-primary)',
             pointerEvents: 'none',
-            zIndex: 1200,
+            zIndex: 'var(--z-tooltip, 1200)',
             whiteSpace: 'nowrap',
             boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
           }}
@@ -337,7 +337,8 @@ export default function CalendarHeatmap({ communityId }) {
           <div style={{ display: 'flex', gap: '2px', marginTop: '4px' }}>
             <div style={{ width: '28px', height: '6px', borderRadius: '2px', background: getColor(tooltip.value, mode) }} />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {loading && (

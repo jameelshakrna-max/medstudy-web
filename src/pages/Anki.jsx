@@ -6,6 +6,7 @@ import { queryKeys } from '../lib/queryKeys'
 import { FSRS, Card as FSRSCard, State as FSRSState, Rating as FSRSRating } from 'fsrs.js'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
+import Toast from '../components/ui/Toast/Toast'
 import s from './Anki.module.css'
 
 const fsrsInstance = new FSRS()
@@ -410,7 +411,6 @@ export default function Anki() {
       })
     } catch (e) {
       setToast({ msg: 'Save failed: ' + e.message, type: 'error' })
-      setTimeout(() => setToast(null), 4000)
     }
     setSubmitting(false)
   }
@@ -444,7 +444,6 @@ export default function Anki() {
       })
     } catch (e) {
       setToast({ msg: 'Save failed: ' + e.message, type: 'error' })
-      setTimeout(() => setToast(null), 4000)
       setReviewingCardId(card.id)
     }
     setSubmitting(false)
@@ -657,6 +656,7 @@ export default function Anki() {
   /* ── render ──────────────────────────────────────────── */
 
   return (
+    <Toast.Provider>
     <div className={`${s.page}${compact ? '' : ' ' + s.expanded}`}>
       {/* header */}
       <div className={s.header}>
@@ -1193,11 +1193,14 @@ export default function Anki() {
       )}
 
       {/* ── toast notification ── */}
-      {toast && (
-        <div className={`${s.toast} ${toast.type === 'error' ? s.toastError : ''}`}>
-          {toast.msg}
-        </div>
-      )}
+      <Toast
+        open={!!toast}
+        onOpenChange={(open) => { if (!open) setToast(null) }}
+        variant={toast?.type === 'error' ? 'error' : 'default'}
+        title={toast?.msg}
+      />
     </div>
+    <Toast.Viewport />
+    </Toast.Provider>
   )
 }

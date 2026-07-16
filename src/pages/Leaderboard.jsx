@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Virtuoso } from 'react-virtuoso'
 import {
@@ -88,7 +88,6 @@ export default function Leaderboard() {
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [showSearch, setShowSearch] = useState(false)
-  const searchRef = useRef(null)
   const [joinedIds, setJoinedIds] = useState(new Set())
 
   const currentYear = now.getFullYear()
@@ -104,14 +103,6 @@ export default function Leaderboard() {
     if (debouncedSearch.length < 2) { setShowSearch(false); return }
     setShowSearch(true)
   }, [debouncedSearch])
-
-  useEffect(() => {
-    const handler = (e) => {
-      if (searchRef.current && !searchRef.current.contains(e.target)) setShowSearch(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
 
   const goPrev = () => {
     if (month === 1) { setMonth(12); setYear(y => y - 1) }
@@ -269,7 +260,7 @@ export default function Leaderboard() {
       ) : (
         <>
           {/* Search */}
-          <div className={s.searchWrapper} ref={searchRef}>
+          <div className={s.searchWrapper}>
             <Search size={16} strokeWidth={1.5} className={s.searchIcon} />
             <input
               className={s.searchInput}
@@ -277,6 +268,7 @@ export default function Leaderboard() {
               placeholder={`Search ${scope === 'individuals' ? 'users' : 'communities'}...`}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
+              onFocus={() => { if (debouncedSearch.length >= 2 && searchResults.length > 0) setShowSearch(true) }}
             />
             {showSearch && searchResults.length > 0 && (
               <div className={s.searchResults}>

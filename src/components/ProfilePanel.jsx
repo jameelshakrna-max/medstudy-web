@@ -10,6 +10,7 @@ import { apiGet, apiPost, apiDelete, imageUrl } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import { ProfilePanelSkeleton } from './profile/Skeleton'
 import Drawer from './ui/Drawer/Drawer'
+import Dropdown from './ui/Dropdown/Dropdown'
 import s from './ProfilePanel.module.css'
 
 
@@ -136,11 +137,8 @@ export default function ProfilePanel() {
     }
   }
 
-  const handleToggleInvite = async () => {
-    if (showInviteDropdown) {
-      setShowInviteDropdown(false)
-      return
-    }
+  const handleToggleInvite = async (open) => {
+    if (!open) return
     try {
       const data = await apiGet('/communities')
       const list = Array.isArray(data) ? data : (data?.communities || [])
@@ -148,7 +146,6 @@ export default function ProfilePanel() {
     } catch {
       setUserCommunities([])
     }
-    setShowInviteDropdown(true)
   }
 
   const handleInviteToCommunity = async (communityId) => {
@@ -225,36 +222,28 @@ export default function ProfilePanel() {
                 <button className={s.linkBtn} onClick={handleCopyLink} title="Copy profile link">
                   <Link size={16} />
                 </button>
-                <div style={{ position: 'relative' }}>
-                  <button
-                    className={`${s.linkBtn} ${inviteSent ? s.inviteSent : ''}`}
-                    onClick={handleToggleInvite}
-                    title="Invite to community"
-                    disabled={inviting}
-                  >
-                    <UserPlus size={16} />
-                  </button>
-                  {showInviteDropdown && (
-                    <div className={s.inviteDropdown}>
-                      {userCommunities.length === 0 ? (
-                        <div className={s.inviteOption} style={{ color: 'var(--text-secondary)', cursor: 'default' }}>
-                          No communities found
-                        </div>
-                      ) : (
-                        userCommunities.map(c => (
-                          <button
-                            key={c.id}
-                            className={s.inviteOption}
-                            onClick={() => handleInviteToCommunity(c.id)}
-                            disabled={inviting}
-                          >
-                            {c.name}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
+                <Dropdown open={showInviteDropdown} onOpenChange={(open) => { setShowInviteDropdown(open); handleToggleInvite(open) }}>
+                  <Dropdown.Trigger asChild>
+                    <button
+                      className={`${s.linkBtn} ${inviteSent ? s.inviteSent : ''}`}
+                      title="Invite to community"
+                      disabled={inviting}
+                    >
+                      <UserPlus size={16} />
+                    </button>
+                  </Dropdown.Trigger>
+                  <Dropdown.Content align="end">
+                    {userCommunities.length === 0 ? (
+                      <Dropdown.Label>No communities found</Dropdown.Label>
+                    ) : (
+                      userCommunities.map(c => (
+                        <Dropdown.Item key={c.id} onSelect={() => handleInviteToCommunity(c.id)} disabled={inviting}>
+                          {c.name}
+                        </Dropdown.Item>
+                      ))
+                    )}
+                  </Dropdown.Content>
+                </Dropdown>
               </div>
             )}
 
