@@ -1,6 +1,6 @@
 import { useAuth } from '../context/AuthContext'
 import { useNavigate, Link } from 'react-router-dom'
-import { ChevronDown, LogOut, Settings, User, LayoutDashboard, MessageCircle } from 'lucide-react'
+import { ChevronDown, LogOut, Settings, User, LayoutDashboard, MessageCircle, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { apiGet } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
@@ -10,7 +10,7 @@ import { usePresence } from '../context/PresenceContext'
 import Dropdown from './ui/Dropdown/Dropdown'
 import styles from './TopBar.module.css'
 
-export default function TopBar() {
+export default function TopBar({ sidebarCollapsed, onToggleSidebar }) {
   const { user, profile, userProfile, signOut } = useAuth()
   const navigate = useNavigate()
   const { myStatus } = usePresence() || {}
@@ -35,6 +35,9 @@ export default function TopBar() {
 
   return (
     <div className={styles.topBar}>
+      <button className={styles.toggleBtn} onClick={onToggleSidebar} title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}>
+        {sidebarCollapsed ? <PanelLeftOpen size={18} strokeWidth={1.5} /> : <PanelLeftClose size={18} strokeWidth={1.5} />}
+      </button>
       <div className={styles.spacer} />
       <div className={styles.right}>
         <NotificationCenter user={user} />

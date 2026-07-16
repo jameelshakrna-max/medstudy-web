@@ -33,6 +33,17 @@ export default function Layout() {
   const { user, profile, signOut } = useAuth()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem('sidebarCollapsed') === 'true' } catch { return false }
+  })
+
+  function toggleSidebar() {
+    setSidebarCollapsed(v => {
+      const next = !v
+      try { localStorage.setItem('sidebarCollapsed', next) } catch {}
+      return next
+    })
+  }
 
   const sidebarSwipe = useSwipeable({
     onSwipedRight: () => { if (window.innerWidth <= 768 && !mobileOpen) setMobileOpen(true) },
@@ -51,7 +62,7 @@ export default function Layout() {
   return (
     <div className={styles.layout}>
       {/* Sidebar */}
-      <aside className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ''}`}>
+      <aside className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ''} ${sidebarCollapsed ? styles.sidebarCollapsed : ''}`}>
         <div className={styles.sidebarTop}>
           <div className={styles.logo}>
             <img src="/icon.svg" alt="MedStudy" className={styles.logoIcon} />
@@ -89,13 +100,13 @@ export default function Layout() {
       {mobileOpen && <div className={styles.overlay} onClick={() => setMobileOpen(false)} />}
 
       {/* Main */}
-      <main className={styles.main} {...sidebarSwipe}>
+      <main className={`${styles.main} ${sidebarCollapsed ? styles.mainCollapsed : ''}`} {...sidebarSwipe}>
         <div className={styles.mobileHeader}>
           <button className={styles.menuBtn} onClick={() => setMobileOpen(!mobileOpen)}>
             <Menu size={20} strokeWidth={1.5} />
           </button>
         </div>
-        <TopBar />
+        <TopBar sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
         <div className={styles.content}>
           <Outlet />
         </div>

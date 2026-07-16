@@ -82,6 +82,30 @@
   background: var(--redL);
 }
 
+.toggleBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.toggleBtn:hover {
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+
+@media (max-width: 768px) {
+  .toggleBtn { display: none; }
+}
+
 @media (max-width: 480px) {
   .topBar {
     padding: 0 16px;

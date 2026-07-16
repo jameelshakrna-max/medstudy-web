@@ -28,6 +28,11 @@
 .menuBtn { background: none; border: none; color: var(--text-secondary); font-size: 22px; cursor: pointer; padding: 4px; }
 .content { padding: 36px 40px; max-width: 1200px; flex: 1; }
 .overlay { display: none; }
+
+/* ── Desktop collapsed sidebar ── */
+.sidebarCollapsed { transform: translateX(-100%); pointer-events: none; }
+.mainCollapsed { margin-left: 0; }
+
 @media (max-width: 768px) {
   .sidebar { transform: translateX(-100%); border-right: none; }
   .sidebarOpen { transform: translateX(0); }
