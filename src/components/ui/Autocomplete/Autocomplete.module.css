@@ -16,15 +16,18 @@
 
 .content {
   background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
   z-index: var(--z-float, 1800);
   padding: 4px;
   min-width: 200px;
   max-width: 100%;
   width: var(--radix-popover-trigger-width);
   animation: autocompleteIn 150ms ease;
+  overflow: hidden;
 }
 
 @keyframes autocompleteIn {
@@ -36,19 +39,32 @@
   max-height: 250px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 .option {
-  padding: 8px 10px;
-  border-radius: 4px;
+  padding: 10px 12px;
+  border-radius: 6px;
   font-size: 13px;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background 0.1s, color 0.1s;
   user-select: none;
 }
 
 .option.highlighted,
 .option:hover {
-  background: var(--input-bg);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .option.highlighted,
+[data-theme="light"] .option:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .content {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
