@@ -26,12 +26,13 @@
 .main { flex: 1; margin-left: 260px; min-height: 100vh; display: flex; flex-direction: column; }
 .mobileHeader { display: none; align-items: center; gap: 14px; padding: 12px 20px; border-bottom: 1px solid var(--card-border); background: var(--page-bg); position: sticky; top: 0; z-index: var(--z-header, 200); backdrop-filter: blur(16px); }
 .menuBtn { background: none; border: none; color: var(--text-secondary); font-size: 22px; cursor: pointer; padding: 4px; }
-.content { padding: 36px 40px; max-width: 1200px; flex: 1; }
+.content { padding: 36px 40px; max-width: 1200px; flex: 1; transition: max-width 0.3s ease, padding 0.3s ease; }
 .overlay { display: none; }
 
 /* ── Desktop collapsed sidebar ── */
 .sidebarCollapsed { transform: translateX(-100%); pointer-events: none; }
 .mainCollapsed { margin-left: 0; }
+.mainCollapsed .content { max-width: none; padding: 36px 60px; }
 
 @media (max-width: 768px) {
   .sidebar { transform: translateX(-100%); border-right: none; }
