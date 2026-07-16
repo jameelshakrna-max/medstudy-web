@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiDelete } from '../../lib/api'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiPost, apiDelete } from '../../lib/api'
 import { queryKeys } from '../../lib/queryKeys'
-import { X, Plus, Search } from 'lucide-react'
+import { X, Plus } from 'lucide-react'
 import Modal from '../ui/Modal/Modal'
-import Autocomplete from '../ui/Autocomplete/Autocomplete'
 import styles from './SkillEditor.module.css'
 
 const PROFICIENCY_OPTIONS = ['beginner', 'intermediate', 'advanced', 'expert']
@@ -26,17 +25,7 @@ export default function SkillEditor({ userId, skills: initialSkills, onClose, on
       is_custom: s.is_custom,
     }))
   )
-  const [searchQuery, setSearchQuery] = useState('')
-  const [customSkillInput, setCustomSkillInput] = useState('')
-
-  const { data: predefinedSkills = [] } = useQuery({
-    queryKey: ['research', 'predefinedSkills'],
-    queryFn: () => apiGet('/research/skills/predefined').then(d => d.skills || []),
-  })
-
-  const availableSkills = predefinedSkills.filter(
-    s => !currentSkills.some(cs => cs.skill.toLowerCase() === s.toLowerCase())
-  )
+  const [skillInput, setSkillInput] = useState('')
 
   const addSkillMutation = useMutation({
     mutationFn: (payload) => apiPost(`/users/${userId}/research-skills`, payload),
@@ -46,16 +35,15 @@ export default function SkillEditor({ userId, skills: initialSkills, onClose, on
     mutationFn: (skillId) => apiDelete(`/users/${userId}/research-skills/${skillId}`),
   })
 
-  const handleAddSkill = (skillName, isCustom = false) => {
+  const handleAddSkill = (skillName) => {
     if (!skillName.trim()) return
     if (currentSkills.some(s => s.skill.toLowerCase() === skillName.toLowerCase())) return
 
     setCurrentSkills(prev => [
       ...prev,
-      { skill_id: null, skill: skillName.trim(), proficiency: 'beginner', is_custom: isCustom },
+      { skill_id: null, skill: skillName.trim(), proficiency: 'beginner', is_custom: true },
     ])
-    setSearchQuery('')
-    setCustomSkillInput('')
+    setSkillInput('')
   }
 
   const handleRemoveSkill = (index) => {
@@ -119,42 +107,23 @@ export default function SkillEditor({ userId, skills: initialSkills, onClose, on
         </div>
       )}
 
-      <div className={styles.skillSearch}>
-        <div className={styles.skillInputWrapper}>
-          <div className={styles.skillInputContainer}>
-            <Search size={14} className={styles.skillInputIcon} />
-            <Autocomplete
-              value={searchQuery}
-              onValueChange={setSearchQuery}
-              onSelect={(item) => {
-                const label = typeof item === 'string' ? item : item.label || item.name || ''
-                handleAddSkill(label)
-              }}
-              suggestions={availableSkills}
-              placeholder="Search skills..."
-              className={styles.skillInput}
-            />
-          </div>
-        </div>
-      </div>
-
       <div className={styles.customRow}>
         <input
           className={styles.customInput}
-          placeholder="Add custom skill..."
-          value={customSkillInput}
-          onChange={e => setCustomSkillInput(e.target.value)}
+          placeholder="Add a skill..."
+          value={skillInput}
+          onChange={e => setSkillInput(e.target.value)}
           onKeyDown={e => {
             if (e.key === 'Enter') {
               e.preventDefault()
-              handleAddSkill(customSkillInput, true)
+              handleAddSkill(skillInput)
             }
           }}
         />
         <button
           className={styles.addBtn}
-          onClick={() => handleAddSkill(customSkillInput, true)}
-          disabled={!customSkillInput.trim()}
+          onClick={() => handleAddSkill(skillInput)}
+          disabled={!skillInput.trim()}
         >
           <Plus size={14} /> Add
         </button>

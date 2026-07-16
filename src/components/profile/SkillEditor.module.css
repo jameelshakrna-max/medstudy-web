@@ -3,12 +3,6 @@
 .skillRow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--text-primary); }
 .skillRemove { background: none; border: none; color: var(--red, #ef4444); cursor: pointer; padding: 2px; }
 
-.skillSearch { position: relative; }
-.skillInputWrapper { display: flex; gap: 6px; }
-.skillInputContainer { position: relative; flex: 1; display: flex; align-items: center; }
-.skillInputIcon { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: var(--mist); pointer-events: none; z-index: 1; }
-.skillInput { width: 100%; padding: 8px 10px 8px 28px !important; }
-
 .customRow { display: flex; gap: 6px; margin-top: 8px; }
 .customInput { flex: 1; padding: 8px 10px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px; font-size: 13px; color: var(--text-primary); outline: none; font-family: 'DM Sans', sans-serif; }
 .customInput:focus { border-color: var(--blue); }
