@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Send, Paperclip } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { useProfilePanel } from '../context/ProfilePanelContext'
 import { supabase } from '../lib/supabase'
 import { apiGet, apiPost, imageUrl } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
@@ -44,7 +43,6 @@ function shouldShowDivider(prev, curr) {
 
 export default function DMConversation() {
   const { user } = useAuth()
-  const { openProfile } = useProfilePanel()
   const { conversationId } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -194,23 +192,13 @@ export default function DMConversation() {
 
   if (!user) return null
 
-  const initials = (otherUser?.display_name || otherUser?.username || '?')
-    .split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
-
   return (
     <div className={styles.page}>
       <div className={styles.header}>
         <button className={styles.backBtn} onClick={() => navigate('/messages')}>
           <ArrowLeft size={20} />
         </button>
-        {otherUser?.avatar_url ? (
-          <img className={styles.avatar} src={imageUrl(otherUser.avatar_url)} alt="" onClick={(e) => { e.stopPropagation(); openProfile(otherUser?.user_id); }} style={{cursor: 'pointer'}} />
-        ) : (
-          <div className={styles.avatarFallback} onClick={(e) => { e.stopPropagation(); openProfile(otherUser?.user_id); }} style={{cursor: 'pointer'}}>{initials}</div>
-        )}
-        <div className={styles.headerInfo}>
-          <UserLink userId={otherUser?.user_id} displayName={otherUser?.display_name || otherUser?.username} avatar={otherUser?.avatar_url} size="md" showAvatar={false} showHandle={false} />
-        </div>
+        <UserLink userId={otherUser?.user_id} displayName={otherUser?.display_name || otherUser?.username} avatar={otherUser?.avatar_url} size="md" showHandle={false} />
       </div>
 
       <div className={styles.messages} ref={containerRef}>

@@ -3,15 +3,13 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { useProfilePanel } from '../context/ProfilePanelContext'
-import { apiGet, imageUrl, formatDate } from '../lib/api'
+import { apiGet, formatDate } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import UserLink from './ui/UserLink/UserLink'
 import styles from './DMInbox.module.css'
 
 export default function DMInbox() {
   const { user } = useAuth()
-  const { openProfile } = useProfilePanel()
   const navigate = useNavigate()
   const { conversationId } = useParams()
   const [search, setSearch] = useState('')
@@ -53,22 +51,15 @@ export default function DMInbox() {
         <div className={styles.list}>
           {filtered.map(conv => {
             const u = conv.other_user
-            const initials = (u?.display_name || u?.username || '?')
-              .split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
             return (
               <div
                 key={conv.id}
                 className={`${styles.conversation} ${String(conv.id) === String(conversationId) ? styles.active : ''}`}
                 onClick={() => navigate(`/messages/${conv.id}`)}
               >
-                {u?.avatar_url ? (
-                  <img className={styles.avatar} src={imageUrl(u.avatar_url)} alt="" loading="lazy" onClick={(e) => { e.stopPropagation(); openProfile(u?.user_id); }} style={{cursor: 'pointer'}} />
-                ) : (
-                  <div className={styles.avatarFallback} onClick={(e) => { e.stopPropagation(); openProfile(u?.user_id); }} style={{cursor: 'pointer'}}>{initials}</div>
-                )}
+                <UserLink userId={u?.user_id} displayName={u?.display_name || u?.username} avatar={u?.avatar_url} size="sm" />
                 <div className={styles.info}>
                   <div className={styles.nameRow}>
-                    <UserLink userId={u?.user_id} displayName={u?.display_name || u?.username} size="sm" showAvatar={false} />
                     <span className={styles.time}>
                       {conv.last_message?.created_at ? formatDate(conv.last_message.created_at) : ''}
                     </span>

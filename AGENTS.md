@@ -61,6 +61,20 @@ Every new feature must use these shared components. Do not recreate these behavi
 - `<Toast>` — notifications, feedback
 - `<Autocomplete>` — searchable suggestion lists
 - `<Overlay>` — backdrop for modals and drawers
+- `<UserLink>` / `<UserCard>` — user identity display with profile navigation
+
+### User Profile Navigation Rule
+
+Every place in the application where a user's identity is displayed must allow opening that user's profile.
+
+- Use the application's shared **identity components** (`UserLink`, `UserCard`, or future identity primitives) for every user identity display. Do not implement profile navigation directly inside feature components.
+- The default interaction is that the entire user identity block (avatar, display name, username, badges, subtitle) is a single interactive target that opens the user's profile. If the surrounding container has its own primary action (e.g. navigating to a conversation), only the identity block should open the profile while the rest of the container keeps its original behavior.
+- Feature components must never call `openProfile()` directly. Profile navigation should be owned by the shared identity components. If new behavior is needed, extend the shared component instead of duplicating profile-opening logic.
+- Pass `userId`, `avatar`, `username`, `displayName`, `badge`, `subtitle` props to identity components. The ProfilePanel handles data loading — only pass the userId.
+- Exceptions: deleted accounts, banned/hidden users, anonymous/system users, loading skeletons.
+- Future features MUST use shared identity components — no plain text usernames or avatars.
+
+**Code Review Requirement:** During code review, any newly introduced avatar, username, or user identity that is not implemented using a shared identity component should be treated as an architectural issue and refactored before merging.
 
 ### Layering Rules
 

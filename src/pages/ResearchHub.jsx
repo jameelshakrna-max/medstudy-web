@@ -907,9 +907,8 @@ export default function ResearchHub() {
                   )}
                   {(postDetail.comments || []).map((comment) => (
                     <div key={comment.id} className={s.commentItem}>
-                      <img src={comment.avatar_url || undefined} alt="" className={s.commentAvatar} onClick={(e) => { e.stopPropagation(); openProfile(comment.user_id); }} style={{cursor: 'pointer'}} />
                       <div className={s.commentBody}>
-                        <UserLink userId={comment.user_id} username={comment.username} size="sm" showAvatar={false} />
+                        <UserLink userId={comment.user_id} username={comment.username} avatar={comment.avatar_url} size="sm" />
                         <div className={s.commentContent}>{comment.content}</div>
                         <div className={s.commentMeta}>{timeAgo(comment.created_at)}</div>
                       </div>
