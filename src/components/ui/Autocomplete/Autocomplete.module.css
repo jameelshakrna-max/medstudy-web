@@ -15,7 +15,7 @@
 }
 
 .content {
-  background: var(--surface, var(--navy2));
+  background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
@@ -50,5 +50,5 @@
 
 .option.highlighted,
 .option:hover {
-  background: var(--surface-hover, rgba(255, 255, 255, 0.08));
+  background: var(--input-bg);
 }

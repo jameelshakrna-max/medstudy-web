@@ -89,6 +89,7 @@ export default function Autocomplete({
                   onMouseDown={(e) => {
                     e.preventDefault()
                     onSelect?.(item)
+                    setOpen(false)
                   }}
                   onMouseEnter={() => setHighlightedIndex(i)}
                 >
