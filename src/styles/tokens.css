@@ -44,4 +44,5 @@
 
   /* Overlay */
   --overlay-bg: rgba(0, 0, 0, 0.5);
+  --overlay-bg-soft: rgba(0, 0, 0, 0.3);
 }

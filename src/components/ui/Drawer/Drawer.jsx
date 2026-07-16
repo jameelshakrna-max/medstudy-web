@@ -8,6 +8,7 @@ const Drawer = forwardRef(function Drawer({
   contentClassName,
   side = 'right', // 'right' | 'left'
   width = 380,
+  overlay = 'soft',
   ...props
 }, ref) {
   const animation = side === 'left' ? 'slide-left' : 'slide-right'
@@ -17,6 +18,7 @@ const Drawer = forwardRef(function Drawer({
       ref={ref}
       animation={animation}
       layer="drawer"
+      overlay={overlay}
       contentClassName={`${styles.drawer} ${side === 'left' ? styles.left : styles.right} ${contentClassName || ''}`}
       style={{ '--drawer-width': `${width}px` }}
       {...props}

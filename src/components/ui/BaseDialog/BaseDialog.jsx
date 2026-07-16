@@ -4,6 +4,7 @@ import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import useScrollLock from '../../../hooks/useScrollLock'
 import { useLayer } from '../../../context/LayerContext'
 import Overlay from '../Overlay/Overlay'
+import overlayStyles from '../Overlay/Overlay.module.css'
 import styles from './BaseDialog.module.css'
 
 const BaseDialog = forwardRef(function BaseDialog({
@@ -13,6 +14,7 @@ const BaseDialog = forwardRef(function BaseDialog({
   className,
   contentClassName,
   overlayClassName,
+  overlay = 'default', // 'default' | 'soft'
   layer = 'modal',
   animation = 'scale', // 'scale' | 'slide-right' | 'slide-left' | 'slide-up'
   onEscape,
@@ -55,7 +57,7 @@ const BaseDialog = forwardRef(function BaseDialog({
       <Dialog.Portal>
         <Dialog.Overlay asChild>
           <Overlay
-            className={overlayClassName}
+            className={`${overlay === 'soft' ? overlayStyles.soft : ''} ${overlayClassName || ''}`}
             style={{ zIndex: `calc(${layerStyle} - 1)` }}
           />
         </Dialog.Overlay>
