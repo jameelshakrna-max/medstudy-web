@@ -10,10 +10,10 @@ import styles from './SkillEditor.module.css'
 const PROFICIENCY_OPTIONS = ['beginner', 'intermediate', 'advanced', 'expert']
 
 const PROFICIENCY_COLORS = {
-  beginner: '#9ca3af',
+  beginner: 'var(--mist)',
   intermediate: 'var(--blue)',
-  advanced: 'var(--green)',
-  expert: '#f59e0b',
+  advanced: 'var(--emerald)',
+  expert: 'var(--amber)',
 }
 
 export default function SkillEditor({ userId, skills: initialSkills, onClose, onSaved }) {

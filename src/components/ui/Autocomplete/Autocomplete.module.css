@@ -1,11 +1,11 @@
 .input {
   width: 100%;
   padding: 8px 10px;
-  background: var(--bg);
+  background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 13px;
-  color: var(--text);
+  color: var(--text-primary);
   outline: none;
   font-family: 'DM Sans', sans-serif;
 }
@@ -42,7 +42,7 @@
   padding: 8px 10px;
   border-radius: 4px;
   font-size: 13px;
-  color: var(--text);
+  color: var(--text-primary);
   cursor: pointer;
   transition: background 0.1s;
   user-select: none;

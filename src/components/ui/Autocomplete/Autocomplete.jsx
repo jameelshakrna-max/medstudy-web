@@ -38,6 +38,7 @@ export default function Autocomplete({
       e.preventDefault()
       const item = filtered[highlightedIndex]
       onSelect?.(item)
+      setOpen(false)
     } else if (e.key === 'Escape') {
       setOpen(false)
     }
