@@ -6,6 +6,7 @@ import { apiGet, apiPost, formatDate } from '../lib/api'
 import { useNotifications } from '../context/NotificationContext'
 import { queryKeys } from '../lib/queryKeys'
 import Dropdown from './ui/Dropdown/Dropdown'
+import UserLink from './ui/UserLink/UserLink'
 import styles from './NotificationCenter.module.css'
 
 const CATEGORIES = [
@@ -126,7 +127,10 @@ export default function NotificationCenter({ user }) {
                 <p>You're all caught up!</p>
               </div>
             ) : (
-              notifications.map(n => (
+              notifications.map(n => {
+                const notifData = n.data ? (typeof n.data === 'string' ? JSON.parse(n.data) : n.data) : {}
+                const senderId = notifData.follower_id || notifData.inviter_id || notifData.invitee_id || null
+                return (
                 <div
                   key={n.id}
                   className={`${styles.item} ${n.read ? '' : styles.itemUnread}`}
@@ -140,6 +144,11 @@ export default function NotificationCenter({ user }) {
                     <span className={styles.categoryIcon}>{CATEGORY_ICONS[n.category] || '📌'}</span>
                   </div>
                   <div className={styles.itemContent}>
+                    {senderId && (
+                      <div className={styles.senderLink}>
+                        <UserLink userId={senderId} size="sm" showAvatar={false} />
+                      </div>
+                    )}
                     <div className={styles.itemTitle}>{n.title}</div>
                     {n.body && <div className={styles.itemBody}>{n.body}</div>}
                     <div className={styles.itemMeta}>
@@ -155,7 +164,8 @@ export default function NotificationCenter({ user }) {
                     </div>
                   </div>
                 </div>
-              ))
+                )
+              })
             )}
           </div>
         </Dropdown.Content>

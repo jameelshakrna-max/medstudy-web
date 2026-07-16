@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import s from '../../pages/CommunityDetail.module.css'
 import Dropdown from '../ui/Dropdown/Dropdown'
+import UserLink from '../ui/UserLink/UserLink'
 
 const roomCard = {
   background: 'var(--card-bg)',
@@ -908,7 +909,7 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
                 }}>
                   <span style={{ color: 'var(--text-primary)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: focusStatusColor(p.focus_status || 'focusing'), display: 'inline-block', flexShrink: 0 }} />
-                    {p.user_id === currentUserId ? 'You' : p.user_id.slice(0, 8)}
+                                {p.user_id === currentUserId ? 'You' : <UserLink userId={p.user_id} displayName={p.user_name || 'Unknown'} size="sm" showAvatar={false} />}
                   </span>
                   <span style={{ color: 'var(--emerald, #10b981)', fontWeight: 600, fontSize: 12 }}>
                     {formatDuration(p.study_seconds)}
@@ -1068,7 +1069,7 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
                                 {i + 1}
                               </span>
                               <span style={{ fontSize: 12, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {p.user_id === currentUserId ? 'You' : p.user_id.slice(0, 8)}
+                    {p.user_id === currentUserId ? 'You' : <UserLink userId={p.user_id} displayName={p.user_name || 'Unknown'} size="sm" showAvatar={false} />}
                               </span>
                               <span style={{ fontSize: 11, color: 'var(--emerald, #10b981)', fontWeight: 600 }}>
                                 {formatDuration(p.study_seconds)}
@@ -1157,7 +1158,7 @@ export default function VoiceRooms({ communityId, myRole, isMod, isAdmin }) {
                   {room.status}
                 </span>
                 <span>{room.participants || 0} {room.participants === 1 ? 'member' : 'members'}</span>
-                {room.created_by_name && <span>{room.created_by_name}</span>}
+                {room.created_by_name && <UserLink userId={room.created_by} displayName={room.created_by_name} size="sm" showAvatar={false} />}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>

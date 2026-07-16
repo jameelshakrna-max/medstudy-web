@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { apiGet } from '../../lib/api'
 import { Loader2, Crown } from 'lucide-react'
+import UserLink from '../ui/UserLink/UserLink'
 import s from './HallOfFameTab.module.css'
 
 const MONTHS = [
@@ -63,17 +64,7 @@ export default function HallOfFameTab({ communityId }) {
               </div>
               {winner ? (
                 <div className={s.winner}>
-                  <div className={s.avatar}>
-                    {winner.avatar_url ? (
-                      <img src={winner.avatar_url} alt="" />
-                    ) : (
-                      <span>{winner.user_name?.[0]?.toUpperCase() || '?'}</span>
-                    )}
-                  </div>
-                  <div className={s.winnerInfo}>
-                    <span className={s.winnerName}>{winner.user_name}</span>
-                    {winner.title && <span className={s.winnerTitle}>{winner.title}</span>}
-                  </div>
+                  <UserLink userId={winner.user_id} username={winner.user_name} displayName={winner.user_name} avatar={winner.avatar_url} subtitle={winner.title} size="md" />
                 </div>
               ) : (
                 <div className={s.noWinner}>No winner yet</div>

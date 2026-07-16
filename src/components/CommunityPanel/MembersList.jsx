@@ -1,12 +1,10 @@
 import { useState } from 'react'
-import { useProfilePanel } from '../../context/ProfilePanelContext'
-import { imageUrl } from '../../lib/api'
 import { ChevronRight, Search } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { UserLink } from '../ui'
 import s from './CommunityPanel.module.css'
 
 export default function MembersList({ communityId, members }) {
-  const { openProfile } = useProfilePanel()
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
 
@@ -32,19 +30,9 @@ export default function MembersList({ communityId, members }) {
           <div
             key={m.id}
             className={s.memberRow}
-            onClick={() => openProfile(m.user_id)}
             style={{ cursor: 'pointer' }}
           >
-            <div className={s.memberAvatar}>
-              {m.avatar_url ? (
-                <img src={imageUrl(m.avatar_url)} alt="" />
-              ) : (
-                <div className={s.memberAvatarFallback}>{m.user_name?.[0]?.toUpperCase()}</div>
-              )}
-            </div>
-            <div className={s.memberInfo}>
-              <span className={s.memberName}>{m.user_name}</span>
-            </div>
+            <UserLink userId={m.user_id} username={m.user_name} avatar={m.avatar_url} size="sm" />
             <div className={s.memberHours}>{Math.round(m.total_study_hours || 0)}h</div>
           </div>
         ))}

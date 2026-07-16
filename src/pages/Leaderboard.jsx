@@ -11,6 +11,7 @@ import { queryKeys } from '../lib/queryKeys'
 import { useAuth } from '../context/AuthContext'
 import { useProfilePanel } from '../context/ProfilePanelContext'
 import { useCommunityPanel } from '../context/CommunityPanelContext'
+import { UserLink } from '../components/ui'
 import s from './Leaderboard.module.css'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -49,20 +50,13 @@ function ScoreBadge({ score }) {
   return <span className={`${s.communityScore} ${cls}`}>{Math.round(score)}</span>
 }
 
-function PodiumCard({ entry, place, medals, showStreak, onClick }) {
+function PodiumCard({ entry, place, medals, showStreak }) {
   if (!entry) return <div className={`${s.podiumPlace} ${s['podium' + place]}`} />
   const medal = medals[place]
   return (
-    <div className={`${s.podiumPlace} ${s['podium' + place]} ${s.podiumClickable}`} onClick={onClick}>
+    <div className={`${s.podiumPlace} ${s['podium' + place]} ${s.podiumClickable}`}>
       <div className={s.podiumMedal}>{medal}</div>
-      <div className={s.podiumAvatar}>
-        {entry.avatar_url ? (
-          <img src={imageUrl(entry.avatar_url)} alt="" loading="lazy" />
-        ) : (
-          <span>{entry.user_name?.[0]?.toUpperCase() || entry.name?.[0]?.toUpperCase() || '?'}</span>
-        )}
-      </div>
-      <div className={s.podiumName}>{entry.user_name || entry.name}</div>
+      <UserLink userId={entry.user_id} username={entry.user_name || entry.name} avatar={entry.avatar_url} size="md" />
       <div className={s.podiumValue}>{Math.round(entry.hours ?? entry.total_hours ?? entry.value ?? 0)}h</div>
       {showStreak && entry.streak != null && (
         <div className={s.podiumStreak}><Flame size={12} /> {entry.streak}d streak</div>
@@ -301,9 +295,9 @@ export default function Leaderboard() {
           {/* Podium */}
           {scope === 'individuals' && top3Users.length > 0 && (
             <div className={s.podium}>
-              <PodiumCard entry={top3Users[1]} place="Second" medals={medals} showStreak onClick={() => openProfile(top3Users[1].user_id)} />
-              <PodiumCard entry={top3Users[0]} place="First" medals={medals} showStreak onClick={() => openProfile(top3Users[0].user_id)} />
-              <PodiumCard entry={top3Users[2]} place="Third" medals={medals} showStreak onClick={() => openProfile(top3Users[2].user_id)} />
+              <PodiumCard entry={top3Users[1]} place="Second" medals={medals} showStreak />
+              <PodiumCard entry={top3Users[0]} place="First" medals={medals} showStreak />
+              <PodiumCard entry={top3Users[2]} place="Third" medals={medals} showStreak />
             </div>
           )}
           {scope === 'communities' && top3Comms.length > 0 && (
@@ -326,21 +320,13 @@ export default function Leaderboard() {
                   <div
                     key={entry.user_id}
                     className={`${s.row} ${entry.is_me ? s.rowMe : ''}`}
-                    onClick={() => openProfile(entry.user_id)}
                     onMouseEnter={() => preloadProfile(entry.user_id)}
                     onMouseLeave={cancelPreload}
                   >
                     <div className={s.rank}>
                       {medal ? <span className={s.medal}>{medal}</span> : <span className={s.rankNum}>{entry.rank}</span>}
                     </div>
-                    <div className={s.avatar}>
-                      {entry.avatar_url ? (
-                        <img src={imageUrl(entry.avatar_url)} alt="" loading="lazy" />
-                      ) : (
-                        <div className={s.avatarFallback}>{entry.user_name?.[0]?.toUpperCase() || '?'}</div>
-                      )}
-                    </div>
-                    <div className={s.name}>{entry.user_name}</div>
+                    <UserLink userId={entry.user_id} username={entry.user_name} avatar={entry.avatar_url} size="md" />
                     <div className={s.value}>{Math.round(entry.hours ?? entry.value ?? 0)}h</div>
                     <RankChange change={entry.rank_change} />
                   </div>

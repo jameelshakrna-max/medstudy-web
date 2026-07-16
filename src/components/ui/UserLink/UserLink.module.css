@@ -1,0 +1,123 @@
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  border-radius: 6px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background 0.15s ease;
+  max-width: 100%;
+}
+
+.link:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.link:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.link:hover .name {
+  text-decoration: underline;
+}
+
+.subtitle {
+  font-size: 0.8em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.handle {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.avatar {
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--navy3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--blue);
+}
+
+.avatarSm {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+}
+
+.avatarMd {
+  width: 32px;
+  height: 32px;
+  font-size: 13px;
+}
+
+.avatarLg {
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
+}
+
+.nameSm {
+  font-size: 13px;
+}
+
+.nameMd {
+  font-size: 14px;
+}
+
+.nameLg {
+  font-size: 16px;
+}
+
+.textGroup {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.plain {
+  cursor: default;
+}
+
+.plain:hover {
+  background: none;
+}

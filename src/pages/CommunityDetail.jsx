@@ -31,6 +31,8 @@ import FlashcardShareModal from '../components/FlashcardShareModal'
 import MentionText from '../components/MentionText'
 import MentionInput from '../components/MentionInput'
 import UserCard from '../components/UserCard'
+import UserLink from '../components/ui/UserLink/UserLink'
+import { useProfilePanel } from '../context/ProfilePanelContext'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -48,6 +50,7 @@ export default function CommunityDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { openProfile } = useProfilePanel()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('chat')
   const [avatarError, setAvatarError] = useState(false)
@@ -402,7 +405,7 @@ export default function CommunityDetail() {
                   return (
                   <div key={msg.id} id={'msg-' + msg.id} className={`${s.message} ${s.msgRow} ${msg.deleted ? s.deleted : ''} ${msg.user_id === user?.id ? s.own : ''}`}>
                     <div className={s.msgMeta}>
-                      <UserCard userId={msg.user_id}><span className={s.msgUser}>{msg.user_name}</span></UserCard>
+                      <UserCard userId={msg.user_id}><span className={s.msgUser} onClick={(e) => { e.stopPropagation(); openProfile(msg.user_id) }}>{msg.user_name}</span></UserCard>
                       <RoleBadge role={msg.user_role} size="sm" />
                       <span className={s.msgTime}>{formatDate(msg.created_at)}</span>
                     </div>
@@ -448,7 +451,7 @@ export default function CommunityDetail() {
                 {pendingUploads.map(p => (
                   <div key={p.id} className={`${s.message} ${s.own} ${s.pendingMsg}`}>
                     <div className={s.msgMeta}>
-                      <span className={s.msgUser}>{p.user_name}</span>
+                      <UserLink userId={user?.id} displayName={p.user_name} size="sm" showAvatar={false} />
                       <span className={s.msgTime}>{formatDate(p.created_at)}</span>
                     </div>
                     {p.status === 'uploading' ? (
@@ -483,7 +486,7 @@ export default function CommunityDetail() {
                       return (
                       <div key={msg.id} id={'msg-' + msg.id} className={`${s.message} ${s.msgRow} ${msg.deleted ? s.deleted : ''} ${msg.user_id === user?.id ? s.own : ''}`}>
                         <div className={s.msgMeta}>
-                          <UserCard userId={msg.user_id}><span className={s.msgUser}>{msg.user_name}</span></UserCard>
+                          <UserCard userId={msg.user_id}><span className={s.msgUser} onClick={(e) => { e.stopPropagation(); openProfile(msg.user_id) }}>{msg.user_name}</span></UserCard>
                           <RoleBadge role={msg.user_role} size="sm" />
                           <span className={s.msgTime}>{formatDate(msg.created_at)}{msg.is_edited ? ' (edited)' : ''}</span>
                         </div>

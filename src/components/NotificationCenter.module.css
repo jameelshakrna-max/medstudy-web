@@ -134,3 +134,7 @@
   transition: all 0.15s;
 }
 .actionBtn:hover { background: var(--blue); color: #fff; }
+
+.senderLink {
+  margin-bottom: 2px;
+}

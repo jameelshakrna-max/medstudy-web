@@ -5,7 +5,7 @@ import { useProfilePanel } from '../context/ProfilePanelContext'
 import StatusIndicator from './StatusIndicator'
 import Popover from './ui/Popover/Popover'
 
-export default function UserCard({ userId, children, placement = 'bottom' }) {
+export default function UserCard({ userId, children, placement = 'bottom', onClick }) {
   const navigate = useNavigate()
   const { openProfile } = useProfilePanel()
   const [visible, setVisible] = useState(false)
@@ -98,7 +98,7 @@ export default function UserCard({ userId, children, placement = 'bottom' }) {
           <>
             <div
               style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}
-              onClick={() => { setVisible(false); openProfile(userId) }}
+              onClick={() => { setVisible(false); if (onClick) { onClick(userId); } else { openProfile(userId); } }}
             >
               <div style={{ position: 'relative', flexShrink: 0 }}>
                 {cardData.profile?.avatar_url ? (

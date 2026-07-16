@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { apiGet } from '../../lib/api'
 import confetti from 'canvas-confetti'
 import { Trophy, Medal, TrendingUp, Clock, Users, BarChart3, ChevronUp, ChevronDown, Minus, Loader2, Search } from 'lucide-react'
+import UserLink from '../ui/UserLink/UserLink'
 import s from '../../pages/CommunityDetail.module.css'
 
 const FILTERS = [
@@ -147,7 +148,7 @@ export default function LeaderboardTab({ communityId, myId, isAdmin, isMod }) {
                 {silver && (
                   <>
                     <div className={s.podiumAvatar}>{silver.badge?.emoji || '\u{1F948}'}</div>
-                    <div className={s.podiumName}>{silver.user_name}</div>
+                    <div className={s.podiumName}><UserLink userId={silver.user_id} displayName={silver.user_name} size="sm" showAvatar={false} /></div>
                     <div className={s.podiumHours}>{silver.hours}h</div>
                     {silver.badge?.title && <div className={s.podiumTitle}>{silver.badge.title}</div>}
                   </>
@@ -157,7 +158,7 @@ export default function LeaderboardTab({ communityId, myId, isAdmin, isMod }) {
                 {gold && (
                   <>
                     <div className={s.podiumAvatar}>{gold.badge?.emoji || '\u{1F947}'}</div>
-                    <div className={s.podiumName}>{gold.user_name}</div>
+                    <div className={s.podiumName}><UserLink userId={gold.user_id} displayName={gold.user_name} size="sm" showAvatar={false} /></div>
                     <div className={s.podiumHours}>{gold.hours}h</div>
                     {gold.badge?.title && <div className={s.podiumTitle}>{gold.badge.title}</div>}
                   </>
@@ -167,7 +168,7 @@ export default function LeaderboardTab({ communityId, myId, isAdmin, isMod }) {
                 {bronze && (
                   <>
                     <div className={s.podiumAvatar}>{bronze.badge?.emoji || '\u{1F949}'}</div>
-                    <div className={s.podiumName}>{bronze.user_name}</div>
+                    <div className={s.podiumName}><UserLink userId={bronze.user_id} displayName={bronze.user_name} size="sm" showAvatar={false} /></div>
                     <div className={s.podiumHours}>{bronze.hours}h</div>
                     {bronze.badge?.title && <div className={s.podiumTitle}>{bronze.badge.title}</div>}
                   </>
@@ -182,7 +183,7 @@ export default function LeaderboardTab({ communityId, myId, isAdmin, isMod }) {
                 <div key={r.user_id} className={`${s.lbRow} ${r.is_me ? s.lbRowMe : ''}`}>
                   <span className={s.lbRank}>#{r.rank}</span>
                   <span className={`${s.lbName} ${r.is_me ? s.lbNameMe : ''}`}>
-                    {r.is_me ? 'You' : r.user_name}
+                    {r.is_me ? 'You' : <UserLink userId={r.user_id} displayName={r.user_name} size="sm" showAvatar={false} />}
                   </span>
                   <span className={s.lbHours}>{r.hours}h</span>
                   {r.badge?.emoji && <span className={s.lbBadge}>{r.badge.emoji}</span>}

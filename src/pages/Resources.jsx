@@ -10,6 +10,7 @@ import {
   Download, Eye, Plus, Loader2, FolderOpen
 } from 'lucide-react'
 import Modal from '../components/ui/Modal/Modal'
+import UserLink from '../components/ui/UserLink/UserLink'
 import s from './Resources.module.css'
 
 const API = import.meta.env.VITE_API_URL || '/api'
@@ -331,7 +332,7 @@ export default function Resources() {
                   </div>
                 )}
                 <div className={s.cardActions}>
-                  <span className={s.cardUser}>{r.user_name}</span>
+                  <UserLink userId={r.user_id} displayName={r.user_name} size="sm" showAvatar={false} />
                   <div className={s.cardActionBtns} onClick={e => e.stopPropagation()}>
                     <a href={API + '/resources/' + r.id + '/download?token=' + sessionToken} className={s.actionBtn} title="Download" download>
                       <Download size={14} strokeWidth={1.5} />

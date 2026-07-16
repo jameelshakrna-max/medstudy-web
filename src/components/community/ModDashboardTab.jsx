@@ -4,6 +4,7 @@ import { apiGet, apiPut, apiPost, apiDelete } from '../../lib/api'
 import { useProfilePanel } from '../../context/ProfilePanelContext'
 import AnnouncementsTab from './AnnouncementsTab'
 import RoleBadge from '../RoleBadge'
+import { UserLink } from '../ui'
 import s from '../../pages/CommunityDetail.module.css'
 
 const ROLE_ORDER = ['administrator', 'moderator', 'mentor', 'scholar', 'member']
@@ -162,7 +163,7 @@ export default function ModDashboardTab({ communityId, members, announcements, s
           <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Pending Join Requests</h3>
           {joinReqs.map(req => (
             <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--card-border)' }}>
-              <span style={{ fontSize: 14, fontWeight: 500 }}>{req.username || req.user_id}</span>
+              <UserLink userId={req.user_id} username={req.username} displayName={req.username || 'Unknown'} size="sm" showAvatar={false} />
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                 <button className={s.actionBtn} onClick={() => handleApproveRequest(req.id, 'approved')} title="Approve">
                   <Check size={14} />
@@ -218,11 +219,8 @@ export default function ModDashboardTab({ communityId, members, announcements, s
           const isExpanded = expandedMember === uid
           return (
             <div key={uid} className={s.memberCard}>
-              <div className={s.memberAvatar}>
-                {(m.user_name || '?')[0].toUpperCase()}
-              </div>
+              <UserLink userId={uid} username={m.user_name} size="sm" showAvatar={false} />
               <div className={s.memberInfo}>
-                <div className={s.memberName}>{m.user_name}</div>
                 <div className={s.memberMeta}>
                   <RoleBadge role={role} />
                   {m.title && <span style={{ color: 'var(--mist)' }}>{m.title}</span>}

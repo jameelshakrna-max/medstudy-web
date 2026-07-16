@@ -4,6 +4,7 @@ import { apiGet, apiPost, apiPut, formatDate, formatCountdown } from '../../lib/
 import { Search, Trophy, Plus, X, Loader2, Check, Flag, UserPlus, Clock, Users, BarChart3 } from 'lucide-react'
 import s from '../../pages/CommunityDetail.module.css'
 import Modal from '../ui/Modal/Modal'
+import UserLink from '../ui/UserLink/UserLink'
 
 const COMPETITION_DURATIONS = [
   { value: '1_week', label: '1 Week' },
@@ -194,7 +195,7 @@ export default function CompetitionsTab({ competitions, communityId, myId, isAdm
                 const w = (p.total_hours / maxHours) * 100
                 return (
                   <div key={p.id} className={`${s.barChartRow} ${p.user_id === myId ? s.barChartRowActive : ''}`}>
-                    <span className={s.barChartName}>{p.user_id === myId ? 'You' : (p.user_name || p.user_id?.slice(0, 8))}</span>
+                    <span className={s.barChartName}><UserLink userId={p.user_id} displayName={p.user_id === myId ? 'You' : (p.user_name || 'Unknown')} size="sm" showAvatar={false} /></span>
                     <div className={s.barChartTrack}>
                       <div className={s.barChartFill} style={{ width: w + '%' }} />
                     </div>
@@ -257,7 +258,7 @@ export default function CompetitionsTab({ competitions, communityId, myId, isAdm
                     {medal || `#${i + 1}`}
                   </span>
                   <span className={`${s.lbName} ${i === 0 ? s.lbNameWinner : ''} ${p.user_id === myId ? s.lbNameMe : ''}`}>
-                    {p.user_id === myId ? 'You' : (p.user_name || p.user_id?.slice(0, 8))}
+                    <UserLink userId={p.user_id} displayName={p.user_id === myId ? 'You' : (p.user_name || 'Unknown')} size="sm" showAvatar={false} />
                   </span>
                   <span className={s.lbHours}>{Math.round(p.total_hours)}h</span>
                 </div>
@@ -323,7 +324,7 @@ export default function CompetitionsTab({ competitions, communityId, myId, isAdm
                   <div className={s.compName}>{c.title}</div>
                   {c.description && <div className={s.compDesc}>{c.description}</div>}
                   <div className={s.compMeta}>
-                    <span>by {c.created_by === myId ? 'You' : c.created_by?.slice(0, 8)}</span>
+                    <span>by <UserLink userId={c.created_by} displayName={c.created_by === myId ? 'You' : 'Unknown'} size="sm" showAvatar={false} /></span>
                     <span>{c.duration.replace('_', ' ')}</span>
                   </div>
                 </div>

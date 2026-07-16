@@ -3,12 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiDelete } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import { useAuth } from '../context/AuthContext'
-import { useProfilePanel } from '../context/ProfilePanelContext'
 import {
   Search, Plus, ExternalLink, ArrowUp, MessageSquare, CheckCircle,
   Bookmark, BookmarkCheck, Flag, Loader2, X, Send, ChevronDown, Clock, Users, Trash2
 } from 'lucide-react'
 import Modal from '../components/ui/Modal/Modal'
+import { UserLink } from '../components/ui'
 import s from './ResearchHub.module.css'
 
 const CATEGORIES = [
@@ -85,7 +85,6 @@ function truncateUrl(url) {
 export default function ResearchHub() {
   const { user, profile } = useAuth()
   const queryClient = useQueryClient()
-  const { openProfile } = useProfilePanel()
 
   const [activeCategory, setActiveCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -454,28 +453,8 @@ export default function ResearchHub() {
               onClick={() => handleOpenPost(post)}
             >
             <div className={s.postHeader}>
-              {post.avatar_url ? (
-                <img
-                  src={post.avatar_url}
-                  alt=""
-                  className={s.avatar}
-                  onClick={(e) => { e.stopPropagation(); openProfile(post.user_id) }}
-                />
-              ) : (
-                <div
-                  className={s.avatarFallback}
-                  onClick={(e) => { e.stopPropagation(); openProfile(post.user_id) }}
-                >
-                  {(post.username || '?')[0].toUpperCase()}
-                </div>
-              )}
+              <UserLink userId={post.user_id} username={post.username} avatar={post.avatar_url} size="sm" />
               <div className={s.postUserInfo}>
-                <span
-                  className={s.postUser}
-                  onClick={(e) => { e.stopPropagation(); openProfile(post.user_id) }}
-                >
-                  {post.username}
-                </span>
                 {post.reputation > 0 && (
                   <span className={s.postRep}>{post.reputation} rep</span>
                 )}
@@ -589,28 +568,8 @@ export default function ResearchHub() {
               onClick={() => handleOpenPost(post)}
             >
             <div className={s.postHeader}>
-              {post.avatar_url ? (
-                <img
-                  src={post.avatar_url}
-                  alt=""
-                  className={s.avatar}
-                  onClick={(e) => { e.stopPropagation(); openProfile(post.user_id) }}
-                />
-              ) : (
-                <div
-                  className={s.avatarFallback}
-                  onClick={(e) => { e.stopPropagation(); openProfile(post.user_id) }}
-                >
-                  {(post.username || '?')[0].toUpperCase()}
-                </div>
-              )}
+              <UserLink userId={post.user_id} username={post.username} avatar={post.avatar_url} size="sm" />
               <div className={s.postUserInfo}>
-                <span
-                  className={s.postUser}
-                  onClick={(e) => { e.stopPropagation(); openProfile(post.user_id) }}
-                >
-                  {post.username}
-                </span>
                 {post.reputation > 0 && (
                   <span className={s.postRep}>{post.reputation} rep</span>
                 )}
@@ -830,26 +789,7 @@ export default function ResearchHub() {
                 <div className={s.detailHeader}>
                   <div>
                     <div className={s.detailMeta}>
-                      {postDetail.avatar_url ? (
-                        <img
-                          src={postDetail.avatar_url}
-                          alt=""
-                          className={s.avatar}
-                          onClick={() => openProfile(postDetail.user_id)}
-                          style={{ cursor: 'pointer' }}
-                        />
-                      ) : (
-                        <div className={s.avatarFallback}>
-                          {(postDetail.username || '?')[0].toUpperCase()}
-                        </div>
-                      )}
-                      <span
-                        className={s.postUser}
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => openProfile(postDetail.user_id)}
-                      >
-                        {postDetail.username}
-                      </span>
+                      <UserLink userId={postDetail.user_id} username={postDetail.username} avatar={postDetail.avatar_url} size="sm" />
                       {postDetail.reputation > 0 && (
                         <span className={s.postRep}>{postDetail.reputation} rep</span>
                       )}
@@ -967,9 +907,9 @@ export default function ResearchHub() {
                   )}
                   {(postDetail.comments || []).map((comment) => (
                     <div key={comment.id} className={s.commentItem}>
-                      <img src={comment.avatar_url || undefined} alt="" className={s.commentAvatar} />
+                      <img src={comment.avatar_url || undefined} alt="" className={s.commentAvatar} onClick={(e) => { e.stopPropagation(); openProfile(comment.user_id); }} style={{cursor: 'pointer'}} />
                       <div className={s.commentBody}>
-                        <div className={s.commentAuthor}>{comment.username}</div>
+                        <UserLink userId={comment.user_id} username={comment.username} size="sm" showAvatar={false} />
                         <div className={s.commentContent}>{comment.content}</div>
                         <div className={s.commentMeta}>{timeAgo(comment.created_at)}</div>
                       </div>

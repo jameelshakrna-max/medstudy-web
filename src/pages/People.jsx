@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react'
 import { Search, X, Loader2, Users, UserPlus } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { imageUrl, apiGet } from '../lib/api'
+import { apiGet } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import { useProfilePanel } from '../context/ProfilePanelContext'
+import { UserLink } from '../components/ui'
 import s from './People.module.css'
 
 export default function People() {
-  const { openProfile, preloadProfile, cancelPreload } = useProfilePanel()
+  const { preloadProfile, cancelPreload } = useProfilePanel()
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [avatarErrors, setAvatarErrors] = useState({})
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 300)
@@ -37,20 +37,11 @@ export default function People() {
     <div
       key={user.user_id}
       className={s.card}
-      onClick={() => openProfile(user.user_id)}
       onMouseEnter={() => preloadProfile(user.user_id)}
       onMouseLeave={cancelPreload}
     >
-      <div className={s.avatar}>
-        {!avatarErrors[user.user_id] && user.avatar_url ? (
-          <img src={imageUrl(user.avatar_url)} alt="" onError={() => setAvatarErrors(p => ({...p, [user.user_id]: true}))} loading="lazy" />
-        ) : (
-          (user.display_name || user.user_name || '?')[0]?.toUpperCase()
-        )}
-      </div>
+      <UserLink userId={user.user_id} username={user.user_name} displayName={user.display_name} avatar={user.avatar_url} showHandle />
       <div className={s.info}>
-        <div className={s.name}>{user.display_name || user.user_name}</div>
-        <div className={s.username}>@{user.user_name}</div>
         {user.bio && <div className={s.bio}>{user.bio}</div>}
       </div>
       {extra}

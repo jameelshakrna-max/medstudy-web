@@ -7,6 +7,7 @@ import RoleBadge from '../RoleBadge'
 import { X, Plus, Loader2, Check, Copy, FileText, Settings, Link, ScrollText, SlidersHorizontal, Trophy, UserPlus, Ban, Clock, AlertTriangle, Users, UserCog, UserMinus, Star, Search, Camera } from 'lucide-react'
 import s from '../../pages/CommunityDetail.module.css'
 import Modal from '../ui/Modal/Modal'
+import UserLink from '../ui/UserLink/UserLink'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -562,7 +563,7 @@ export default function SettingsTab({ community, rules, settings, members, annou
                         {m.user_name?.[0]?.toUpperCase() || '?'}
                       </div>
                       <div className={s.memberInfo}>
-                        <div className={s.memberName}>{m.user_name}</div>
+                        <div className={s.memberName}><UserLink userId={m.user_id} displayName={m.user_name} size="sm" showAvatar={false} /></div>
                         <div className={s.memberMeta}>
                           <RoleBadge role={m.role} />
                           {m.title && <span>{m.title}</span>}
@@ -661,7 +662,7 @@ export default function SettingsTab({ community, rules, settings, members, annou
                       <UserPlus size={14} strokeWidth={1.5} />
                     </div>
                     <div className={s.rowContent}>
-                      <div className={s.rowTitle}>{req.user_id?.slice(0, 12)}</div>
+                      <div className={s.rowTitle}><UserLink userId={req.user_id} displayName={req.user_id?.slice(0, 12)} size="sm" showAvatar={false} /></div>
                       <div className={s.rowMeta}>{req.created_at?.slice(0, 10)}</div>
                     </div>
                     <div className={s.rowActions}>
@@ -706,7 +707,7 @@ export default function SettingsTab({ community, rules, settings, members, annou
                       <Ban size={14} strokeWidth={1.5} />
                     </div>
                     <div className={s.rowContent}>
-                      <div className={s.rowTitle}>{b.user_id?.slice(0, 12)}</div>
+                      <div className={s.rowTitle}><UserLink userId={b.user_id} displayName={b.user_id?.slice(0, 12)} size="sm" showAvatar={false} /></div>
                       <div className={s.rowMeta}>
                         {b.reason && <span>{b.reason}</span>}
                         {b.expires_at && <span style={{color:'var(--amber)'}}>Expires {formatDate(b.expires_at)}</span>}
@@ -762,13 +763,13 @@ export default function SettingsTab({ community, rules, settings, members, annou
                     </div>
                     <div className={s.rowContent}>
                       <div className={s.rowTitle}>
-                        {log.target_user_id?.slice(0, 8)}
+                        <UserLink userId={log.target_user_id} displayName={log.target_user_id?.slice(0, 8)} size="sm" showAvatar={false} />
                         <span style={{margin:'0 4px',color:'var(--mist)'}}>&rarr;</span>
                         {log.old_role || '?'} &rarr; {log.new_role}
                       </div>
                       <div className={s.rowMeta}>
                         <span>{log.created_at?.slice(0, 10)}</span>
-                        <span>by {log.changed_by_user_id?.slice(0, 8)}</span>
+                        <span>by <UserLink userId={log.changed_by_user_id} displayName={log.changed_by_user_id?.slice(0, 8)} size="sm" showAvatar={false} /></span>
                       </div>
                     </div>
                   </div>
@@ -812,7 +813,7 @@ export default function SettingsTab({ community, rules, settings, members, annou
                       <div className={s.rowTitle}>{f.file_name}</div>
                       <div className={s.rowMeta}>
                         <span>{(f.file_size / 1024).toFixed(0)} KB</span>
-                        {f.user_name && <span>{f.user_name}</span>}
+                        {f.user_name && <UserLink userId={f.user_id} displayName={f.user_name} size="sm" showAvatar={false} />}
                         {f.created_at && <span>{f.created_at?.slice(0, 10)}</span>}
                       </div>
                     </div>
