@@ -11,15 +11,18 @@ export default function Autocomplete({
   renderItem,
   className,
   contentClassName,
+  filterFn,
 }) {
   const [open, setOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const inputRef = useRef(null)
 
-  const filtered = suggestions.filter(s => {
-    const label = typeof s === 'string' ? s : s.label || s.name || ''
-    return label.toLowerCase().includes((value || '').toLowerCase())
-  })
+  const filtered = filterFn
+    ? filterFn(suggestions, value || '')
+    : suggestions.filter(s => {
+        const label = typeof s === 'string' ? s : s.label || s.name || ''
+        return label.toLowerCase().includes((value || '').toLowerCase())
+      })
 
   useEffect(() => {
     setHighlightedIndex(-1)

@@ -6,6 +6,8 @@ import { supabase } from '../lib/supabase'
 import { apiGet, apiPost, apiPut, apiDelete } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import { User, Lock, Bell, Palette, Clock, ShieldAlert, Medal, Loader2, Camera, MapPin, LinkIcon, AtSign, FileText, Award, FlaskConical } from 'lucide-react'
+import { Autocomplete } from '../components/ui'
+import { universities, filterUniversities } from '../data/universities'
 import AvatarUpload from '../components/AvatarUpload'
 import BannerUpload from '../components/BannerUpload'
 import ProfileCompletion from '../components/ProfileCompletion'
@@ -615,13 +617,20 @@ export default function Settings() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
             <div className={s.field}>
               <label className={s.label}>University</label>
-              <input
-                className={s.input}
-                type="text"
+              <Autocomplete
                 value={university}
-                onChange={e => setUniversity(e.target.value)}
-                placeholder="e.g. Al-Quds University"
-                maxLength={100}
+                onValueChange={setUniversity}
+                onSelect={(item) => setUniversity(item.label)}
+                suggestions={universities}
+                placeholder="Search universities..."
+                className={s.input}
+                filterFn={filterUniversities}
+                renderItem={(item) => (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{item.label}</span>
+                    <span style={{ fontSize: 11, opacity: 0.5 }}>{item.city}</span>
+                  </div>
+                )}
               />
             </div>
             <div className={s.field}>
