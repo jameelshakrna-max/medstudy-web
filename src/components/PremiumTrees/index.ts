@@ -5,3 +5,6 @@ export type {
   PremiumTreeState,
   PremiumTreeType,
 } from './types'
+
+import type { PremiumTreeType } from './types'
+export const PREMIUM_TREE_IDS: Set<PremiumTreeType> = new Set(['sakura', 'maple', 'willow', 'baobab', 'crystal'])

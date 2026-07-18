@@ -60,6 +60,7 @@ export default function ForestTreeInstance({
         variant="landscape"
         wind={wind}
         mature
+        windSeed={session.id}
       />
     </button>
   )
