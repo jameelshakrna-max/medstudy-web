@@ -134,6 +134,45 @@
   75% { transform: translate(20px, -5px) rotate(4deg); }
 }
 
+/* ── Pollen ── */
+.pollen {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: rgba(232,200,80,0.6);
+  box-shadow: 0 0 3px rgba(232,200,80,0.3);
+  animation: pollenFloat var(--dur, 7s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes pollenFloat {
+  0% { opacity: 0; transform: translate(0, 0); }
+  20% { opacity: 0.6; }
+  50% { transform: translate(var(--dx, 5px), -30px); }
+  80% { opacity: 0.4; }
+  100% { opacity: 0; transform: translate(calc(var(--dx, 5px) * -1), -60px); }
+}
+
+/* ── Falling leaf ── */
+.fallingLeaf {
+  position: absolute;
+  width: 6px;
+  height: 4px;
+  border-radius: 0 50% 50% 50%;
+  background: var(--color, rgba(16,185,129,0.6));
+  animation: leafDrift var(--dur, 6s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes leafDrift {
+  0% { opacity: 0; transform: translate(0, 0) rotate(0deg); }
+  15% { opacity: 0.7; }
+  50% { transform: translate(15px, 40px) rotate(var(--rot, 270deg)); }
+  85% { opacity: 0.5; }
+  100% { opacity: 0; transform: translate(-10px, 80px) rotate(calc(var(--rot, 270deg) + 180deg)); }
+}
+
 .sunRays {
   position: absolute;
   top: -20px;
@@ -177,6 +216,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .grass, .flower, .firefly, .butterfly, .sunRays { animation: none !important; }
+  .grass, .flower, .firefly, .butterfly, .sunRays, .pollen, .fallingLeaf { animation: none !important; }
   .butterfly::before, .butterfly::after { animation: none !important; }
 }

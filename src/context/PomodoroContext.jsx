@@ -306,6 +306,68 @@ export function PomodoroProvider({ children }) {
   const [focusMode, setFocusMode] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
 
+  // ── Persist timer state to localStorage ──
+  const saveTimerState = useCallback((overrides = {}) => {
+    try {
+      const state = {
+        mode, running, seconds, totalSec,
+        selectedTopic, sessionPomodoros, activeStudySeconds,
+        treeStatus, selectedTree,
+        savedAt: Date.now(),
+        ...overrides,
+      }
+      localStorage.setItem('pomodoro_state', JSON.stringify(state))
+    } catch (_) {}
+  }, [mode, running, seconds, totalSec, selectedTopic, sessionPomodoros, activeStudySeconds, treeStatus, selectedTree])
+
+  // ── Recover timer state on mount ──
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('pomodoro_state')
+      if (!raw) return
+      const saved = JSON.parse(raw)
+      if (!saved?.savedAt) return
+
+      // Only recover if saved within last 2 hours
+      const age = Date.now() - saved.savedAt
+      if (age > 2 * 60 * 60 * 1000) {
+        localStorage.removeItem('pomodoro_state')
+        return
+      }
+
+      if (saved.mode) setMode(saved.mode)
+      if (saved.selectedTopic) setSelectedTopic(saved.selectedTopic)
+      if (saved.sessionPomodoros) setSessionPomodoros(saved.sessionPomodoros)
+      if (saved.activeStudySeconds) setActiveStudySeconds(saved.activeStudySeconds)
+      if (saved.selectedTree) setSelectedTree(saved.selectedTree)
+
+      // If timer was running, calculate remaining time
+      if (saved.running && saved.seconds > 0) {
+        const elapsed = Math.floor(age / 1000)
+        const remaining = Math.max(0, saved.seconds - elapsed)
+        if (remaining > 0) {
+          setSeconds(remaining)
+          setTotalSec(saved.totalSec || saved.seconds)
+          setTreeStatus('RUNNING')
+          // Don't auto-resume — let user decide
+        } else {
+          // Timer expired while away
+          setSeconds(0)
+          setTotalSec(saved.totalSec || 25 * 60)
+        }
+      } else if (saved.seconds !== undefined) {
+        setSeconds(saved.seconds)
+        setTotalSec(saved.totalSec || 25 * 60)
+      }
+    } catch (_) {}
+  }, []) // Run once on mount
+
+  // ── Auto-save on state changes (debounced) ──
+  useEffect(() => {
+    const timeout = setTimeout(() => saveTimerState(), 1000)
+    return () => clearTimeout(timeout)
+  }, [mode, running, seconds, totalSec, selectedTopic, sessionPomodoros, activeStudySeconds, treeStatus, selectedTree, saveTimerState])
+
   const rafRef = useRef(null)
   const endTimeRef = useRef(null)
   const lastTickRef = useRef(null)
@@ -681,6 +743,7 @@ export function PomodoroProvider({ children }) {
   }, [getDuration])
 
   const resetSession = useCallback(() => {
+    try { localStorage.removeItem('pomodoro_state') } catch (_) {}
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
     if (bgTimeoutRef.current) { clearTimeout(bgTimeoutRef.current); bgTimeoutRef.current = null }
     endTimeRef.current = null

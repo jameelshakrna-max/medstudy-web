@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import confetti from 'canvas-confetti'
 import { usePomodoro, usePomodoroSettings } from '../context/PomodoroContext'
 import { Play, Pause, Leaf, Timer, ChevronDown, BookOpen, Maximize2, Minimize2, EyeOff } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -45,6 +46,7 @@ export default function Pomodoro() {
   const [ownedTrees, setOwnedTrees] = useState(['oak', 'sakura'])
   const [coins, setCoins] = useState(0)
   const [coinEarning, setCoinEarning] = useState({ amount: 0, show: false })
+  const [achievement, setAchievement] = useState({ name: '', show: false })
 
   const tree = getTreeById(selectedTree)
   const subjectColor = topicInfo?.subject?.system?.id
@@ -165,6 +167,14 @@ export default function Pomodoro() {
           setCoinEarning({ amount: data.coinsEarned, show: true })
           setTimeout(() => setCoinEarning(prev => ({ ...prev, show: false })), 3000)
         }
+        if (data.achievements?.length > 0) {
+          const ach = data.achievements[0]
+          const names = { crystal: 'Crystal Tree', cosmic: 'Cosmic Pine' }
+          setTimeout(() => {
+            setAchievement({ name: names[ach.treeId] || ach.treeId, show: true })
+            setTimeout(() => setAchievement(prev => ({ ...prev, show: false })), 4000)
+          }, 3500)
+        }
       } catch (_) {}
     }
     earnCoins()
@@ -248,6 +258,15 @@ export default function Pomodoro() {
       }
 
       setShowFinish(false)
+      // Celebration confetti
+      const duration = 2000
+      const end = Date.now() + duration
+      const frame = () => {
+        confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 } })
+        confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 } })
+        if (Date.now() < end) requestAnimationFrame(frame)
+      }
+      frame()
       resetSession()
     } catch (err) {
       setSaveError('Something went wrong. Please try again.')
@@ -463,7 +482,14 @@ export default function Pomodoro() {
         {coinEarning.show && (
           <div className={s.coinToast}>
             <span className={s.coinIcon}>🪙</span>
-            <span>+{coinEarning.amount} coins</span>
+            <span>+{coinEarning.amount} coins earned</span>
+          </div>
+        )}
+
+        {achievement.show && (
+          <div className={s.achievementToast}>
+            <span className={s.achievementIcon}>🏆</span>
+            <span>{achievement.name} unlocked!</span>
           </div>
         )}
       </div>
@@ -471,14 +497,37 @@ export default function Pomodoro() {
       {/* ═══ Finish Modal ═══ */}
       {showFinish && (
         <Modal open={showFinish} onOpenChange={(v) => { if (!v) setShowFinish(false) }} size="sm">
-          <Modal.Title style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 16 }}>
-            Session Complete!
-          </Modal.Title>
-          <div className={s.modalSummary}>
-            <div><Timer size={14} strokeWidth={1.5} /> {sessionPomodoros} Pomodoro{sessionPomodoros > 1 ? 's' : ''}</div>
-            <div>⏱ {totalMin} minutes</div>
-            {topicInfo && <div><BookOpen size={14} strokeWidth={1.5} /> {topicInfo.name}</div>}
+          <div className={s.modalHeader}>
+            <div className={s.modalEmoji}>🎉</div>
+            <Modal.Title style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: 'var(--text-primary)', textAlign: 'center' }}>
+              Session Complete!
+            </Modal.Title>
           </div>
+
+          <div className={s.modalStats}>
+            <div className={s.modalStat}>
+              <span className={s.modalStatValue}>{sessionPomodoros}</span>
+              <span className={s.modalStatLabel}>Pomodoro{sessionPomodoros > 1 ? 's' : ''}</span>
+            </div>
+            <div className={s.modalStatDivider} />
+            <div className={s.modalStat}>
+              <span className={s.modalStatValue}>{totalMin}m</span>
+              <span className={s.modalStatLabel}>Focused</span>
+            </div>
+            <div className={s.modalStatDivider} />
+            <div className={s.modalStat}>
+              <span className={s.modalStatValue}>{coinEarning.amount || '—'}</span>
+              <span className={s.modalStatLabel}>Coins</span>
+            </div>
+          </div>
+
+          {topicInfo && (
+            <div className={s.modalTopic}>
+              <BookOpen size={13} strokeWidth={1.5} />
+              <span>{topicInfo.name}</span>
+            </div>
+          )}
+
           {selectedTopic && (
             <div className={s.modalField}>
               <label>How's this topic?</label>
