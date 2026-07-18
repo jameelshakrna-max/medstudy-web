@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import confetti from 'canvas-confetti'
 import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { usePomodoro, usePomodoroSettings } from '../context/PomodoroContext'
-import { Play, Pause, Leaf, Timer, ChevronDown, BookOpen, EyeOff } from 'lucide-react'
+import { Play, Pause, Leaf, Timer, ChevronDown, BookOpen, EyeOff, Trees } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { getSubjectColor } from '../lib/subjectColors'
 import { queryKeys } from '../lib/queryKeys'
@@ -56,6 +57,7 @@ export default function Pomodoro() {
   } = usePomodoroSettings()
 
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { playBloom, playWilt, playStart, playSnap } = useForestAudio()
 
   const [topics, setTopics] = useState([])
@@ -347,6 +349,7 @@ export default function Pomodoro() {
             earnedCoins={earnedCoins}
             advanceToNextMode={advanceToNextMode}
             sessionLog={sessionLog}
+            onVisitForest={() => navigate('/forest')}
           />
         ) : view === 'failed' ? (
           <FailedScreen
@@ -563,10 +566,16 @@ function SetupScreen({
 
       {/* Secondary settings */}
       {!focusMode && (
-        <button className={s.focusModeBtn} onClick={() => { navigator.vibrate?.(15); toggleFocusMode() }}>
-          <EyeOff size={16} strokeWidth={2} />
-          <span>Focus Mode</span>
-        </button>
+        <div className={s.secondaryActions}>
+          <button className={s.forestBtn} onClick={() => navigate('/forest')} aria-label="Open My Forest">
+            <Trees size={16} strokeWidth={2} />
+            <span className={s.forestBtnLabel}>My Forest</span>
+          </button>
+          <button className={s.focusModeBtn} onClick={() => { navigator.vibrate?.(15); toggleFocusMode() }}>
+            <EyeOff size={16} strokeWidth={2} />
+            <span>Focus Mode</span>
+          </button>
+        </div>
       )}
 
       {/* Stats */}
@@ -663,7 +672,7 @@ function ActiveBreakScreen({
 //  COMPLETION SCREEN
 // ═══════════════════════════════════════════════
 
-function CompletionScreen({ totalSec, topicInfo, earnedCoins, advanceToNextMode, sessionLog }) {
+function CompletionScreen({ totalSec, topicInfo, earnedCoins, advanceToNextMode, sessionLog, onVisitForest }) {
   return (
     <div className={s.completionCard}>
       <div className={s.completionTree}>
@@ -677,6 +686,10 @@ function CompletionScreen({ totalSec, topicInfo, earnedCoins, advanceToNextMode,
         <button className={`${s.plantBtn} study`} onClick={advanceToNextMode}>
           <Play size={18} strokeWidth={2} />
           <span>Plant another</span>
+        </button>
+        <button className={s.secondaryBtn} onClick={onVisitForest}>
+          <Trees size={16} strokeWidth={2} />
+          <span>View My Forest</span>
         </button>
       </div>
     </div>

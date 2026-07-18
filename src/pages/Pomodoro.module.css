@@ -180,6 +180,25 @@
 }
 .focusModeBtn:hover { border-color: var(--text-secondary); color: var(--text-primary); background: var(--input-bg); }
 
+.secondaryActions {
+  display: flex; gap: 8px; align-items: center;
+}
+.forestBtn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+  border-radius: 100px; border: 1px solid var(--card-border);
+  background: var(--card-bg); color: var(--mist); font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; backdrop-filter: blur(8px);
+  font-family: 'DM Sans', sans-serif;
+}
+.forestBtn:hover { color: var(--emerald); border-color: var(--emerald); background: rgba(16,185,129,0.08); }
+.secondaryBtn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px;
+  border-radius: 12px; border: 1px solid var(--card-border);
+  background: var(--input-bg); color: var(--text-secondary); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; font-family: 'DM Sans', sans-serif;
+}
+.secondaryBtn:hover { color: var(--text-primary); background: var(--card-border); }
+
 /* ── Active Focus Screen ── */
 .topicLabel {
   font-size: 14px;
@@ -486,6 +505,9 @@
   .statValue { font-size: 16px; }
   .durationEditor { gap: 14px; }
   .stepButton { width: 42px; height: 42px; font-size: 16px; }
+  .forestBtnLabel { display: none; }
+  .forestBtn { padding: 8px; border-radius: 50%; }
+  .completionActions { flex-direction: column; }
 }
 @media (max-height: 800px) and (min-width: 769px) {
   .activeTreeStage { height: clamp(240px, 36dvh, 380px); }
