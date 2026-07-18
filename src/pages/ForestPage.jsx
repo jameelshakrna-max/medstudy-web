@@ -1,15 +1,13 @@
 import { useState, useMemo, useCallback } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { queryKeys } from '../lib/queryKeys'
-import { Trees, TreePine, Leaf } from 'lucide-react'
+import { Leaf } from 'lucide-react'
 import {
-  buildGroves, getTreeLayout, splitRows, getTreePreview,
-  formatMinutes, getDateBounds, getSubjectColor, getSubjectName, PAGE_SIZE,
+  getDateBounds, getSubjectColor, getSubjectName, PAGE_SIZE,
 } from '../lib/forestUtils'
-import TreePreview from '../components/TreePreview'
+import ForestLandscape from '../components/forest/ForestLandscape'
 import TreeDetailsSheet from '../components/TreeDetailsSheet'
 import LoadingScreen from '../components/LoadingScreen'
 import styles from './Page.module.css'
@@ -23,8 +21,6 @@ const TIME_FILTERS = [
 
 export default function ForestPage() {
   const { user } = useAuth()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const [timeFilter, setTimeFilter] = useState('all')
   const [subjectFilter, setSubjectFilter] = useState('all')
   const [selectedSession, setSelectedSession] = useState(null)
@@ -70,8 +66,6 @@ export default function ForestPage() {
   const displayedSessions = useMemo(() => filteredSessions.slice(0, (page + 1) * PAGE_SIZE), [filteredSessions, page])
   const hasMore = filteredSessions.length > displayedSessions.length
 
-  const groves = useMemo(() => buildGroves(displayedSessions), [displayedSessions])
-
   const totalMinutes = useMemo(() => filteredSessions.reduce((sum, s) => sum + (s.duration_min || 0), 0), [filteredSessions])
 
   const totalHours = useMemo(() => {
@@ -79,6 +73,11 @@ export default function ForestPage() {
     const m = totalMinutes % 60
     return h > 0 ? `${h}h ${m > 0 ? m + 'm' : ''}` : `${m}m`
   }, [totalMinutes])
+
+  const groveCount = useMemo(() => {
+    const ids = new Set(filteredSessions.map(s => s.subject_id || 'other'))
+    return ids.size
+  }, [filteredSessions])
 
   const handleTreeClick = useCallback((session) => {
     setSelectedSession(session)
@@ -90,13 +89,15 @@ export default function ForestPage() {
 
   if (isLoading) return <LoadingScreen fullPage={false} message="Loading your forest..." />
 
+  const isEmpty = filteredSessions.length === 0
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
         <h1 className={styles.title}>My Forest</h1>
         <p className={styles.sub}>
           {filteredSessions.length} tree{filteredSessions.length !== 1 ? 's' : ''} &middot; {totalHours} focused
-          {groves.length > 1 && <> &middot; {groves.length} groves</>}
+          {groveCount > 1 && <> &middot; {groveCount} subjects</>}
         </p>
       </div>
 
@@ -135,83 +136,25 @@ export default function ForestPage() {
         </div>
       )}
 
-      {filteredSessions.length === 0 ? (
-        <div className={s.emptyState}>
-          <div className={s.emptyIcon}>
-            <Trees size={48} strokeWidth={1} />
-          </div>
-          <h3 className={s.emptyTitle}>Your forest is waiting</h3>
-          <p className={s.emptyDesc}>
-            Complete your first focus session to plant an Oak tree.
-          </p>
-          <button className={s.emptyCta} onClick={() => navigate('/pomodoro')}>
-            <TreePine size={16} />
-            Start focusing
-          </button>
-        </div>
-      ) : (
-        <div className={s.landscape}>
-          {groves.map(grove => (
-            <GroveSection key={grove.subjectId} grove={grove} onTreeClick={handleTreeClick} />
-          ))}
+      <div className={s.landscapeWrapper}>
+        <ForestLandscape
+          trees={displayedSessions}
+          environment="meadow"
+          wind
+          onTreeClick={handleTreeClick}
+          empty={isEmpty}
+          transitioning={subjectFilter !== 'all'}
+        />
+      </div>
 
-          {hasMore && (
-            <button className={s.loadMore} onClick={handleLoadMore}>
-              <Leaf size={14} />
-              Load older trees ({filteredSessions.length - displayedSessions.length} more)
-            </button>
-          )}
-        </div>
+      {hasMore && (
+        <button className={s.loadMore} onClick={handleLoadMore}>
+          <Leaf size={14} />
+          Load older trees ({filteredSessions.length - displayedSessions.length} more)
+        </button>
       )}
 
       <TreeDetailsSheet session={selectedSession} onClose={() => setSelectedSession(null)} />
-    </div>
-  )
-}
-
-function GroveSection({ grove, onTreeClick }) {
-  const { subjectId, subjectName, sessions, totalMinutes } = grove
-  const color = getSubjectColor(subjectId)
-  const layout = useMemo(() => getTreeLayout(sessions), [sessions])
-  const { back, mid, front } = useMemo(() => splitRows(sessions, layout), [sessions, layout])
-
-  return (
-    <div className={s.grove}>
-      <div className={s.groveHeader}>
-        <span className={s.groveDot} style={{ background: color }} />
-        <span className={s.groveName}>{subjectName}</span>
-        <span className={s.groveMeta}>
-          {sessions.length} tree{sessions.length !== 1 ? 's' : ''} &middot; {formatMinutes(totalMinutes)}
-        </span>
-      </div>
-
-      <div className={s.groveGround}>
-        <div className={s.groundStrip} style={{ background: `linear-gradient(90deg, ${color}18, ${color}08)` }} />
-        <TreeRow items={back} depthClass={s.backRow} onTreeClick={onTreeClick} />
-        <TreeRow items={mid} depthClass={s.midRow} onTreeClick={onTreeClick} />
-        <TreeRow items={front} depthClass={s.frontRow} onTreeClick={onTreeClick} />
-      </div>
-    </div>
-  )
-}
-
-function TreeRow({ items, depthClass, onTreeClick }) {
-  if (items.length === 0) return null
-  return (
-    <div className={`${s.treeRow} ${depthClass}`}>
-      {items.map(({ session, layout }) => (
-        <button
-          key={session.id}
-          type="button"
-          className={s.plantedTree}
-          style={{
-            transform: `translate(${layout.xJitter}px, ${layout.yJitter}px) rotate(${layout.rotation}deg) scale(${layout.scale})`,
-          }}
-          onClick={() => onTreeClick(session)}
-          aria-label={`${session.tree_type || 'Oak'}, ${session.subject_name || 'Study'}, ${session.duration_min} minutes`}>
-          <TreePreview treeId={session.tree_type} size="forest" />
-        </button>
-      ))}
     </div>
   )
 }

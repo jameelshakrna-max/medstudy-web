@@ -46,9 +46,11 @@
   }
 }
 
-/* ── Wind idle sway (only when growing) ── */
-.growing .canopyWrap {
-  animation: windSway 4s ease-in-out infinite;
+/* ── Wind idle sway (only when growing or windy) ── */
+.growing .canopyWrap,
+.windy .canopyWrap {
+  animation: windSway var(--wind-duration, 4s) ease-in-out infinite;
+  animation-delay: var(--wind-delay, 0s);
   transform-origin: bottom center;
 }
 

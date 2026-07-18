@@ -4,7 +4,7 @@ import ForestTreeOld from './ForestTreeOld'
 import { ForestTree } from './ForestTree'
 import s from './TreePreview.module.css'
 
-export default function TreePreview({ treeId, size = 'md', className = '' }) {
+export default function TreePreview({ treeId, size = 'md', className = '', wind = false, mature = false }) {
   const tree = useMemo(() => getTreeById(treeId) || getTreeById('oak'), [treeId])
   const isOak = tree?.id === 'oak'
 
@@ -13,14 +13,27 @@ export default function TreePreview({ treeId, size = 'md', className = '' }) {
   if (isOak) {
     return (
       <div className={`${s.wrapper} ${sizeClass} ${className}`}>
-        <ForestTree progress={1} state="paused" preview size="100%" />
+        <ForestTree
+          progress={1}
+          state="idle"
+          preview={mature}
+          landscapeWind={wind}
+          showParticles={false}
+          showGlow={false}
+          size="100%"
+        />
       </div>
     )
   }
 
   return (
     <div className={`${s.wrapper} ${sizeClass} ${className}`}>
-      <ForestTreeOld tree={tree} progress={1} status="IDLE" />
+      <ForestTreeOld
+        tree={tree}
+        progress={1}
+        status={mature ? 'IDLE' : 'IDLE'}
+        wind={wind}
+      />
     </div>
   )
 }

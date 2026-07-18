@@ -26,7 +26,7 @@ const FLOWER_CONFIG = [
   { x:  22, y: -4,  r: 1.8, delay: 5 },
 ]
 
-export default function ForestTree({ tree, progress = 0, status = 'IDLE', subjectColor }) {
+export default function ForestTree({ tree, progress = 0, status = 'IDLE', subjectColor, wind = false }) {
   const vp = Math.max(0.12, progress)
   const colors = tree?.colors || {}
 
@@ -86,7 +86,7 @@ export default function ForestTree({ tree, progress = 0, status = 'IDLE', subjec
   const c3RY = lerp(0, 20, c3P)
 
   return (
-    <div className={`${s.tree} ${isWilted ? s.wilted : ''} ${isBloomed ? s.bloomed : ''} ${isGrowing ? s.growing : ''}`}
+    <div className={`${s.tree} ${isWilted ? s.wilted : ''} ${isBloomed ? s.bloomed : ''} ${isGrowing ? s.growing : ''} ${wind ? s.windy : ''}`}
       style={wiltStyle}>
       <svg viewBox="0 0 180 210" className={s.svg} style={{ filter: accentFilter }}>
         <defs>

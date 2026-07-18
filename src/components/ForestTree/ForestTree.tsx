@@ -15,8 +15,14 @@ export interface ForestTreeProps {
   /** CSS width, for example 420, "100%", or "min(64vw, 560px)". */
   size?: number | string
   ariaLabel?: string
-  /** Static preview mode: disables wind, particles, glow, bloom, wilt. */
+  /** Static preview mode: disables growth, glow, bloom, wilt. */
   preview?: boolean
+  /** Enable canopy wind sway in landscape mode (independent of preview). */
+  landscapeWind?: boolean
+  /** Show floating particles (default true). */
+  showParticles?: boolean
+  /** Show glow effect (default true). */
+  showGlow?: boolean
 }
 
 const rootPaths = [
@@ -107,6 +113,9 @@ export default function ForestTree({
   size,
   ariaLabel = 'An oak tree growing with the focus timer',
   preview = false,
+  landscapeWind = false,
+  showParticles: showParticlesProp,
+  showGlow: showGlowProp,
 }: ForestTreeProps) {
   const rawId = useId().replace(/:/g, '')
   const shadowFilterId = `oak-shadow-${rawId}`
@@ -119,7 +128,9 @@ export default function ForestTree({
   const logicalProgress = (state === 'success' && !preview) ? 1 : clamp01(progress)
   const visualProgress = Math.max(logicalProgress, state === 'idle' ? 0.015 : 0.025)
   const stages = getTreeStages(visualProgress)
-  const isWindActive = !preview && (state === 'running' || state === 'success')
+  const isWindActive = preview ? landscapeWind : (state === 'running' || state === 'success' || landscapeWind)
+  const showParticles = showParticlesProp ?? !preview
+  const showGlow = showGlowProp ?? !preview
 
   const rootStyle = {
     '--draw': stages.roots,
@@ -193,9 +204,11 @@ export default function ForestTree({
         </defs>
 
         <g className={styles.environment}>
-          <g className={styles.glow} style={glowStyle} filter={`url(#${glowFilterId})`}>
-            <ellipse cx="400" cy="330" rx="265" ry="205" fill="#D6F76C" opacity="0.23" />
-          </g>
+          {showGlow && (
+            <g className={styles.glow} style={glowStyle} filter={`url(#${glowFilterId})`}>
+              <ellipse cx="400" cy="330" rx="265" ry="205" fill="#D6F76C" opacity="0.23" />
+            </g>
+          )}
 
           <g className={styles.ground} style={groundStyle}>
             <ellipse cx="400" cy="739" rx="255" ry="25" fill="#170D05" opacity="0.28" />
@@ -303,20 +316,22 @@ export default function ForestTree({
           ))}
         </g>
 
-        <g className={styles.particles} style={particleStyle}>
-          {particles.map(([x, y, radius, fill, opacity, delay], index) => (
-            <circle
-              key={`${x}-${y}-${index}`}
-              className={styles.particle}
-              cx={x}
-              cy={y}
-              r={radius}
-              fill={fill}
-              opacity={opacity}
-              style={{ animationDelay: `${delay}s` }}
-            />
-          ))}
-        </g>
+        {showParticles && (
+          <g className={styles.particles} style={particleStyle}>
+            {particles.map(([x, y, radius, fill, opacity, delay], index) => (
+              <circle
+                key={`${x}-${y}-${index}`}
+                className={styles.particle}
+                cx={x}
+                cy={y}
+                r={radius}
+                fill={fill}
+                opacity={opacity}
+                style={{ animationDelay: `${delay}s` }}
+              />
+            ))}
+          </g>
+        )}
 
         <g className={styles.completionHalo} aria-hidden="true">
           <ellipse cx="400" cy="335" rx="278" ry="220" fill="none" stroke="#E8FF92" strokeWidth="5" opacity="0.32" />

@@ -1,0 +1,450 @@
+/* ══════════════════════════════════════════════
+   Forest Landscape — Full scene styles
+   ══════════════════════════════════════════════ */
+
+.landscape {
+  position: relative;
+  width: 100%;
+  height: clamp(380px, 52vw, 620px);
+  overflow: hidden;
+  border-radius: 18px;
+  user-select: none;
+}
+
+/* ── Sky layer ── */
+.sky {
+  position: absolute;
+  inset: 0;
+  transition: background 600ms ease;
+}
+
+/* ── Distant hills ── */
+.hillsFar,
+.hillsNear {
+  position: absolute;
+  bottom: 18%;
+  left: 0;
+  width: 100%;
+  height: 30%;
+  pointer-events: none;
+}
+
+.hillsNear {
+  bottom: 14%;
+  height: 28%;
+}
+
+/* ── Background forest silhouettes ── */
+.backgroundForest {
+  position: absolute;
+  bottom: 16%;
+  left: 0;
+  width: 100%;
+  height: 35%;
+  pointer-events: none;
+  filter: blur(2px);
+  opacity: 0.4;
+}
+
+/* ── Mist layer ── */
+.mistLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.mistBand {
+  position: absolute;
+  left: -20%;
+  width: 140%;
+  height: 18%;
+  border-radius: 50%;
+  filter: blur(20px);
+  animation: mistDrift linear infinite;
+  will-change: transform;
+}
+
+.mistBand1 { top: 25%; animation-duration: 80s; opacity: 0.6; }
+.mistBand2 { top: 40%; animation-duration: 100s; animation-delay: -30s; opacity: 0.4; }
+.mistBand3 { top: 55%; animation-duration: 120s; animation-delay: -60s; opacity: 0.5; }
+
+/* ── Tree scene (depth rows) ── */
+.treeScene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.depthRow {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0;
+  pointer-events: none;
+}
+
+.backRow {
+  bottom: 30%;
+  height: 35%;
+  opacity: 0.62;
+  filter: saturate(0.72) brightness(0.78);
+  z-index: 1;
+}
+
+.midRow {
+  bottom: 16%;
+  height: 40%;
+  opacity: 0.82;
+  filter: saturate(0.88) brightness(0.92);
+  z-index: 2;
+}
+
+.frontRow {
+  bottom: 2%;
+  height: 45%;
+  opacity: 1;
+  z-index: 3;
+}
+
+/* ── Tree instance wrapper ── */
+.treeInstance {
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--tree-width, 56px);
+  transform-origin: 50% 100%;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+
+.treeInstance:hover {
+  filter: brightness(1.1);
+}
+
+.treeInstance:focus-visible {
+  outline: 2px solid var(--emerald, #10B981);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Cluster density (background groups for 100+ trees) ── */
+.treeCluster {
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--cluster-width, 80px);
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 0.45;
+  filter: saturate(0.6) brightness(0.75);
+  z-index: 1;
+}
+
+.treeCluster:hover {
+  opacity: 0.65;
+  filter: saturate(0.8) brightness(0.9);
+}
+
+.clusterSilhouettes {
+  position: relative;
+  width: 100%;
+  height: 80%;
+}
+
+/* ── Empty forest scene ── */
+.emptyOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.emptyOverlay > * {
+  pointer-events: auto;
+}
+
+.emptySeed {
+  width: 32px;
+  height: 32px;
+  animation: seedBreathe 2.8s ease-in-out infinite;
+}
+
+.emptyMessage {
+  font-size: 15px;
+  color: var(--text-secondary, rgba(255,255,255,0.7));
+  text-align: center;
+  max-width: 260px;
+  line-height: 1.5;
+}
+
+.emptyCta {
+  margin-top: 8px;
+  padding: 10px 24px;
+  background: var(--emerald, #10B981);
+  color: #fff;
+  border: none;
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.emptyCta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);
+}
+
+/* ══════════════════════════════════════════════
+   Environment variants — Meadow
+   ══════════════════════════════════════════════ */
+.meadow .sky {
+  background: linear-gradient(180deg, #7EC8E3 0%, #B4D8E8 35%, #D4EDDA 70%, #E8F5E9 100%);
+}
+
+.meadow .mistBand {
+  background: rgba(255,255,255,0.25);
+}
+
+/* ══════════════════════════════════════════════
+   Environment variants — Woodland
+   ══════════════════════════════════════════════ */
+.woodland .sky {
+  background: linear-gradient(180deg, #4A7C59 0%, #6B9F78 30%, #8FBC8F 60%, #C8DFC0 100%);
+}
+
+.woodland .mistBand {
+  background: rgba(200,230,200,0.3);
+}
+
+/* ══════════════════════════════════════════════
+   Environment variants — Lake
+   ══════════════════════════════════════════════ */
+.lake .sky {
+  background: linear-gradient(180deg, #87CEEB 0%, #B0D4E8 40%, #D0E8F0 70%, #E0F0F8 100%);
+}
+
+.lake .mistBand {
+  background: rgba(200,220,240,0.25);
+}
+
+/* ══════════════════════════════════════════════
+   Environment variants — Enchanted
+   ══════════════════════════════════════════════ */
+.enchanted .sky {
+  background: linear-gradient(180deg, #2D1B4E 0%, #4A2D7A 30%, #6B3FA0 60%, #8B5EC0 100%);
+}
+
+.enchanted .mistBand {
+  background: rgba(180,160,255,0.25);
+}
+
+/* ══════════════════════════════════════════════
+   Environment variants — Celestial
+   ══════════════════════════════════════════════ */
+.celestial .sky {
+  background: linear-gradient(180deg, #0a0a1a 0%, #1a1a3a 30%, #2a2a5a 60%, #1a2a4a 100%);
+}
+
+.celestial .mistBand {
+  background: rgba(150,150,255,0.15);
+}
+
+/* ══════════════════════════════════════════════
+   Keyframes
+   ══════════════════════════════════════════════ */
+
+@keyframes mistDrift {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(25%); }
+}
+
+@keyframes seedBreathe {
+  0%, 100% { transform: scale(0.92) translateY(0); }
+  50% { transform: scale(1.08) translateY(-2px); }
+}
+
+@keyframes groundGrassSway {
+  0%, 100% { transform: rotate(-1.5deg); }
+  50% { transform: rotate(1.5deg); }
+}
+
+@keyframes groundFlowerBob {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-1.5px) rotate(1deg); }
+}
+
+@keyframes leafFall {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translate(var(--leaf-drift, 40px), var(--leaf-fall, 200px)) rotate(var(--leaf-spin, 360deg));
+    opacity: 0;
+  }
+}
+
+@keyframes pollenFloat {
+  0% {
+    transform: translate(0, 0) scale(0.5);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.6;
+  }
+  80% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate(var(--pollen-drift, 20px), var(--pollen-rise, -80px)) scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes fireflyGlow {
+  0%, 100% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.8;
+  }
+  50% {
+    transform: translate(var(--ff-dx, 15px), var(--ff-dy, -10px));
+    opacity: 0.9;
+  }
+  80% {
+    opacity: 0.6;
+  }
+}
+
+/* ── Ground element animations ── */
+.groundGrass {
+  animation: groundGrassSway 3.5s ease-in-out infinite;
+  transform-box: fill-box;
+}
+
+.groundFlower {
+  animation: groundFlowerBob 4.2s ease-in-out infinite;
+  transform-box: fill-box;
+}
+
+/* ── Particle containers ── */
+.particleLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 5;
+}
+
+.fallingLeaf {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 0 50% 50% 50%;
+  animation: leafFall var(--leaf-duration, 8s) linear infinite;
+  animation-delay: var(--leaf-delay, 0s);
+  will-change: transform, opacity;
+}
+
+.pollenDot {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(255, 255, 200, 0.7);
+  animation: pollenFloat var(--pollen-duration, 6s) ease-in-out infinite;
+  animation-delay: var(--pollen-delay, 0s);
+  will-change: transform, opacity;
+}
+
+.fireflyDot {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 150, 0.9);
+  box-shadow: 0 0 6px 2px rgba(255, 255, 150, 0.4);
+  animation: fireflyGlow var(--ff-duration, 4s) ease-in-out infinite;
+  animation-delay: var(--ff-delay, 0s);
+  will-change: transform, opacity;
+}
+
+/* ══════════════════════════════════════════════
+   Filter transition
+   ══════════════════════════════════════════════ */
+.transitioning .treeInstance,
+.transitioning .treeCluster {
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+
+/* ══════════════════════════════════════════════
+   Reduced motion
+   ══════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  .mistBand,
+  .groundGrass,
+  .groundFlower,
+  .fallingLeaf,
+  .pollenDot,
+  .fireflyDot,
+  .emptySeed {
+    animation: none !important;
+  }
+
+  .treeInstance,
+  .treeCluster {
+    transition: none !important;
+  }
+}
+
+/* ══════════════════════════════════════════════
+   Paused state (tab hidden / not visible)
+   ══════════════════════════════════════════════ */
+.paused .mistBand,
+.paused .groundGrass,
+.paused .groundFlower,
+.paused .fallingLeaf,
+.paused .pollenDot,
+.paused .fireflyDot,
+.paused .emptySeed {
+  animation-play-state: paused;
+}
+
+/* ══════════════════════════════════════════════
+   Responsive
+   ══════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .landscape {
+    height: clamp(300px, 60vw, 500px);
+    border-radius: 14px;
+  }
+
+  .backRow { bottom: 28%; }
+  .midRow { bottom: 14%; }
+  .frontRow { bottom: 1%; }
+}
+
+@media (max-width: 480px) {
+  .landscape {
+    height: clamp(280px, 70vw, 420px);
+    border-radius: 12px;
+  }
+}
