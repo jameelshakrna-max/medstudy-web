@@ -266,6 +266,10 @@ export function PomodoroProvider({ children }) {
   const [sessionLog, setSessionLog] = useState([])
   const [activeStudySeconds, setActiveStudySeconds] = useState(0)
 
+  // ── Forest tree state ──
+  const [selectedTree, setSelectedTree] = useState('oak')
+  const [treeStatus, setTreeStatus] = useState('IDLE') // IDLE | RUNNING | SUCCESS | FAILED
+
   const rafRef = useRef(null)
   const endTimeRef = useRef(null)
   const lastTickRef = useRef(null)
@@ -363,6 +367,8 @@ export function PomodoroProvider({ children }) {
 
     setRunning(false)
     setSeconds(0)
+    setTreeStatus('SUCCESS')
+    setTimeout(() => setTreeStatus('IDLE'), 3000)
 
     const currentMode = modeRef.current
     const currentDone = doneRef.current + 1
@@ -518,6 +524,7 @@ export function PomodoroProvider({ children }) {
       }
       completingRef.current = false
       setRunning(true)
+      setTreeStatus('RUNNING')
       unlockAudio()
 
       // ── iOS: Re-subscribe on play if needed ──
@@ -568,8 +575,56 @@ export function PomodoroProvider({ children }) {
   }, [focusMins, shortMins, longMins])
 
   const finishTimer = useCallback(() => {
-    handleComplete()
-  }, [handleComplete])
+    if (completingRef.current) return
+    completingRef.current = true
+
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
+    if (bgTimeoutRef.current) { clearTimeout(bgTimeoutRef.current); bgTimeoutRef.current = null }
+    endTimeRef.current = null
+    lastTickRef.current = null
+
+    setRunning(false)
+    setSeconds(0)
+    setTreeStatus('FAILED')
+    setTimeout(() => setTreeStatus('IDLE'), 2000)
+
+    const currentMode = modeRef.current
+    const currentDone = doneRef.current + 1
+
+    if (!bgChimedRef.current) {
+      const soundEnabled = localStorage.getItem('medstudy-sound-enabled') !== 'false'
+      if (soundEnabled) playChime()
+      showLocalNotification(currentMode)
+    }
+    bgChimedRef.current = false
+
+    setDone(currentDone)
+
+    const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
+    setSessionLog(l => [{
+      type: currentMode,
+      label: MODE_LABELS[currentMode],
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }, ...l].slice(0, 10))
+
+    if (currentMode === 'study') {
+      setSessionPomodoros(p => p + 1)
+      const nextMode = currentDone % 4 === 0 ? 'long' : 'break'
+      const nextDur = { study: focusMins, break: shortMins, long: longMins }[nextMode] * 60
+      setMode(nextMode)
+      setSeconds(nextDur)
+      setTotalSec(nextDur)
+      totalRef.current = nextDur
+    } else {
+      const nextDur = focusMins * 60
+      setMode('study')
+      setSeconds(nextDur)
+      setTotalSec(nextDur)
+      totalRef.current = nextDur
+    }
+
+    setTimeout(() => { completingRef.current = false }, 100)
+  }, [focusMins, shortMins, longMins])
 
   const resetTimer = useCallback(() => {
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
@@ -578,6 +633,7 @@ export function PomodoroProvider({ children }) {
     lastTickRef.current = null
     completingRef.current = false
     setRunning(false)
+    setTreeStatus('IDLE')
     const dur = getDuration(modeRef.current)
     setSeconds(dur)
     setTotalSec(dur)
@@ -597,6 +653,7 @@ export function PomodoroProvider({ children }) {
     setSessionStart(null)
     setSessionLog([])
     setMode('study')
+    setTreeStatus('IDLE')
     const dur = focusMins * 60
     setSeconds(dur)
     setTotalSec(dur)
@@ -619,10 +676,12 @@ export function PomodoroProvider({ children }) {
     displayRemaining,
     progress,
     togglePlay, skipTimer, finishTimer, resetTimer, resetSession,
+    treeStatus, setTreeStatus,
   }), [
     mode, running, done, seconds, totalSec,
     displayRemaining, progress,
     togglePlay, skipTimer, finishTimer, resetTimer, resetSession,
+    treeStatus,
   ])
 
   const settingsValue = useMemo(() => ({
@@ -634,10 +693,12 @@ export function PomodoroProvider({ children }) {
     sessionStart, setSessionStart,
     sessionLog, setSessionLog,
     activeStudySeconds, setActiveStudySeconds,
+    selectedTree, setSelectedTree,
   }), [
     focusMins, shortMins, longMins,
     selectedTopic,
     sessionPomodoros, sessionStart, sessionLog, activeStudySeconds,
+    selectedTree,
   ])
 
   return (

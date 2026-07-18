@@ -1,57 +1,95 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { usePomodoro, usePomodoroSettings } from '../context/PomodoroContext'
-import { Timer, Coffee, Moon, Play, Pause, Leaf, BookOpen, SkipForward, Check, RefreshCw } from 'lucide-react'
+import { Play, Pause, Leaf, Timer, ChevronDown, BookOpen } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { getTreeById, getTreeColors } from '../lib/treeTypes'
+import { getSubjectColor } from '../lib/subjectColors'
+import { useForestAudio } from '../hooks/useForestAudio'
 import Modal from '../components/ui/Modal/Modal'
+import RadialDial from '../components/RadialDial'
+import ForestTree from '../components/ForestTree'
+import ForestScene from '../components/ForestScene'
+import TreePicker from '../components/TreePicker'
 import s from './Pomodoro.module.css'
 
-const MODES = ['study','break','long']
+const MODES = ['study', 'break', 'long']
 const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
-const TREE_COLORS = ['treeBlue','treeEmerald','treeIndigo','treeAmber']
 
 export default function Pomodoro() {
   const {
-    mode, setMode, running, setRunning,
-    done, setDone,
-    seconds, totalSec,
+    mode, setMode, running,
+    done, seconds, totalSec,
     displayRemaining, progress,
-    togglePlay, skipTimer, finishTimer, resetTimer,
-    resetSession,
+    togglePlay, finishTimer, resetTimer, resetSession,
+    treeStatus,
   } = usePomodoro()
 
   const {
     focusMins, setFocusMins,
     shortMins, setShortMins, longMins, setLongMins,
     selectedTopic, setSelectedTopic,
-    sessionPomodoros, setSessionPomodoros,
-    sessionLog, activeStudySeconds,
+    sessionPomodoros, sessionLog, activeStudySeconds,
+    selectedTree, setSelectedTree,
   } = usePomodoroSettings()
 
-  const [showSettings, setShowSettings] = useState(false)
-  const [trees, setTrees] = useState([])
+  const { playBloom, playWilt, playStart } = useForestAudio()
+
   const [topics, setTopics] = useState([])
   const [topicInfo, setTopicInfo] = useState(null)
-
-  // Finish modal
+  const [showSessions, setShowSessions] = useState(false)
   const [showFinish, setShowFinish] = useState(false)
   const [topicStatus, setTopicStatus] = useState('In Progress')
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [ownedTrees, setOwnedTrees] = useState(['oak', 'sakura'])
+  const [coins, setCoins] = useState(0)
+  const [coinEarning, setCoinEarning] = useState({ amount: 0, show: false })
 
-  const treeIdRef = useRef(0)
+  const tree = getTreeById(selectedTree)
+  const subjectColor = topicInfo?.subject?.system?.id
+    ? getSubjectColor(topicInfo.subject.system.id)
+    : null
 
-  // ── Listen for timer completion to grow a tree ──
-  // We detect a "just completed" cycle when `done` increases
-  const prevDoneRef = useRef(done)
+  const API = import.meta.env.VITE_API_URL || '/api'
+
+  // ── Load forest inventory on mount ──
   useEffect(() => {
-    if (done > prevDoneRef.current) {
-      const color = TREE_COLORS[Math.floor(Math.random() * TREE_COLORS.length)]
-      const id = treeIdRef.current++
-      const left = 10 + Math.random() * 80
-      const scale = 0.6 + Math.random() * 0.6
-      setTrees(prev => [...prev, { id, color, left, scale, born: Date.now() }])
+    const loadForest = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) return
+        const res = await fetch(`${API}/forest/inventory`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        if (data.owned) setOwnedTrees(data.owned)
+        if (data.selectedTree) setSelectedTree(data.selectedTree)
+        if (data.coins !== undefined) setCoins(data.coins)
+      } catch (_) {}
     }
-    prevDoneRef.current = done
-  }, [done])
+    loadForest()
+  }, [])
+
+  // ── Persist selected tree (debounced) ──
+  useEffect(() => {
+    if (!selectedTree) return
+    const timeout = setTimeout(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) return
+        await fetch(`${API}/forest/selected-tree`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ treeId: selectedTree }),
+        })
+      } catch (_) {}
+    }, 500)
+    return () => clearTimeout(timeout)
+  }, [selectedTree])
 
   // ── Load topics ──
   useEffect(() => {
@@ -60,7 +98,7 @@ export default function Pomodoro() {
       if (!user) return
       const { data } = await supabase
         .from('curriculum_topics')
-        .select('id, name, status, high_yield, completion_pct, subject:curriculum_subjects(name, system:curriculum_systems(name))')
+        .select('id, name, status, high_yield, completion_pct, subject:curriculum_subjects(name, system:curriculum_systems(id, name))')
         .eq('user_id', user.id)
         .order('name')
       if (data) setTopics(data)
@@ -68,7 +106,6 @@ export default function Pomodoro() {
     load()
   }, [])
 
-  // ── Update topic info when selection changes ──
   useEffect(() => {
     if (selectedTopic) {
       const t = topics.find(t => t.id === selectedTopic)
@@ -78,73 +115,74 @@ export default function Pomodoro() {
     }
   }, [selectedTopic, topics])
 
+  // ── Audio on status change ──
+  useEffect(() => {
+    if (treeStatus === 'SUCCESS') playBloom()
+    else if (treeStatus === 'FAILED') playWilt()
+  }, [treeStatus, playBloom, playWilt])
+
+  // ── Earn coins on session success ──
+  useEffect(() => {
+    if (treeStatus !== 'SUCCESS') return
+    const earnCoins = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) return
+        const focusMin = Math.floor(activeStudySeconds / 60)
+        const streak = 0
+        const res = await fetch(`${API}/forest/earn-coins`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ focusMinutes: focusMin, streak }),
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        if (data.coinsEarned) {
+          setCoins(data.newBalance)
+          setCoinEarning({ amount: data.coinsEarned, show: true })
+          setTimeout(() => setCoinEarning(prev => ({ ...prev, show: false })), 3000)
+        }
+      } catch (_) {}
+    }
+    earnCoins()
+  }, [treeStatus, activeStudySeconds])
+
+  // ── Current duration for the radial dial ──
+  const currentDuration = useMemo(() => {
+    return { study: focusMins, break: shortMins, long: longMins }[mode]
+  }, [mode, focusMins, shortMins, longMins])
+
+  const setCurrentDuration = useCallback((mins) => {
+    if (mode === 'study') setFocusMins(mins)
+    else if (mode === 'break') setShortMins(mins)
+    else setLongMins(mins)
+  }, [mode, setFocusMins, setShortMins, setLongMins])
+
   // ── Computed ──
   const circumference = 2 * Math.PI * 130
   const dashOffset = circumference * (1 - progress)
-
   const totalMin = Math.floor(activeStudySeconds / 60)
+  const showDial = !running && seconds === totalSec
+  const showProgress = running || (!running && seconds < totalSec)
 
-  // ── Stars (memoized) ──
+  // ── Stars ──
   const stars = useMemo(() =>
     Array.from({ length: 40 }, (_, i) => ({
       id: i,
       left: `${Math.random() * 100}%`,
       top: `${Math.random() * 100}%`,
       duration: `${2 + Math.random() * 4}s`,
-      delay: `${Math.random() * 3}s`
+      delay: `${Math.random() * 3}s`,
     })), [])
 
-  // ── Fireflies ──
-  const fireflies = useMemo(() =>
-    Array.from({ length: 8 }, (_, i) => ({
-      id: i,
-      left: `${10 + Math.random() * 80}%`,
-      top: `${40 + Math.random() * 50}%`,
-      dur: `${5 + Math.random() * 4}s`,
-      delay: `${Math.random() * 5}s`,
-      dx: `${-30 + Math.random() * 60}px`,
-      dy: `${-20 + Math.random() * -40}px`
-    })), [])
-
-  // ── Leaf particles ──
-  const leaves = useMemo(() =>
-    Array.from({ length: 12 }, (_, i) => ({
-      id: i,
-      left: `${5 + Math.random() * 90}%`,
-      top: `${Math.random() * 30}%`,
-      color: TREE_COLORS[i % 4],
-      dur: `${3 + Math.random() * 3}s`,
-      delay: `${Math.random() * 8}s`,
-      dx: `${-20 + Math.random() * 40}px`,
-      dx2: `${-15 + Math.random() * 30}px`
-    })), [])
-
-  // ── Tick marks for timer ──
-  const tickMarks = useMemo(() => {
-    const marks = []
-    for (let i = 0; i < 60; i++) {
-      const angle = (i * 6) * Math.PI / 180
-      const r = 140
-      const x = 150 + r * Math.cos(angle)
-      const y = 150 + r * Math.sin(angle)
-      const len = i % 5 === 0 ? 8 : 4
-      const x2 = 150 + (r - len) * Math.cos(angle)
-      const y2 = 150 + (r - len) * Math.sin(angle)
-      marks.push({ id: i, x1: x, y1: y, x2, y2, major: i % 5 === 0 })
-    }
-    return marks
-  }, [])
-
-  const modeClass = mode
-
-  // ── Finish session ──
+  // ── Finish ──
   const handleFinish = () => {
     if (sessionPomodoros === 0) return
     setShowFinish(true)
   }
-
-  // ── Error state for save failures ──
-  const [saveError, setSaveError] = useState('')
 
   const confirmFinish = async () => {
     setSaving(true)
@@ -156,7 +194,6 @@ export default function Pomodoro() {
       const elapsedMinNow = Math.floor(activeStudySeconds / 60)
       const topicName = topicInfo?.name || 'General Study'
 
-      // Insert with only columns that exist in study_sessions table
       const { error: insertError } = await supabase.from('study_sessions').insert({
         user_id: user.id,
         label: `Pomodoro — ${topicName}`,
@@ -170,13 +207,11 @@ export default function Pomodoro() {
       })
 
       if (insertError) {
-        console.error('Insert error:', insertError)
         setSaveError(insertError.message)
         setSaving(false)
         return
       }
 
-      const API = import.meta.env.VITE_API_URL || '/api'
       const { data: { session } } = await supabase.auth.getSession()
       fetch(API + '/study-hours/sync', {
         method: 'POST',
@@ -186,18 +221,15 @@ export default function Pomodoro() {
 
       if (selectedTopic && topicStatus) {
         const pct = topicStatus === 'Complete' ? 100 : topicStatus === 'Reviewing' ? 75 : 40
-        const { error: topicError } = await supabase.from('curriculum_topics').update({
+        await supabase.from('curriculum_topics').update({
           status: topicStatus,
           completion_pct: pct
         }).eq('id', selectedTopic)
-
-        if (topicError) console.error('Topic update error:', topicError)
       }
 
       setShowFinish(false)
       resetSession()
     } catch (err) {
-      console.error(err)
       setSaveError('Something went wrong. Please try again.')
     } finally {
       setSaving(false)
@@ -218,18 +250,12 @@ export default function Pomodoro() {
       </div>
 
       <div className={s.content}>
-        {/* Header */}
-        <div className={s.header}>
-          <h1 className={s.title}>Forest Timer</h1>
-          <p className={s.sub}>Stay focused, grow your forest</p>
-        </div>
-
         {/* Mode Tabs */}
         <div className={s.modeTabs}>
           {MODES.map(m => (
             <button key={m}
               className={`${s.modeTab} ${mode === m ? s.modeTabActive : ''} ${mode === m ? s[m] : ''}`}
-              onClick={() => { if (!running) setMode(m) }}>
+              onClick={() => { if (!running) { setMode(m); resetTimer() } }}>
               {MODE_LABELS[m]}
             </button>
           ))}
@@ -237,240 +263,167 @@ export default function Pomodoro() {
 
         {/* Topic Selector */}
         <div className={s.topicSelector}>
-          <span className={s.topicLabel}>Studying Topic</span>
+          <BookOpen size={13} className={s.topicIcon} />
           <select className={s.topicSelect}
             value={selectedTopic || ''}
             onChange={e => setSelectedTopic(e.target.value || null)}>
-            <option value="">— Select a topic —</option>
+            <option value="">Select a topic</option>
             {topics.map(t => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>
-          {topicInfo && (
-            <div className={s.topicInfo}>
-              {topicInfo.high_yield && <span className={s.topicHY}>High Yield</span>}
-              <span className={s.topicStatus}>{topicInfo.status || 'Not Started'}</span>
+          {topicInfo?.high_yield && <span className={s.topicHY}>HY</span>}
+        </div>
+
+        {/* Tree Picker — hidden when running */}
+        {!running && (
+          <TreePicker selectedTree={selectedTree} onSelect={setSelectedTree} subjectColor={subjectColor} ownedTrees={ownedTrees} coins={coins} onPurchase={(treeId, newBalance) => { setOwnedTrees(prev => [...prev, treeId]); setCoins(newBalance) }} />
+        )}
+
+        {/* ═══ TIMER AREA ═══ */}
+        <div className={s.timerArea}>
+          {/* Scene */}
+          <ForestScene progress={running ? progress : 0} status={treeStatus} />
+
+          {/* Radial Dial (idle) */}
+          {showDial && (
+            <RadialDial
+              minutes={currentDuration}
+              onChange={setCurrentDuration}
+              mode={mode}
+              disabled={false}
+            />
+          )}
+
+          {/* Progress Ring + Tree (running or paused) */}
+          {showProgress && (
+            <div className={s.progressContainer}>
+              <div className={`${s.glowRing} ${s[mode]} ${running ? s.pulseActive : ''}`} />
+
+              <svg className={s.progressSvg} viewBox="0 0 300 300">
+                <defs>
+                  <linearGradient id="pGradStudy" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#3B82F6" />
+                    <stop offset="100%" stopColor="#93C5FD" />
+                  </linearGradient>
+                  <linearGradient id="pGradBreak" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#10B981" />
+                    <stop offset="100%" stopColor="#6EE7B7" />
+                  </linearGradient>
+                  <linearGradient id="pGradLong" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#6366F1" />
+                    <stop offset="100%" stopColor="#A5B4FC" />
+                  </linearGradient>
+                </defs>
+                <circle cx="150" cy="150" r="130" fill="none"
+                  stroke="var(--card-border)" strokeWidth="5" />
+                <circle cx="150" cy="150" r="130" fill="none"
+                  className={`${s.progressFg} ${s[mode]}`}
+                  strokeDasharray={circumference}
+                  strokeDashoffset={dashOffset}
+                  transform="rotate(-90 150 150)" />
+              </svg>
+
+              <div className={s.progressCenter}>
+                <span className={`${s.progressTime} ${s[mode]}`}>
+                  {displayRemaining}
+                </span>
+              </div>
+
+              {/* Tree inside the ring */}
+              <div className={s.treeInRing}>
+                <ForestTree tree={tree} progress={running ? progress : 0.6} status={treeStatus} subjectColor={subjectColor} />
+              </div>
             </div>
           )}
         </div>
 
-        {/* ═══ UPGRADED TIMER ═══ */}
-        <div className={s.timerContainer}>
-          {/* Orbit ring decoration */}
-          <div className={s.orbitRing}>
-            <div className={`${s.orbitDot} ${s[modeClass]}`} />
+        {/* ═══ CONTROLS ═══ */}
+        <div className={s.controls}>
+          {!running && showDial && (
+            <button className={`${s.plantBtn} ${s[mode]}`} onClick={() => { playStart(); togglePlay() }}>
+              <Play size={20} strokeWidth={2} />
+              <span>Plant</span>
+            </button>
+          )}
+
+          {running && (
+            <>
+              <button className={s.giveUpBtn} onClick={finishTimer}>
+                Give Up
+              </button>
+              <button className={`${s.pauseBtn} ${s[mode]}`} onClick={togglePlay}>
+                <Pause size={20} strokeWidth={2} />
+              </button>
+            </>
+          )}
+
+          {!running && !showDial && (
+            <button className={`${s.pauseBtn} ${s[mode]}`} onClick={togglePlay}>
+              <Play size={20} strokeWidth={2} />
+            </button>
+          )}
+        </div>
+
+        {/* ═══ STATS BAR ═══ */}
+        <div className={s.statsBar}>
+          <div className={s.statItem}>
+            <span className={s.statLabel}>Today</span>
+            <span className={s.statValue}>{totalMin}m</span>
           </div>
+          <div className={s.statDivider} />
+          <div className={s.statItem}>
+            <span className={s.statLabel}>Streak</span>
+            <span className={s.statValue}>--</span>
+          </div>
+          <div className={s.statDivider} />
+          <div className={s.statItem}>
+            <span className={s.statLabel}>Trees</span>
+            <span className={s.statValue}>{sessionPomodoros}</span>
+          </div>
+          <div className={s.statDivider} />
+          <div className={s.statItem}>
+            <span className={s.statLabel}>Coins</span>
+            <span className={s.statValue}>{coins}</span>
+          </div>
+        </div>
 
-          {/* Glow */}
-          <div className={`${s.glowRing} ${s[modeClass]} ${running ? s.pulseActive : ''}`} />
-
-          <div className={s.ringOuter}>
-            {/* SVG Ring with gradient + tick marks */}
-            <svg className={s.ringSvg} viewBox="0 0 300 300">
-              <defs>
-                <linearGradient id="timerGradientStudy" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#3B82F6" />
-                  <stop offset="50%" stopColor="#60A5FA" />
-                  <stop offset="100%" stopColor="#93C5FD" />
-                </linearGradient>
-                <linearGradient id="timerGradientBreak" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#10B981" />
-                  <stop offset="50%" stopColor="#34D399" />
-                  <stop offset="100%" stopColor="#6EE7B7" />
-                </linearGradient>
-                <linearGradient id="timerGradientLong" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#6366F1" />
-                  <stop offset="50%" stopColor="#818CF8" />
-                  <stop offset="100%" stopColor="#A5B4FC" />
-                </linearGradient>
-              </defs>
-
-              {/* Tick marks */}
-              {tickMarks.map(t => (
-                <line key={t.id} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2}
-                  stroke="var(--card-border)" strokeWidth={t.major ? 1.5 : 0.5} />
-              ))}
-
-              {/* Background ring */}
-              <circle className={s.ringBg} cx="150" cy="150" r="130" />
-              {/* Dashed track */}
-              <circle className={s.ringTrack} cx="150" cy="150" r="125" />
-              {/* Progress ring */}
-              <circle className={`${s.ringFg} ${s[modeClass]}`}
-                cx="150" cy="150" r="130"
-                style={{ strokeDashoffset: dashOffset }} />
-            </svg>
-
-            {/* Inner content */}
-            <div className={s.ringInner}>
-              <span className={s.ringLabel}>{MODE_LABELS[mode]}</span>
-              <span className={`${s.ringTime} ${s[modeClass]} ${running ? s.ringTimeActive : ''}`}>
-                {displayRemaining}
-              </span>
-              <div className={s.ringDots}>
-                {[0,1,2,3].map(i => (
-                  <div key={i} className={`${s.dot} ${done > i ? s.filled : ''} ${s[modeClass]}`} />
+        {/* ═══ RECENT SESSIONS ═══ */}
+        {sessionLog.length > 0 && (
+          <div className={s.sessionsSection}>
+            <button className={s.sessionsToggle} onClick={() => setShowSessions(!showSessions)}>
+              <span>Recent Sessions</span>
+              <ChevronDown size={14} className={`${s.sessionsArrow} ${showSessions ? s.sessionsArrowOpen : ''}`} />
+            </button>
+            {showSessions && (
+              <div className={s.sessionsList}>
+                {sessionLog.map((entry, i) => (
+                  <div key={i} className={s.sessionItem}>
+                    <span className={s.sessionIcon}>
+                      {entry.type === 'study' ? '🌳' : entry.type === 'break' ? '☕' : '🌙'}
+                    </span>
+                    <span className={s.sessionLabel}>{entry.label}</span>
+                    <span className={s.sessionTime}>{entry.time}</span>
+                  </div>
                 ))}
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Controls */}
-        <div className={s.controls}>
-          <div className={s.controlsRow}>
-            <button className={s.ctrlBtn} onClick={resetTimer} title="Reset"><RefreshCw size={18} strokeWidth={1.5} /></button>
-            <button className={`${s.playBtn} ${s[modeClass]}`} onClick={togglePlay}>
-              {running ? <Pause size={20} strokeWidth={1.5} /> : <Play size={20} strokeWidth={1.5} />}
-              {running && <span className={`${s.playBtnPulse} ${s[modeClass]}`} />}
-            </button>
-            <button className={s.ctrlBtn} onClick={skipTimer} title="Skip"><SkipForward size={18} strokeWidth={1.5} /></button>
-          </div>
-          <button className={`${s.ctrlBtn} ${s.finishBtn}`} onClick={finishTimer} title="Finish Early"><Check size={18} strokeWidth={1.5} /></button>
-        </div>
-
-        {/* Stats */}
-        <div className={s.statsGrid}>
-          <div className={s.statCard}>
-            <span className={s.statIcon}><Timer size={14} strokeWidth={1.5} /></span>
-            <span className={s.statNum}>{sessionPomodoros}</span>
-            <span className={s.statLabel}>Pomodoros</span>
-          </div>
-          <div className={s.statCard}>
-            <span className={s.statIcon}>⏱</span>
-            <span className={s.statNum}>{totalMin}</span>
-            <span className={s.statLabel}>Minutes</span>
-          </div>
-          <div className={s.statCard}>
-            <span className={s.statIcon}><Leaf size={14} strokeWidth={1.5} /></span>
-            <span className={s.statNum}>{trees.length}</span>
-            <span className={s.statLabel}>Trees</span>
-          </div>
-        </div>
-
-        {/* ═══ UPGRADED FOREST ═══ */}
-        <div className={s.forest}>
-          <div className={s.forestLabel}>Your Forest</div>
-          <div className={s.forestGround}>
-            {trees.map((tree, idx) => (
-              <div key={tree.id}
-                className={`${s.tree} ${s[tree.color]} ${idx >= trees.length - 1 ? s.treeGrowing : s.treeIdle}`}
-                style={{
-                  left: `${tree.left}%`,
-                  transform: `scale(${tree.scale})`,
-                  transformOrigin: 'bottom center',
-                  animationDelay: idx >= trees.length - 1 ? '0s' : `${idx * 0.2}s`
-                }}>
-                {/* Multi-layer canopy */}
-                <div className={s.treeCrown}>
-                  <div className={`${s.canopyLayer} ${s.canopyBack}`}
-                    style={{ '--cw': `${28 * tree.scale}px`, '--ch': `${22 * tree.scale}px` }} />
-                  <div className={`${s.canopyLayer} ${s.canopyMid}`}
-                    style={{ '--cw': `${24 * tree.scale}px`, '--ch': `${20 * tree.scale}px` }} />
-                  <div className={`${s.canopyLayer} ${s.canopyTop}`}
-                    style={{ '--cw': `${20 * tree.scale}px`, '--ch': `${18 * tree.scale}px` }}>
-                    <div className={s.canopyHighlight} />
-                  </div>
-                </div>
-                {/* Trunk */}
-                <div className={s.treeTrunk}
-                  style={{ '--cw': `${24 * tree.scale}px`, '--ch': `${20 * tree.scale}px` }} />
-                {/* Shadow */}
-                <div className={s.treeShadow}
-                  style={{ '--cw': `${24 * tree.scale}px` }} />
-              </div>
-            ))}
-
-            {/* Falling leaves */}
-            {trees.length > 0 && leaves.map(lf => (
-              <div key={lf.id}
-                className={`${s.leaf} ${s[lf.color.replace('tree','leaf')]} ${s.leafFall}`}
-                style={{
-                  left: lf.left,
-                  top: lf.top,
-                  '--leaf-dur': lf.dur,
-                  '--leaf-delay': lf.delay,
-                  '--leaf-dx': lf.dx,
-                  '--leaf-dx2': lf.dx2
-                }} />
-            ))}
-
-            {/* Fireflies */}
-            {fireflies.map(ff => (
-              <div key={ff.id} className={s.firefly}
-                style={{
-                  left: ff.left,
-                  top: ff.top,
-                  '--dur': ff.dur,
-                  '--delay': ff.delay,
-                  '--dx': ff.dx,
-                  '--dy': ff.dy
-                }} />
-            ))}
-
-            {/* Ground fog */}
-            <div className={s.forestFog} />
-          </div>
-        </div>
-
-        {/* Finish & Save */}
-        {sessionPomodoros > 0 && (
-          <div className={s.finishSection} style={{ maxWidth: 580, width: '100%' }}>
-            <div className={s.finishInfo}>
-              {sessionPomodoros} pomodoro{sessionPomodoros > 1 ? 's' : ''} completed
-              {topicInfo ? ` — ${topicInfo.name}` : ''}
-            </div>
-            <button className={s.finishBtn} onClick={handleFinish}>Finish & Save Session</button>
+            )}
           </div>
         )}
 
-        {/* Bottom Panel */}
-        <div className={s.bottomPanel}>
-          {/* Settings Toggle */}
-          <button className={s.toggleBtn} onClick={() => setShowSettings(!showSettings)}>
-            Timer Settings
-            <span className={`${s.toggleArrow} ${showSettings ? s.toggleArrowOpen : ''}`}>▼</span>
+        {/* ═══ FINISH & SAVE ═══ */}
+        {sessionPomodoros > 0 && !running && (
+          <button className={s.finishBtn} onClick={handleFinish}>
+            Finish & Save Session
           </button>
+        )}
 
-          {showSettings && (
-            <div className={s.settingsSection}>
-              <div className={s.settingsTitle}>Duration (minutes)</div>
-              <div className={s.settingsGrid}>
-                <div className={s.setItem}>
-                  <label>Focus</label>
-                  <input type="number" min="1" max="90" value={focusMins}
-                    onChange={e => setFocusMins(Math.max(1, +e.target.value))} />
-                </div>
-                <div className={s.setItem}>
-                  <label>Short</label>
-                  <input type="number" min="1" max="30" value={shortMins}
-                    onChange={e => setShortMins(Math.max(1, +e.target.value))} />
-                </div>
-                <div className={s.setItem}>
-                  <label>Long</label>
-                  <input type="number" min="1" max="60" value={longMins}
-                    onChange={e => setLongMins(Math.max(1, +e.target.value))} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Session Log */}
-          {sessionLog.length > 0 && (
-            <div className={s.sessionLog}>
-              <div className={s.logTitle}>Session Log</div>
-              {sessionLog.map((entry, i) => (
-                <div key={i} className={s.logItem}>
-                  <span className={s.logEmoji}>
-                    {entry.type === 'study' ? <Timer size={14} strokeWidth={1.5} /> : entry.type === 'break' ? <Coffee size={14} strokeWidth={1.5} /> : <Moon size={14} strokeWidth={1.5} />}
-                  </span>
-                  <span className={s.logLabel}>{entry.label}</span>
-                  <span className={s.logTime}>{entry.time}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {coinEarning.show && (
+          <div className={s.coinToast}>
+            <span className={s.coinIcon}>🪙</span>
+            <span>+{coinEarning.amount} coins</span>
+          </div>
+        )}
       </div>
 
       {/* ═══ Finish Modal ═══ */}
@@ -481,14 +434,14 @@ export default function Pomodoro() {
           </Modal.Title>
           <div className={s.modalSummary}>
             <div><Timer size={14} strokeWidth={1.5} /> {sessionPomodoros} Pomodoro{sessionPomodoros > 1 ? 's' : ''}</div>
-            <div>⏱ {totalMin} minutes ({(totalMin / 60).toFixed(1)} hours)</div>
+            <div>⏱ {totalMin} minutes</div>
             {topicInfo && <div><BookOpen size={14} strokeWidth={1.5} /> {topicInfo.name}</div>}
           </div>
           {selectedTopic && (
             <div className={s.modalField}>
               <label>How's this topic?</label>
               <div className={s.statusOptions}>
-                {['In Progress','Reviewing','Complete'].map(st => (
+                {['In Progress', 'Reviewing', 'Complete'].map(st => (
                   <button key={st}
                     className={`${s.statusOpt} ${topicStatus === st ? s.statusOptOn : ''}`}
                     onClick={() => setTopicStatus(st)}>
@@ -499,9 +452,7 @@ export default function Pomodoro() {
             </div>
           )}
           {saveError && (
-            <div style={{ color: 'var(--red)', fontSize: '13px', textAlign: 'center', padding: '8px', background: 'var(--redL)', borderRadius: '8px', marginTop: '8px' }}>
-              {saveError}
-            </div>
+            <div className={s.saveError}>{saveError}</div>
           )}
           <div className={s.modalActions}>
             <button className={s.modalCancel} onClick={() => setShowFinish(false)}>Cancel</button>
@@ -511,7 +462,6 @@ export default function Pomodoro() {
           </div>
         </Modal>
       )}
-
     </div>
   )
 }

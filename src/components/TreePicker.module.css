@@ -1,0 +1,193 @@
+.picker {
+  width: 100%;
+  max-width: 400px;
+}
+
+.scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 8px 12px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-snap-type: x mandatory;
+}
+.scroll::-webkit-scrollbar { display: none; }
+
+.card {
+  flex: 0 0 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  border-radius: 14px;
+  background: var(--card-bg);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+  scroll-snap-align: start;
+  position: relative;
+  -webkit-tap-highlight-color: transparent;
+}
+.card:hover { background: var(--input-bg); border-color: var(--card-border); }
+.card.selected {
+  border-color: var(--emerald);
+  background: var(--emeraldL);
+}
+.card.locked { opacity: 0.5; }
+
+.treePreview {
+  width: 52px;
+  height: 60px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.name {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--mist);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  color: var(--emerald);
+}
+
+.lockIcon {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  color: var(--mist);
+  opacity: 0.6;
+}
+
+/* Locked preview modal */
+.lockedOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: var(--overlay-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.lockedModal {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 20px;
+  padding: 32px;
+  text-align: center;
+  max-width: 280px;
+  width: 90%;
+  backdrop-filter: blur(20px);
+  animation: scaleIn 0.3s var(--ease-spring);
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.lockedPreview {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.lockedName {
+  font-family: 'DM Serif Display', serif;
+  font-size: 20px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.lockedDesc {
+  font-size: 13px;
+  color: var(--mist);
+  margin-bottom: 12px;
+}
+
+.lockedPrice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--amber);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.lockedBalance {
+  font-size: 12px;
+  color: var(--mist);
+  margin-bottom: 12px;
+}
+
+.purchaseError {
+  color: var(--red);
+  font-size: 12px;
+  text-align: center;
+  padding: 6px 10px;
+  background: var(--redL);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.lockedActions {
+  display: flex;
+  gap: 8px;
+}
+
+.closeBtn {
+  flex: 1;
+  padding: 8px 16px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.closeBtn:hover { background: var(--card-bg); color: var(--text-primary); }
+
+.purchaseBtn {
+  flex: 1;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, var(--amber), #D97706);
+  border: none;
+  border-radius: 10px;
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.purchaseBtn:hover { opacity: 0.9; transform: translateY(-1px); }
+.purchaseBtnDisabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@media (max-width: 480px) {
+  .card { flex: 0 0 64px; }
+  .treePreview { width: 44px; height: 52px; }
+}

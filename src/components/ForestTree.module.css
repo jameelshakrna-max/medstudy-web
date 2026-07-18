@@ -1,0 +1,90 @@
+.tree {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.svg {
+  width: 120px;
+  height: 140px;
+  transition: filter 1s ease;
+}
+
+/* Bloom particles */
+.particle {
+  position: absolute;
+  width: var(--size, 4px);
+  height: var(--size, 4px);
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  animation: bloomBurst 0.8s var(--ease-out) forwards;
+  animation-delay: var(--delay, 0s);
+  opacity: 0;
+  pointer-events: none;
+}
+
+@keyframes bloomBurst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate(0, 0) scale(0.3);
+  }
+  30% {
+    opacity: 1;
+    transform: translate(-50%, -50%)
+      translate(calc(cos(var(--angle)) * var(--dist)), calc(sin(var(--angle)) * var(--dist)))
+      scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%)
+      translate(calc(cos(var(--angle)) * var(--dist) * 2), calc(sin(var(--angle)) * var(--dist) * 2 - 15px))
+      scale(0.2);
+  }
+}
+
+.bloomed .svg {
+  animation: bloomPulse 1.5s var(--ease-spring) forwards;
+}
+
+@keyframes bloomPulse {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+/* Wilt */
+.wilted .svg {
+  animation: wiltDroop 1.2s var(--ease-out) forwards;
+}
+
+@keyframes wiltDroop {
+  0% { transform: rotate(0deg) scale(1); }
+  60% { transform: rotate(8deg) scale(0.95); }
+  100% { transform: rotate(12deg) scale(0.9); }
+}
+
+.wiltLeaf {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 0 50% 50% 50%;
+  opacity: 0;
+  animation: wiltFall 1.5s var(--ease-out) forwards;
+  pointer-events: none;
+}
+
+.wiltLeaf1 { top: 30%; left: 35%; animation-delay: 0.2s; }
+.wiltLeaf2 { top: 25%; left: 55%; animation-delay: 0.5s; }
+.wiltLeaf3 { top: 35%; left: 45%; animation-delay: 0.8s; }
+
+@keyframes wiltFall {
+  0% { opacity: 0; transform: translate(0, 0) rotate(0deg); }
+  20% { opacity: 0.8; transform: translate(5px, 10px) rotate(45deg); }
+  100% { opacity: 0; transform: translate(-10px, 60px) rotate(200deg); }
+}
+
+@media (max-width: 480px) {
+  .svg { width: 100px; height: 116px; }
+}

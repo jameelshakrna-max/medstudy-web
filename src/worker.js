@@ -78,6 +78,11 @@ import {
 } from './handlers/pins.js'
 
 import {
+  handleGetForestInventory, handleUpdateSelectedTree,
+  handleEarnCoins, handlePurchaseTree, handleGetForestStats,
+} from './handlers/forest.js'
+
+import {
   handleGetUserAchievements, handleCheckAchievements,
 } from './handlers/achievements.js'
 
@@ -500,6 +505,13 @@ export default {
       if (path.match(/^\/api\/users\/[^\/]+\/portfolio$/) && request.method === 'POST') return handleAddPortfolioEntry(request, env, user)
       if (path.match(/^\/api\/users\/[^\/]+\/portfolio\/[^\/]+$/) && request.method === 'PUT') return handleUpdatePortfolioEntry(request, env, user)
       if (path.match(/^\/api\/users\/[^\/]+\/portfolio\/[^\/]+$/) && request.method === 'DELETE') return handleDeletePortfolioEntry(request, env, user)
+
+      // ── Forest Timer ──
+      if (path === '/api/forest/inventory' && request.method === 'GET') return handleGetForestInventory(request, env, user)
+      if (path === '/api/forest/selected-tree' && request.method === 'PUT') return handleUpdateSelectedTree(request, env, user)
+      if (path === '/api/forest/earn-coins' && request.method === 'POST') return handleEarnCoins(request, env, user)
+      if (path === '/api/forest/purchase-tree' && request.method === 'POST') return handlePurchaseTree(request, env, user)
+      if (path === '/api/forest/stats' && request.method === 'GET') return handleGetForestStats(request, env, user)
 
       return json({ error: 'Not found' }, 404)
     } catch (err) {

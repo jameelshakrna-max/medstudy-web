@@ -1,0 +1,182 @@
+.scene {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.ground {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(16,185,129,0.04) 30%,
+    rgba(16,185,129,0.08) 60%,
+    rgba(16,185,129,0.12) 100%);
+  border-radius: 0 0 20px 20px;
+  transition: opacity 0.5s;
+}
+
+.soil {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 12px;
+  background: linear-gradient(180deg,
+    rgba(139,69,19,0.06),
+    rgba(139,69,19,0.12));
+  border-radius: 0 0 20px 20px;
+}
+
+.grass {
+  position: absolute;
+  bottom: 14px;
+  width: 2px;
+  background: linear-gradient(0deg, rgba(16,185,129,0.5), rgba(74,222,128,0.3));
+  border-radius: 1px;
+  transform-origin: bottom center;
+  animation: grassSway var(--dur, 3s) ease-in-out infinite;
+}
+
+@keyframes grassSway {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+
+.stone {
+  position: absolute;
+  border-radius: 50% 50% 45% 55%;
+  background: rgba(156,163,175,0.3);
+}
+
+.flower {
+  position: absolute;
+  width: var(--size, 6px);
+  height: var(--size, 6px);
+  border-radius: 50%;
+  background: var(--color, var(--emerald));
+  animation: flowerBob 3s ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes flowerBob {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-2px) scale(1.1); }
+}
+
+.firefly {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(232,200,80,0.8);
+  box-shadow: 0 0 6px rgba(232,200,80,0.5);
+  animation: fireflyFloat var(--dur, 5s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes fireflyFloat {
+  0%, 100% { opacity: 0; transform: translate(0, 0); }
+  15% { opacity: 0.8; }
+  50% { opacity: 0.4; transform: translate(var(--dx, 20px), var(--dy, -20px)); }
+  85% { opacity: 0.7; }
+}
+
+.butterfly {
+  position: absolute;
+  width: 8px;
+  height: 6px;
+  animation: butterflyFly var(--dur, 6s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+.butterfly::before, .butterfly::after {
+  content: '';
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50% 50% 20% 50%;
+  background: var(--color, var(--emerald));
+  opacity: 0.7;
+}
+
+.butterfly::before {
+  left: 0;
+  animation: wingLeft 0.4s ease-in-out infinite alternate;
+}
+
+.butterfly::after {
+  right: 0;
+  animation: wingRight 0.4s ease-in-out infinite alternate;
+}
+
+@keyframes wingLeft {
+  from { transform: rotate(-20deg) scaleX(1); }
+  to { transform: rotate(10deg) scaleX(0.6); }
+}
+
+@keyframes wingRight {
+  from { transform: rotate(20deg) scaleX(1); }
+  to { transform: rotate(-10deg) scaleX(0.6); }
+}
+
+@keyframes butterflyFly {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(15px, -10px) rotate(5deg); }
+  50% { transform: translate(-10px, -20px) rotate(-3deg); }
+  75% { transform: translate(20px, -5px) rotate(4deg); }
+}
+
+.sunRays {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 200%;
+  height: 80px;
+  background: radial-gradient(ellipse at 50% 0%,
+    rgba(253,224,71,0.15) 0%,
+    rgba(253,224,71,0.05) 40%,
+    transparent 70%);
+  animation: sunPulse 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes sunPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.fog {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: linear-gradient(0deg, rgba(10,22,40,0.4), transparent);
+  pointer-events: none;
+}
+
+[data-theme="light"] .ground {
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(16,185,129,0.06) 30%,
+    rgba(16,185,129,0.1) 60%,
+    rgba(16,185,129,0.14) 100%);
+}
+
+[data-theme="light"] .fog {
+  background: linear-gradient(0deg, rgba(244,246,249,0.6), transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grass, .flower, .firefly, .butterfly, .sunRays { animation: none !important; }
+  .butterfly::before, .butterfly::after { animation: none !important; }
+}

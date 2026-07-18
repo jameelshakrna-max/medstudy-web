@@ -1027,3 +1027,38 @@ CREATE TABLE IF NOT EXISTS research_reports (
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_research_reports_post ON research_reports(post_id);
+
+-- ════════════════════════════════════════════════════════════
+-- FOREST TIMER — Tree inventory & selected tree
+-- ════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS user_forest_inventory (
+  user_id TEXT NOT NULL,
+  tree_id TEXT NOT NULL,
+  purchased_at TEXT DEFAULT (datetime('now')),
+  purchase_type TEXT DEFAULT 'free',
+  PRIMARY KEY (user_id, tree_id)
+);
+
+CREATE TABLE IF NOT EXISTS user_forest_settings (
+  user_id TEXT PRIMARY KEY,
+  selected_tree TEXT NOT NULL DEFAULT 'oak',
+  coins INTEGER DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- ════════════════════════════════════════════════════════════
+-- FOREST ECONOMY — Coin transactions & focus time tracking
+-- ════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS forest_coin_transactions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  amount INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  entity_id TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_fct_user ON forest_coin_transactions(user_id, created_at);
+
+ALTER TABLE user_forest_settings ADD COLUMN total_focus_minutes INTEGER DEFAULT 0;
