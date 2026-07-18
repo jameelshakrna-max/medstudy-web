@@ -65,6 +65,32 @@ export function getTreeTransforms(progress) {
 }
 
 // ═══════════════════════════════════════════════════
+//  PER-PART GROWTH SYSTEM
+//  Each part reveals independently over the session
+// ═══════════════════════════════════════════════════
+
+export const GROWTH_PARTS = {
+  soil:      { start: 0.00, peak: 0.05 },
+  trunk:     { start: 0.02, peak: 0.35 },
+  stem:      { start: 0.15, peak: 0.45 },
+  branches:  { start: 0.25, peak: 0.55 },
+  canopy1:   { start: 0.35, peak: 0.60 },
+  canopy2:   { start: 0.40, peak: 0.65 },
+  canopy3:   { start: 0.45, peak: 0.70 },
+  leaves:    { start: 0.50, peak: 0.75 },
+  flowers:   { start: 0.70, peak: 0.90 },
+}
+
+// Compute a 0-1 progress for a specific part given global progress
+export function getPartProgress(partName, globalProgress) {
+  const part = GROWTH_PARTS[partName]
+  if (!part) return 0
+  if (globalProgress <= part.start) return 0
+  if (globalProgress >= part.peak) return 1
+  return (globalProgress - part.start) / (part.peak - part.start)
+}
+
+// ═══════════════════════════════════════════════════
 //  TREE DEFINITIONS
 // ═══════════════════════════════════════════════════
 

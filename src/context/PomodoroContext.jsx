@@ -302,6 +302,10 @@ export function PomodoroProvider({ children }) {
   const [selectedTree, setSelectedTree] = useState('oak')
   const [treeStatus, setTreeStatus] = useState('IDLE') // IDLE | RUNNING | SUCCESS | FAILED
 
+  // ── Focus mode state ──
+  const [focusMode, setFocusMode] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
   const rafRef = useRef(null)
   const endTimeRef = useRef(null)
   const lastTickRef = useRef(null)
@@ -696,6 +700,33 @@ export function PomodoroProvider({ children }) {
     totalRef.current = dur
   }, [focusMins])
 
+  // ── Focus mode + fullscreen ──
+  const toggleFocusMode = useCallback(() => {
+    setFocusMode(prev => {
+      const next = !prev
+      if (!next && document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {})
+      }
+      return next
+    })
+  }, [])
+
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen()
+      } else {
+        await document.exitFullscreen()
+      }
+    } catch (_) {}
+  }, [])
+
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => document.removeEventListener('fullscreenchange', onFsChange)
+  }, [])
+
   const displayRemaining = (() => {
     const m = Math.floor(seconds / 60)
     const s = seconds % 60
@@ -713,11 +744,13 @@ export function PomodoroProvider({ children }) {
     progress,
     togglePlay, skipTimer, finishTimer, resetTimer, resetSession,
     treeStatus, setTreeStatus,
+    focusMode, isFullscreen, toggleFocusMode, toggleFullscreen,
   }), [
     mode, running, done, seconds, totalSec,
     displayRemaining, progress,
     togglePlay, skipTimer, finishTimer, resetTimer, resetSession,
     treeStatus,
+    focusMode, isFullscreen, toggleFocusMode, toggleFullscreen,
   ])
 
   const settingsValue = useMemo(() => ({

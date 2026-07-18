@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { usePomodoro, usePomodoroSettings } from '../context/PomodoroContext'
-import { Play, Pause, Leaf, Timer, ChevronDown, BookOpen } from 'lucide-react'
+import { Play, Pause, Leaf, Timer, ChevronDown, BookOpen, Maximize2, Minimize2, EyeOff } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { getTreeById, getTreeColors } from '../lib/treeTypes'
 import { getSubjectColor } from '../lib/subjectColors'
@@ -22,6 +22,7 @@ export default function Pomodoro() {
     displayRemaining, progress,
     togglePlay, finishTimer, resetTimer, resetSession,
     treeStatus,
+    focusMode, isFullscreen, toggleFocusMode, toggleFullscreen,
   } = usePomodoro()
 
   const {
@@ -162,7 +163,7 @@ export default function Pomodoro() {
   }, [mode, setFocusMins, setShortMins, setLongMins])
 
   // ── Computed ──
-  const circumference = 2 * Math.PI * 130
+  const circumference = 2 * Math.PI * 210
   const dashOffset = circumference * (1 - progress)
   const totalMin = Math.floor(activeStudySeconds / 60)
   const showDial = !running && seconds === totalSec
@@ -250,33 +251,37 @@ export default function Pomodoro() {
       </div>
 
       <div className={s.content}>
-        {/* Mode Tabs */}
-        <div className={s.modeTabs}>
-          {MODES.map(m => (
-            <button key={m}
-              className={`${s.modeTab} ${mode === m ? s.modeTabActive : ''} ${mode === m ? s[m] : ''}`}
-              onClick={() => { if (!running) { setMode(m); resetTimer() } }}>
-              {MODE_LABELS[m]}
-            </button>
-          ))}
-        </div>
-
-        {/* Topic Selector */}
-        <div className={s.topicSelector}>
-          <BookOpen size={13} className={s.topicIcon} />
-          <select className={s.topicSelect}
-            value={selectedTopic || ''}
-            onChange={e => setSelectedTopic(e.target.value || null)}>
-            <option value="">Select a topic</option>
-            {topics.map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
+        {/* Mode Tabs — hidden in focus mode */}
+        {!focusMode && (
+          <div className={s.modeTabs}>
+            {MODES.map(m => (
+              <button key={m}
+                className={`${s.modeTab} ${mode === m ? s.modeTabActive : ''} ${mode === m ? s[m] : ''}`}
+                onClick={() => { if (!running) { setMode(m); resetTimer() } }}>
+                {MODE_LABELS[m]}
+              </button>
             ))}
-          </select>
-          {topicInfo?.high_yield && <span className={s.topicHY}>HY</span>}
-        </div>
+          </div>
+        )}
 
-        {/* Tree Picker — hidden when running */}
-        {!running && (
+        {/* Topic Selector — hidden in focus mode */}
+        {!focusMode && (
+          <div className={s.topicSelector}>
+            <BookOpen size={13} className={s.topicIcon} />
+            <select className={s.topicSelect}
+              value={selectedTopic || ''}
+              onChange={e => setSelectedTopic(e.target.value || null)}>
+              <option value="">Select a topic</option>
+              {topics.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+            {topicInfo?.high_yield && <span className={s.topicHY}>HY</span>}
+          </div>
+        )}
+
+        {/* Tree Picker — hidden when running or in focus mode */}
+        {!running && !focusMode && (
           <TreePicker selectedTree={selectedTree} onSelect={setSelectedTree} subjectColor={subjectColor} ownedTrees={ownedTrees} coins={coins} onPurchase={(treeId, newBalance) => { setOwnedTrees(prev => [...prev, treeId]); setCoins(newBalance) }} />
         )}
 
@@ -300,7 +305,7 @@ export default function Pomodoro() {
             <div className={s.progressContainer}>
               <div className={`${s.glowRing} ${s[mode]} ${running ? s.pulseActive : ''}`} />
 
-              <svg className={s.progressSvg} viewBox="0 0 300 300">
+              <svg className={s.progressSvg} viewBox="0 0 480 480">
                 <defs>
                   <linearGradient id="pGradStudy" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stopColor="#3B82F6" />
@@ -315,13 +320,13 @@ export default function Pomodoro() {
                     <stop offset="100%" stopColor="#A5B4FC" />
                   </linearGradient>
                 </defs>
-                <circle cx="150" cy="150" r="130" fill="none"
+                <circle cx="240" cy="240" r="210" fill="none"
                   stroke="var(--card-border)" strokeWidth="5" />
-                <circle cx="150" cy="150" r="130" fill="none"
+                <circle cx="240" cy="240" r="210" fill="none"
                   className={`${s.progressFg} ${s[mode]}`}
                   strokeDasharray={circumference}
                   strokeDashoffset={dashOffset}
-                  transform="rotate(-90 150 150)" />
+                  transform="rotate(-90 240 240)" />
               </svg>
 
               <div className={s.progressCenter}>
@@ -341,10 +346,16 @@ export default function Pomodoro() {
         {/* ═══ CONTROLS ═══ */}
         <div className={s.controls}>
           {!running && showDial && (
-            <button className={`${s.plantBtn} ${s[mode]}`} onClick={() => { playStart(); togglePlay() }}>
-              <Play size={20} strokeWidth={2} />
-              <span>Plant</span>
-            </button>
+            <>
+              <button className={`${s.plantBtn} ${s[mode]}`} onClick={() => { playStart(); togglePlay() }}>
+                <Play size={20} strokeWidth={2} />
+                <span>Plant</span>
+              </button>
+              <button className={s.focusModeBtn} onClick={toggleFocusMode}>
+                <EyeOff size={16} strokeWidth={2} />
+                <span>Focus Mode</span>
+              </button>
+            </>
           )}
 
           {running && (
@@ -352,9 +363,15 @@ export default function Pomodoro() {
               <button className={s.giveUpBtn} onClick={finishTimer}>
                 Give Up
               </button>
-              <button className={`${s.pauseBtn} ${s[mode]}`} onClick={togglePlay}>
-                <Pause size={20} strokeWidth={2} />
-              </button>
+              <div className={s.runningControls}>
+                <button className={`${s.pauseBtn} ${s[mode]}`} onClick={togglePlay}>
+                  <Pause size={20} strokeWidth={2} />
+                </button>
+                <button className={s.focusModeBtn} onClick={toggleFocusMode}>
+                  <EyeOff size={16} strokeWidth={2} />
+                  <span>{focusMode ? 'Exit Focus' : 'Focus'}</span>
+                </button>
+              </div>
             </>
           )}
 
@@ -366,30 +383,32 @@ export default function Pomodoro() {
         </div>
 
         {/* ═══ STATS BAR ═══ */}
-        <div className={s.statsBar}>
-          <div className={s.statItem}>
-            <span className={s.statLabel}>Today</span>
-            <span className={s.statValue}>{totalMin}m</span>
+        {!focusMode && (
+          <div className={s.statsBar}>
+            <div className={s.statItem}>
+              <span className={s.statLabel}>Today</span>
+              <span className={s.statValue}>{totalMin}m</span>
+            </div>
+            <div className={s.statDivider} />
+            <div className={s.statItem}>
+              <span className={s.statLabel}>Streak</span>
+              <span className={s.statValue}>--</span>
+            </div>
+            <div className={s.statDivider} />
+            <div className={s.statItem}>
+              <span className={s.statLabel}>Trees</span>
+              <span className={s.statValue}>{sessionPomodoros}</span>
+            </div>
+            <div className={s.statDivider} />
+            <div className={s.statItem}>
+              <span className={s.statLabel}>Coins</span>
+              <span className={s.statValue}>{coins}</span>
+            </div>
           </div>
-          <div className={s.statDivider} />
-          <div className={s.statItem}>
-            <span className={s.statLabel}>Streak</span>
-            <span className={s.statValue}>--</span>
-          </div>
-          <div className={s.statDivider} />
-          <div className={s.statItem}>
-            <span className={s.statLabel}>Trees</span>
-            <span className={s.statValue}>{sessionPomodoros}</span>
-          </div>
-          <div className={s.statDivider} />
-          <div className={s.statItem}>
-            <span className={s.statLabel}>Coins</span>
-            <span className={s.statValue}>{coins}</span>
-          </div>
-        </div>
+        )}
 
         {/* ═══ RECENT SESSIONS ═══ */}
-        {sessionLog.length > 0 && (
+        {!focusMode && sessionLog.length > 0 && (
           <div className={s.sessionsSection}>
             <button className={s.sessionsToggle} onClick={() => setShowSessions(!showSessions)}>
               <span>Recent Sessions</span>
@@ -412,7 +431,7 @@ export default function Pomodoro() {
         )}
 
         {/* ═══ FINISH & SAVE ═══ */}
-        {sessionPomodoros > 0 && !running && (
+        {!focusMode && sessionPomodoros > 0 && !running && (
           <button className={s.finishBtn} onClick={handleFinish}>
             Finish & Save Session
           </button>

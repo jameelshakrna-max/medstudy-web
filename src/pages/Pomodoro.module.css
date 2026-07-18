@@ -43,12 +43,12 @@
 
 /* ── Timer Area ── */
 .timerArea {
-  position: relative; width: 300px; height: 300px; margin: 8px auto 20px;
+  position: relative; width: 480px; height: 480px; margin: 8px auto 20px;
   display: flex; align-items: center; justify-content: center;
 }
 
 /* Progress Ring */
-.progressContainer { position: relative; width: 300px; height: 300px; }
+.progressContainer { position: relative; width: 480px; height: 480px; }
 .progressSvg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .progressFg { fill: none; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
 .progressFg.study { stroke: url(#pGradStudy); filter: drop-shadow(0 0 10px rgba(79,140,255,0.5)); }
@@ -78,7 +78,7 @@
 
 .treeInRing {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  z-index: 2; pointer-events: none; transform: translateY(16px);
+  z-index: 2; pointer-events: none; transform: translateY(24px);
 }
 
 /* ── Controls ── */
@@ -114,6 +114,23 @@
   cursor: pointer; transition: all 0.2s; letter-spacing: 0.02em;
 }
 .giveUpBtn:hover { border-color: var(--red); color: var(--red); background: var(--redL); }
+
+/* ── Focus Mode Button ── */
+.focusModeBtn {
+  display: flex; align-items: center; gap: 6px; padding: 8px 16px;
+  border-radius: 100px; border: 1px solid var(--card-border);
+  background: var(--card-bg); color: var(--mist); font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; backdrop-filter: blur(8px);
+}
+.focusModeBtn:hover { border-color: var(--text-secondary); color: var(--text-primary); background: var(--input-bg); }
+
+.runningControls {
+  display: flex; align-items: center; gap: 12px;
+}
+
+/* ── Focus Mode active state ── */
+.page.focusMode .stars { opacity: 0.3; }
+.page.focusMode .content { padding-top: 12px; }
 
 /* ── Stats Bar ── */
 .statsBar {
@@ -227,26 +244,36 @@
 [data-theme="light"] .stars { display: block; opacity: 0.2; }
 [data-theme="light"] .star { background: rgba(245,158,11,0.08); }
 
-/* ── Responsive ── */
+/* ── Responsive: 5 tiers ── */
 @media (max-width: 768px) {
   .content { padding: 16px 20px 32px; }
-  .timerArea { width: 270px; height: 270px; }
-  .progressContainer { width: 270px; height: 270px; }
+  .timerArea { width: 380px; height: 380px; }
+  .progressContainer { width: 380px; height: 380px; }
   .progressTime { font-size: 42px; }
+  .treeInRing { transform: translateY(18px); }
+}
+@media (max-width: 540px) {
+  .content { padding: 14px 18px 28px; }
+  .timerArea { width: 320px; height: 320px; }
+  .progressContainer { width: 320px; height: 320px; }
+  .progressTime { font-size: 38px; }
+  .treeInRing { transform: translateY(14px); }
+  .modeTab { font-size: 12px; padding: 7px 10px; }
 }
 @media (max-width: 480px) {
-  .content { padding: 14px 16px 24px; }
-  .timerArea { width: 240px; height: 240px; }
-  .progressContainer { width: 240px; height: 240px; }
-  .progressTime { font-size: 38px; letter-spacing: -1px; }
-  .modeTab { font-size: 12px; padding: 7px 8px; }
+  .content { padding: 12px 16px 24px; }
+  .timerArea { width: 280px; height: 280px; }
+  .progressContainer { width: 280px; height: 280px; }
+  .progressTime { font-size: 34px; letter-spacing: -1px; }
+  .treeInRing { transform: translateY(12px); }
   .statsBar { max-width: 300px; }
   .statValue { font-size: 16px; }
 }
 @media (max-width: 360px) {
-  .timerArea { width: 210px; height: 210px; }
-  .progressContainer { width: 210px; height: 210px; }
-  .progressTime { font-size: 34px; }
+  .timerArea { width: 240px; height: 240px; }
+  .progressContainer { width: 240px; height: 240px; }
+  .progressTime { font-size: 30px; }
+  .treeInRing { transform: translateY(8px); }
 }
 
 /* ── Reduced motion ── */

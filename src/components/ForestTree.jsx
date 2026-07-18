@@ -1,20 +1,64 @@
 import { useMemo } from 'react'
-import { getTreeTransforms, getGrowthStage } from '../lib/treeTypes'
+import { getPartProgress } from '../lib/treeTypes'
 import s from './ForestTree.module.css'
 
 function lerp(a, b, t) { return a + (b - a) * t }
 
+// Leaf positions relative to canopy center (cx=90, cy ~75-95)
+const LEAF_CONFIG = [
+  { x: -18, y: -12, delay: 0 },
+  { x:  15, y: -16, delay: 1 },
+  { x: -24, y:   2, delay: 2 },
+  { x:  22, y:   0, delay: 3 },
+  { x:  -8, y: -22, delay: 4 },
+  { x:  10, y: -20, delay: 5 },
+  { x: -28, y: -8,  delay: 6 },
+  { x:  28, y: -6,  delay: 7 },
+  { x:   0, y: -26, delay: 8 },
+  { x: -14, y: -18, delay: 9 },
+]
+
+const FLOWER_CONFIG = [
+  { x: -10, y: -18, r: 3, delay: 0 },
+  { x:  12, y: -14, r: 2.5, delay: 2 },
+  { x:   2, y: -24, r: 2, delay: 4 },
+  { x: -20, y: -6,  r: 2.2, delay: 3 },
+  { x:  22, y: -4,  r: 1.8, delay: 5 },
+]
+
 export default function ForestTree({ tree, progress = 0, status = 'IDLE', subjectColor }) {
   const vp = Math.max(0.12, progress)
-  const t = getTreeTransforms(vp)
   const colors = tree?.colors || {}
 
-  const accentFilter = subjectColor
-    ? `drop-shadow(0 0 6px ${subjectColor}40)`
-    : 'none'
+  // Per-part progress
+  const soilP = getPartProgress('soil', vp)
+  const trunkP = getPartProgress('trunk', vp)
+  const stemP = getPartProgress('stem', vp)
+  const branchP = getPartProgress('branches', vp)
+  const c1P = getPartProgress('canopy1', vp)
+  const c2P = getPartProgress('canopy2', vp)
+  const c3P = getPartProgress('canopy3', vp)
+  const leafP = getPartProgress('leaves', vp)
+  const flowerP = getPartProgress('flowers', vp)
 
+  const isGrowing = status === 'RUNNING'
   const isWilted = status === 'FAILED'
   const isBloomed = status === 'SUCCESS'
+
+  // SVG coordinates (viewBox 180x210)
+  const groundY = 198
+  const baseX = 90
+  const trunkH = lerp(0, 50, trunkP)
+  const trunkTop = groundY - trunkH
+  const stemH = lerp(0, 30, stemP)
+  const stemTop = trunkTop - stemH
+  const canopyCY = stemTop - 5
+
+  // Trunk clip-path for draw effect
+  const trunkClipBottom = lerp(100, 0, trunkP)
+
+  const accentFilter = subjectColor
+    ? `drop-shadow(0 0 8px ${subjectColor}40)` : 'none'
 
   const wiltStyle = isWilted ? {
     filter: 'sepia(0.7) saturate(0.3) brightness(0.7)',
@@ -24,7 +68,6 @@ export default function ForestTree({ tree, progress = 0, status = 'IDLE', subjec
     transition: 'filter 0.5s ease',
   } : {}
 
-  // Particle positions for bloom
   const particles = useMemo(() =>
     Array.from({ length: 8 }, (_, i) => ({
       id: i,
@@ -34,122 +77,171 @@ export default function ForestTree({ tree, progress = 0, status = 'IDLE', subjec
       delay: i * 0.08,
     })), [])
 
+  // Canopy sizes driven by part progress
+  const c1RX = lerp(0, 38, c1P)
+  const c1RY = lerp(0, 28, c1P)
+  const c2RX = lerp(0, 30, c2P)
+  const c2RY = lerp(0, 24, c2P)
+  const c3RX = lerp(0, 24, c3P)
+  const c3RY = lerp(0, 20, c3P)
+
   return (
-    <div className={`${s.tree} ${isWilted ? s.wilted : ''} ${isBloomed ? s.bloomed : ''}`}
+    <div className={`${s.tree} ${isWilted ? s.wilted : ''} ${isBloomed ? s.bloomed : ''} ${isGrowing ? s.growing : ''}`}
       style={wiltStyle}>
-      <svg viewBox="0 0 120 140" className={s.svg} style={{ filter: accentFilter }}>
+      <svg viewBox="0 0 180 210" className={s.svg} style={{ filter: accentFilter }}>
         <defs>
           <radialGradient id={`trunkGrad-${tree.id}`} cx="50%" cy="30%">
             <stop offset="0%" stopColor={colors.trunk} />
             <stop offset="100%" stopColor={colors.trunkDark} />
           </radialGradient>
-          <filter id={`treeGlow-${tree.id}`}>
-            <feGaussianBlur stdDeviation="3" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
+          {/* Clip path for trunk draw effect */}
+          <clipPath id={`trunkClip-${tree.id}`}>
+            <rect x={baseX - 6} y={trunkTop} width={12} height={trunkH} />
+          </clipPath>
         </defs>
 
         {/* Soil */}
-        <ellipse cx="60" cy="132" rx="22" ry="5"
-          fill="rgba(139,69,19,0.25)"
-          style={{ opacity: Math.max(0.45, lerp(0, 1, progress * 5)) }} />
+        <ellipse cx={baseX} cy={groundY + 3} rx={lerp(0, 32, soilP)} ry={lerp(0, 6, soilP)}
+          fill="rgba(139,69,19,0.3)"
+          style={{ opacity: Math.max(0.45, lerp(0, 1, soilP)) }} />
 
-        {/* Trunk */}
-        <rect
-          x={60 - t.trunkWidth / 2}
-          y={130 - t.trunkHeight}
-          width={t.trunkWidth}
-          height={t.trunkHeight}
-          rx="1.5"
-          fill={`url(#trunkGrad-${tree.id})`}
-          style={{
-            transition: 'height 0.4s var(--ease-out), width 0.4s var(--ease-out)',
-          }}
-        />
+        {/* Shadow on ground */}
+        <ellipse cx={baseX} cy={groundY + 6} rx={lerp(0, 22, trunkP)} ry={lerp(0, 3.5, trunkP)}
+          fill="rgba(0,0,0,0.18)"
+          style={{ opacity: Math.max(0.25, lerp(0, 0.6, vp * 3)) }} />
 
-        {/* Bark texture lines */}
-        {t.trunkHeight > 8 && (
-          <>
-            <line x1={60 - 1} y1={130 - t.trunkHeight * 0.3}
-              x2={60 - 1} y2={130 - t.trunkHeight * 0.6}
-              stroke={colors.trunkDark} strokeWidth="0.5" opacity="0.3" />
-            <line x1={60 + 1.5} y1={130 - t.trunkHeight * 0.2}
-              x2={60 + 1.5} y2={130 - t.trunkHeight * 0.5}
-              stroke={colors.trunkDark} strokeWidth="0.5" opacity="0.3" />
-          </>
+        {/* Trunk with clip-path draw */}
+        <g clipPath={`url(#trunkClip-${tree.id})`}
+           style={{ clipPath: `inset(0 0 ${trunkClipBottom}% 0)` }}>
+          <rect
+            x={baseX - 5}
+            y={trunkTop}
+            width={10}
+            height={trunkH}
+            rx="2"
+            fill={`url(#trunkGrad-${tree.id})`}
+          />
+          {/* Bark texture */}
+          {trunkH > 10 && (
+            <>
+              <line x1={baseX - 1.5} y1={trunkTop + trunkH * 0.2}
+                x2={baseX - 1.5} y2={trunkTop + trunkH * 0.55}
+                stroke={colors.trunkDark} strokeWidth="0.6" opacity="0.35" />
+              <line x1={baseX + 2} y1={trunkTop + trunkH * 0.15}
+                x2={baseX + 2} y2={trunkTop + trunkH * 0.45}
+                stroke={colors.trunkDark} strokeWidth="0.5" opacity="0.25" />
+            </>
+          )}
+        </g>
+
+        {/* Stem */}
+        {stemP > 0 && (
+          <line x1={baseX} y1={trunkTop}
+            x2={baseX} y2={trunkTop - stemH}
+            stroke={colors.stem} strokeWidth="2.5" strokeLinecap="round"
+            style={{ opacity: stemP }} />
         )}
 
-        {/* Stem / branches */}
-        {t.stemHeight > 0 && (
-          <>
-            <line x1="60" y1={130 - t.trunkHeight}
-              x2="60" y2={130 - t.trunkHeight - t.stemHeight}
-              stroke={colors.stem} strokeWidth="2" strokeLinecap="round"
-              style={{ transition: 'y2 0.4s var(--ease-out)' }} />
-
-            {/* Branches */}
-            {t.branchSpread > 0 && (
-              <>
-                <line x1="60" y1={130 - t.trunkHeight - t.stemHeight * 0.4}
-                  x2={60 - 14 * t.branchSpread} y2={130 - t.trunkHeight - t.stemHeight * 0.7}
-                  stroke={colors.stem} strokeWidth="1.5" strokeLinecap="round" opacity={t.branchSpread} />
-                <line x1="60" y1={130 - t.trunkHeight - t.stemHeight * 0.5}
-                  x2={60 + 12 * t.branchSpread} y2={130 - t.trunkHeight - t.stemHeight * 0.8}
-                  stroke={colors.stem} strokeWidth="1.5" strokeLinecap="round" opacity={t.branchSpread} />
-              </>
-            )}
-          </>
+        {/* Branches */}
+        {branchP > 0 && (
+          <g style={{ opacity: branchP }}>
+            <line x1={baseX} y1={trunkTop - stemH * 0.35}
+              x2={baseX - 22 * branchP} y2={trunkTop - stemH * 0.7}
+              stroke={colors.stem} strokeWidth="1.8" strokeLinecap="round" />
+            <line x1={baseX} y1={trunkTop - stemH * 0.5}
+              x2={baseX + 20 * branchP} y2={trunkTop - stemH * 0.8}
+              stroke={colors.stem} strokeWidth="1.5" strokeLinecap="round" />
+            <line x1={baseX} y1={trunkTop - stemH * 0.6}
+              x2={baseX - 14 * branchP} y2={trunkTop - stemH * 0.9}
+              stroke={colors.stem} strokeWidth="1.2" strokeLinecap="round" />
+            <line x1={baseX} y1={trunkTop - stemH * 0.7}
+              x2={baseX + 12 * branchP} y2={trunkTop - stemH}
+              stroke={colors.stem} strokeWidth="1" strokeLinecap="round" />
+          </g>
         )}
 
         {/* Canopy layers */}
-        {t.canopy1Opacity > 0 && (
-          <ellipse cx="60" cy={130 - t.trunkHeight - t.stemHeight - 8}
-            rx={22 * t.canopy1Scale} ry={16 * t.canopy1Scale}
-            fill={colors.canopy1}
-            style={{ transition: 'all 0.5s var(--ease-out)' }} />
-        )}
-        {t.canopy2Opacity > 0 && (
-          <ellipse cx="60" cy={130 - t.trunkHeight - t.stemHeight - 5}
-            rx={18 * t.canopy2Scale} ry={14 * t.canopy2Scale}
-            fill={colors.canopy2}
-            style={{ transition: 'all 0.5s var(--ease-out)' }} />
-        )}
-        {t.canopy3Opacity > 0 && (
-          <ellipse cx="60" cy={130 - t.trunkHeight - t.stemHeight - 2}
-            rx={15 * t.canopy3Scale} ry={12 * t.canopy3Scale}
-            fill={colors.canopy3}
-            style={{ transition: 'all 0.5s var(--ease-out)' }} />
-        )}
+        <g className="canopyWrap">
+          {c1P > 0 && (
+            <ellipse cx={baseX - 3} cy={canopyCY + 4}
+              rx={c1RX} ry={c1RY}
+              fill={colors.canopy1} style={{ transition: 'all 0.4s var(--ease-out)' }} />
+          )}
+          {c2P > 0 && (
+            <ellipse cx={baseX + 2} cy={canopyCY}
+              rx={c2RX} ry={c2RY}
+              fill={colors.canopy2} style={{ transition: 'all 0.4s var(--ease-out)' }} />
+          )}
+          {c3P > 0 && (
+            <ellipse cx={baseX} cy={canopyCY - 3}
+              rx={c3RX} ry={c3RY}
+              fill={colors.canopy3} style={{ transition: 'all 0.4s var(--ease-out)' }} />
+          )}
 
-        {/* Highlight */}
-        {t.canopy3Opacity > 0 && (
-          <ellipse cx={60 - 4 * t.canopy3Scale} cy={130 - t.trunkHeight - t.stemHeight - 6}
-            rx={5 * t.canopy3Scale} ry={4 * t.canopy3Scale}
-            fill="rgba(255,255,255,0.15)"
-            style={{ transition: 'all 0.5s var(--ease-out)' }} />
-        )}
+          {/* Canopy shadow (dark side) */}
+          {c2P > 0 && (
+            <ellipse cx={baseX + 8} cy={canopyCY + 6}
+              rx={c2RX * 0.6} ry={c2RY * 0.5}
+              fill={colors.canopyShadow || 'rgba(0,0,0,0.12)'}
+              style={{ opacity: c2P * 0.7, transition: 'all 0.4s var(--ease-out)' }} />
+          )}
 
-        {/* Flowers */}
-        {t.flowerOpacity > 0 && (
-          <>
-            <circle cx={52} cy={130 - t.trunkHeight - t.stemHeight - 10}
-              r="2" fill={colors.flower} opacity={t.flowerOpacity} />
-            <circle cx={68} cy={130 - t.trunkHeight - t.stemHeight - 8}
-              r="1.8" fill={colors.flower} opacity={t.flowerOpacity * 0.8} />
-            <circle cx={58} cy={130 - t.trunkHeight - t.stemHeight - 14}
-              r="1.5" fill={colors.flower} opacity={t.flowerOpacity * 0.7} />
-          </>
-        )}
+          {/* Highlight */}
+          {c3P > 0 && (
+            <ellipse cx={baseX - 8} cy={canopyCY - 8}
+              rx={c3RX * 0.3} ry={c3RY * 0.25}
+              fill="rgba(255,255,255,0.18)"
+              style={{ opacity: c3P, transition: 'all 0.4s var(--ease-out)' }} />
+          )}
+        </g>
 
-        {/* Shadow */}
-        <ellipse cx="60" cy="134" rx={14 * t.trunkWidth / 5} ry="3"
-          fill="rgba(0,0,0,0.2)" opacity={Math.max(0.25, lerp(0, 0.6, progress * 3))} />
+        {/* Leaves with stagger pop */}
+        {leafP > 0 && LEAF_CONFIG.map((lf, i) => {
+          const visible = leafP > (lf.delay / LEAF_CONFIG.length)
+          if (!visible) return null
+          const opacity = lerp(0, 0.8, Math.min(1, (leafP - lf.delay / LEAF_CONFIG.length) * LEAF_CONFIG.length))
+          return (
+            <ellipse key={i}
+              cx={baseX + lf.x} cy={canopyCY + lf.y}
+              rx="3.5" ry="2.5"
+              fill={colors.leaf || colors.canopy3}
+              className="leafPop"
+              style={{
+                '--x': `${lf.x}px`,
+                '--y': `${lf.y}px`,
+                '--target-opacity': opacity,
+                '--leaf-delay': `${lf.delay * 0.06}s`,
+                animation: `leafPop 0.4s var(--ease-out) ${lf.delay * 0.06}s both`,
+                opacity: 0,
+              }}
+            />
+          )
+        })}
+
+        {/* Flowers with stagger bloom */}
+        {flowerP > 0 && FLOWER_CONFIG.map((fl, i) => {
+          const visible = flowerP > (fl.delay / FLOWER_CONFIG.length)
+          if (!visible) return null
+          const opacity = lerp(0, 0.85, Math.min(1, (flowerP - fl.delay / FLOWER_CONFIG.length) * FLOWER_CONFIG.length))
+          return (
+            <circle key={`f${i}`}
+              cx={baseX + fl.x} cy={canopyCY + fl.y}
+              r={fl.r}
+              fill={colors.flower}
+              className="flowerBloom"
+              style={{
+                '--x': `${fl.x}px`,
+                '--y': `${fl.y}px`,
+                '--target-opacity': opacity,
+                animation: `flowerBloom 0.5s var(--ease-out) ${fl.delay * 0.08}s both`,
+                opacity: 0,
+              }}
+            />
+          )
+        })}
       </svg>
 
-      {/* Bloom particles */}
+      {/* Bloom particles on success */}
       {isBloomed && particles.map(p => (
         <div key={p.id} className={s.particle}
           style={{
