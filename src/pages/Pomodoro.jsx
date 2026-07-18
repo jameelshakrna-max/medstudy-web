@@ -8,7 +8,7 @@ import { getSubjectColor } from '../lib/subjectColors'
 import { useForestAudio } from '../hooks/useForestAudio'
 import Modal from '../components/ui/Modal/Modal'
 import RadialDial from '../components/RadialDial'
-import ForestTree from '../components/ForestTree'
+import { ForestTree } from '../components/ForestTree'
 import ForestScene from '../components/ForestScene'
 import TreePicker from '../components/TreePicker'
 import s from './Pomodoro.module.css'
@@ -198,6 +198,14 @@ export default function Pomodoro() {
   const showDial = !running && seconds === totalSec
   const showProgress = running || (!running && seconds < totalSec)
 
+  const isStudyMode = mode === 'study'
+  const treeProgress = isStudyMode ? progress : (sessionPomodoros > 0 ? 1 : 0)
+  const treeState = treeStatus === 'SUCCESS' ? 'success'
+    : treeStatus === 'FAILED' ? 'failed'
+    : running ? 'running'
+    : treeProgress > 0 ? 'paused'
+    : 'idle'
+
   // ── Stars ──
   const stars = useMemo(() =>
     Array.from({ length: 40 }, (_, i) => ({
@@ -340,46 +348,18 @@ export default function Pomodoro() {
 
           {/* Progress Ring + Tree (running or paused) */}
           {showProgress && (
-            <div className={s.progressContainer}>
+            <div className={s.treeStage}>
               <div className={`${s.glowRing} ${s[mode]} ${running ? s.pulseActive : ''}`}
                 style={{ opacity: running ? 0.12 + progress * 0.18 : 0.12 }} />
 
-              <svg className={s.progressSvg} viewBox="0 0 480 480">
-                <defs>
-                  <linearGradient id="pGradStudy" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#3B82F6" />
-                    <stop offset="100%" stopColor="#93C5FD" />
-                  </linearGradient>
-                  <linearGradient id="pGradBreak" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#10B981" />
-                    <stop offset="100%" stopColor="#6EE7B7" />
-                  </linearGradient>
-                  <linearGradient id="pGradLong" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#6366F1" />
-                    <stop offset="100%" stopColor="#A5B4FC" />
-                  </linearGradient>
-                </defs>
-                <circle cx="240" cy="240" r="210" fill="none"
-                  stroke="var(--card-border)"
-                  strokeWidth={3 + progress * 3}
-                  style={{ transition: 'stroke-width 1s ease' }} />
-                <circle cx="240" cy="240" r="210" fill="none"
-                  className={`${s.progressFg} ${s[mode]}`}
-                  strokeWidth={3 + progress * 3}
-                  strokeDasharray={circumference}
-                  strokeDashoffset={dashOffset}
-                  transform="rotate(-90 240 240)" />
-              </svg>
+              <ForestTree
+                progress={treeProgress}
+                state={treeState}
+                size="min(100%, 580px)"
+              />
 
-              <div className={s.progressCenter}>
-                <span className={`${s.progressTime} ${s[mode]}`}>
-                  {displayRemaining}
-                </span>
-              </div>
-
-              {/* Tree inside the ring */}
-              <div className={s.treeInRing}>
-                <ForestTree tree={tree} progress={running ? progress : 0.6} status={treeStatus} subjectColor={subjectColor} />
+              <div className={s.timerOverlay}>
+                <strong className={`${s.progressTime} ${s[mode]}`}>{displayRemaining}</strong>
               </div>
             </div>
           )}

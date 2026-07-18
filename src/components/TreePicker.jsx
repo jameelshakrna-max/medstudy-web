@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from 'react'
 import { Lock, Check, Sparkles } from 'lucide-react'
 import { TREES, getTreeById } from '../lib/treeTypes'
 import { supabase } from '../lib/supabase'
-import ForestTree from './ForestTree'
+import ForestTree from './ForestTreeOld'
 import s from './TreePicker.module.css'
 
 export default function TreePicker({ selectedTree, onSelect, subjectColor, ownedTrees = ['oak', 'sakura'], coins = 0, onPurchase }) {

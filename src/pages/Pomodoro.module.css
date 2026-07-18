@@ -43,20 +43,35 @@
 
 /* ── Timer Area ── */
 .timerArea {
-  position: relative; width: 480px; height: 480px; margin: 8px auto 20px;
+  position: relative; width: 480px; min-height: 480px; margin: 8px auto 20px;
   display: flex; align-items: center; justify-content: center;
 }
 
-/* Progress Ring */
-.progressContainer { position: relative; width: 480px; height: 480px; }
-.progressSvg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.progressFg { fill: none; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
-.progressFg.study { stroke: url(#pGradStudy); filter: drop-shadow(0 0 10px rgba(79,140,255,0.5)); }
-.progressFg.break { stroke: url(#pGradBreak); filter: drop-shadow(0 0 10px rgba(16,185,129,0.5)); }
-.progressFg.long { stroke: url(#pGradLong); filter: drop-shadow(0 0 10px rgba(129,140,248,0.5)); }
-.progressCenter {
-  position: absolute; inset: 0; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; z-index: 1;
+/* Tree Stage */
+.treeStage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(100%, 680px);
+  margin-inline: auto;
+}
+.treeStage > * {
+  grid-area: 1 / 1;
+}
+
+.timerOverlay {
+  position: relative;
+  z-index: 2;
+  align-self: end;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  margin-bottom: 1rem;
+  pointer-events: none;
+}
+.timerOverlay strong {
+  font-size: clamp(2.5rem, 7vw, 4.75rem);
+  line-height: 1;
 }
 .progressTime {
   font-family: 'DM Mono', monospace; font-size: 48px; font-weight: 400;
@@ -75,11 +90,6 @@
 .glowRing.long { background: var(--indigo); }
 .pulseActive { animation: pulse 3s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.12; } 50% { transform: scale(1.08); opacity: 0.2; } }
-
-.treeInRing {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  z-index: 2; pointer-events: none; transform: translateY(24px);
-}
 
 /* ── Controls ── */
 .controls { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 24px; }
@@ -304,33 +314,29 @@
 /* ── Responsive: 5 tiers ── */
 @media (max-width: 768px) {
   .content { padding: 16px 20px 32px; }
-  .timerArea { width: 380px; height: 380px; }
-  .progressContainer { width: 380px; height: 380px; }
+  .timerArea { width: 380px; min-height: 380px; }
+  .treeStage { width: min(100%, 580px); }
   .progressTime { font-size: 42px; }
-  .treeInRing { transform: translateY(18px); }
 }
 @media (max-width: 540px) {
   .content { padding: 14px 18px 28px; }
-  .timerArea { width: 320px; height: 320px; }
-  .progressContainer { width: 320px; height: 320px; }
+  .timerArea { width: 320px; min-height: 320px; }
+  .treeStage { width: min(100%, 480px); }
   .progressTime { font-size: 38px; }
-  .treeInRing { transform: translateY(14px); }
   .modeTab { font-size: 12px; padding: 7px 10px; }
 }
 @media (max-width: 480px) {
   .content { padding: 12px 16px 24px; }
-  .timerArea { width: 280px; height: 280px; }
-  .progressContainer { width: 280px; height: 280px; }
+  .timerArea { width: 280px; min-height: 280px; }
+  .treeStage { width: 100%; }
   .progressTime { font-size: 34px; letter-spacing: -1px; }
-  .treeInRing { transform: translateY(12px); }
   .statsBar { max-width: 300px; }
   .statValue { font-size: 16px; }
 }
 @media (max-width: 360px) {
-  .timerArea { width: 240px; height: 240px; }
-  .progressContainer { width: 240px; height: 240px; }
+  .timerArea { width: 240px; min-height: 240px; }
+  .treeStage { width: 100%; }
   .progressTime { font-size: 30px; }
-  .treeInRing { transform: translateY(8px); }
 }
 
 /* ── Reduced motion ── */
