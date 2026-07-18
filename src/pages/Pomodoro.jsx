@@ -34,7 +34,7 @@ export default function Pomodoro() {
     selectedTree, setSelectedTree,
   } = usePomodoroSettings()
 
-  const { playBloom, playWilt, playStart } = useForestAudio()
+  const { playBloom, playWilt, playStart, playSnap } = useForestAudio()
 
   const [topics, setTopics] = useState([])
   const [topicInfo, setTopicInfo] = useState(null)
@@ -191,6 +191,13 @@ export default function Pomodoro() {
     else setLongMins(mins)
   }, [mode, setFocusMins, setShortMins, setLongMins])
 
+  const stepDuration = useCallback((delta) => {
+    const min = mode === 'study' ? 5 : 1
+    setCurrentDuration(Math.max(min, Math.min(120, currentDuration + delta)))
+  }, [mode, currentDuration, setCurrentDuration])
+
+  const breakLabel = mode === 'break' ? 'Short Break' : 'Long Break'
+
   // ── Computed ──
   const totalMin = Math.floor(activeStudySeconds / 60)
   const showDial = !running && seconds === totalSec
@@ -317,8 +324,8 @@ export default function Pomodoro() {
           </div>
         )}
 
-        {/* Topic Selector — hidden in focus mode */}
-        {!focusMode && (
+        {/* Topic Selector — hidden in focus mode and during breaks */}
+        {!focusMode && mode === 'study' && (
           <div className={s.topicSelector}>
             <BookOpen size={13} className={s.topicIcon} />
             <select className={s.topicSelect}
@@ -333,8 +340,8 @@ export default function Pomodoro() {
           </div>
         )}
 
-        {/* Tree Picker — hidden when running or in focus mode */}
-        {!running && !focusMode && (
+        {/* Tree Picker — hidden when running, in focus mode, or during breaks */}
+        {!running && !focusMode && mode === 'study' && (
           <TreePicker selectedTree={selectedTree} onSelect={setSelectedTree} subjectColor={subjectColor} ownedTrees={ownedTrees} coins={coins} onPurchase={(treeId, newBalance) => { setOwnedTrees(prev => [...prev, treeId]); setCoins(newBalance) }} />
         )}
 
@@ -346,12 +353,27 @@ export default function Pomodoro() {
           />
 
           {showStudyDial ? (
-            <RadialDial
-              minutes={currentDuration}
-              onChange={setCurrentDuration}
-              mode={mode}
-              disabled={false}
-            />
+            <div className={s.dialArea}>
+              <RadialDial
+                minutes={currentDuration}
+                onChange={setCurrentDuration}
+                mode={mode}
+                disabled={false}
+              />
+              <div className={s.durationControls}>
+                <button
+                  className={s.durationButton}
+                  onClick={() => { playSnap(); stepDuration(-5) }}
+                  aria-label="Decrease by 5 minutes"
+                >−5</button>
+                <span className={s.durationValue}>{currentDuration} min</span>
+                <button
+                  className={s.durationButton}
+                  onClick={() => { playSnap(); stepDuration(5) }}
+                  aria-label="Increase by 5 minutes"
+                >+5</button>
+              </div>
+            </div>
           ) : mode === 'study' ? (
             <div className={s.focusVisual}>
               <div className={s.treeStage}>
@@ -372,12 +394,27 @@ export default function Pomodoro() {
                 </span>
               </div>
             </div>
-          ) : null}
+          ) : (
+            <div className={s.breakTimer}>
+              <div className={s.timerDisplay}>
+                <span className={`${s.progressTime} ${s[mode]}`}>
+                  {displayRemaining}
+                </span>
+
+                <span className={s.timerLabel}>
+                  {running
+                    ? `${breakLabel} remaining`
+                    : `Start ${breakLabel}`}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ═══ CONTROLS ═══ */}
         <div className={s.controls}>
-          {!running && showDial && (
+          {/* Study idle: Plant + Focus Mode */}
+          {!running && showDial && mode === 'study' && (
             <>
               <button className={`${s.plantBtn} ${s[mode]}`} onClick={() => { playStart(); navigator.vibrate?.(30); togglePlay() }}>
                 <Play size={20} strokeWidth={2} />
@@ -390,7 +427,16 @@ export default function Pomodoro() {
             </>
           )}
 
-          {running && (
+          {/* Break/Long idle: Start Break */}
+          {!running && showDial && mode !== 'study' && (
+            <button className={`${s.plantBtn} ${s[mode]}`} onClick={() => { playStart(); navigator.vibrate?.(30); togglePlay() }}>
+              <Play size={20} strokeWidth={2} />
+              <span>Start {breakLabel}</span>
+            </button>
+          )}
+
+          {/* Study running: Give Up + Pause + Focus Mode */}
+          {running && mode === 'study' && (
             <>
               <button className={s.giveUpBtn} onClick={() => { navigator.vibrate?.([10, 50, 10]); finishTimer() }}>
                 Give Up
@@ -407,6 +453,14 @@ export default function Pomodoro() {
             </>
           )}
 
+          {/* Break running: Pause only */}
+          {running && mode !== 'study' && (
+            <button className={`${s.pauseBtn} ${s[mode]}`} onClick={() => { navigator.vibrate?.(20); togglePlay() }}>
+              <Pause size={20} strokeWidth={2} />
+            </button>
+          )}
+
+          {/* Paused (any mode): Resume */}
           {!running && !showDial && (
             <button className={`${s.pauseBtn} ${s[mode]}`} onClick={() => { navigator.vibrate?.(30); togglePlay() }}>
               <Play size={20} strokeWidth={2} />

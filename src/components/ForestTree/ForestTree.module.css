@@ -177,6 +177,17 @@
   animation-play-state: paused;
 }
 
+.preview .windCluster,
+.preview .particle,
+.preview .grass > g,
+.preview .seed {
+  animation: none !important;
+}
+
+.preview .particles { opacity: 0 !important; }
+.preview .glow { opacity: 0 !important; }
+.preview .completionHalo { opacity: 0 !important; }
+
 @keyframes seedBreath {
   0%,
   100% {

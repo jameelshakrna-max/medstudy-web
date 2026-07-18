@@ -1,11 +1,11 @@
 .picker {
   width: 100%;
-  max-width: 400px;
+  max-width: 480px;
 }
 
 .scroll {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   overflow-x: auto;
   padding: 4px 8px 12px;
   scrollbar-width: none;
@@ -15,12 +15,12 @@
 .scroll::-webkit-scrollbar { display: none; }
 
 .card {
-  flex: 0 0 72px;
+  flex: 0 0 108px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 8px 4px 6px;
+  gap: 6px;
+  padding: 8px 6px 8px;
   border-radius: 14px;
   background: var(--card-bg);
   border: 2px solid transparent;
@@ -35,38 +35,48 @@
   border-color: var(--emerald);
   background: var(--emeraldL);
 }
-.card.locked { opacity: 0.5; }
 
 .treePreview {
-  width: 52px;
-  height: 60px;
+  width: 96px;
+  height: 96px;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  overflow: hidden;
+  position: relative;
 }
 
 .name {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--mist);
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
 
-.check {
+.checkBadge {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  color: var(--emerald);
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--emerald);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
-.lockIcon {
+.lockBadge {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  color: var(--mist);
-  opacity: 0.6;
+  top: 2px;
+  right: 2px;
+  font-size: 12px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
 }
 
 /* Locked preview modal */
@@ -106,7 +116,9 @@
 .lockedPreview {
   display: flex;
   justify-content: center;
-  margin-bottom: 16px;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 16px;
 }
 
 .lockedName {
@@ -188,6 +200,6 @@
 }
 
 @media (max-width: 480px) {
-  .card { flex: 0 0 64px; }
-  .treePreview { width: 44px; height: 52px; }
+  .card { flex: 0 0 96px; }
+  .treePreview { width: 84px; height: 84px; }
 }

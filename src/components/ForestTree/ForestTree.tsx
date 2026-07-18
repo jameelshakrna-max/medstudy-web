@@ -15,6 +15,8 @@ export interface ForestTreeProps {
   /** CSS width, for example 420, "100%", or "min(64vw, 560px)". */
   size?: number | string
   ariaLabel?: string
+  /** Static preview mode: disables wind, particles, glow, bloom, wilt. */
+  preview?: boolean
 }
 
 const rootPaths = [
@@ -104,6 +106,7 @@ export default function ForestTree({
   className = '',
   size,
   ariaLabel = 'An oak tree growing with the focus timer',
+  preview = false,
 }: ForestTreeProps) {
   const rawId = useId().replace(/:/g, '')
   const shadowFilterId = `oak-shadow-${rawId}`
@@ -113,10 +116,10 @@ export default function ForestTree({
   const grassGradientId = `oak-grass-${rawId}`
   const trunkClipId = `oak-trunk-clip-${rawId}`
 
-  const logicalProgress = state === 'success' ? 1 : clamp01(progress)
+  const logicalProgress = (state === 'success' && !preview) ? 1 : clamp01(progress)
   const visualProgress = Math.max(logicalProgress, state === 'idle' ? 0.015 : 0.025)
   const stages = getTreeStages(visualProgress)
-  const isWindActive = state === 'running' || state === 'success'
+  const isWindActive = !preview && (state === 'running' || state === 'success')
 
   const rootStyle = {
     '--draw': stages.roots,
@@ -142,13 +145,13 @@ export default function ForestTree({
 
   return (
     <div
-      className={`${styles.wrapper} ${className}`.trim()}
+      className={`${styles.wrapper} ${preview ? styles.preview : ''} ${className}`.trim()}
       style={{ width: sizeValue(size) }}
-      data-state={state}
+      data-state={preview ? 'idle' : state}
       data-progress={logicalProgress.toFixed(3)}
     >
       <svg
-        className={`${styles.svg} ${styles[state]}`}
+        className={`${styles.svg} ${preview ? '' : styles[state]}`}
         viewBox="0 0 800 800"
         width="100%"
         height="100%"

@@ -1,8 +1,9 @@
-import { useRef, useState, useEffect } from 'react'
-import { Lock, Check, Sparkles } from 'lucide-react'
-import { TREES, getTreeById } from '../lib/treeTypes'
+import { useRef, useState } from 'react'
+import { Sparkles } from 'lucide-react'
+import { TREES } from '../lib/treeTypes'
 import { supabase } from '../lib/supabase'
-import ForestTree from './ForestTreeOld'
+import { ForestTree } from './ForestTree'
+import ForestTreeOld from './ForestTreeOld'
 import s from './TreePicker.module.css'
 
 export default function TreePicker({ selectedTree, onSelect, subjectColor, ownedTrees = ['oak', 'sakura'], coins = 0, onPurchase }) {
@@ -50,6 +51,13 @@ export default function TreePicker({ selectedTree, onSelect, subjectColor, owned
     onSelect(tree.id)
   }
 
+  const renderPreview = (tree) => {
+    if (tree.id === 'oak') {
+      return <ForestTree progress={1} state="paused" preview size="100%" />
+    }
+    return <ForestTreeOld tree={tree} progress={1} status="IDLE" subjectColor={subjectColor} />
+  }
+
   return (
     <div className={s.picker}>
       <div className={s.scroll} ref={scrollRef}>
@@ -58,17 +66,15 @@ export default function TreePicker({ selectedTree, onSelect, subjectColor, owned
           const isOwned = ownedTrees.includes(tree.id)
           return (
             <button key={tree.id}
-              className={`${s.card} ${isSelected ? s.selected : ''} ${!isOwned ? s.locked : ''}`}
+              className={`${s.card} ${isSelected ? s.selected : ''}`}
+              style={!isOwned ? { opacity: 0.6 } : undefined}
               onClick={() => handleSelect(tree)}>
               <div className={s.treePreview}>
-                <ForestTree tree={tree} progress={isSelected ? 0.6 : 0.15} status="IDLE" subjectColor={subjectColor} />
+                {renderPreview(tree)}
+                {!isOwned && <span className={s.lockBadge}>🔒</span>}
+                {isOwned && isSelected && <span className={s.checkBadge}>✓</span>}
               </div>
               <span className={s.name}>{tree.name}</span>
-              {isOwned ? (
-                isSelected && <Check size={12} className={s.check} />
-              ) : (
-                <Lock size={10} className={s.lockIcon} />
-              )}
             </button>
           )
         })}
@@ -79,7 +85,7 @@ export default function TreePicker({ selectedTree, onSelect, subjectColor, owned
         <div className={s.lockedOverlay} onClick={() => { setShowLocked(null); setPurchaseError('') }}>
           <div className={s.lockedModal} onClick={e => e.stopPropagation()}>
             <div className={s.lockedPreview}>
-              <ForestTree tree={showLocked} progress={0.8} status="IDLE" subjectColor={subjectColor} />
+              {renderPreview(showLocked)}
             </div>
             <h3 className={s.lockedName}>{showLocked.name}</h3>
             <p className={s.lockedDesc}>{showLocked.description}</p>
