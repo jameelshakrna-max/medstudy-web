@@ -617,7 +617,7 @@ function ActiveFocusScreen({
       )}
 
       <div className={s.activeTreeStage}>
-        <TreePreview treeId={selectedTree} progress={treeProgress} state={treeState} size="forest" />
+        <TreePreview treeId={selectedTree} progress={Math.max(0.15, treeProgress)} state={treeState} size="forest" />
       </div>
 
       <div className={s.activeTimer}>

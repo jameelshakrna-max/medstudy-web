@@ -224,6 +224,25 @@
   margin: 12px 0;
 }
 
+/* ── Active screen entrance ── */
+@keyframes activeEntrance {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.activeTreeStage,
+.activeTimer,
+.activeControls {
+  animation: activeEntrance 0.4s ease-out both;
+}
+.activeTimer    { animation-delay: 0.08s; }
+.activeControls { animation-delay: 0.16s; }
+
+@keyframes countdownPulse {
+  0%, 100% { text-shadow: none; }
+  50%      { text-shadow: 0 0 12px rgba(255,255,255,0.15); }
+}
+
 .countdownTime {
   font-family: 'DM Mono', monospace;
   font-size: clamp(32px, 6vw, 48px);
@@ -231,6 +250,7 @@
   letter-spacing: -2px;
   line-height: 1;
   color: var(--text-primary);
+  animation: countdownPulse 3s ease-in-out infinite;
 }
 
 .countdownLabel {
