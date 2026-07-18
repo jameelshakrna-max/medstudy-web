@@ -501,6 +501,7 @@ function SetupScreen({
   selectedTree, setSelectedTree, subjectColor, ownedTrees, coins, setOwnedTrees,
   totalMin, sessionPomodoros, sessionLog, showSessions, setShowSessions, handleFinish,
 }) {
+  const navigate = useNavigate();
   return (
     <>
       {/* Mode Tabs */}
