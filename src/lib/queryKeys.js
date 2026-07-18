@@ -138,6 +138,10 @@ export const queryKeys = {
     all: ['user'],
     checkUsername: (username) => [...queryKeys.user.all, 'checkUsername', username],
   },
+  forest: {
+    all: ['forest'],
+    sessions: (userId) => ['forest', 'sessions', userId],
+  },
   research: {
     all: ['research'],
     list: (category, search, sort, status, communityId, page) => [...queryKeys.research.all, 'list', category, search, sort, status, communityId, page],

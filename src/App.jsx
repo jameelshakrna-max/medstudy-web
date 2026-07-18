@@ -53,6 +53,7 @@ const People = lazy(() => import('./pages/People'))
 const DMInbox = lazy(() => import('./components/DMInbox'))
 const DMConversation = lazy(() => import('./components/DMConversation'))
 const ResearchHub = lazy(() => import('./pages/ResearchHub'))
+const ForestPage = lazy(() => import('./pages/ForestPage'))
 
 const PAGE_LOADING = <LoadingScreen />
 
@@ -105,6 +106,7 @@ function AppRoutes() {
           <Route path="settings"   element={<Settings />} />
           <Route path="messages" element={<DMInbox />} />
           <Route path="messages/:conversationId" element={<DMConversation />} />
+          <Route path="forest" element={<ForestPage />} />
           <Route path="research" element={<ResearchHub />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

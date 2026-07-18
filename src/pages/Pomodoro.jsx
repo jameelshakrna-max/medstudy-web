@@ -1,13 +1,13 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import confetti from 'canvas-confetti'
+import { useQueryClient } from '@tanstack/react-query'
 import { usePomodoro, usePomodoroSettings } from '../context/PomodoroContext'
-import { Play, Pause, Leaf, Timer, ChevronDown, BookOpen, Maximize2, Minimize2, EyeOff } from 'lucide-react'
+import { Play, Pause, Leaf, Timer, ChevronDown, BookOpen, EyeOff } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { getTreeById, getTreeColors } from '../lib/treeTypes'
 import { getSubjectColor } from '../lib/subjectColors'
+import { queryKeys } from '../lib/queryKeys'
 import { useForestAudio } from '../hooks/useForestAudio'
 import Modal from '../components/ui/Modal/Modal'
-import RadialDial from '../components/RadialDial'
 import { ForestTree } from '../components/ForestTree'
 import ForestScene from '../components/ForestScene'
 import TreePicker from '../components/TreePicker'
@@ -16,24 +16,46 @@ import s from './Pomodoro.module.css'
 const MODES = ['study', 'break', 'long']
 const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
 
+const DURATION_LIMITS = {
+  study: { min: 5, max: 120, step: 5, presets: [15, 25, 50, 90] },
+  break: { min: 1, max: 30, step: 1, presets: [3, 5, 10] },
+  long:  { min: 5, max: 60, step: 5, presets: [10, 15, 20, 30] },
+}
+
+const BREAK_TIPS = [
+  'Look at something 20 feet away for 20 seconds.',
+  'Stand up and relax your shoulders.',
+  'Drink some water.',
+  'Take five slow breaths.',
+  'Close your eyes and relax them briefly.',
+]
+
+function formatTime(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60)
+  const s = totalSeconds % 60
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
 export default function Pomodoro() {
   const {
     mode, setMode, running,
     done, seconds, totalSec,
     displayRemaining, progress,
-    togglePlay, finishTimer, resetTimer, resetSession,
+    togglePlay, skipTimer, finishTimer, resetTimer, resetSession,
     treeStatus,
-    focusMode, isFullscreen, toggleFocusMode, toggleFullscreen,
+    focusMode, isFullscreen, toggleFocusMode,
+    sessionPhase, sessionOutcome, isSetup, isActive,
+    setModeDuration, advanceToNextMode,
   } = usePomodoro()
 
   const {
-    focusMins, setFocusMins,
-    shortMins, setShortMins, longMins, setLongMins,
+    focusMins, shortMins, longMins,
     selectedTopic, setSelectedTopic,
     sessionPomodoros, sessionLog, activeStudySeconds,
     selectedTree, setSelectedTree,
   } = usePomodoroSettings()
 
+  const queryClient = useQueryClient()
   const { playBloom, playWilt, playStart, playSnap } = useForestAudio()
 
   const [topics, setTopics] = useState([])
@@ -48,7 +70,8 @@ export default function Pomodoro() {
   const [coinEarning, setCoinEarning] = useState({ amount: 0, show: false })
   const [achievement, setAchievement] = useState({ name: '', show: false })
 
-  const tree = getTreeById(selectedTree)
+  const [breakTip] = useState(() => BREAK_TIPS[Math.floor(Math.random() * BREAK_TIPS.length)])
+
   const subjectColor = topicInfo?.subject?.system?.id
     ? getSubjectColor(topicInfo.subject.system.id)
     : null
@@ -127,7 +150,6 @@ export default function Pomodoro() {
   // ── Keyboard shortcuts ──
   useEffect(() => {
     const onKey = (e) => {
-      // Don't fire when typing in inputs
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return
       if (e.key === ' ' || e.code === 'Space') {
         e.preventDefault()
@@ -180,30 +202,13 @@ export default function Pomodoro() {
     earnCoins()
   }, [treeStatus, activeStudySeconds])
 
-  // ── Current duration for the radial dial ──
-  const currentDuration = useMemo(() => {
-    return { study: focusMins, break: shortMins, long: longMins }[mode]
-  }, [mode, focusMins, shortMins, longMins])
-
-  const setCurrentDuration = useCallback((mins) => {
-    if (mode === 'study') setFocusMins(mins)
-    else if (mode === 'break') setShortMins(mins)
-    else setLongMins(mins)
-  }, [mode, setFocusMins, setShortMins, setLongMins])
-
-  const stepDuration = useCallback((delta) => {
-    const min = mode === 'study' ? 5 : 1
-    setCurrentDuration(Math.max(min, Math.min(120, currentDuration + delta)))
-  }, [mode, currentDuration, setCurrentDuration])
-
-  const breakLabel = mode === 'break' ? 'Short Break' : 'Long Break'
-
-  // ── Computed ──
-  const totalMin = Math.floor(activeStudySeconds / 60)
-  const showDial = !running && seconds === totalSec
-  const showProgress = running || (!running && seconds < totalSec)
-
+  // ── Derived ──
   const isStudyMode = mode === 'study'
+  const breakLabel = mode === 'break' ? 'Short Break' : 'Long Break'
+  const totalMin = Math.floor(activeStudySeconds / 60)
+  const currentDuration = { study: focusMins, break: shortMins, long: longMins }[mode]
+  const limits = DURATION_LIMITS[mode]
+
   const treeProgress = isStudyMode ? progress : (sessionPomodoros > 0 ? 1 : 0)
   const treeState = treeStatus === 'SUCCESS' ? 'success'
     : treeStatus === 'FAILED' ? 'failed'
@@ -211,14 +216,17 @@ export default function Pomodoro() {
     : treeProgress > 0 ? 'paused'
     : 'idle'
 
-  const showStudyDial = mode === 'study' && showDial
-
   const sceneProgress =
-    mode === 'study'
-      ? showDial
-        ? 0
-        : treeProgress
+    mode === 'study' && !isSetup
+      ? treeProgress
       : 0
+
+  const view = sessionOutcome ?? `${mode}-${sessionPhase}`
+
+  const earnedCoins = useMemo(() => {
+    const focusMin = Math.floor((totalSec) / 60)
+    return 10 + Math.floor(focusMin / 5) - 5
+  }, [totalSec])
 
   // ── Stars ──
   const stars = useMemo(() =>
@@ -229,6 +237,13 @@ export default function Pomodoro() {
       duration: `${2 + Math.random() * 4}s`,
       delay: `${Math.random() * 3}s`,
     })), [])
+
+  // ── Duration stepping ──
+  const stepDuration = useCallback((delta) => {
+    const newVal = Math.max(limits.min, Math.min(limits.max, currentDuration + delta))
+    setModeDuration(mode, newVal)
+    playSnap()
+  }, [mode, currentDuration, limits, setModeDuration, playSnap])
 
   // ── Finish ──
   const handleFinish = () => {
@@ -256,6 +271,11 @@ export default function Pomodoro() {
         focus_quality: 'Deep focus',
         goals_met: true,
         notes: `${sessionPomodoros} pomodoro${sessionPomodoros > 1 ? 's' : ''} completed`,
+        tree_type: selectedTree || 'oak',
+        subject_id: topicInfo?.subject?.system?.id || null,
+        subject_name: topicInfo?.subject?.system?.name || topicName,
+        status: 'completed',
+        mode: 'study',
       })
 
       if (insertError) {
@@ -280,7 +300,6 @@ export default function Pomodoro() {
       }
 
       setShowFinish(false)
-      // Celebration confetti
       const duration = 2000
       const end = Date.now() + duration
       const frame = () => {
@@ -289,6 +308,7 @@ export default function Pomodoro() {
         if (Date.now() < end) requestAnimationFrame(frame)
       }
       frame()
+      queryClient.invalidateQueries({ queryKey: queryKeys.forest.all })
       resetSession()
     } catch (err) {
       setSaveError('Something went wrong. Please try again.')
@@ -310,218 +330,83 @@ export default function Pomodoro() {
         ))}
       </div>
 
+      {/* ForestScene — page-level, outside .content */}
+      <ForestScene
+        className={s.sceneLayer}
+        mode={mode}
+        phase={sessionPhase}
+        progress={sceneProgress}
+        status={treeStatus}
+      />
+
       <div className={s.content}>
-        {/* Mode Tabs — hidden in focus mode */}
-        {!focusMode && (
-          <div className={s.modeTabs}>
-            {MODES.map(m => (
-              <button key={m}
-                className={`${s.modeTab} ${mode === m ? s.modeTabActive : ''} ${mode === m ? s[m] : ''}`}
-                onClick={() => { if (!running) { setMode(m); resetTimer() } }}>
-                {MODE_LABELS[m]}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Topic Selector — hidden in focus mode and during breaks */}
-        {!focusMode && mode === 'study' && (
-          <div className={s.topicSelector}>
-            <BookOpen size={13} className={s.topicIcon} />
-            <select className={s.topicSelect}
-              value={selectedTopic || ''}
-              onChange={e => setSelectedTopic(e.target.value || null)}>
-              <option value="">Select a topic</option>
-              {topics.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-            {topicInfo?.high_yield && <span className={s.topicHY}>HY</span>}
-          </div>
-        )}
-
-        {/* Tree Picker — hidden when running, in focus mode, or during breaks */}
-        {!running && !focusMode && mode === 'study' && (
-          <TreePicker selectedTree={selectedTree} onSelect={setSelectedTree} subjectColor={subjectColor} ownedTrees={ownedTrees} coins={coins} onPurchase={(treeId, newBalance) => { setOwnedTrees(prev => [...prev, treeId]); setCoins(newBalance) }} />
-        )}
-
-        {/* ═══ TIMER AREA ═══ */}
-        <div className={s.timerArea}>
-          <ForestScene
-            progress={sceneProgress}
-            status={treeStatus}
+        {view === 'completed' ? (
+          <CompletionScreen
+            totalSec={totalSec}
+            topicInfo={topicInfo}
+            earnedCoins={earnedCoins}
+            advanceToNextMode={advanceToNextMode}
+            sessionLog={sessionLog}
           />
-
-          {showStudyDial ? (
-            <div className={s.dialArea}>
-              <RadialDial
-                minutes={currentDuration}
-                onChange={setCurrentDuration}
-                mode={mode}
-                disabled={false}
-              />
-              <div className={s.durationControls}>
-                <button
-                  className={s.durationButton}
-                  onClick={() => { playSnap(); stepDuration(-5) }}
-                  aria-label="Decrease by 5 minutes"
-                >−5</button>
-                <span className={s.durationValue}>{currentDuration} min</span>
-                <button
-                  className={s.durationButton}
-                  onClick={() => { playSnap(); stepDuration(5) }}
-                  aria-label="Increase by 5 minutes"
-                >+5</button>
-              </div>
-            </div>
-          ) : mode === 'study' ? (
-            <div className={s.focusVisual}>
-              <div className={s.treeStage}>
-                <ForestTree
-                  progress={treeProgress}
-                  state={treeState}
-                  size="100%"
-                />
-              </div>
-
-              <div className={s.timerDisplay}>
-                <span className={`${s.progressTime} ${s[mode]}`}>
-                  {displayRemaining}
-                </span>
-
-                <span className={s.timerLabel}>
-                  {running ? 'Focus time remaining' : 'Paused'}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className={s.breakTimer}>
-              <div className={s.timerDisplay}>
-                <span className={`${s.progressTime} ${s[mode]}`}>
-                  {displayRemaining}
-                </span>
-
-                <span className={s.timerLabel}>
-                  {running
-                    ? `${breakLabel} remaining`
-                    : `Start ${breakLabel}`}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ═══ CONTROLS ═══ */}
-        <div className={s.controls}>
-          {/* Study idle: Plant + Focus Mode */}
-          {!running && showDial && mode === 'study' && (
-            <>
-              <button className={`${s.plantBtn} ${s[mode]}`} onClick={() => { playStart(); navigator.vibrate?.(30); togglePlay() }}>
-                <Play size={20} strokeWidth={2} />
-                <span>Plant</span>
-              </button>
-              <button className={s.focusModeBtn} onClick={() => { navigator.vibrate?.(15); toggleFocusMode() }}>
-                <EyeOff size={16} strokeWidth={2} />
-                <span>Focus Mode</span>
-              </button>
-            </>
-          )}
-
-          {/* Break/Long idle: Start Break */}
-          {!running && showDial && mode !== 'study' && (
-            <button className={`${s.plantBtn} ${s[mode]}`} onClick={() => { playStart(); navigator.vibrate?.(30); togglePlay() }}>
-              <Play size={20} strokeWidth={2} />
-              <span>Start {breakLabel}</span>
-            </button>
-          )}
-
-          {/* Study running: Give Up + Pause + Focus Mode */}
-          {running && mode === 'study' && (
-            <>
-              <button className={s.giveUpBtn} onClick={() => { navigator.vibrate?.([10, 50, 10]); finishTimer() }}>
-                Give Up
-              </button>
-              <div className={s.runningControls}>
-                <button className={`${s.pauseBtn} ${s[mode]}`} onClick={() => { navigator.vibrate?.(20); togglePlay() }}>
-                  <Pause size={20} strokeWidth={2} />
-                </button>
-                <button className={s.focusModeBtn} onClick={() => { navigator.vibrate?.(15); toggleFocusMode() }}>
-                  <EyeOff size={16} strokeWidth={2} />
-                  <span>{focusMode ? 'Exit Focus' : 'Focus'}</span>
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Break running: Pause only */}
-          {running && mode !== 'study' && (
-            <button className={`${s.pauseBtn} ${s[mode]}`} onClick={() => { navigator.vibrate?.(20); togglePlay() }}>
-              <Pause size={20} strokeWidth={2} />
-            </button>
-          )}
-
-          {/* Paused (any mode): Resume */}
-          {!running && !showDial && (
-            <button className={`${s.pauseBtn} ${s[mode]}`} onClick={() => { navigator.vibrate?.(30); togglePlay() }}>
-              <Play size={20} strokeWidth={2} />
-            </button>
-          )}
-        </div>
-
-        {/* ═══ STATS BAR ═══ */}
-        {!focusMode && (
-          <div className={s.statsBar}>
-            <div className={s.statItem}>
-              <span className={s.statLabel}>Today</span>
-              <span className={s.statValue}>{totalMin}m</span>
-            </div>
-            <div className={s.statDivider} />
-            <div className={s.statItem}>
-              <span className={s.statLabel}>Streak</span>
-              <span className={s.statValue}>--</span>
-            </div>
-            <div className={s.statDivider} />
-            <div className={s.statItem}>
-              <span className={s.statLabel}>Trees</span>
-              <span className={s.statValue}>{sessionPomodoros}</span>
-            </div>
-            <div className={s.statDivider} />
-            <div className={s.statItem}>
-              <span className={s.statLabel}>Coins</span>
-              <span className={s.statValue}>{coins}</span>
-            </div>
-          </div>
-        )}
-
-        {/* ═══ RECENT SESSIONS ═══ */}
-        {!focusMode && sessionLog.length > 0 && (
-          <div className={s.sessionsSection}>
-            <button className={s.sessionsToggle} onClick={() => setShowSessions(!showSessions)}>
-              <span>Recent Sessions</span>
-              <ChevronDown size={14} className={`${s.sessionsArrow} ${showSessions ? s.sessionsArrowOpen : ''}`} />
-            </button>
-            {showSessions && (
-              <div className={s.sessionsList}>
-                {sessionLog.map((entry, i) => (
-                  <div key={i} className={s.sessionItem}>
-                    <span className={s.sessionIcon}>
-                      {entry.type === 'study' ? '🌳' : entry.type === 'break' ? '☕' : '🌙'}
-                    </span>
-                    <span className={s.sessionLabel}>{entry.label}</span>
-                    <span className={s.sessionTime}>{entry.time}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ═══ FINISH & SAVE ═══ */}
-        {!focusMode && sessionPomodoros > 0 && !running && (
-          <button className={s.finishBtn} onClick={handleFinish}>
-            Finish & Save Session
-          </button>
-        )}
+        ) : view === 'failed' ? (
+          <FailedScreen
+            advanceToNextMode={advanceToNextMode}
+            sessionLog={sessionLog}
+          />
+        ) : isSetup ? (
+          <SetupScreen
+            mode={mode}
+            isStudyMode={isStudyMode}
+            breakLabel={breakLabel}
+            focusMode={focusMode}
+            currentDuration={currentDuration}
+            limits={limits}
+            stepDuration={stepDuration}
+            setModeDuration={setModeDuration}
+            togglePlay={togglePlay}
+            playStart={playStart}
+            toggleFocusMode={toggleFocusMode}
+            topics={topics}
+            selectedTopic={selectedTopic}
+            setSelectedTopic={setSelectedTopic}
+            topicInfo={topicInfo}
+            selectedTree={selectedTree}
+            setSelectedTree={setSelectedTree}
+            subjectColor={subjectColor}
+            ownedTrees={ownedTrees}
+            coins={coins}
+            setOwnedTrees={setOwnedTrees}
+            totalMin={totalMin}
+            sessionPomodoros={sessionPomodoros}
+            sessionLog={sessionLog}
+            showSessions={showSessions}
+            setShowSessions={setShowSessions}
+            handleFinish={handleFinish}
+          />
+        ) : isStudyMode && isActive ? (
+          <ActiveFocusScreen
+            selectedTopic={selectedTopic}
+            topicInfo={topicInfo}
+            treeProgress={treeProgress}
+            treeState={treeState}
+            displayRemaining={displayRemaining}
+            running={running}
+            togglePlay={togglePlay}
+            finishTimer={finishTimer}
+            focusMode={focusMode}
+            toggleFocusMode={toggleFocusMode}
+          />
+        ) : isActive ? (
+          <ActiveBreakScreen
+            breakLabel={breakLabel}
+            displayRemaining={displayRemaining}
+            running={running}
+            togglePlay={togglePlay}
+            skipTimer={skipTimer}
+            breakTip={breakTip}
+            mode={mode}
+          />
+        ) : null}
 
         {coinEarning.show && (
           <div className={s.coinToast}>
@@ -538,7 +423,7 @@ export default function Pomodoro() {
         )}
       </div>
 
-      {/* ═══ Finish Modal ═══ */}
+      {/* Finish Modal */}
       {showFinish && (
         <Modal open={showFinish} onOpenChange={(v) => { if (!v) setShowFinish(false) }} size="sm">
           <div className={s.modalHeader}>
@@ -596,6 +481,312 @@ export default function Pomodoro() {
             </button>
           </div>
         </Modal>
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════
+//  SETUP SCREEN
+// ═══════════════════════════════════════════════
+
+function SetupScreen({
+  mode, isStudyMode, breakLabel, focusMode,
+  currentDuration, limits, stepDuration, setModeDuration,
+  togglePlay, playStart, toggleFocusMode,
+  topics, selectedTopic, setSelectedTopic, topicInfo,
+  selectedTree, setSelectedTree, subjectColor, ownedTrees, coins, setOwnedTrees,
+  totalMin, sessionPomodoros, sessionLog, showSessions, setShowSessions, handleFinish,
+}) {
+  return (
+    <>
+      {/* Mode Tabs */}
+      {!focusMode && <ModeTabs />}
+
+      {/* Topic Selector — study only */}
+      {!focusMode && isStudyMode && (
+        <TopicSelector topics={topics} selectedTopic={selectedTopic} setSelectedTopic={setSelectedTopic} topicInfo={topicInfo} />
+      )}
+
+      {/* Tree Picker — study only */}
+      {!focusMode && isStudyMode && (
+        <TreePicker selectedTree={selectedTree} onSelect={setSelectedTree} subjectColor={subjectColor} ownedTrees={ownedTrees} coins={coins} onPurchase={(treeId, newBalance) => { setOwnedTrees(prev => [...prev, treeId]); setCoins(newBalance) }} />
+      )}
+
+      {/* Selected tree hero preview */}
+      <div className={s.treeHero}>
+        <ForestTree progress={1} state="idle" size={180} preview />
+      </div>
+
+      {/* Duration editor */}
+      <div className={s.durationEditor}>
+        <button
+          className={s.stepButton}
+          onClick={() => stepDuration(-limits.step)}
+          disabled={currentDuration <= limits.min}
+          aria-label={`Decrease by ${limits.step} minutes`}
+        >
+          −{limits.step}
+        </button>
+        <div className={s.durationCenter}>
+          <span className={s.durationTime}>{formatTime(currentDuration * 60)}</span>
+          <span className={s.durationLabel}>minutes</span>
+        </div>
+        <button
+          className={s.stepButton}
+          onClick={() => stepDuration(limits.step)}
+          disabled={currentDuration >= limits.max}
+          aria-label={`Increase by ${limits.step} minutes`}
+        >
+          +{limits.step}
+        </button>
+      </div>
+
+      {/* Preset chips */}
+      <div className={s.presetChips}>
+        {limits.presets.map(p => (
+          <button
+            key={p}
+            className={`${s.presetChip} ${currentDuration === p ? s.presetActive : ''}`}
+            onClick={() => { playStart(); setModeDuration(mode, p) }}
+          >
+            {p} min
+          </button>
+        ))}
+      </div>
+
+      {/* CTA */}
+      <button className={`${s.plantBtn} ${s[mode]}`} onClick={() => { playStart(); navigator.vibrate?.(30); togglePlay() }}>
+        <Play size={20} strokeWidth={2} />
+        <span>{isStudyMode ? 'Plant' : `Start ${breakLabel}`}</span>
+      </button>
+
+      {/* Secondary settings */}
+      {!focusMode && (
+        <button className={s.focusModeBtn} onClick={() => { navigator.vibrate?.(15); toggleFocusMode() }}>
+          <EyeOff size={16} strokeWidth={2} />
+          <span>Focus Mode</span>
+        </button>
+      )}
+
+      {/* Stats */}
+      {!focusMode && <StatsBar totalMin={totalMin} sessionPomodoros={sessionPomodoros} coins={coins} />}
+
+      {/* Sessions */}
+      {!focusMode && sessionLog.length > 0 && (
+        <SessionsSection sessionLog={sessionLog} showSessions={showSessions} setShowSessions={setShowSessions} />
+      )}
+
+      {/* Finish */}
+      {!focusMode && sessionPomodoros > 0 && (
+        <button className={s.finishBtn} onClick={handleFinish}>
+          Finish & Save Session
+        </button>
+      )}
+    </>
+  )
+}
+
+// ═══════════════════════════════════════════════
+//  ACTIVE FOCUS SCREEN
+// ═══════════════════════════════════════════════
+
+function ActiveFocusScreen({
+  selectedTopic, topicInfo, treeProgress, treeState,
+  displayRemaining, running, togglePlay, finishTimer,
+  focusMode, toggleFocusMode,
+}) {
+  return (
+    <>
+      {selectedTopic && topicInfo && (
+        <p className={s.topicLabel}>{topicInfo.name}</p>
+      )}
+
+      <div className={s.activeTreeStage}>
+        <ForestTree progress={treeProgress} state={treeState} size="100%" />
+      </div>
+
+      <div className={s.activeTimer}>
+        <span className={s.countdownTime}>{displayRemaining}</span>
+        <span className={s.countdownLabel}>Focus time remaining</span>
+      </div>
+
+      <div className={s.activeControls}>
+        <button className={`${s.pauseBtn} ${s.study}`} onClick={() => { navigator.vibrate?.(20); togglePlay() }}>
+          {running ? <Pause size={20} strokeWidth={2} /> : <Play size={20} strokeWidth={2} />}
+        </button>
+        <button className={s.giveUpBtn} onClick={() => { navigator.vibrate?.([10, 50, 10]); finishTimer() }}>
+          Give up
+        </button>
+        <button className={s.focusModeBtn} onClick={() => { navigator.vibrate?.(15); toggleFocusMode() }}>
+          <EyeOff size={16} strokeWidth={2} />
+          <span>{focusMode ? 'Exit Focus' : 'Focus'}</span>
+        </button>
+      </div>
+    </>
+  )
+}
+
+// ═══════════════════════════════════════════════
+//  ACTIVE BREAK SCREEN
+// ═══════════════════════════════════════════════
+
+function ActiveBreakScreen({
+  breakLabel, displayRemaining, running, togglePlay, skipTimer, breakTip, mode,
+}) {
+  return (
+    <>
+      <div className={s.breakVisual}>
+        <div className={s.breathingOrb} aria-hidden="true" />
+      </div>
+
+      <div className={s.activeTimer}>
+        <span className={s.countdownTime}>{displayRemaining}</span>
+        <span className={s.countdownLabel}>{breakLabel} remaining</span>
+      </div>
+
+      <p className={s.breakTip}>{breakTip}</p>
+
+      <div className={s.activeControls}>
+        <button className={`${s.pauseBtn} ${s[mode]}`} onClick={() => { navigator.vibrate?.(20); togglePlay() }}>
+          {running ? <Pause size={20} strokeWidth={2} /> : <Play size={20} strokeWidth={2} />}
+        </button>
+        <button className={s.giveUpBtn} onClick={skipTimer}>
+          Skip break
+        </button>
+      </div>
+    </>
+  )
+}
+
+// ═══════════════════════════════════════════════
+//  COMPLETION SCREEN
+// ═══════════════════════════════════════════════
+
+function CompletionScreen({ totalSec, topicInfo, earnedCoins, advanceToNextMode, sessionLog }) {
+  return (
+    <div className={s.completionCard}>
+      <div className={s.completionTree}>
+        <ForestTree progress={1} state="success" size={180} preview />
+      </div>
+      <h3 className={s.completionTitle}>Tree planted</h3>
+      <p className={s.completionStat}>{Math.floor(totalSec / 60)} minutes focused</p>
+      {topicInfo && <p className={s.completionStat}>{topicInfo.name}</p>}
+      <p className={s.completionStat}>+{earnedCoins} coins</p>
+      <div className={s.completionActions}>
+        <button className={`${s.plantBtn} study`} onClick={advanceToNextMode}>
+          <Play size={18} strokeWidth={2} />
+          <span>Plant another</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════
+//  FAILED SCREEN
+// ═══════════════════════════════════════════════
+
+function FailedScreen({ advanceToNextMode, sessionLog }) {
+  return (
+    <div className={s.completionCard}>
+      <div className={s.completionTree}>
+        <ForestTree progress={0.3} state="failed" size={180} preview />
+      </div>
+      <h3 className={s.completionTitle}>Session ended</h3>
+      <p className={s.completionStat}>Your tree didn't survive this time</p>
+      <div className={s.completionActions}>
+        <button className={`${s.plantBtn} study`} onClick={advanceToNextMode}>
+          <Play size={18} strokeWidth={2} />
+          <span>Try again</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════
+//  SHARED SUB-COMPONENTS
+// ═══════════════════════════════════════════════
+
+function ModeTabs() {
+  const { mode, setMode, running, resetTimer } = usePomodoro()
+
+  return (
+    <div className={s.modeTabs}>
+      {MODES.map(m => (
+        <button key={m}
+          className={`${s.modeTab} ${mode === m ? s.modeTabActive : ''} ${mode === m ? s[m] : ''}`}
+          onClick={() => { if (!running) { setMode(m); resetTimer() } }}>
+          {MODE_LABELS[m]}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function TopicSelector({ topics, selectedTopic, setSelectedTopic, topicInfo }) {
+  return (
+    <div className={s.topicSelector}>
+      <BookOpen size={13} className={s.topicIcon} />
+      <select className={s.topicSelect}
+        value={selectedTopic || ''}
+        onChange={e => setSelectedTopic(e.target.value || null)}>
+        <option value="">Select a topic</option>
+        {topics.map(t => (
+          <option key={t.id} value={t.id}>{t.name}</option>
+        ))}
+      </select>
+      {topicInfo?.high_yield && <span className={s.topicHY}>HY</span>}
+    </div>
+  )
+}
+
+function StatsBar({ totalMin, sessionPomodoros, coins }) {
+  return (
+    <div className={s.statsBar}>
+      <div className={s.statItem}>
+        <span className={s.statLabel}>Today</span>
+        <span className={s.statValue}>{totalMin}m</span>
+      </div>
+      <div className={s.statDivider} />
+      <div className={s.statItem}>
+        <span className={s.statLabel}>Streak</span>
+        <span className={s.statValue}>--</span>
+      </div>
+      <div className={s.statDivider} />
+      <div className={s.statItem}>
+        <span className={s.statLabel}>Trees</span>
+        <span className={s.statValue}>{sessionPomodoros}</span>
+      </div>
+      <div className={s.statDivider} />
+      <div className={s.statItem}>
+        <span className={s.statLabel}>Coins</span>
+        <span className={s.statValue}>{coins}</span>
+      </div>
+    </div>
+  )
+}
+
+function SessionsSection({ sessionLog, showSessions, setShowSessions }) {
+  return (
+    <div className={s.sessionsSection}>
+      <button className={s.sessionsToggle} onClick={() => setShowSessions(!showSessions)}>
+        <span>Recent Sessions</span>
+        <ChevronDown size={14} className={`${s.sessionsArrow} ${showSessions ? s.sessionsArrowOpen : ''}`} />
+      </button>
+      {showSessions && (
+        <div className={s.sessionsList}>
+          {sessionLog.map((entry, i) => (
+            <div key={i} className={s.sessionItem}>
+              <span className={s.sessionIcon}>
+                {entry.type === 'study' ? '🌳' : entry.type === 'break' ? '☕' : '🌙'}
+              </span>
+              <span className={s.sessionLabel}>{entry.label}</span>
+              <span className={s.sessionTime}>{entry.time}</span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )

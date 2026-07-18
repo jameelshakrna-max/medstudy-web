@@ -2,8 +2,7 @@ import { useRef, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { TREES } from '../lib/treeTypes'
 import { supabase } from '../lib/supabase'
-import { ForestTree } from './ForestTree'
-import ForestTreeOld from './ForestTreeOld'
+import TreePreview from './TreePreview'
 import s from './TreePicker.module.css'
 
 export default function TreePicker({ selectedTree, onSelect, subjectColor, ownedTrees = ['oak', 'sakura'], coins = 0, onPurchase }) {
@@ -52,10 +51,7 @@ export default function TreePicker({ selectedTree, onSelect, subjectColor, owned
   }
 
   const renderPreview = (tree) => {
-    if (tree.id === 'oak') {
-      return <ForestTree progress={1} state="paused" preview size="100%" />
-    }
-    return <ForestTreeOld tree={tree} progress={1} status="IDLE" subjectColor={subjectColor} />
+    return <TreePreview treeId={tree.id} size="md" />
   }
 
   return (

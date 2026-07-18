@@ -1,8 +1,39 @@
 import { useMemo } from 'react'
 import s from './ForestScene.module.css'
 
-export default function ForestScene({ progress = 0, status = 'IDLE' }) {
+export default function ForestScene({ progress = 0, status = 'IDLE', mode = 'study', phase = 'setup', className }) {
   const vp = Math.max(0, progress)
+
+  const ENVIRONMENTS = {
+    study: {
+      idleColor: 'rgba(59, 130, 246, 0.08)',
+      activeColor: 'rgba(16, 185, 129, 0.14)',
+      particleSpeed: 1,
+      showPollen: true,
+      showLeaves: true,
+      showFireflies: true,
+    },
+    break: {
+      idleColor: 'rgba(20, 184, 166, 0.10)',
+      activeColor: 'rgba(20, 184, 166, 0.14)',
+      particleSpeed: 0.45,
+      showPollen: false,
+      showLeaves: true,
+      showFireflies: false,
+    },
+    long: {
+      idleColor: 'rgba(99, 102, 241, 0.10)',
+      activeColor: 'rgba(139, 92, 246, 0.13)',
+      particleSpeed: 0.25,
+      showPollen: false,
+      showLeaves: false,
+      showFireflies: true,
+    },
+  }
+
+  const env = ENVIRONMENTS[mode] || ENVIRONMENTS.study
+  const isActive = phase === 'running'
+  const glowColor = isActive ? env.activeColor : env.idleColor
 
   const grassBlades = useMemo(() =>
     Array.from({ length: 24 }, (_, i) => ({
@@ -68,17 +99,11 @@ export default function ForestScene({ progress = 0, status = 'IDLE' }) {
   const showGrass = vp > 0.08
   const showFlowers = vp > 0.20
   const showStones = vp > 0.35
-  const showPollen = vp > 0.15
-  const showLeaves = vp > 0.30
-  const showFireflies = vp > 0.55
   const showButterflies = vp > 0.75
   const showSunRays = status === 'SUCCESS'
 
-  // Time-of-day class for ambient gradient
-  const timeOfDay = vp < 0.25 ? 'dawn' : vp < 0.50 ? 'morning' : vp < 0.75 ? 'day' : 'dusk'
-
   return (
-    <div className={`${s.scene} ${s[`time_${timeOfDay}`]}`}>
+    <div className={`${s.scene} ${className || ''}`} style={{ '--scene-glow': glowColor, '--particle-speed': env.particleSpeed }}>
       {/* Ground — evolves from bare soil to grassy */}
       <div className={s.ground} style={{ opacity: Math.min(1, vp * 4) }} />
       <div className={s.soil} style={{ opacity: Math.min(0.6, vp * 3) }} />
@@ -118,7 +143,7 @@ export default function ForestScene({ progress = 0, status = 'IDLE' }) {
       ))}
 
       {/* Pollen — small floating dots */}
-      {showPollen && pollen.map(p => (
+      {env.showPollen && vp > 0.15 && pollen.map(p => (
         <div key={`p${p.id}`} className={s.pollen}
           style={{
             left: p.left,
@@ -131,7 +156,7 @@ export default function ForestScene({ progress = 0, status = 'IDLE' }) {
       ))}
 
       {/* Falling leaves */}
-      {showLeaves && fallingLeaves.map(l => (
+      {env.showLeaves && vp > 0.30 && fallingLeaves.map(l => (
         <div key={`l${l.id}`} className={s.fallingLeaf}
           style={{
             left: l.left,
@@ -145,7 +170,7 @@ export default function ForestScene({ progress = 0, status = 'IDLE' }) {
       ))}
 
       {/* Fireflies */}
-      {showFireflies && fireflies.map(ff => (
+      {env.showFireflies && vp > 0.55 && fireflies.map(ff => (
         <div key={ff.id} className={s.firefly}
           style={{
             left: ff.left,

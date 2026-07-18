@@ -1,0 +1,140 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-popover, 500);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.sheet {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  max-height: 70vh;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 20px 20px 0 0;
+  padding: 12px 24px 28px;
+  overflow-y: auto;
+  animation: slideUp 0.25s var(--ease-out);
+}
+
+@keyframes slideUp {
+  from { transform: translateY(40px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--card-border);
+  margin: 0 auto 16px;
+}
+
+.closeBtn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--input-bg);
+  color: var(--mist);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.closeBtn:hover {
+  background: var(--card-border);
+  color: var(--text-primary);
+}
+
+.preview {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.treeName {
+  font-family: 'DM Serif Display', serif;
+  font-size: 20px;
+  color: var(--text-primary);
+  text-align: center;
+  margin-bottom: 2px;
+}
+
+.subject {
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  background: var(--input-bg);
+  border-radius: 14px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.row svg {
+  color: var(--mist);
+  flex-shrink: 0;
+}
+
+.subjectTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 6px 12px;
+  border-radius: 100px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mist);
+}
+
+@media (min-width: 769px) {
+  .overlay {
+    align-items: center;
+  }
+  .sheet {
+    border-radius: 20px;
+    max-height: 80vh;
+  }
+  .handle {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .sheet {
+    padding: 12px 20px 24px;
+  }
+}
