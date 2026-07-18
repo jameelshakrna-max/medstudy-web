@@ -122,6 +122,25 @@ export default function Pomodoro() {
     else if (treeStatus === 'FAILED') playWilt()
   }, [treeStatus, playBloom, playWilt])
 
+  // ── Keyboard shortcuts ──
+  useEffect(() => {
+    const onKey = (e) => {
+      // Don't fire when typing in inputs
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault()
+        togglePlay()
+      } else if (e.key === 'Escape' && focusMode) {
+        toggleFocusMode()
+      } else if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault()
+        toggleFocusMode()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [togglePlay, toggleFocusMode, focusMode])
+
   // ── Earn coins on session success ──
   useEffect(() => {
     if (treeStatus !== 'SUCCESS') return
@@ -303,7 +322,8 @@ export default function Pomodoro() {
           {/* Progress Ring + Tree (running or paused) */}
           {showProgress && (
             <div className={s.progressContainer}>
-              <div className={`${s.glowRing} ${s[mode]} ${running ? s.pulseActive : ''}`} />
+              <div className={`${s.glowRing} ${s[mode]} ${running ? s.pulseActive : ''}`}
+                style={{ opacity: running ? 0.12 + progress * 0.18 : 0.12 }} />
 
               <svg className={s.progressSvg} viewBox="0 0 480 480">
                 <defs>
@@ -321,9 +341,12 @@ export default function Pomodoro() {
                   </linearGradient>
                 </defs>
                 <circle cx="240" cy="240" r="210" fill="none"
-                  stroke="var(--card-border)" strokeWidth="5" />
+                  stroke="var(--card-border)"
+                  strokeWidth={3 + progress * 3}
+                  style={{ transition: 'stroke-width 1s ease' }} />
                 <circle cx="240" cy="240" r="210" fill="none"
                   className={`${s.progressFg} ${s[mode]}`}
+                  strokeWidth={3 + progress * 3}
                   strokeDasharray={circumference}
                   strokeDashoffset={dashOffset}
                   transform="rotate(-90 240 240)" />
@@ -347,11 +370,11 @@ export default function Pomodoro() {
         <div className={s.controls}>
           {!running && showDial && (
             <>
-              <button className={`${s.plantBtn} ${s[mode]}`} onClick={() => { playStart(); togglePlay() }}>
+              <button className={`${s.plantBtn} ${s[mode]}`} onClick={() => { playStart(); navigator.vibrate?.(30); togglePlay() }}>
                 <Play size={20} strokeWidth={2} />
                 <span>Plant</span>
               </button>
-              <button className={s.focusModeBtn} onClick={toggleFocusMode}>
+              <button className={s.focusModeBtn} onClick={() => { navigator.vibrate?.(15); toggleFocusMode() }}>
                 <EyeOff size={16} strokeWidth={2} />
                 <span>Focus Mode</span>
               </button>
@@ -360,14 +383,14 @@ export default function Pomodoro() {
 
           {running && (
             <>
-              <button className={s.giveUpBtn} onClick={finishTimer}>
+              <button className={s.giveUpBtn} onClick={() => { navigator.vibrate?.([10, 50, 10]); finishTimer() }}>
                 Give Up
               </button>
               <div className={s.runningControls}>
-                <button className={`${s.pauseBtn} ${s[mode]}`} onClick={togglePlay}>
+                <button className={`${s.pauseBtn} ${s[mode]}`} onClick={() => { navigator.vibrate?.(20); togglePlay() }}>
                   <Pause size={20} strokeWidth={2} />
                 </button>
-                <button className={s.focusModeBtn} onClick={toggleFocusMode}>
+                <button className={s.focusModeBtn} onClick={() => { navigator.vibrate?.(15); toggleFocusMode() }}>
                   <EyeOff size={16} strokeWidth={2} />
                   <span>{focusMode ? 'Exit Focus' : 'Focus'}</span>
                 </button>
@@ -376,7 +399,7 @@ export default function Pomodoro() {
           )}
 
           {!running && !showDial && (
-            <button className={`${s.pauseBtn} ${s[mode]}`} onClick={togglePlay}>
+            <button className={`${s.pauseBtn} ${s[mode]}`} onClick={() => { navigator.vibrate?.(30); togglePlay() }}>
               <Play size={20} strokeWidth={2} />
             </button>
           )}

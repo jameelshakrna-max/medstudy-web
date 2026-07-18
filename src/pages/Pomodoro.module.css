@@ -68,7 +68,7 @@
 
 .glowRing {
   position: absolute; width: 80%; height: 80%; left: 10%; top: 10%;
-  border-radius: 50%; filter: blur(50px); opacity: 0.12; transition: all 1s ease; pointer-events: none;
+  border-radius: 50%; filter: blur(50px); transition: opacity 1s ease; pointer-events: none;
 }
 .glowRing.study { background: var(--blue); }
 .glowRing.break { background: var(--emerald); }

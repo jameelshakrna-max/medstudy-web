@@ -704,7 +704,9 @@ export function PomodoroProvider({ children }) {
   const toggleFocusMode = useCallback(() => {
     setFocusMode(prev => {
       const next = !prev
-      if (!next && document.fullscreenElement) {
+      if (next && !document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {})
+      } else if (!next && document.fullscreenElement) {
         document.exitFullscreen().catch(() => {})
       }
       return next
@@ -722,7 +724,12 @@ export function PomodoroProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement)
+    const onFsChange = () => {
+      const fs = !!document.fullscreenElement
+      setIsFullscreen(fs)
+      // Auto-exit focus mode when user exits fullscreen (e.g. Escape key)
+      if (!fs) setFocusMode(false)
+    }
     document.addEventListener('fullscreenchange', onFsChange)
     return () => document.removeEventListener('fullscreenchange', onFsChange)
   }, [])
