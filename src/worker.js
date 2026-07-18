@@ -83,6 +83,10 @@ import {
 } from './handlers/forest.js'
 
 import {
+  handleSubscribe, handleSchedulePush, handleCancelPushes, handlePushCron,
+} from './handlers/push.js'
+
+import {
   handleGetUserAchievements, handleCheckAchievements,
 } from './handlers/achievements.js'
 
@@ -513,6 +517,11 @@ export default {
       if (path === '/api/forest/purchase-tree' && request.method === 'POST') return handlePurchaseTree(request, env, user)
       if (path === '/api/forest/stats' && request.method === 'GET') return handleGetForestStats(request, env, user)
 
+      // ── Push Notifications ──
+      if (path === '/api/push/subscribe' && request.method === 'POST') return handleSubscribe(request, env, user)
+      if (path === '/api/push/schedule' && request.method === 'POST') return handleSchedulePush(request, env, user)
+      if (path === '/api/push/cancel' && request.method === 'POST') return handleCancelPushes(request, env, user)
+
       return json({ error: 'Not found' }, 404)
     } catch (err) {
       console.error(`[${requestId}]`, err)
@@ -522,6 +531,10 @@ export default {
       console.error(`[${requestId}] outer:`, outerErr)
       return ensureCORS(json({ error: 'Internal Server Error', requestId }, 500))
     }
+  },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(handlePushCron(env))
   },
 }
 

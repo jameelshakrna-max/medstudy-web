@@ -10,8 +10,8 @@ const MODES = ['study', 'break', 'long']
 //  VAPID PUBLIC KEY — REPLACE WITH YOUR OWN KEY
 // ══════════════════════════════════════════════════
 
-const PUSH_ENABLED = false
-const VAPID_PUBLIC_KEY = 'BKbcMQDt4fIvsxpU5j1mWFBsMNIyy-N3xMlOldlLkzpEUzmKtKNoxkI_s_lvl1_IsjX74bqNB5E9Xf8lhmYTtkE'
+const PUSH_ENABLED = true
+const VAPID_PUBLIC_KEY = 'BL1DR63woanpTniR80ObGZ3E2XeeSdmQoU1O8HKmVML6Lh40n58v05jg6cIkfCenkS8jkMyc81zX_fV-xdc1VHI'
 
 // Convert base64 string to Uint8Array for push subscription
 function urlBase64ToUint8Array(base64String) {
@@ -223,6 +223,10 @@ async function schedulePushNotification(userId, endTime, mode) {
   if (!PUSH_ENABLED) return
   pushLog('Scheduling push for ' + mode + ' at ' + new Date(endTime).toLocaleTimeString())
 
+  const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
+  const label = MODE_LABELS[mode] || 'Timer'
+  const duration_ms = Math.max(0, endTime - Date.now())
+
   try {
     const { data: { session } } = await supabase.auth.getSession()
     const res = await fetch('/api/push/schedule', {
@@ -231,7 +235,15 @@ async function schedulePushNotification(userId, endTime, mode) {
         'Content-Type': 'application/json',
         Authorization: 'Bearer ' + session.access_token
       },
-      body: JSON.stringify({ user_id: userId, end_time: endTime, mode })
+      body: JSON.stringify({
+        type: 'timer_complete',
+        title: label + ' Complete',
+        body: mode === 'study'
+          ? 'Great work! Time for a break.'
+          : 'Break is over. Ready to focus?',
+        url: '/pomodoro',
+        duration_ms
+      })
     })
     const resText = await res.text()
     try {
@@ -242,6 +254,26 @@ async function schedulePushNotification(userId, endTime, mode) {
     }
   } catch (err) {
     pushLog('ERROR: Schedule failed: ' + err.message)
+  }
+}
+
+// Cancel scheduled push notification (called on pause, skip, reset, manual finish)
+async function cancelPushNotification() {
+  if (!PUSH_ENABLED) return
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    await fetch('/api/push/cancel', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + session.access_token
+      },
+      body: JSON.stringify({ type: 'timer_complete' })
+    })
+    pushLog('Cancelled scheduled push')
+  } catch (err) {
+    pushLog('Cancel push error: ' + err.message)
   }
 }
 
@@ -555,6 +587,7 @@ export function PomodoroProvider({ children }) {
       lastTickRef.current = null
       if (bgTimeoutRef.current) { clearTimeout(bgTimeoutRef.current); bgTimeoutRef.current = null }
       setRunning(false)
+      cancelPushNotification()
     }
   }, [seconds, getDuration])
 
@@ -565,6 +598,7 @@ export function PomodoroProvider({ children }) {
     lastTickRef.current = null
     completingRef.current = false
     setRunning(false)
+    cancelPushNotification()
     const idx = MODES.indexOf(modeRef.current)
     const next = MODES[(idx + 1) % MODES.length]
     const dur = { study: focusMins, break: shortMins, long: longMins }[next] * 60
@@ -582,6 +616,7 @@ export function PomodoroProvider({ children }) {
     if (bgTimeoutRef.current) { clearTimeout(bgTimeoutRef.current); bgTimeoutRef.current = null }
     endTimeRef.current = null
     lastTickRef.current = null
+    cancelPushNotification()
 
     setRunning(false)
     setSeconds(0)
@@ -633,6 +668,7 @@ export function PomodoroProvider({ children }) {
     lastTickRef.current = null
     completingRef.current = false
     setRunning(false)
+    cancelPushNotification()
     setTreeStatus('IDLE')
     const dur = getDuration(modeRef.current)
     setSeconds(dur)

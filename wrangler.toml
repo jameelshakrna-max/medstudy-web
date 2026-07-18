@@ -1,6 +1,11 @@
 name = "medstudy-api"
 main = "src/worker.js"
 compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[triggers]]
+  type = "cron"
+  cron = "* * * * *"
 
 [[d1_databases]]
 binding = "DB"
@@ -31,3 +36,4 @@ bucket_name = "card-images"
 SUPABASE_URL = "https://undakhccjrbcpzryfmot.supabase.co"
 CF_ACCOUNT_ID = "a05b2fac1d43aa509d8765c8089f499b"
 REALTIMEKIT_APP_ID = "96b410b8-1a27-477b-8fb9-eaa406775a82"
+VAPID_PUBLIC_KEY = "BL1DR63woanpTniR80ObGZ3E2XeeSdmQoU1O8HKmVML6Lh40n58v05jg6cIkfCenkS8jkMyc81zX_fV-xdc1VHI"

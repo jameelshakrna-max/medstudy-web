@@ -1062,3 +1062,32 @@ CREATE TABLE IF NOT EXISTS forest_coin_transactions (
 CREATE INDEX IF NOT EXISTS idx_fct_user ON forest_coin_transactions(user_id, created_at);
 
 ALTER TABLE user_forest_settings ADD COLUMN total_focus_minutes INTEGER DEFAULT 0;
+
+-- ════════════════════════════════════════════════════════════
+-- PUSH NOTIFICATIONS — Browser push subscriptions & scheduled delivery queue
+-- ════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  expiration_time INTEGER,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_push_sub_user ON push_subscriptions(user_id);
+
+CREATE TABLE IF NOT EXISTS scheduled_pushes (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  url TEXT,
+  data TEXT,
+  scheduled_at INTEGER NOT NULL,
+  attempts INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_sched_push_due ON scheduled_pushes(scheduled_at, attempts);
