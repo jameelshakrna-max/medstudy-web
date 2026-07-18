@@ -5,7 +5,7 @@ import { ForestTree } from './ForestTree'
 import { PremiumTree, PREMIUM_TREE_IDS } from './PremiumTrees'
 import s from './TreePreview.module.css'
 
-export default function TreePreview({ treeId, size = 'md', className = '', wind = false, mature = false, variant, windSeed }) {
+export default function TreePreview({ treeId, size = 'md', className = '', wind = false, mature = false, variant, windSeed, progress, state }) {
   const tree = useMemo(() => getTreeById(treeId) || getTreeById('oak'), [treeId])
   const isOak = tree?.id === 'oak'
   const isPremium = PREMIUM_TREE_IDS.has(treeId)
@@ -13,13 +13,16 @@ export default function TreePreview({ treeId, size = 'md', className = '', wind 
   const isLandscape = variant === 'landscape'
   const sizeClass = isLandscape ? s.forest : size === 'sm' ? s.sm : size === 'forest' ? s.forest : s.md
 
+  const g = progress ?? 1
+  const st = state ?? 'idle'
+
   if (isPremium) {
     return (
       <div className={`${s.wrapper} ${sizeClass} ${isLandscape ? s.landscapePreview : ''} ${className}`}>
         <PremiumTree
           treeType={treeId}
-          progress={1}
-          state="idle"
+          progress={g}
+          state={st}
           preview={mature}
           wind={wind}
           windSeed={windSeed}
@@ -33,8 +36,8 @@ export default function TreePreview({ treeId, size = 'md', className = '', wind 
     return (
       <div className={`${s.wrapper} ${sizeClass} ${isLandscape ? s.landscapePreview : ''} ${className}`}>
         <ForestTree
-          progress={1}
-          state="idle"
+          progress={g}
+          state={st}
           preview={mature}
           landscapeWind={wind}
           showParticles={false}
@@ -49,8 +52,8 @@ export default function TreePreview({ treeId, size = 'md', className = '', wind 
     <div className={`${s.wrapper} ${sizeClass} ${isLandscape ? s.landscapePreview : ''} ${className}`}>
       <ForestTreeOld
         tree={tree}
-        progress={1}
-        status={mature ? 'IDLE' : 'IDLE'}
+        progress={g}
+        status={st.toUpperCase()}
         wind={wind}
       />
     </div>

@@ -9,7 +9,7 @@ import { getSubjectColor } from '../lib/subjectColors'
 import { queryKeys } from '../lib/queryKeys'
 import { useForestAudio } from '../hooks/useForestAudio'
 import Modal from '../components/ui/Modal/Modal'
-import { ForestTree } from '../components/ForestTree'
+import TreePreview from '../components/TreePreview'
 import ForestScene from '../components/ForestScene'
 import TreePicker from '../components/TreePicker'
 import s from './Pomodoro.module.css'
@@ -350,11 +350,13 @@ export default function Pomodoro() {
             advanceToNextMode={advanceToNextMode}
             sessionLog={sessionLog}
             onVisitForest={() => navigate('/forest')}
+            selectedTree={selectedTree}
           />
         ) : view === 'failed' ? (
           <FailedScreen
             advanceToNextMode={advanceToNextMode}
             sessionLog={sessionLog}
+            selectedTree={selectedTree}
           />
         ) : isSetup ? (
           <SetupScreen
@@ -378,6 +380,7 @@ export default function Pomodoro() {
             subjectColor={subjectColor}
             ownedTrees={ownedTrees}
             coins={coins}
+            setCoins={setCoins}
             setOwnedTrees={setOwnedTrees}
             totalMin={totalMin}
             sessionPomodoros={sessionPomodoros}
@@ -398,6 +401,7 @@ export default function Pomodoro() {
             finishTimer={finishTimer}
             focusMode={focusMode}
             toggleFocusMode={toggleFocusMode}
+            selectedTree={selectedTree}
           />
         ) : isActive ? (
           <ActiveBreakScreen
@@ -498,7 +502,7 @@ function SetupScreen({
   currentDuration, limits, stepDuration, setModeDuration,
   togglePlay, playStart, toggleFocusMode,
   topics, selectedTopic, setSelectedTopic, topicInfo,
-  selectedTree, setSelectedTree, subjectColor, ownedTrees, coins, setOwnedTrees,
+  selectedTree, setSelectedTree, subjectColor, ownedTrees, coins, setCoins, setOwnedTrees,
   totalMin, sessionPomodoros, sessionLog, showSessions, setShowSessions, handleFinish,
 }) {
   const navigate = useNavigate();
@@ -519,7 +523,7 @@ function SetupScreen({
 
       {/* Selected tree hero preview */}
       <div className={s.treeHero}>
-        <ForestTree progress={1} state="idle" size={180} preview />
+        <TreePreview treeId={selectedTree} size="md" mature />
       </div>
 
       {/* Duration editor */}
@@ -604,7 +608,7 @@ function SetupScreen({
 function ActiveFocusScreen({
   selectedTopic, topicInfo, treeProgress, treeState,
   displayRemaining, running, togglePlay, finishTimer,
-  focusMode, toggleFocusMode,
+  focusMode, toggleFocusMode, selectedTree,
 }) {
   return (
     <>
@@ -613,7 +617,7 @@ function ActiveFocusScreen({
       )}
 
       <div className={s.activeTreeStage}>
-        <ForestTree progress={treeProgress} state={treeState} size="100%" />
+        <TreePreview treeId={selectedTree} progress={treeProgress} state={treeState} size="forest" />
       </div>
 
       <div className={s.activeTimer}>
@@ -673,11 +677,11 @@ function ActiveBreakScreen({
 //  COMPLETION SCREEN
 // ═══════════════════════════════════════════════
 
-function CompletionScreen({ totalSec, topicInfo, earnedCoins, advanceToNextMode, sessionLog, onVisitForest }) {
+function CompletionScreen({ totalSec, topicInfo, earnedCoins, advanceToNextMode, sessionLog, onVisitForest, selectedTree }) {
   return (
     <div className={s.completionCard}>
       <div className={s.completionTree}>
-        <ForestTree progress={1} state="success" size={180} preview />
+        <TreePreview treeId={selectedTree} size="md" mature />
       </div>
       <h3 className={s.completionTitle}>Tree planted</h3>
       <p className={s.completionStat}>{Math.floor(totalSec / 60)} minutes focused</p>
@@ -701,11 +705,11 @@ function CompletionScreen({ totalSec, topicInfo, earnedCoins, advanceToNextMode,
 //  FAILED SCREEN
 // ═══════════════════════════════════════════════
 
-function FailedScreen({ advanceToNextMode, sessionLog }) {
+function FailedScreen({ advanceToNextMode, sessionLog, selectedTree }) {
   return (
     <div className={s.completionCard}>
       <div className={s.completionTree}>
-        <ForestTree progress={0.3} state="failed" size={180} preview />
+        <TreePreview treeId={selectedTree} size="md" mature />
       </div>
       <h3 className={s.completionTitle}>Session ended</h3>
       <p className={s.completionStat}>Your tree didn't survive this time</p>
