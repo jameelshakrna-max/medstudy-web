@@ -192,8 +192,6 @@ export default function Pomodoro() {
   }, [mode, setFocusMins, setShortMins, setLongMins])
 
   // ── Computed ──
-  const circumference = 2 * Math.PI * 210
-  const dashOffset = circumference * (1 - progress)
   const totalMin = Math.floor(activeStudySeconds / 60)
   const showDial = !running && seconds === totalSec
   const showProgress = running || (!running && seconds < totalSec)
@@ -205,6 +203,15 @@ export default function Pomodoro() {
     : running ? 'running'
     : treeProgress > 0 ? 'paused'
     : 'idle'
+
+  const showStudyDial = mode === 'study' && showDial
+
+  const sceneProgress =
+    mode === 'study'
+      ? showDial
+        ? 0
+        : treeProgress
+      : 0
 
   // ── Stars ──
   const stars = useMemo(() =>
@@ -333,36 +340,39 @@ export default function Pomodoro() {
 
         {/* ═══ TIMER AREA ═══ */}
         <div className={s.timerArea}>
-          {/* Scene */}
-          <ForestScene progress={running ? progress : 0} status={treeStatus} />
+          <ForestScene
+            progress={sceneProgress}
+            status={treeStatus}
+          />
 
-          {/* Radial Dial (idle) */}
-          {showDial && (
+          {showStudyDial ? (
             <RadialDial
               minutes={currentDuration}
               onChange={setCurrentDuration}
               mode={mode}
               disabled={false}
             />
-          )}
+          ) : mode === 'study' ? (
+            <div className={s.focusVisual}>
+              <div className={s.treeStage}>
+                <ForestTree
+                  progress={treeProgress}
+                  state={treeState}
+                  size="100%"
+                />
+              </div>
 
-          {/* Progress Ring + Tree (running or paused) */}
-          {showProgress && (
-            <div className={s.treeStage}>
-              <div className={`${s.glowRing} ${s[mode]} ${running ? s.pulseActive : ''}`}
-                style={{ opacity: running ? 0.12 + progress * 0.18 : 0.12 }} />
+              <div className={s.timerDisplay}>
+                <span className={`${s.progressTime} ${s[mode]}`}>
+                  {displayRemaining}
+                </span>
 
-              <ForestTree
-                progress={treeProgress}
-                state={treeState}
-                size="min(100%, 580px)"
-              />
-
-              <div className={s.timerOverlay}>
-                <strong className={`${s.progressTime} ${s[mode]}`}>{displayRemaining}</strong>
+                <span className={s.timerLabel}>
+                  {running ? 'Focus time remaining' : 'Paused'}
+                </span>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* ═══ CONTROLS ═══ */}

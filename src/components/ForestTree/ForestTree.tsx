@@ -150,6 +150,9 @@ export default function ForestTree({
       <svg
         className={`${styles.svg} ${styles[state]}`}
         viewBox="0 0 800 800"
+        width="100%"
+        height="100%"
+        preserveAspectRatio="xMidYMax meet"
         role="img"
         aria-label={ariaLabel}
         xmlns="http://www.w3.org/2000/svg"
