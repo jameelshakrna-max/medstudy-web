@@ -5,7 +5,8 @@ import s from './ForestTree.module.css'
 function lerp(a, b, t) { return a + (b - a) * t }
 
 export default function ForestTree({ tree, progress = 0, status = 'IDLE', subjectColor }) {
-  const t = getTreeTransforms(progress)
+  const vp = Math.max(0.04, progress)
+  const t = getTreeTransforms(vp)
   const colors = tree?.colors || {}
 
   const accentFilter = subjectColor
@@ -54,7 +55,7 @@ export default function ForestTree({ tree, progress = 0, status = 'IDLE', subjec
         {/* Soil */}
         <ellipse cx="60" cy="132" rx="22" ry="5"
           fill="rgba(139,69,19,0.25)"
-          style={{ opacity: lerp(0, 1, progress * 5) }} />
+          style={{ opacity: Math.max(0.3, lerp(0, 1, progress * 5)) }} />
 
         {/* Trunk */}
         <rect
@@ -145,7 +146,7 @@ export default function ForestTree({ tree, progress = 0, status = 'IDLE', subjec
 
         {/* Shadow */}
         <ellipse cx="60" cy="134" rx={14 * t.trunkWidth / 5} ry="3"
-          fill="rgba(0,0,0,0.2)" opacity={lerp(0, 0.6, progress * 3)} />
+          fill="rgba(0,0,0,0.2)" opacity={Math.max(0.15, lerp(0, 0.6, progress * 3))} />
       </svg>
 
       {/* Bloom particles */}
