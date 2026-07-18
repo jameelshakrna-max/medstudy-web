@@ -22,7 +22,7 @@
 .hillsFar,
 .hillsNear {
   position: absolute;
-  bottom: 18%;
+  bottom: 28%;
   left: 0;
   width: 100%;
   height: 30%;
@@ -30,14 +30,14 @@
 }
 
 .hillsNear {
-  bottom: 14%;
+  bottom: 22%;
   height: 28%;
 }
 
 /* ── Background forest silhouettes ── */
 .backgroundForest {
   position: absolute;
-  bottom: 16%;
+  bottom: 26%;
   left: 0;
   width: 100%;
   height: 35%;
@@ -78,46 +78,50 @@
 
 .depthRow {
   position: absolute;
-  left: 0;
-  width: 100%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 0;
+  left: 3%;
+  width: 94%;
+  bottom: 0;
+  height: 100%;
   pointer-events: none;
 }
 
 .backRow {
-  bottom: 30%;
-  height: 35%;
+  bottom: 0;
+  height: 55%;
   opacity: 0.62;
   filter: saturate(0.72) brightness(0.78);
   z-index: 1;
 }
 
 .midRow {
-  bottom: 16%;
-  height: 40%;
+  bottom: 0;
+  height: 50%;
   opacity: 0.82;
   filter: saturate(0.88) brightness(0.92);
   z-index: 2;
 }
 
 .frontRow {
-  bottom: 2%;
-  height: 45%;
+  bottom: 0;
+  height: 48%;
   opacity: 1;
   z-index: 3;
 }
 
 /* ── Tree instance wrapper ── */
 .treeInstance {
-  position: relative;
-  flex: 0 0 auto;
-  width: var(--tree-width, 56px);
+  position: absolute;
   transform-origin: 50% 100%;
   pointer-events: auto;
   cursor: pointer;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  outline: 0;
+  border-radius: 0;
+  appearance: none;
+  overflow: visible;
   transition: opacity 180ms ease, transform 220ms ease;
 }
 
@@ -127,19 +131,15 @@
 
 .treeInstance:focus-visible {
   outline: 2px solid var(--emerald, #10B981);
-  outline-offset: 2px;
-  border-radius: 4px;
+  outline-offset: 4px;
+  border-radius: 50%;
 }
 
 /* ── Cluster density (background groups for 100+ trees) ── */
 .treeCluster {
-  position: relative;
-  flex: 0 0 auto;
+  position: absolute;
   width: var(--cluster-width, 80px);
-  height: 100%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
+  height: 60px;
   pointer-events: auto;
   cursor: pointer;
   opacity: 0.45;
@@ -155,7 +155,7 @@
 .clusterSilhouettes {
   position: relative;
   width: 100%;
-  height: 80%;
+  height: 100%;
 }
 
 /* ── Empty forest scene ── */
@@ -436,10 +436,6 @@
     height: clamp(300px, 60vw, 500px);
     border-radius: 14px;
   }
-
-  .backRow { bottom: 28%; }
-  .midRow { bottom: 14%; }
-  .frontRow { bottom: 1%; }
 }
 
 @media (max-width: 480px) {

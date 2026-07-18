@@ -4,19 +4,28 @@ import { createSeededRandom } from './seededRandom'
 
 const PAGE_SIZE = 150
 
+const USABLE_START = 5
+const USABLE_WIDTH = 90
+const COLS = 8
+
 export function getTreeLayout(sessions) {
-  const COLS = 8
   return sessions.map((session, i) => {
     const rng = createSeededRandom(session.id || String(i))
     const col = i % COLS
     const row = Math.floor(i / COLS)
     const depth = rng()
+
+    const xJitter = (rng() - 0.5) * 6
+    const baseX = USABLE_START + ((col + 0.5) / COLS) * USABLE_WIDTH + xJitter
+
+    const sizeVar = 0.85 + rng() * 0.3
+
     return {
       col,
       row,
       depth,
-      xJitter: (rng() - 0.5) * 8,
-      yJitter: (rng() - 0.5) * 6,
+      x: Math.max(2, Math.min(98, baseX)),
+      sizeVar,
       scale: 0.88 + rng() * 0.22,
       rotation: -2.5 + rng() * 5,
     }
@@ -78,10 +87,9 @@ export function splitRows(sessions, layout) {
   const front = []
   for (let i = 0; i < sessions.length; i++) {
     const l = layout[i]
-    const item = { session: sessions[i], layout: l }
-    if (l.depth < 0.33) back.push(item)
-    else if (l.depth < 0.66) mid.push(item)
-    else front.push(item)
+    if (l.depth < 0.33) back.push({ session: sessions[i], layout: l })
+    else if (l.depth < 0.66) mid.push({ session: sessions[i], layout: l })
+    else front.push({ session: sessions[i], layout: l })
   }
   return { back, mid, front }
 }

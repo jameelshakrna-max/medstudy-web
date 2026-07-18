@@ -94,14 +94,14 @@ function BackgroundForestSVG({ env }) {
   )
 }
 
-function TreeRow({ trees, layoutMap, depth, wind, onTreeClick }) {
+function TreeRow({ trees, depth, wind, onTreeClick }) {
   return (
     <div className={`${s.depthRow} ${s[`${depth}Row`]}`}>
-      {trees.map((session) => (
+      {trees.map(({ session, layout }) => (
         <ForestTreeInstance
           key={session.id}
           session={session}
-          layout={layoutMap.get(session.id)}
+          layout={layout}
           depth={depth}
           wind={wind}
           onClick={() => onTreeClick(session)}
@@ -112,13 +112,18 @@ function TreeRow({ trees, layoutMap, depth, wind, onTreeClick }) {
 }
 
 function ClusterRow({ clusters, onClusterClick }) {
+  const rand = createSeededRandom('cluster-positions')
   return (
     <div className={`${s.depthRow} ${s.backRow}`}>
       {clusters.map((cluster, i) => (
         <div
           key={i}
           className={s.treeCluster}
-          style={{ '--cluster-width': `${60 + cluster.count * 0.8}px` }}
+          style={{
+            left: `${8 + (i / Math.max(1, clusters.length)) * 82 + (rand() - 0.5) * 8}%`,
+            bottom: '38%',
+            '--cluster-width': `${60 + cluster.count * 0.8}px`,
+          }}
           onClick={() => onClusterClick(cluster)}
           role="button"
           tabIndex={0}
@@ -131,10 +136,10 @@ function ClusterRow({ clusters, onClusterClick }) {
                 viewBox="0 0 30 40"
                 style={{
                   position: 'absolute',
-                  bottom: `${j * 8}%`,
-                  left: `${10 + j * 18}%`,
+                  bottom: `${j * 12}%`,
+                  left: `${8 + j * 18}%`,
                   width: '30%',
-                  height: '60%',
+                  height: '70%',
                   opacity: 0.5 + j * 0.1,
                 }}
               >
@@ -213,14 +218,6 @@ export default function ForestLandscape({
   const layout = useMemo(() => getTreeLayout(detailed), [detailed])
   const rows = useMemo(() => splitRows(detailed, layout), [detailed, layout])
 
-  const layoutMap = useMemo(() => {
-    const map = new Map()
-    detailed.forEach((session, i) => {
-      map.set(session.id, layout[i])
-    })
-    return map
-  }, [detailed, layout])
-
   const handleClusterClick = useCallback((cluster) => {
     // Future: open history panel for older sessions
   }, [])
@@ -258,7 +255,6 @@ export default function ForestLandscape({
         {rows.back.length > 0 && (
           <TreeRow
             trees={rows.back}
-            layoutMap={layoutMap}
             depth="back"
             wind={shouldAnimate}
             onTreeClick={onTreeClick}
@@ -267,7 +263,6 @@ export default function ForestLandscape({
         {rows.mid.length > 0 && (
           <TreeRow
             trees={rows.mid}
-            layoutMap={layoutMap}
             depth="mid"
             wind={shouldAnimate}
             onTreeClick={onTreeClick}
@@ -276,7 +271,6 @@ export default function ForestLandscape({
         {rows.front.length > 0 && (
           <TreeRow
             trees={rows.front}
-            layoutMap={layoutMap}
             depth="front"
             wind={shouldAnimate}
             onTreeClick={onTreeClick}

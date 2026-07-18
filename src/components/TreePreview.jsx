@@ -4,15 +4,16 @@ import ForestTreeOld from './ForestTreeOld'
 import { ForestTree } from './ForestTree'
 import s from './TreePreview.module.css'
 
-export default function TreePreview({ treeId, size = 'md', className = '', wind = false, mature = false }) {
+export default function TreePreview({ treeId, size = 'md', className = '', wind = false, mature = false, variant }) {
   const tree = useMemo(() => getTreeById(treeId) || getTreeById('oak'), [treeId])
   const isOak = tree?.id === 'oak'
 
-  const sizeClass = size === 'sm' ? s.sm : size === 'forest' ? s.forest : s.md
+  const isLandscape = variant === 'landscape'
+  const sizeClass = isLandscape ? s.forest : size === 'sm' ? s.sm : size === 'forest' ? s.forest : s.md
 
   if (isOak) {
     return (
-      <div className={`${s.wrapper} ${sizeClass} ${className}`}>
+      <div className={`${s.wrapper} ${sizeClass} ${isLandscape ? s.landscapePreview : ''} ${className}`}>
         <ForestTree
           progress={1}
           state="idle"
@@ -27,7 +28,7 @@ export default function TreePreview({ treeId, size = 'md', className = '', wind 
   }
 
   return (
-    <div className={`${s.wrapper} ${sizeClass} ${className}`}>
+    <div className={`${s.wrapper} ${sizeClass} ${isLandscape ? s.landscapePreview : ''} ${className}`}>
       <ForestTreeOld
         tree={tree}
         progress={1}
