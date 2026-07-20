@@ -302,6 +302,9 @@ export function PomodoroProvider({ children }) {
   const [selectedTree, setSelectedTree] = useState('oak')
   const [treeStatus, setTreeStatus] = useState('IDLE') // IDLE | RUNNING | SUCCESS | FAILED
 
+  // ── Session tree ID (locked at Plant press, survives navigation/remount) ──
+  const [sessionTreeId, setSessionTreeId] = useState(null)
+
   // ── Session outcome ──
   const [completed, setCompleted] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -327,13 +330,13 @@ export function PomodoroProvider({ children }) {
       const state = {
         mode, running, seconds, totalSec,
         selectedTopic, sessionPomodoros, activeStudySeconds,
-        treeStatus, selectedTree, completed, failed,
+        treeStatus, selectedTree, sessionTreeId, completed, failed,
         savedAt: Date.now(),
         ...overrides,
       }
       localStorage.setItem('pomodoro_state', JSON.stringify(state))
     } catch (_) {}
-  }, [mode, running, seconds, totalSec, selectedTopic, sessionPomodoros, activeStudySeconds, treeStatus, selectedTree, completed, failed])
+  }, [mode, running, seconds, totalSec, selectedTopic, sessionPomodoros, activeStudySeconds, treeStatus, selectedTree, sessionTreeId, completed, failed])
 
   // ── Recover timer state on mount ──
   useEffect(() => {
@@ -355,6 +358,7 @@ export function PomodoroProvider({ children }) {
       if (saved.sessionPomodoros) setSessionPomodoros(saved.sessionPomodoros)
       if (saved.activeStudySeconds) setActiveStudySeconds(saved.activeStudySeconds)
       if (saved.selectedTree) setSelectedTree(saved.selectedTree)
+      if (saved.sessionTreeId) setSessionTreeId(saved.sessionTreeId)
       if (saved.completed) setCompleted(true)
       if (saved.failed) setFailed(true)
 
@@ -383,7 +387,7 @@ export function PomodoroProvider({ children }) {
   useEffect(() => {
     const timeout = setTimeout(() => saveTimerState(), 1000)
     return () => clearTimeout(timeout)
-  }, [mode, running, seconds, totalSec, selectedTopic, sessionPomodoros, activeStudySeconds, treeStatus, selectedTree, completed, failed, saveTimerState])
+  }, [mode, running, seconds, totalSec, selectedTopic, sessionPomodoros, activeStudySeconds, treeStatus, selectedTree, sessionTreeId, completed, failed, saveTimerState])
 
   const rafRef = useRef(null)
   const endTimeRef = useRef(null)
@@ -766,6 +770,7 @@ export function PomodoroProvider({ children }) {
     setSessionLog([])
     setMode('study')
     setTreeStatus('IDLE')
+    setSessionTreeId(null)
     const dur = focusMins * 60
     setSeconds(dur)
     setTotalSec(dur)
@@ -836,6 +841,7 @@ export function PomodoroProvider({ children }) {
     focusMode, isFullscreen, toggleFocusMode, toggleFullscreen,
     sessionPhase, sessionOutcome, isSetup, isActive,
     setModeDuration, advanceToNextMode,
+    sessionTreeId, setSessionTreeId,
   }), [
     mode, running, done, seconds, totalSec,
     displayRemaining, progress,
@@ -844,6 +850,7 @@ export function PomodoroProvider({ children }) {
     focusMode, isFullscreen, toggleFocusMode, toggleFullscreen,
     sessionPhase, sessionOutcome, isSetup, isActive,
     setModeDuration, advanceToNextMode,
+    sessionTreeId,
   ])
 
   const settingsValue = useMemo(() => ({

@@ -234,13 +234,28 @@
 }
 
 .activeTreeStage {
-  width: min(92vw, 480px);
-  height: clamp(280px, 42dvh, 460px);
+  position: relative;
+  width: clamp(190px, 24vw, 310px);
+  height: clamp(230px, 32vw, 390px);
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  overflow: visible;
   pointer-events: none;
+  z-index: 2;
   margin: 0 auto;
+}
+
+.activeTreeStage > * {
+  width: 100%;
+  height: 100%;
+}
+
+.activeTreeStage svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 
 .activeTimer {
@@ -537,7 +552,7 @@
 /* ── Responsive: 5 tiers ── */
 @media (max-width: 768px) {
   .content { padding: 16px 20px 32px; }
-  .activeTreeStage { height: clamp(240px, 38dvh, 400px); }
+  .activeTreeStage { height: clamp(200px, 28dvh, 340px); }
   .countdownTime { font-size: clamp(2.75rem, 13vw, 4rem); letter-spacing: -2px; }
 }
 @media (max-width: 540px) {
@@ -556,7 +571,7 @@
   .completionActions { flex-direction: column; }
 }
 @media (max-height: 800px) and (min-width: 769px) {
-  .activeTreeStage { height: clamp(240px, 36dvh, 380px); }
+  .activeTreeStage { height: clamp(190px, 26dvh, 320px); }
 }
 
 /* ── Reduced motion ── */

@@ -10,6 +10,7 @@ import { queryKeys } from '../lib/queryKeys'
 import { useForestAudio } from '../hooks/useForestAudio'
 import Modal from '../components/ui/Modal/Modal'
 import TreePreview from '../components/TreePreview'
+import GrowingTreeRenderer from '../components/pomodoro/GrowingTreeRenderer'
 import ForestScene from '../components/ForestScene'
 import TreePicker from '../components/TreePicker'
 import s from './Pomodoro.module.css'
@@ -47,6 +48,7 @@ export default function Pomodoro() {
     focusMode, isFullscreen, toggleFocusMode,
     sessionPhase, sessionOutcome, isSetup, isActive,
     setModeDuration, advanceToNextMode,
+    sessionTreeId, setSessionTreeId,
   } = usePomodoro()
 
   const {
@@ -258,8 +260,9 @@ export default function Pomodoro() {
 
   const handlePlant = useCallback(() => {
     if (transitionPhase !== 'idle') return
+    setSessionTreeId(selectedTree || 'oak')
     setTransitionPhase('exiting')
-  }, [transitionPhase])
+  }, [transitionPhase, selectedTree])
 
   // ── Fallback timer: if animationend doesn't fire within 600ms, force the transition ──
   useEffect(() => {
@@ -328,7 +331,7 @@ export default function Pomodoro() {
         focus_quality: 'Deep focus',
         goals_met: true,
         notes: `${sessionPomodoros} pomodoro${sessionPomodoros > 1 ? 's' : ''} completed`,
-        tree_type: selectedTree || 'oak',
+        tree_type: sessionTreeId || 'oak',
         subject_id: topicInfo?.subject?.system?.id || null,
         subject_name: topicInfo?.subject?.system?.name || topicName,
         status: 'completed',
@@ -464,7 +467,8 @@ export default function Pomodoro() {
             finishTimer={finishTimer}
             focusMode={focusMode}
             toggleFocusMode={toggleFocusMode}
-            selectedTree={selectedTree}
+            sessionTreeId={sessionTreeId}
+            subjectColor={subjectColor}
           />
         ) : isActive ? (
           <ActiveBreakScreen
@@ -676,7 +680,7 @@ function SetupScreen({
 function ActiveFocusScreen({
   selectedTopic, topicInfo, treeProgress, treeState,
   displayRemaining, running, togglePlay, finishTimer,
-  focusMode, toggleFocusMode, selectedTree,
+  focusMode, toggleFocusMode, sessionTreeId, subjectColor,
 }) {
   return (
     <>
@@ -685,7 +689,13 @@ function ActiveFocusScreen({
       )}
 
       <div className={s.activeTreeStage}>
-        <TreePreview treeId={selectedTree} progress={Math.max(0.15, treeProgress)} state={treeState} size="forest" />
+        <GrowingTreeRenderer
+          treeId={sessionTreeId}
+          progress={treeProgress}
+          state={treeState}
+          subjectColor={subjectColor}
+          wind={running}
+        />
       </div>
 
       <div className={s.activeTimer}>
