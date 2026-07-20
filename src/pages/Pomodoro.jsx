@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import confetti from 'canvas-confetti'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -73,6 +73,9 @@ export default function Pomodoro() {
   const [achievement, setAchievement] = useState({ name: '', show: false })
 
   const [breakTip] = useState(() => BREAK_TIPS[Math.floor(Math.random() * BREAK_TIPS.length)])
+
+  const [transitionPhase, setTransitionPhase] = useState('idle')
+  const transitionTimerRef = useRef(null)
 
   const subjectColor = topicInfo?.subject?.system?.id
     ? getSubjectColor(topicInfo.subject.system.id)
@@ -253,6 +256,58 @@ export default function Pomodoro() {
     setShowFinish(true)
   }
 
+  const handlePlant = useCallback(() => {
+    if (transitionPhase !== 'idle') return
+    setTransitionPhase('exiting')
+  }, [transitionPhase])
+
+  // ── Fallback timer: if animationend doesn't fire within 600ms, force the transition ──
+  useEffect(() => {
+    if (transitionPhase === 'exiting' || transitionPhase === 'entering') {
+      transitionTimerRef.current = setTimeout(() => {
+        if (transitionPhase === 'exiting') {
+          togglePlay()
+          playStart()
+          navigator.vibrate?.(30)
+          setTransitionPhase('entering')
+        } else {
+          setTransitionPhase('idle')
+        }
+        transitionTimerRef.current = null
+      }, 600)
+    }
+    return () => {
+      if (transitionTimerRef.current) {
+        clearTimeout(transitionTimerRef.current)
+        transitionTimerRef.current = null
+      }
+    }
+  }, [transitionPhase, togglePlay, playStart])
+
+  const handleScreenAnimationEnd = useCallback((e) => {
+    if (e.target !== e.currentTarget) return
+
+    if (transitionPhase === 'exiting') {
+      if (transitionTimerRef.current) {
+        clearTimeout(transitionTimerRef.current)
+        transitionTimerRef.current = null
+      }
+      togglePlay()
+      playStart()
+      navigator.vibrate?.(30)
+      setTransitionPhase('entering')
+      return
+    }
+
+    if (transitionPhase === 'entering') {
+      if (transitionTimerRef.current) {
+        clearTimeout(transitionTimerRef.current)
+        transitionTimerRef.current = null
+      }
+      setTransitionPhase('idle')
+    }
+  }, [transitionPhase, togglePlay, playStart])
+
   const confirmFinish = async () => {
     setSaving(true)
     setSaveError('')
@@ -342,6 +397,14 @@ export default function Pomodoro() {
       />
 
       <div className={s.content}>
+        <div
+          className={`${s.screenTransition} ${
+            transitionPhase === 'exiting' ? s.screenExiting : ''
+          } ${
+            transitionPhase === 'entering' ? s.screenEntering : ''
+          }`}
+          onAnimationEnd={handleScreenAnimationEnd}
+        >
         {view === 'completed' ? (
           <CompletionScreen
             totalSec={totalSec}
@@ -368,8 +431,8 @@ export default function Pomodoro() {
             limits={limits}
             stepDuration={stepDuration}
             setModeDuration={setModeDuration}
-            togglePlay={togglePlay}
-            playStart={playStart}
+            onPlant={handlePlant}
+            isTransitioning={transitionPhase !== 'idle'}
             toggleFocusMode={toggleFocusMode}
             topics={topics}
             selectedTopic={selectedTopic}
@@ -414,6 +477,7 @@ export default function Pomodoro() {
             mode={mode}
           />
         ) : null}
+        </div>
 
         {coinEarning.show && (
           <div className={s.coinToast}>
@@ -500,7 +564,7 @@ export default function Pomodoro() {
 function SetupScreen({
   mode, isStudyMode, breakLabel, focusMode,
   currentDuration, limits, stepDuration, setModeDuration,
-  togglePlay, playStart, toggleFocusMode,
+  onPlant, isTransitioning, toggleFocusMode,
   topics, selectedTopic, setSelectedTopic, topicInfo,
   selectedTree, setSelectedTree, subjectColor, ownedTrees, coins, setCoins, setOwnedTrees,
   totalMin, sessionPomodoros, sessionLog, showSessions, setShowSessions, handleFinish,
@@ -564,7 +628,11 @@ function SetupScreen({
       </div>
 
       {/* CTA */}
-      <button className={`${s.plantBtn} ${s[mode]}`} onClick={() => { playStart(); navigator.vibrate?.(30); togglePlay() }}>
+      <button
+        className={`${s.plantBtn} ${s[mode]}`}
+        onClick={onPlant}
+        disabled={isTransitioning}
+      >
         <Play size={20} strokeWidth={2} />
         <span>{isStudyMode ? 'Plant' : `Start ${breakLabel}`}</span>
       </button>
