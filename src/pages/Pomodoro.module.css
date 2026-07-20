@@ -93,6 +93,7 @@
 .modeTabs { display: flex; justify-content: center; gap: 4px; background: var(--card-bg-solid, var(--card-bg)); padding: 4px; border-radius: 100px; border: 1px solid var(--card-border); backdrop-filter: blur(12px); width: min(100%, 620px); }
 .modeTab { flex: 1; padding: 8px 14px; border-radius: 100px; background: transparent; border: none; color: var(--mist); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.3s; white-space: nowrap; }
 .modeTab:hover { color: var(--text-primary); }
+.modeTab:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
 .modeTabActive { color: var(--text-primary); box-shadow: 0 2px 12px rgba(0,0,0,0.2); }
 .modeTabActive.study { background: linear-gradient(135deg, rgba(79,140,255,0.25), rgba(79,140,255,0.1)); color: var(--blue); }
 .modeTabActive.break { background: linear-gradient(135deg, rgba(16,185,129,0.25), rgba(16,185,129,0.1)); color: var(--emerald); }

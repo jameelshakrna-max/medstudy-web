@@ -75,7 +75,7 @@ export default function Pomodoro() {
   const [coinEarning, setCoinEarning] = useState({ amount: 0, show: false })
   const [achievement, setAchievement] = useState({ name: '', show: false })
 
-  const [breakTip] = useState(() => BREAK_TIPS[Math.floor(Math.random() * BREAK_TIPS.length)])
+  const [breakTip, setBreakTip] = useState(() => BREAK_TIPS[Math.floor(Math.random() * BREAK_TIPS.length)])
 
   const [transitionPhase, setTransitionPhase] = useState('idle')
   const transitionTimerRef = useRef(null)
@@ -120,6 +120,13 @@ export default function Pomodoro() {
       if (confettiFrameRef.current) cancelAnimationFrame(confettiFrameRef.current)
     }
   }, [])
+
+  // ── Rotate break tip on mode change ──
+  useEffect(() => {
+    if (mode === 'break' || mode === 'long') {
+      setBreakTip(BREAK_TIPS[Math.floor(Math.random() * BREAK_TIPS.length)])
+    }
+  }, [mode])
 
   // ── Persist selected tree (debounced) ──
   useEffect(() => {
@@ -729,15 +736,15 @@ function ActiveFocusScreen({
       </div>
 
       <div className={s.activeTimer}>
-        <span className={s.countdownTime}>{displayRemaining}</span>
+        <span className={s.countdownTime} aria-live="polite" aria-atomic="true">{displayRemaining}</span>
         <span className={s.countdownLabel}>Focus time remaining</span>
       </div>
 
       <div className={s.activeControls}>
-        <button className={`${s.pauseBtn} ${s.study}`} onClick={() => { navigator.vibrate?.(20); togglePlay() }}>
+        <button className={`${s.pauseBtn} ${s.study}`} aria-label={running ? 'Pause timer' : 'Resume timer'} onClick={() => { navigator.vibrate?.(20); togglePlay() }}>
           {running ? <Pause size={20} strokeWidth={2} /> : <Play size={20} strokeWidth={2} />}
         </button>
-        <button className={s.giveUpBtn} onClick={() => { navigator.vibrate?.([10, 50, 10]); finishTimer() }}>
+        <button className={s.giveUpBtn} aria-label="Give up and end session" onClick={() => { navigator.vibrate?.([10, 50, 10]); finishTimer() }}>
           Give up
         </button>
         <button className={s.focusModeBtn} onClick={() => { navigator.vibrate?.(15); toggleFocusMode() }}>
@@ -763,17 +770,17 @@ function ActiveBreakScreen({
       </div>
 
       <div className={s.activeTimer}>
-        <span className={s.countdownTime}>{displayRemaining}</span>
+        <span className={s.countdownTime} aria-live="polite" aria-atomic="true">{displayRemaining}</span>
         <span className={s.countdownLabel}>{breakLabel} remaining</span>
       </div>
 
       <p className={s.breakTip}>{breakTip}</p>
 
       <div className={s.activeControls}>
-        <button className={`${s.pauseBtn} ${s[mode]}`} onClick={() => { navigator.vibrate?.(20); togglePlay() }}>
+        <button className={`${s.pauseBtn} ${s[mode]}`} aria-label={running ? 'Pause timer' : 'Resume timer'} onClick={() => { navigator.vibrate?.(20); togglePlay() }}>
           {running ? <Pause size={20} strokeWidth={2} /> : <Play size={20} strokeWidth={2} />}
         </button>
-        <button className={s.giveUpBtn} onClick={skipTimer}>
+        <button className={s.giveUpBtn} aria-label="Skip break" onClick={skipTimer}>
           Skip break
         </button>
       </div>
@@ -843,6 +850,7 @@ function ModeTabs() {
       {MODES.map(m => (
         <button key={m}
           className={`${s.modeTab} ${mode === m ? s.modeTabActive : ''} ${mode === m ? s[m] : ''}`}
+          disabled={running}
           onClick={() => { if (!running) { setMode(m); resetTimer() } }}>
           {MODE_LABELS[m]}
         </button>
@@ -897,7 +905,7 @@ function StatsBar({ totalMin, sessionPomodoros, coins }) {
 function SessionsSection({ sessionLog, showSessions, setShowSessions }) {
   return (
     <div className={s.sessionsSection}>
-      <button className={s.sessionsToggle} onClick={() => setShowSessions(!showSessions)}>
+      <button className={s.sessionsToggle} aria-expanded={showSessions} onClick={() => setShowSessions(!showSessions)}>
         <span>Recent Sessions</span>
         <ChevronDown size={14} className={`${s.sessionsArrow} ${showSessions ? s.sessionsArrowOpen : ''}`} />
       </button>
