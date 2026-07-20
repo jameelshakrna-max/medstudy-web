@@ -88,7 +88,7 @@ export default function ForestTree({ tree, progress = 0, status = 'IDLE', subjec
   return (
     <div className={`${s.tree} ${isWilted ? s.wilted : ''} ${isBloomed ? s.bloomed : ''} ${isGrowing ? s.growing : ''} ${wind ? s.windy : ''}`}
       style={wiltStyle}>
-      <svg viewBox="0 0 180 210" className={s.svg} style={{ filter: accentFilter }}>
+      <svg viewBox="0 0 180 210" preserveAspectRatio="xMidYMax meet" className={s.svg} style={{ filter: accentFilter }}>
         <defs>
           <radialGradient id={`trunkGrad-${tree.id}`} cx="50%" cy="30%">
             <stop offset="0%" stopColor={colors.trunk} />

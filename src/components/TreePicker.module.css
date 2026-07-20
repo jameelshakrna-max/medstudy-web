@@ -4,15 +4,26 @@
 }
 
 .scroll {
-  display: flex;
-  gap: 10px;
+  width: 100%;
   overflow-x: auto;
-  padding: 4px 8px 12px;
+  overflow-y: hidden;
+  padding-block: 4px 12px;
+  scroll-padding-inline: 12px;
+  scroll-snap-type: x proximity;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  scroll-snap-type: x mandatory;
 }
 .scroll::-webkit-scrollbar { display: none; }
+
+.pickerInner {
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  width: max-content;
+  min-width: 100%;
+  padding-inline: 12px;
+}
 
 .card {
   flex: 0 0 112px;
@@ -24,7 +35,7 @@
   gap: 6px;
   padding: 8px 6px 8px;
   border-radius: 14px;
-  background: var(--card-bg);
+  background: var(--card-bg-solid, var(--card-bg));
   border: 2px solid transparent;
   cursor: pointer;
   transition: all 0.2s var(--ease-out);
@@ -38,6 +49,21 @@
 .card.selected {
   border-color: var(--emerald);
   background: var(--emeraldL);
+}
+
+.cardLocked .treePreview {
+  opacity: 0.58;
+  filter: saturate(0.55);
+}
+.cardLocked .name {
+  color: var(--text-secondary);
+  opacity: 0.88;
+}
+.cardLocked .lockBadge {
+  opacity: 1;
+}
+.cardLocked:hover .treePreview {
+  opacity: 0.72;
 }
 
 .treePreview {

@@ -20,8 +20,8 @@
 }
 
 .content {
-  position: relative; z-index: 2; width: 100%; max-width: 720px; margin-inline: auto;
-  padding: 16px 24px 32px; display: flex; flex-direction: column; align-items: center;
+  position: relative; z-index: 10; width: 100%; max-width: 720px; margin-inline: auto;
+  padding: 16px 24px max(32px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center;
   min-height: 0; overflow: visible;
 }
 
@@ -48,12 +48,20 @@
   gap: 12px;
 }
 
-.setupDuration,
+.setupDuration {
+  width: min(100%, 580px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 14px;
+}
+
 .setupActions {
   width: min(100%, 580px);
   display: grid;
   justify-items: center;
   gap: 8px;
+  padding-bottom: 12px;
 }
 
 .screenTransition {
@@ -82,7 +90,7 @@
 }
 
 /* ── Mode Tabs ── */
-.modeTabs { display: flex; justify-content: center; gap: 4px; background: var(--card-bg); padding: 4px; border-radius: 100px; border: 1px solid var(--card-border); backdrop-filter: blur(12px); width: min(100%, 620px); }
+.modeTabs { display: flex; justify-content: center; gap: 4px; background: var(--card-bg-solid, var(--card-bg)); padding: 4px; border-radius: 100px; border: 1px solid var(--card-border); backdrop-filter: blur(12px); width: min(100%, 620px); }
 .modeTab { flex: 1; padding: 8px 14px; border-radius: 100px; background: transparent; border: none; color: var(--mist); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.3s; white-space: nowrap; }
 .modeTab:hover { color: var(--text-primary); }
 .modeTabActive { color: var(--text-primary); box-shadow: 0 2px 12px rgba(0,0,0,0.2); }
@@ -93,7 +101,7 @@
 /* ── Topic Selector ── */
 .topicSelector {
   display: flex; align-items: center; gap: 8px;
-  background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px;
+  background: var(--card-bg-solid, var(--card-bg)); border: 1px solid var(--card-border); border-radius: 10px;
   padding: 6px 12px; width: 100%; max-width: 620px;
 }
 .topicIcon { color: var(--mist); flex-shrink: 0; }
@@ -109,23 +117,29 @@
 
 /* ── Tree Hero Preview ── */
 .treeHero {
+  position: relative;
   width: 170px;
-  height: 118px;
+  height: 130px;
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  margin: 0;
+  padding-bottom: 4px;
   overflow: visible;
 }
 
 .treeHero > *,
 .treeHero svg {
+  display: block;
   width: 100%;
   height: 100%;
-  display: block;
+  max-height: 100%;
 }
 
 /* ── Duration Editor ── */
 .durationEditor {
+  position: relative;
+  margin: 0;
   display: flex;
   align-items: center;
   gap: 20px;
@@ -420,7 +434,7 @@
 /* ── Stats Bar ── */
 .statsBar {
   display: flex; align-items: center; gap: 0; width: 100%; max-width: 360px;
-  background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px;
+  background: var(--card-bg-solid, var(--card-bg)); border: 1px solid var(--card-border); border-radius: 14px;
   padding: 12px 0;
 }
 .statItem { flex: 1; text-align: center; }
@@ -608,22 +622,22 @@
 }
 /* ── Viewport height — compact setup for shorter screens ── */
 @media (max-height: 850px) {
-  .content { padding-block: 10px 24px; }
+  .content { padding-block: 10px max(24px, env(safe-area-inset-bottom)); }
   .setupScreen { row-gap: 8px; }
-  .treeHero { height: 100px; }
+  .treeHero { height: 110px; }
 }
 @media (max-height: 800px) and (min-width: 769px) {
   .activeTreeStage { height: clamp(190px, 26dvh, 320px); }
   .setupScreen { row-gap: 8px; }
   .setupConfiguration { gap: 8px; }
-  .treeHero { height: 92px; }
+  .treeHero { height: 96px; }
   .card { height: 128px; }
   .treePreview { width: 86px; height: 86px; }
   .statsBar { min-height: 62px; }
 }
 @media (max-height: 720px) {
-  .content { padding-block: 8px 20px; }
-  .treeHero { height: 78px; }
+  .content { padding-block: 8px max(20px, env(safe-area-inset-bottom)); }
+  .treeHero { height: 80px; }
 }
 
 /* ── Reduced motion ── */

@@ -57,23 +57,24 @@ export default function TreePicker({ selectedTree, onSelect, subjectColor, owned
   return (
     <div className={s.picker}>
       <div className={s.scroll} ref={scrollRef}>
-        {TREES.map(tree => {
-          const isSelected = selectedTree === tree.id
-          const isOwned = ownedTrees.includes(tree.id)
-          return (
-            <button key={tree.id}
-              className={`${s.card} ${isSelected ? s.selected : ''}`}
-              style={!isOwned ? { opacity: 0.6 } : undefined}
-              onClick={() => handleSelect(tree)}>
-              <div className={s.treePreview}>
-                {renderPreview(tree)}
-                {!isOwned && <span className={s.lockBadge}>🔒</span>}
-                {isOwned && isSelected && <span className={s.checkBadge}>✓</span>}
-              </div>
-              <span className={s.name}>{tree.name}</span>
-            </button>
-          )
-        })}
+        <div className={s.pickerInner}>
+          {TREES.map(tree => {
+            const isSelected = selectedTree === tree.id
+            const isOwned = ownedTrees.includes(tree.id)
+            return (
+              <button key={tree.id}
+                className={`${s.card} ${isSelected ? s.selected : ''} ${!isOwned ? s.cardLocked : ''}`}
+                onClick={() => handleSelect(tree)}>
+                <div className={s.treePreview}>
+                  {renderPreview(tree)}
+                  {!isOwned && <span className={s.lockBadge}>🔒</span>}
+                  {isOwned && isSelected && <span className={s.checkBadge}>✓</span>}
+                </div>
+                <span className={s.name}>{tree.name}</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Locked tree preview modal */}

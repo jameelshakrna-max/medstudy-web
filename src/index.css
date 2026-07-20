@@ -30,6 +30,7 @@
   --text-primary:    #F1F5F9;
   --text-secondary:  #8899AA;
   --card-bg:         rgba(255,255,255,0.03);
+  --card-bg-solid:   rgba(255,255,255,0.08);
   --card-border:     rgba(255,255,255,0.08);
   --accent-glow:     rgba(79,140,255,0.15);
   --nav-border:      rgba(255,255,255,0.06);
