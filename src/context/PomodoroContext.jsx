@@ -329,6 +329,7 @@ export function PomodoroProvider({ children }) {
     try {
       const state = {
         mode, running, seconds, totalSec,
+        focusMins, shortMins, longMins,
         selectedTopic, sessionPomodoros, activeStudySeconds,
         treeStatus, selectedTree, sessionTreeId, completed, failed,
         savedAt: Date.now(),
@@ -336,7 +337,7 @@ export function PomodoroProvider({ children }) {
       }
       localStorage.setItem('pomodoro_state', JSON.stringify(state))
     } catch (_) {}
-  }, [mode, running, seconds, totalSec, selectedTopic, sessionPomodoros, activeStudySeconds, treeStatus, selectedTree, sessionTreeId, completed, failed])
+  }, [mode, running, seconds, totalSec, focusMins, shortMins, longMins, selectedTopic, sessionPomodoros, activeStudySeconds, treeStatus, selectedTree, sessionTreeId, completed, failed])
 
   // ── Recover timer state on mount ──
   useEffect(() => {
@@ -361,6 +362,9 @@ export function PomodoroProvider({ children }) {
       if (saved.sessionTreeId) setSessionTreeId(saved.sessionTreeId)
       if (saved.completed) setCompleted(true)
       if (saved.failed) setFailed(true)
+      if (typeof saved.focusMins === 'number' && saved.focusMins > 0) setFocusMins(saved.focusMins)
+      if (typeof saved.shortMins === 'number' && saved.shortMins > 0) setShortMins(saved.shortMins)
+      if (typeof saved.longMins === 'number' && saved.longMins > 0) setLongMins(saved.longMins)
 
       // If timer was running, calculate remaining time
       if (saved.running && saved.seconds > 0) {
@@ -398,6 +402,7 @@ export function PomodoroProvider({ children }) {
         const state = {
           mode, running: true,
           seconds, totalSec, activeStudySeconds,
+          focusMins, shortMins, longMins,
           selectedTopic, sessionPomodoros,
           treeStatus, selectedTree, sessionTreeId, completed, failed,
           savedAt: Date.now(),
@@ -406,7 +411,7 @@ export function PomodoroProvider({ children }) {
       } catch (_) {}
     }, 5000)
     return () => clearInterval(interval)
-  }, [mode, running, seconds, totalSec, activeStudySeconds, selectedTopic, sessionPomodoros, treeStatus, selectedTree, sessionTreeId, completed, failed])
+  }, [mode, running, seconds, totalSec, activeStudySeconds, focusMins, shortMins, longMins, selectedTopic, sessionPomodoros, treeStatus, selectedTree, sessionTreeId, completed, failed])
 
   const rafRef = useRef(null)
   const endTimeRef = useRef(null)

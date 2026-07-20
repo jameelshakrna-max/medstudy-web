@@ -79,6 +79,11 @@ export default function Pomodoro() {
 
   const [transitionPhase, setTransitionPhase] = useState('idle')
   const transitionTimerRef = useRef(null)
+  const savingRef = useRef(false)
+  const confettiFrameRef = useRef(null)
+  const coinTimerRef = useRef(null)
+  const achievementTimerRef = useRef(null)
+  const achievementHideTimerRef = useRef(null)
 
   const subjectColor = topicInfo?.subject?.system?.id
     ? getSubjectColor(topicInfo.subject.system.id)
@@ -103,6 +108,17 @@ export default function Pomodoro() {
       } catch (_) {}
     }
     loadForest()
+  }, [])
+
+  // ── Cleanup timers on unmount ──
+  useEffect(() => {
+    return () => {
+      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current)
+      if (coinTimerRef.current) clearTimeout(coinTimerRef.current)
+      if (achievementTimerRef.current) clearTimeout(achievementTimerRef.current)
+      if (achievementHideTimerRef.current) clearTimeout(achievementHideTimerRef.current)
+      if (confettiFrameRef.current) cancelAnimationFrame(confettiFrameRef.current)
+    }
   }, [])
 
   // ── Persist selected tree (debounced) ──
@@ -144,8 +160,11 @@ export default function Pomodoro() {
     if (selectedTopic) {
       const t = topics.find(t => t.id === selectedTopic)
       setTopicInfo(t || null)
+      if (t?.status) setTopicStatus(t.status)
+      else setTopicStatus('In Progress')
     } else {
       setTopicInfo(null)
+      setTopicStatus('In Progress')
     }
   }, [selectedTopic, topics])
 
@@ -195,19 +214,24 @@ export default function Pomodoro() {
         if (data.coinsEarned) {
           setCoins(data.newBalance)
           setCoinEarning({ amount: data.coinsEarned, show: true })
-          setTimeout(() => setCoinEarning(prev => ({ ...prev, show: false })), 3000)
+          coinTimerRef.current = setTimeout(() => setCoinEarning(prev => ({ ...prev, show: false })), 3000)
         }
         if (data.achievements?.length > 0) {
           const ach = data.achievements[0]
           const names = { crystal: 'Crystal Tree', cosmic: 'Cosmic Pine' }
-          setTimeout(() => {
+          achievementTimerRef.current = setTimeout(() => {
             setAchievement({ name: names[ach.treeId] || ach.treeId, show: true })
-            setTimeout(() => setAchievement(prev => ({ ...prev, show: false })), 4000)
+            achievementHideTimerRef.current = setTimeout(() => setAchievement(prev => ({ ...prev, show: false })), 4000)
           }, 3500)
         }
       } catch (_) {}
     }
     earnCoins()
+    return () => {
+      if (coinTimerRef.current) { clearTimeout(coinTimerRef.current); coinTimerRef.current = null }
+      if (achievementTimerRef.current) { clearTimeout(achievementTimerRef.current); achievementTimerRef.current = null }
+      if (achievementHideTimerRef.current) { clearTimeout(achievementHideTimerRef.current); achievementHideTimerRef.current = null }
+    }
   }, [treeStatus, activeStudySeconds])
 
   // ── Derived ──
@@ -313,14 +337,22 @@ export default function Pomodoro() {
   }, [transitionPhase, togglePlay, playStart])
 
   const confirmFinish = async () => {
+    if (savingRef.current) return
+    savingRef.current = true
     setSaving(true)
     setSaveError('')
     cancelPushNotification()
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setSaveError('Not logged in'); setSaving(false); return }
+      if (!user) { setSaveError('Not logged in'); setSaving(false); savingRef.current = false; return }
 
       const elapsedMinNow = Math.floor(activeStudySeconds / 60)
+      if (elapsedMinNow < 1) {
+        setSaveError('Study at least 1 minute before saving')
+        setSaving(false)
+        savingRef.current = false
+        return
+      }
       const topicName = topicInfo?.name || 'General Study'
 
       const { error: insertError } = await supabase.from('study_sessions').insert({
@@ -337,7 +369,7 @@ export default function Pomodoro() {
         subject_id: topicInfo?.subject?.system?.id || null,
         subject_name: topicInfo?.subject?.system?.name || topicName,
         status: 'completed',
-        mode: 'study',
+        mode,
       })
 
       if (insertError) {
@@ -367,7 +399,7 @@ export default function Pomodoro() {
       const frame = () => {
         confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 } })
         confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 } })
-        if (Date.now() < end) requestAnimationFrame(frame)
+        if (Date.now() < end) confettiFrameRef.current = requestAnimationFrame(frame)
       }
       frame()
       queryClient.invalidateQueries({ queryKey: queryKeys.forest.all })
@@ -376,6 +408,7 @@ export default function Pomodoro() {
       setSaveError('Something went wrong. Please try again.')
     } finally {
       setSaving(false)
+      savingRef.current = false
     }
   }
 
@@ -412,7 +445,7 @@ export default function Pomodoro() {
         >
         {view === 'completed' ? (
           <CompletionScreen
-            totalSec={totalSec}
+            activeStudySeconds={activeStudySeconds}
             topicInfo={topicInfo}
             earnedCoins={earnedCoins}
             advanceToNextMode={advanceToNextMode}
@@ -752,14 +785,14 @@ function ActiveBreakScreen({
 //  COMPLETION SCREEN
 // ═══════════════════════════════════════════════
 
-function CompletionScreen({ totalSec, topicInfo, earnedCoins, advanceToNextMode, sessionLog, onVisitForest, selectedTree }) {
+function CompletionScreen({ activeStudySeconds, topicInfo, earnedCoins, advanceToNextMode, sessionLog, onVisitForest, selectedTree }) {
   return (
     <div className={s.completionCard}>
       <div className={s.completionTree}>
         <TreePreview treeId={selectedTree} size="md" mature />
       </div>
       <h3 className={s.completionTitle}>Tree planted</h3>
-      <p className={s.completionStat}>{Math.floor(totalSec / 60)} minutes focused</p>
+      <p className={s.completionStat}>{Math.floor(activeStudySeconds / 60)} minutes focused</p>
       {topicInfo && <p className={s.completionStat}>{topicInfo.name}</p>}
       <p className={s.completionStat}>+{earnedCoins} coins</p>
       <div className={s.completionActions}>
