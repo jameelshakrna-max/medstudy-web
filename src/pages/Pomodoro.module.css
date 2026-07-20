@@ -531,7 +531,7 @@
   color: var(--amber);
   font-size: 14px;
   font-weight: 600;
-  z-index: var(--z-toast);
+  z-index: var(--z-toast, 1600);
   animation: coinSlideUp 0.4s var(--ease-spring), coinFadeOut 0.4s 2.6s ease forwards;
 }
 
@@ -566,7 +566,7 @@
   color: #A78BFA;
   font-size: 14px;
   font-weight: 600;
-  z-index: var(--z-toast);
+  z-index: var(--z-toast, 1600);
   animation: achievementPop 0.5s var(--ease-spring), coinFadeOut 0.4s 3.6s ease forwards;
 }
 
@@ -601,16 +601,16 @@
 
 /* ── Responsive: 5 tiers ── */
 @media (max-width: 768px) {
-  .content { padding: 16px 20px 32px; }
+  .content { padding: 16px 20px max(32px, env(safe-area-inset-bottom)); }
   .activeTreeStage { height: clamp(200px, 28dvh, 340px); }
   .countdownTime { font-size: clamp(2.75rem, 13vw, 4rem); letter-spacing: -2px; }
 }
 @media (max-width: 540px) {
-  .content { padding: 14px 18px 28px; }
+  .content { padding: 14px 18px max(28px, env(safe-area-inset-bottom)); }
   .modeTab { font-size: 12px; padding: 7px 10px; }
 }
 @media (max-width: 480px) {
-  .content { padding: 12px 16px 24px; }
+  .content { padding: 12px 16px max(24px, env(safe-area-inset-bottom)); }
   .activeTreeStage { width: 100%; }
   .statsBar { max-width: 300px; }
   .statValue { font-size: 16px; }
@@ -631,8 +631,6 @@
   .setupScreen { row-gap: 8px; }
   .setupConfiguration { gap: 8px; }
   .treeHero { height: 96px; }
-  .card { height: 128px; }
-  .treePreview { width: 86px; height: 86px; }
   .statsBar { min-height: 62px; }
 }
 @media (max-height: 720px) {

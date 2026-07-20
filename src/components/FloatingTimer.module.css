@@ -233,11 +233,6 @@
   background: var(--card-border);
 }
 
-/* ── Mode classes ── */
-.study  { }
-.break  { }
-.long   { }
-
 /* ── Utility: no-drag for buttons ── */
 .noDrag { }
 

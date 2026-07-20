@@ -67,7 +67,7 @@ export default function FloatingTimer() {
     return (
       <div
         ref={ref}
-        className={`${s.mini} ${s[mode]}`}
+        className={s.mini}
         style={{ left: pos.x, top: pos.y, touchAction: 'none' }}
         onPointerDown={(e) => {
           setDragging(true)
