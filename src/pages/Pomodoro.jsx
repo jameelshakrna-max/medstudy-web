@@ -44,6 +44,7 @@ export default function Pomodoro() {
     done, seconds, totalSec,
     displayRemaining, progress,
     togglePlay, skipTimer, finishTimer, resetTimer, resetSession,
+    cancelPushNotification,
     treeStatus,
     focusMode, isFullscreen, toggleFocusMode,
     sessionPhase, sessionOutcome, isSetup, isActive,
@@ -314,6 +315,7 @@ export default function Pomodoro() {
   const confirmFinish = async () => {
     setSaving(true)
     setSaveError('')
+    cancelPushNotification()
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setSaveError('Not logged in'); setSaving(false); return }
@@ -378,7 +380,7 @@ export default function Pomodoro() {
   }
 
   return (
-    <div className={s.page}>
+    <div className={`${s.page} ${focusMode ? s.focusMode : ''}`}>
       {/* Ambient BG */}
       <div className={`${s.ambient} ${mode === 'study' ? s.ambientStudy : mode === 'break' ? s.ambientBreak : s.ambientLong}`} />
 
@@ -761,7 +763,7 @@ function CompletionScreen({ totalSec, topicInfo, earnedCoins, advanceToNextMode,
       {topicInfo && <p className={s.completionStat}>{topicInfo.name}</p>}
       <p className={s.completionStat}>+{earnedCoins} coins</p>
       <div className={s.completionActions}>
-        <button className={`${s.plantBtn} study`} onClick={advanceToNextMode}>
+        <button className={`${s.plantBtn} ${s.study}`} onClick={advanceToNextMode}>
           <Play size={18} strokeWidth={2} />
           <span>Plant another</span>
         </button>
@@ -787,7 +789,7 @@ function FailedScreen({ advanceToNextMode, sessionLog, selectedTree }) {
       <h3 className={s.completionTitle}>Session ended</h3>
       <p className={s.completionStat}>Your tree didn't survive this time</p>
       <div className={s.completionActions}>
-        <button className={`${s.plantBtn} study`} onClick={advanceToNextMode}>
+        <button className={`${s.plantBtn} ${s.study}`} onClick={advanceToNextMode}>
           <Play size={18} strokeWidth={2} />
           <span>Try again</span>
         </button>

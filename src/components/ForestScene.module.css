@@ -85,7 +85,7 @@
   border-radius: 50%;
   background: rgba(232,200,80,0.8);
   box-shadow: 0 0 6px rgba(232,200,80,0.5);
-  animation: fireflyFloat var(--dur, 5s) ease-in-out infinite;
+  animation: fireflyFloat calc(var(--dur, 5s) / var(--particle-speed, 1)) ease-in-out infinite;
   animation-delay: var(--delay, 0s);
 }
 
@@ -100,7 +100,7 @@
   position: absolute;
   width: 8px;
   height: 6px;
-  animation: butterflyFly var(--dur, 6s) ease-in-out infinite;
+  animation: butterflyFly calc(var(--dur, 6s) / var(--particle-speed, 1)) ease-in-out infinite;
   animation-delay: var(--delay, 0s);
 }
 
@@ -149,7 +149,7 @@
   border-radius: 50%;
   background: rgba(232,200,80,0.6);
   box-shadow: 0 0 3px rgba(232,200,80,0.3);
-  animation: pollenFloat var(--dur, 7s) ease-in-out infinite;
+  animation: pollenFloat calc(var(--dur, 7s) / var(--particle-speed, 1)) ease-in-out infinite;
   animation-delay: var(--delay, 0s);
 }
 
@@ -168,7 +168,7 @@
   height: 4px;
   border-radius: 0 50% 50% 50%;
   background: var(--color, rgba(16,185,129,0.6));
-  animation: leafDrift var(--dur, 6s) ease-in-out infinite;
+  animation: leafDrift calc(var(--dur, 6s) / var(--particle-speed, 1)) ease-in-out infinite;
   animation-delay: var(--delay, 0s);
 }
 

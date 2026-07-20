@@ -353,7 +353,7 @@ export function PomodoroProvider({ children }) {
         return
       }
 
-      if (saved.mode) setMode(saved.mode)
+      if (saved.mode && ['study', 'break', 'long'].includes(saved.mode)) setMode(saved.mode)
       if (saved.selectedTopic) setSelectedTopic(saved.selectedTopic)
       if (saved.sessionPomodoros) setSessionPomodoros(saved.sessionPomodoros)
       if (saved.activeStudySeconds) setActiveStudySeconds(saved.activeStudySeconds)
@@ -381,13 +381,32 @@ export function PomodoroProvider({ children }) {
         setTotalSec(saved.totalSec || 25 * 60)
       }
     } catch (_) {}
+    recoveryDoneRef.current = true
   }, []) // Run once on mount
 
   // ── Auto-save on state changes (debounced) ──
   useEffect(() => {
     const timeout = setTimeout(() => saveTimerState(), 1000)
     return () => clearTimeout(timeout)
-  }, [mode, running, seconds, totalSec, selectedTopic, sessionPomodoros, activeStudySeconds, treeStatus, selectedTree, sessionTreeId, completed, failed, saveTimerState])
+  }, [mode, running, selectedTopic, sessionPomodoros, treeStatus, selectedTree, sessionTreeId, completed, failed, saveTimerState])
+
+  // ── Periodic save for timer values (every 5s while running) ──
+  useEffect(() => {
+    if (!running) return
+    const interval = setInterval(() => {
+      try {
+        const state = {
+          mode, running: true,
+          seconds, totalSec, activeStudySeconds,
+          selectedTopic, sessionPomodoros,
+          treeStatus, selectedTree, sessionTreeId, completed, failed,
+          savedAt: Date.now(),
+        }
+        localStorage.setItem('pomodoro_state', JSON.stringify(state))
+      } catch (_) {}
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [mode, running, seconds, totalSec, activeStudySeconds, selectedTopic, sessionPomodoros, treeStatus, selectedTree, sessionTreeId, completed, failed])
 
   const rafRef = useRef(null)
   const endTimeRef = useRef(null)
@@ -400,6 +419,7 @@ export function PomodoroProvider({ children }) {
   const bgChimedRef = useRef(false)
   const pushSubscribedRef = useRef(false)
   const swReadyRef = useRef(false)
+  const recoveryDoneRef = useRef(false)
 
   useEffect(() => { modeRef.current = mode }, [mode])
   useEffect(() => { doneRef.current = done }, [done])
@@ -466,7 +486,7 @@ export function PomodoroProvider({ children }) {
   }, [focusMins, shortMins, longMins])
 
   useEffect(() => {
-    if (running) return
+    if (!recoveryDoneRef.current) return
     const dur = getDuration(mode)
     setSeconds(dur)
     setTotalSec(dur)
@@ -498,35 +518,41 @@ export function PomodoroProvider({ children }) {
 
     setRunning(false)
     setSeconds(0)
-    setCompleted(true)
-    setTreeStatus('SUCCESS')
-    setTimeout(() => setTreeStatus('IDLE'), 3000)
+    setTreeStatus('IDLE')
 
     const currentMode = modeRef.current
     const currentDone = doneRef.current + 1
+    const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
 
-    if (!bgChimedRef.current) {
-      const soundEnabled = localStorage.getItem('medstudy-sound-enabled') !== 'false'
-      if (soundEnabled) playChime()
-      showLocalNotification(currentMode)
+    if (currentMode === 'study') {
+      setCompleted(true)
+      setTreeStatus('SUCCESS')
+      setTimeout(() => setTreeStatus('IDLE'), 3000)
+
+      if (!bgChimedRef.current) {
+        const soundEnabled = localStorage.getItem('medstudy-sound-enabled') !== 'false'
+        if (soundEnabled) playChime()
+        showLocalNotification(currentMode)
+      }
+      bgChimedRef.current = false
+      cancelPushNotification()
+
+      setSessionPomodoros(p => p + 1)
+    } else {
+      bgChimedRef.current = false
+      cancelPushNotification()
+      advanceToNextMode()
     }
-    bgChimedRef.current = false
 
     setDone(currentDone)
-
-    const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
     setSessionLog(l => [{
       type: currentMode,
       label: MODE_LABELS[currentMode],
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }, ...l].slice(0, 10))
 
-    if (currentMode === 'study') {
-      setSessionPomodoros(p => p + 1)
-    }
-
     setTimeout(() => { completingRef.current = false }, 100)
-  }, [])
+  }, [advanceToNextMode])
 
   const handleBackgroundComplete = useCallback(() => {
     bgChimedRef.current = true
@@ -705,23 +731,20 @@ export function PomodoroProvider({ children }) {
     lastTickRef.current = null
     cancelPushNotification()
 
+    const currentMode = modeRef.current
+
     setRunning(false)
     setSeconds(0)
-    setFailed(true)
-    setTreeStatus('FAILED')
-    setTimeout(() => setTreeStatus('IDLE'), 2000)
 
-    const currentMode = modeRef.current
-    const currentDone = doneRef.current + 1
-
-    if (!bgChimedRef.current) {
-      const soundEnabled = localStorage.getItem('medstudy-sound-enabled') !== 'false'
-      if (soundEnabled) playChime()
-      showLocalNotification(currentMode)
+    if (currentMode === 'study') {
+      setFailed(true)
+      setTreeStatus('FAILED')
+      setTimeout(() => setTreeStatus('IDLE'), 2000)
+    } else {
+      advanceToNextMode()
     }
-    bgChimedRef.current = false
 
-    setDone(currentDone)
+    setDone(doneRef.current + 1)
 
     const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
     setSessionLog(l => [{
@@ -730,12 +753,8 @@ export function PomodoroProvider({ children }) {
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }, ...l].slice(0, 10))
 
-    if (currentMode === 'study') {
-      setSessionPomodoros(p => p + 1)
-    }
-
     setTimeout(() => { completingRef.current = false }, 100)
-  }, [])
+  }, [advanceToNextMode])
 
   const resetTimer = useCallback(() => {
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
@@ -779,6 +798,7 @@ export function PomodoroProvider({ children }) {
   const advanceToNextMode = useCallback(() => {
     setCompleted(false)
     setFailed(false)
+    setTreeStatus('IDLE')
     const idx = MODES.indexOf(modeRef.current)
     const next = MODES[(idx + 1) % MODES.length]
     const dur = { study: focusMins, break: shortMins, long: longMins }[next] * 60
@@ -837,6 +857,7 @@ export function PomodoroProvider({ children }) {
     displayRemaining,
     progress,
     togglePlay, skipTimer, finishTimer, resetTimer, resetSession,
+    cancelPushNotification,
     treeStatus, setTreeStatus,
     focusMode, isFullscreen, toggleFocusMode, toggleFullscreen,
     sessionPhase, sessionOutcome, isSetup, isActive,
