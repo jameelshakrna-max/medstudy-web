@@ -575,101 +575,96 @@ function SetupScreen({
 }) {
   const navigate = useNavigate();
   return (
-    <>
-      {/* Mode Tabs */}
-      {!focusMode && <ModeTabs />}
+    <div className={s.setupScreen}>
+      <section className={s.setupConfiguration}>
+        {!focusMode && <ModeTabs />}
 
-      {/* Topic Selector — study only */}
-      {!focusMode && isStudyMode && (
-        <TopicSelector topics={topics} selectedTopic={selectedTopic} setSelectedTopic={setSelectedTopic} topicInfo={topicInfo} />
-      )}
+        {!focusMode && isStudyMode && (
+          <TopicSelector topics={topics} selectedTopic={selectedTopic} setSelectedTopic={setSelectedTopic} topicInfo={topicInfo} />
+        )}
 
-      {/* Tree Picker — study only */}
-      {!focusMode && isStudyMode && (
-        <TreePicker selectedTree={selectedTree} onSelect={setSelectedTree} subjectColor={subjectColor} ownedTrees={ownedTrees} coins={coins} onPurchase={(treeId, newBalance) => { setOwnedTrees(prev => [...prev, treeId]); setCoins(newBalance) }} />
-      )}
+        {!focusMode && isStudyMode && (
+          <TreePicker selectedTree={selectedTree} onSelect={setSelectedTree} subjectColor={subjectColor} ownedTrees={ownedTrees} coins={coins} onPurchase={(treeId, newBalance) => { setOwnedTrees(prev => [...prev, treeId]); setCoins(newBalance) }} />
+        )}
+      </section>
 
-      {/* Selected tree hero preview */}
-      <div className={s.treeHero}>
-        <TreePreview treeId={selectedTree} size="md" mature />
-      </div>
-
-      {/* Duration editor */}
-      <div className={s.durationEditor}>
-        <button
-          className={s.stepButton}
-          onClick={() => stepDuration(-limits.step)}
-          disabled={currentDuration <= limits.min}
-          aria-label={`Decrease by ${limits.step} minutes`}
-        >
-          −{limits.step}
-        </button>
-        <div className={s.durationCenter}>
-          <span className={s.durationTime}>{formatTime(currentDuration * 60)}</span>
-          <span className={s.durationLabel}>minutes</span>
+      <section className={s.setupDuration}>
+        <div className={s.treeHero}>
+          <TreePreview treeId={selectedTree} size="md" mature />
         </div>
-        <button
-          className={s.stepButton}
-          onClick={() => stepDuration(limits.step)}
-          disabled={currentDuration >= limits.max}
-          aria-label={`Increase by ${limits.step} minutes`}
-        >
-          +{limits.step}
-        </button>
-      </div>
 
-      {/* Preset chips */}
-      <div className={s.presetChips}>
-        {limits.presets.map(p => (
+        <div className={s.durationEditor}>
           <button
-            key={p}
-            className={`${s.presetChip} ${currentDuration === p ? s.presetActive : ''}`}
-            onClick={() => setModeDuration(mode, p)}
+            className={s.stepButton}
+            onClick={() => stepDuration(-limits.step)}
+            disabled={currentDuration <= limits.min}
+            aria-label={`Decrease by ${limits.step} minutes`}
           >
-            {p} min
+            −{limits.step}
           </button>
-        ))}
-      </div>
-
-      {/* CTA */}
-      <button
-        className={`${s.plantBtn} ${s[mode]}`}
-        onClick={onPlant}
-        disabled={isTransitioning}
-      >
-        <Play size={20} strokeWidth={2} />
-        <span>{isStudyMode ? 'Plant' : `Start ${breakLabel}`}</span>
-      </button>
-
-      {/* Secondary settings */}
-      {!focusMode && (
-        <div className={s.secondaryActions}>
-          <button className={s.forestBtn} onClick={() => navigate('/forest')} aria-label="Open My Forest">
-            <Trees size={16} strokeWidth={2} />
-            <span className={s.forestBtnLabel}>My Forest</span>
-          </button>
-          <button className={s.focusModeBtn} onClick={() => { navigator.vibrate?.(15); toggleFocusMode() }}>
-            <EyeOff size={16} strokeWidth={2} />
-            <span>Focus Mode</span>
+          <div className={s.durationCenter}>
+            <span className={s.durationTime}>{formatTime(currentDuration * 60)}</span>
+            <span className={s.durationLabel}>minutes</span>
+          </div>
+          <button
+            className={s.stepButton}
+            onClick={() => stepDuration(limits.step)}
+            disabled={currentDuration >= limits.max}
+            aria-label={`Increase by ${limits.step} minutes`}
+          >
+            +{limits.step}
           </button>
         </div>
-      )}
 
-      {/* Stats */}
-      {!focusMode && <StatsBar totalMin={totalMin} sessionPomodoros={sessionPomodoros} coins={coins} />}
+        <div className={s.presetChips}>
+          {limits.presets.map(p => (
+            <button
+              key={p}
+              className={`${s.presetChip} ${currentDuration === p ? s.presetActive : ''}`}
+              onClick={() => setModeDuration(mode, p)}
+            >
+              {p} min
+            </button>
+          ))}
+        </div>
+      </section>
 
-      {/* Sessions */}
+      <section className={s.setupActions}>
+        <button
+          className={`${s.plantBtn} ${s[mode]}`}
+          onClick={onPlant}
+          disabled={isTransitioning}
+        >
+          <Play size={20} strokeWidth={2} />
+          <span>{isStudyMode ? 'Plant' : `Start ${breakLabel}`}</span>
+        </button>
+
+        {!focusMode && (
+          <div className={s.secondaryActions}>
+            <button className={s.forestBtn} onClick={() => navigate('/forest')} aria-label="Open My Forest">
+              <Trees size={16} strokeWidth={2} />
+              <span className={s.forestBtnLabel}>My Forest</span>
+            </button>
+            <button className={s.focusModeBtn} onClick={() => { navigator.vibrate?.(15); toggleFocusMode() }}>
+              <EyeOff size={16} strokeWidth={2} />
+              <span>Focus Mode</span>
+            </button>
+          </div>
+        )}
+
+        {!focusMode && <StatsBar totalMin={totalMin} sessionPomodoros={sessionPomodoros} coins={coins} />}
+      </section>
+
       {!focusMode && sessionLog.length > 0 && (
         <SessionsSection sessionLog={sessionLog} showSessions={showSessions} setShowSessions={setShowSessions} />
       )}
 
-      {/* Finish */}
       {!focusMode && sessionPomodoros > 0 && (
         <button className={s.finishBtn} onClick={handleFinish}>
           Finish & Save Session
         </button>
       )}
-    </>
+    </div>
   )
 }
 
