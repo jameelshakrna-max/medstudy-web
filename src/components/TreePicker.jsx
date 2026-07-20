@@ -51,7 +51,7 @@ export default function TreePicker({ selectedTree, onSelect, subjectColor, owned
   }
 
   const renderPreview = (tree) => {
-    return <TreePreview treeId={tree.id} size="md" />
+    return <TreePreview treeId={tree.id} size="md" showParticles={false} showGlow={false} wind={false} />
   }
 
   return (

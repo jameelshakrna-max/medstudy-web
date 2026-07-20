@@ -5,7 +5,7 @@ import { ForestTree } from './ForestTree'
 import { PremiumTree, PREMIUM_TREE_IDS } from './PremiumTrees'
 import s from './TreePreview.module.css'
 
-export default function TreePreview({ treeId, size = 'md', className = '', wind = false, mature = false, variant, windSeed, progress, state }) {
+export default function TreePreview({ treeId, size = 'md', className = '', wind = false, mature = false, variant, windSeed, progress, state, showParticles = true, showGlow = true }) {
   const tree = useMemo(() => getTreeById(treeId) || getTreeById('oak'), [treeId])
   const isOak = tree?.id === 'oak'
   const isPremium = PREMIUM_TREE_IDS.has(treeId)
@@ -40,8 +40,8 @@ export default function TreePreview({ treeId, size = 'md', className = '', wind 
           state={st}
           preview={mature}
           landscapeWind={wind}
-          showParticles={false}
-          showGlow={false}
+          showParticles={showParticles}
+          showGlow={showGlow}
           size="100%"
         />
       </div>

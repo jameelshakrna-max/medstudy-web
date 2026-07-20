@@ -29,6 +29,8 @@
   scroll-snap-align: start;
   position: relative;
   -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+  isolation: isolate;
 }
 .card:hover { background: var(--input-bg); border-color: var(--card-border); }
 .card.selected {

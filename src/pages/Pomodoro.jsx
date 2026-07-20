@@ -19,7 +19,7 @@ const MODES = ['study', 'break', 'long']
 const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
 
 const DURATION_LIMITS = {
-  study: { min: 5, max: 120, step: 5, presets: [15, 25, 50, 90] },
+  study: { min: 5, max: 120, step: 5, presets: [5, 15, 25, 50, 90] },
   break: { min: 1, max: 30, step: 1, presets: [3, 5, 10] },
   long:  { min: 5, max: 60, step: 5, presets: [10, 15, 20, 30] },
 }
