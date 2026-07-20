@@ -624,7 +624,7 @@ function SetupScreen({
           <button
             key={p}
             className={`${s.presetChip} ${currentDuration === p ? s.presetActive : ''}`}
-            onClick={() => { playStart(); setModeDuration(mode, p) }}
+            onClick={() => setModeDuration(mode, p)}
           >
             {p} min
           </button>
