@@ -256,9 +256,9 @@ export default function Pomodoro() {
   const view = sessionOutcome ?? `${mode}-${sessionPhase}`
 
   const earnedCoins = useMemo(() => {
-    const focusMin = Math.floor((totalSec) / 60)
-    return 10 + Math.floor(focusMin / 5) - 5
-  }, [totalSec])
+    const focusMin = Math.floor(activeStudySeconds / 60)
+    return Math.max(1, 10 + Math.floor(focusMin / 5) - 5)
+  }, [activeStudySeconds])
 
   // ── Stars ──
   const stars = useMemo(() =>

@@ -374,6 +374,9 @@ export function PomodoroProvider({ children }) {
           setSeconds(remaining)
           setTotalSec(saved.totalSec || saved.seconds)
           setTreeStatus('RUNNING')
+          if (saved.mode === 'study' && saved.activeStudySeconds) {
+            activeStudyStartRef.current = Date.now() - saved.activeStudySeconds * 1000
+          }
           // Don't auto-resume — let user decide
         } else {
           // Timer expired while away
@@ -386,6 +389,7 @@ export function PomodoroProvider({ children }) {
       }
     } catch (_) {}
     recoveryDoneRef.current = true
+    recoveryAppliedRef.current = true
   }, []) // Run once on mount
 
   // ── Auto-save on state changes (debounced) ──
@@ -395,23 +399,19 @@ export function PomodoroProvider({ children }) {
   }, [mode, running, selectedTopic, sessionPomodoros, treeStatus, selectedTree, sessionTreeId, completed, failed, saveTimerState])
 
   // ── Periodic save for timer values (every 5s while running) ──
+  const periodicStateRef = useRef({})
+  periodicStateRef.current = { mode, running, seconds, totalSec, activeStudySeconds, focusMins, shortMins, longMins, selectedTopic, sessionPomodoros, treeStatus, selectedTree, sessionTreeId, completed, failed }
+
   useEffect(() => {
     if (!running) return
     const interval = setInterval(() => {
       try {
-        const state = {
-          mode, running: true,
-          seconds, totalSec, activeStudySeconds,
-          focusMins, shortMins, longMins,
-          selectedTopic, sessionPomodoros,
-          treeStatus, selectedTree, sessionTreeId, completed, failed,
-          savedAt: Date.now(),
-        }
+        const state = { ...periodicStateRef.current, savedAt: Date.now() }
         localStorage.setItem('pomodoro_state', JSON.stringify(state))
       } catch (_) {}
     }, 5000)
     return () => clearInterval(interval)
-  }, [mode, running, seconds, totalSec, activeStudySeconds, focusMins, shortMins, longMins, selectedTopic, sessionPomodoros, treeStatus, selectedTree, sessionTreeId, completed, failed])
+  }, [running])
 
   const rafRef = useRef(null)
   const endTimeRef = useRef(null)
@@ -425,6 +425,8 @@ export function PomodoroProvider({ children }) {
   const pushSubscribedRef = useRef(false)
   const swReadyRef = useRef(false)
   const recoveryDoneRef = useRef(false)
+  const recoveryAppliedRef = useRef(false)
+  const activeStudyStartRef = useRef(null)
 
   useEffect(() => { modeRef.current = mode }, [mode])
   useEffect(() => { doneRef.current = done }, [done])
@@ -492,6 +494,7 @@ export function PomodoroProvider({ children }) {
 
   useEffect(() => {
     if (!recoveryDoneRef.current) return
+    if (recoveryAppliedRef.current) { recoveryAppliedRef.current = false; return }
     const dur = getDuration(mode)
     setSeconds(dur)
     setTotalSec(dur)
@@ -585,8 +588,8 @@ export function PomodoroProvider({ children }) {
     if (remainingSec !== lastTickRef.current) {
       lastTickRef.current = remainingSec
       setSeconds(remainingSec)
-      if (modeRef.current === 'study') {
-        setActiveStudySeconds(s => s + 1)
+      if (modeRef.current === 'study' && activeStudyStartRef.current) {
+        setActiveStudySeconds(Math.floor((now - activeStudyStartRef.current) / 1000))
       }
     }
     if (runningRef.current) { rafRef.current = requestAnimationFrame(tick) }
@@ -597,12 +600,16 @@ export function PomodoroProvider({ children }) {
     if (!running) {
       if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
       if (bgTimeoutRef.current) { clearTimeout(bgTimeoutRef.current); bgTimeoutRef.current = null }
+      activeStudyStartRef.current = null
       return
     }
 
     if (!sessionStart) setSessionStart(Date.now())
     if (!endTimeRef.current) {
       endTimeRef.current = Date.now() + seconds * 1000
+    }
+    if (modeRef.current === 'study' && !activeStudyStartRef.current) {
+      activeStudyStartRef.current = Date.now()
     }
     lastTickRef.current = null
 
