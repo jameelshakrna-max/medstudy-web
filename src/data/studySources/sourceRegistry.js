@@ -1,15 +1,13 @@
 import { STEP_UP_MEDICINE_6E } from "./textbooks/stepUpMedicine6e.js";
-import { AMBOSS } from "./textbooks/amboss.js";
-import { EL_HUSSEINY_INTERNAL_MEDICINE } from "./textbooks/elhusseinyInternalMedicine.js";
+import { EL_HUSSEINY_ESSENTIALS } from "./textbooks/elHusseinyEssentials.js";
 import { EL_HUSSEINY_SURGERY } from "./textbooks/elhusseinySurgery.js";
-import { SURGERY_CASE_BASED } from "./textbooks/surgeryCaseBased.js";
+import { CASE_BASED_SURGERY_2E } from "./textbooks/caseBasedSurgery2e.js";
 
 export const ALL_SOURCES = [
   STEP_UP_MEDICINE_6E,
-  AMBOSS,
-  EL_HUSSEINY_INTERNAL_MEDICINE,
+  EL_HUSSEINY_ESSENTIALS,
   EL_HUSSEINY_SURGERY,
-  SURGERY_CASE_BASED,
+  CASE_BASED_SURGERY_2E,
 ];
 
 export function getSource(sourceId) {
