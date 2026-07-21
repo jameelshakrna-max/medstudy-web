@@ -5,6 +5,18 @@ export const EL_HUSSEINY_SURGERY = {
     "type": "textbook",
     "uploadedFile": "AL-Husseiny (2).pdf",
     "questionSource": "uworld",
+    "edition": null,
+    "year": null,
+    "version": "1.0.0",
+    "supportedRotations": [
+      "trauma",
+      "orthopedic-surgery",
+      "shock",
+      "preoperative-postoperative-care",
+      "general-surgery",
+      "vascular-surgery",
+      "urology"
+    ],
     "includedPdfPages": [
       5,
       202

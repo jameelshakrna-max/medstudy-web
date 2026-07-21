@@ -6,6 +6,21 @@ export const STEP_UP_MEDICINE_6E = {
     "year": 2024,
     "type": "textbook",
     "questionSource": "uworld",
+    "version": "1.0.0",
+    "supportedRotations": [
+      "cardiology",
+      "pulmonology",
+      "gastroenterology",
+      "endocrinology",
+      "neurology",
+      "rheumatology",
+      "nephrology",
+      "fluids-electrolytes-acid-base",
+      "hematology-oncology",
+      "infectious-disease",
+      "dermatology-hypersensitivity",
+      "ambulatory-medicine"
+    ],
     "includedPdfPages": [
       13,
       843

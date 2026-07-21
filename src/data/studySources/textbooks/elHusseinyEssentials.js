@@ -4,7 +4,28 @@ export const EL_HUSSEINY_ESSENTIALS = {
     "title": "EL Husseiny's Essentials for USMLE Step 2 CK",
     "type": "textbook",
     "pdf_pages": 994,
-    "question_source": "uworld"
+    "question_source": "uworld",
+    "questionSource": "uworld",
+    "edition": null,
+    "year": null,
+    "version": "1.0.0",
+    "supportedRotations": [
+      "antimicrobials",
+      "cardiology",
+      "pulmonology",
+      "endocrinology",
+      "nephrology",
+      "gastroenterology",
+      "rheumatology",
+      "hematology",
+      "neurology",
+      "infectious-diseases",
+      "allergy-and-immunology",
+      "emergency-medicine",
+      "dermatology",
+      "ent",
+      "ophthalmology"
+    ]
   },
   "methodology": {
     "focused": {

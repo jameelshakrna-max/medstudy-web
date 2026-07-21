@@ -10,8 +10,40 @@ export const ALL_SOURCES = [
   CASE_BASED_SURGERY_2E,
 ];
 
+function resolveSource(source) {
+  return {
+    id: source.source.id,
+    title: source.source.title,
+    edition: source.source.edition,
+    year: source.source.year,
+    version: source.source.version,
+    type: source.source.type,
+    questionSource:
+      source.source.questionSource ??
+      source.source.question_source ??
+      "uworld",
+    supportedRotations: source.source.supportedRotations ?? [],
+    topicCount: Array.isArray(source.topics) ? source.topics.length : 0,
+  };
+}
+
 export function getSource(sourceId) {
   return ALL_SOURCES.find(s => s.source.id === sourceId) || null;
+}
+
+export function getStudySource(sourceId) {
+  return getSource(sourceId);
+}
+
+export function getAvailableStudySources() {
+  return ALL_SOURCES.map(resolveSource);
+}
+
+export function getSourcesForRotation(rotationId) {
+  return ALL_SOURCES.filter(s =>
+    Array.isArray(s.source.supportedRotations) &&
+    s.source.supportedRotations.includes(rotationId)
+  ).map(resolveSource);
 }
 
 export function getSourceOptions() {

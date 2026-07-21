@@ -12,7 +12,26 @@ export const CASE_BASED_SURGERY_2E = {
     "uploaded_filename": "A Case Based Clinical Review (2019).pdf",
     "pdf_pages": 652,
     "question_source": "uworld",
-    "book_question_sets": "optional_not_default"
+    "book_question_sets": "optional_not_default",
+    "questionSource": "uworld",
+    "version": "1.0.0",
+    "supportedRotations": [
+      "acute-care-surgery",
+      "breast-surgery",
+      "cardiothoracic-surgery",
+      "endocrine-surgery",
+      "head-neck-surgery",
+      "hepatopancreaticobiliary",
+      "lower-gastrointestinal",
+      "neurosurgery",
+      "orthopedic-surgery",
+      "pediatric-surgery",
+      "surgical-complications",
+      "trauma",
+      "upper-gastrointestinal",
+      "urology",
+      "vascular"
+    ]
   },
   "methodology": {
     "author_reading_guidance": "Each chapter is intended to be readable in approximately 20-30 minutes or less.",
