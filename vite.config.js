@@ -25,15 +25,6 @@ export default defineConfig({
             handler: 'NetworkOnly',
           },
           {
-            urlPattern: /\/assets\/.*-[A-Za-z0-9]{8}\./,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'medstudy-hashed-assets',
-              expiration: { maxEntries: 200, maxAgeSeconds: 30 * 24 * 60 * 60 },
-              cacheableResponse: { statuses: [200] },
-            },
-          },
-          {
             urlPattern: ({ request }) => request.mode === 'navigate',
             handler: 'NetworkFirst',
             options: {
