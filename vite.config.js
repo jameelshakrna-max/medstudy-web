@@ -6,15 +6,17 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['icon.svg', 'favicon.png', 'apple-touch-icon.png'],
       workbox: {
         globDirectory: 'dist',
         globPatterns: ['**/*.{js,css,html,svg,png,ico,wasm}'],
         globIgnores: ['**/CommunityDetail-*.js', '**/TrackingHub-*.js'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-        skipWaiting: true,
+        skipWaiting: false,
         clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        importScripts: ['sw-cache-migration.js'],
         runtimeCaching: [
           {
             urlPattern: /^https?:\/\/.*\/api\//,
@@ -29,15 +31,6 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'medstudy-navigation',
-              cacheableResponse: { statuses: [200] },
-            },
-          },
-          {
-            urlPattern: /.*/,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'medstudy-general',
-              expiration: { maxEntries: 100, maxAgeSeconds: 7 * 24 * 60 * 60 },
               cacheableResponse: { statuses: [200] },
             },
           },
