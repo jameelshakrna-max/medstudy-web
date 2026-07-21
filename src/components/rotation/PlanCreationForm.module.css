@@ -1,0 +1,335 @@
+.formWrap {
+  padding: 4px 0;
+}
+
+.formTitle {
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-size: 22px;
+  color: var(--text-primary);
+  margin: 0 0 20px;
+}
+
+/* Step indicator */
+.stepIndicator {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.stepDot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mist);
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  transition: all 0.2s;
+}
+
+.stepDotActive {
+  background: var(--blueL);
+  border-color: rgba(79, 140, 255, 0.3);
+  color: var(--blue);
+}
+
+.stepDotDone {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: var(--emerald);
+}
+
+/* Radio cards */
+.radioGroup {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.radioCard {
+  flex: 1;
+  min-width: 120px;
+  padding: 12px 14px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.radioCard:hover {
+  border-color: var(--card-border);
+}
+
+.radioCardActive {
+  background: var(--blueL);
+  border-color: rgba(79, 140, 255, 0.3);
+}
+
+.radioInput {
+  display: none;
+}
+
+.radioLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.radioDesc {
+  font-size: 12px;
+  color: var(--mist);
+}
+
+/* Availability */
+.availHeader {
+  display: grid;
+  grid-template-columns: 60px 1fr 70px 70px;
+  gap: 8px;
+  align-items: center;
+  padding: 0 4px 8px;
+  border-bottom: 1px solid var(--card-border);
+  margin-bottom: 8px;
+}
+
+.availColLabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--mist);
+}
+
+.availRow {
+  display: grid;
+  grid-template-columns: 60px 1fr 70px 70px;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--input-bg);
+}
+
+.availDayName {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.availInput {
+  width: 100%;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 6px 10px;
+  outline: none;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.availInput:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px var(--blueL);
+}
+
+.availInput:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.availToggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.availToggle input {
+  display: none;
+}
+
+.toggleTrack {
+  width: 32px;
+  height: 18px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.toggleThumb {
+  width: 14px;
+  height: 14px;
+  background: var(--mist);
+  border-radius: 50%;
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  transition: all 0.2s;
+}
+
+.availToggle input:checked + .toggleTrack {
+  background: var(--blueL);
+  border-color: rgba(79, 140, 255, 0.3);
+}
+
+.availToggle input:checked + .toggleTrack .toggleThumb {
+  background: var(--blue);
+  transform: translateX(14px);
+}
+
+.availNote {
+  font-size: 12px;
+  color: var(--mist);
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: var(--input-bg);
+  border-radius: 8px;
+}
+
+/* Date info */
+.dateInfo {
+  font-size: 13px;
+  color: var(--blue);
+  font-weight: 600;
+  padding: 8px 12px;
+  background: var(--blueL);
+  border-radius: 8px;
+  margin-top: 4px;
+}
+
+/* Check row */
+.checkRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-bottom: 20px;
+}
+
+.checkRow input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--blue);
+}
+
+/* Field note */
+.fieldNote {
+  font-size: 12px;
+  color: var(--mist);
+  margin-top: 4px;
+}
+
+/* Review summary */
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.reviewItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--input-bg);
+  gap: 12px;
+}
+
+.reviewLabel {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--mist);
+  flex-shrink: 0;
+}
+
+.reviewValue {
+  font-size: 14px;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+/* Navigation */
+.navRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--input-bg);
+}
+
+.navBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 18px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.navBtn:hover:not(:disabled) {
+  background: var(--card-border);
+  color: var(--text-primary);
+}
+
+.navBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.navBtnPrimary {
+  background: linear-gradient(135deg, var(--blue), var(--blue2));
+  color: var(--navy);
+  border: none;
+  font-weight: 700;
+}
+
+.navBtnPrimary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px var(--accent-glow);
+}
+
+@media (max-width: 480px) {
+  .availHeader,
+  .availRow {
+    grid-template-columns: 40px 1fr 50px 50px;
+    gap: 4px;
+  }
+
+  .radioGroup {
+    flex-direction: column;
+  }
+
+  .radioCard {
+    min-width: 100%;
+  }
+
+  .reviewItem {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .reviewValue {
+    text-align: left;
+  }
+}

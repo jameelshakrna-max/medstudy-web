@@ -11,6 +11,7 @@ import MRCPView from './MRCPView'
 import LocalBoardView from './LocalBoardView'
 import Goals from './Goals'
 import ResourcesModal from '../components/ResourcesModal'
+import RotationSummary from '../components/rotation/RotationSummary'
 import { generate } from '../services/PerformanceEngine'
 import styles from './TrackingHub.module.css'
 
@@ -20,6 +21,7 @@ const TABS = [
   { id: 'mrcp', label: 'MRCP Progress' },
   { id: 'board', label: 'Local Board Tracker' },
   { id: 'goals', label: 'Goals' },
+  { id: 'rotation', label: 'Rotation' },
 ]
 
 export default function TrackingHub() {
@@ -104,6 +106,7 @@ export default function TrackingHub() {
         {activeTab === 'goals' && (
           <Goals />
         )}
+        {activeTab === 'rotation' && <RotationSummary />}
       </div>
 
       {/* Inline FAB */}

@@ -157,4 +157,12 @@ export const queryKeys = {
     portfolio: (userId) => [...queryKeys.research.all, 'portfolio', userId],
     leaderboard: (type, limit) => [...queryKeys.research.all, 'leaderboard', type, limit],
   },
+  rotations: {
+    all: ['rotations'],
+    plans: () => [...queryKeys.rotations.all, 'plans'],
+    plan: (id) => [...queryKeys.rotations.all, 'plan', id],
+    schedule: (planId) => [...queryKeys.rotations.all, 'schedule', planId],
+    progress: (planId) => [...queryKeys.rotations.all, 'progress', planId],
+    flashcardSummary: () => [...queryKeys.rotations.all, 'flashcardSummary'],
+  },
 }

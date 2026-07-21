@@ -5,7 +5,7 @@ import { useSwipeable } from 'react-swipeable'
 import {
   LayoutDashboard, BookOpen, BrainCircuit,
   BarChart3, Timer, ClipboardList, Settings,
-  FolderOpen, LogOut, Menu, ChevronRight, Target, Users, UserSearch, Trophy, FlaskConical, TreePine,
+  FolderOpen, LogOut, Menu, ChevronRight, Target, Users, UserSearch, Trophy, FlaskConical, TreePine, CalendarRange,
 } from 'lucide-react'
 import TopBar from './TopBar'
 import BottomNav from './BottomNav'
@@ -17,6 +17,7 @@ const NAV = [
   { to: '/anki',       icon: BrainCircuit,  label: 'Anki' },
   { to: '/uworld',     icon: BarChart3,     label: 'Tracking Hub' },
   { to: '/goals',      icon: Target,        label: 'Goals' },
+  { to: '/rotations', icon: CalendarRange, label: 'Rotation Planner' },
   { to: '/pomodoro',   icon: Timer,         label: 'Pomodoro' },
   { to: '/forest',     icon: TreePine,      label: 'My Forest' },
   { to: '/communities', icon: Users, label: 'Communities' },

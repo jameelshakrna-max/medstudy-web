@@ -108,6 +108,12 @@ import {
   handleGetPortfolio, handleAddPortfolioEntry, handleUpdatePortfolioEntry, handleDeletePortfolioEntry,
 } from './handlers/research.js'
 
+import {
+  handleGetPlans, handleCreatePlan, handleGetPlan, handleUpdatePlan, handleDeletePlan,
+  handleGenerateSchedule, handleUpdateEntry, handleGetProgress, handleUpdateProgress,
+  handleActivatePlan, handleFlashcardSummary,
+} from './handlers/rotations.js'
+
 function ensureCORS(response) {
   const h = response.headers
   if (!h.get('access-control-allow-origin')) {
@@ -522,6 +528,19 @@ export default {
       if (path === '/api/push/schedule' && request.method === 'POST') return handleSchedulePush(request, env, user)
       if (path === '/api/push/cancel' && request.method === 'POST') return handleCancelPushes(request, env, user)
 
+
+      // ── Rotation Planner ──
+      if (path === '/api/rotations/plans' && request.method === 'GET') return handleGetPlans(request, env, user)
+      if (path === '/api/rotations/plans' && request.method === 'POST') return handleCreatePlan(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+$/) && request.method === 'GET') return handleGetPlan(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+$/) && request.method === 'PUT') return handleUpdatePlan(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+$/) && request.method === 'DELETE') return handleDeletePlan(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+\/generate$/) && request.method === 'POST') return handleGenerateSchedule(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+\/activate$/) && request.method === 'POST') return handleActivatePlan(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+\/progress$/) && request.method === 'GET') return handleGetProgress(request, env, user)
+      if (path.match(/^\/api\/rotations\/schedule\/[^\/]+$/) && request.method === 'PUT') return handleUpdateEntry(request, env, user)
+      if (path.match(/^\/api\/rotations\/progress\/[^\/]+$/) && request.method === 'PUT') return handleUpdateProgress(request, env, user)
+      if (path === '/api/rotations/flashcard-summary' && request.method === 'GET') return handleFlashcardSummary(request, env, user)
       return json({ error: 'Not found' }, 404)
     } catch (err) {
       console.error(`[${requestId}]`, err)

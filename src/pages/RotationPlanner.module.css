@@ -1,0 +1,359 @@
+.page {
+  position: relative;
+  min-height: 100vh;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.title {
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-size: clamp(24px, 4vw, 36px);
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.sub {
+  font-size: 14px;
+  color: var(--mist);
+  margin: 0;
+}
+
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.createBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, var(--blue), var(--blue2));
+  color: var(--navy);
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 20px var(--accent-glow);
+  font-family: 'DM Sans', sans-serif;
+  flex-shrink: 0;
+}
+
+.createBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px var(--accent-glow);
+}
+
+/* Plan cards */
+.planGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.planCard {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.planCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  border-color: var(--blueL);
+}
+
+.planCardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.planCardName {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.planCardRotation {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.planCardDates {
+  font-size: 12px;
+  color: var(--mist);
+  margin-bottom: 12px;
+}
+
+/* Status badges */
+.statusBadge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 100px;
+  white-space: nowrap;
+}
+
+.statusActive {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--emerald);
+}
+
+.statusDraft {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--amber);
+}
+
+.statusCompleted {
+  background: rgba(79, 140, 255, 0.12);
+  color: var(--blue);
+}
+
+.statusPaused {
+  background: var(--input-bg);
+  color: var(--mist);
+}
+
+/* Progress */
+.planProgress {
+  margin-top: 12px;
+}
+
+.planProgressBar {
+  height: 4px;
+  background: var(--input-bg);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.planProgressFill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--blue), var(--indigo));
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.planProgressText {
+  font-size: 11px;
+  color: var(--mist);
+}
+
+.planStats {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.planStat {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Detail view */
+.detailView {
+  padding-top: 4px;
+}
+
+.detailHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.detailHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.backBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.backBtn:hover {
+  background: var(--card-border);
+  color: var(--text-primary);
+}
+
+.detailTitle {
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-size: 24px;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.detailSubtitle {
+  font-size: 13px;
+  color: var(--mist);
+}
+
+.detailActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 16px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.actionBtn:hover {
+  background: var(--card-border);
+  color: var(--text-primary);
+}
+
+.actionBtnPrimary {
+  background: var(--blueL);
+  border-color: rgba(79, 140, 255, 0.3);
+  color: var(--blue);
+}
+
+.actionBtnPrimary:hover {
+  background: rgba(79, 140, 255, 0.2);
+}
+
+.dangerBtn {
+  color: var(--red);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.dangerBtn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* Sections */
+.detailSection {
+  margin-bottom: 32px;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sectionTitle svg {
+  color: var(--text-secondary);
+  width: 18px;
+  height: 18px;
+}
+
+/* Empty state */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--mist);
+  text-align: center;
+  background: var(--card-bg);
+  border: 1px dashed var(--card-border);
+  border-radius: 20px;
+}
+
+.empty svg {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 12px;
+  opacity: 0.3;
+}
+
+.emptyTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.emptyDesc {
+  font-size: 13px;
+  max-width: 320px;
+}
+
+/* Topic progress grid */
+.topicGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .planGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .detailHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .topicGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .detailActions {
+    width: 100%;
+  }
+
+  .actionBtn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .planStats {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}

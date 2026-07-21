@@ -487,143 +487,6 @@ CREATE TABLE IF NOT EXISTS community_room_timer_participants (
 
 CREATE INDEX IF NOT EXISTS idx_room_participants_room_left ON community_room_timer_participants(room_id, left_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read);
-
--- ════════════════════════════════════════════════════════════
--- SUPABASE / POSTGRESQL SECTION
--- Run these statements in the Supabase SQL Editor (Dashboard → SQL Editor)
--- ════════════════════════════════════════════════════════════
-
--- CREATE SEQUENCE IF NOT EXISTS public.global_id_seq START 1;
-
-CREATE TABLE IF NOT EXISTS public.study_subjects (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  category TEXT DEFAULT 'other',
-  display_order INTEGER DEFAULT 0
-);
-
-INSERT INTO public.study_subjects (id, name, category, display_order) VALUES
-  ('cardiology',        'Cardiology',              'medical',    1),
-  ('respiratory',       'Respiratory',             'medical',    2),
-  ('gastroenterology',  'Gastroenterology',        'medical',    3),
-  ('nephrology',        'Nephrology',              'medical',    4),
-  ('neurology',         'Neurology',               'medical',    5),
-  ('endocrinology',     'Endocrinology',           'medical',    6),
-  ('infectious',        'Infectious Disease',      'medical',    7),
-  ('hematology',        'Hematology',              'medical',    8),
-  ('oncology',          'Oncology',                'medical',    9),
-  ('rheumatology',      'Rheumatology',            'medical',   10),
-  ('dermatology',       'Dermatology',             'medical',   11),
-  ('psychiatry',        'Psychiatry',              'medical',   12),
-  ('obgyn',             'Obstetrics & Gynecology', 'medical',   13),
-  ('pediatrics',        'Pediatrics',              'medical',   14),
-  ('emergency',         'Emergency Medicine',      'medical',   15),
-  ('mixed',             'Mixed',                   'mixed',     16),
-  ('self_assessment',   'Self Assessment',         'mixed',     17),
-  ('other',             'Other',                   'other',     18)
-ON CONFLICT (id) DO NOTHING;
-
-CREATE TABLE IF NOT EXISTS public.uworld_blocks (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  block_name TEXT NOT NULL,
-  total_questions INTEGER DEFAULT 40,
-  correct INTEGER DEFAULT 0,
-  percent_correct INTEGER DEFAULT 0,
-  grade TEXT DEFAULT '',
-  mode TEXT DEFAULT 'Tutor',
-  subject_id TEXT,
-  time_minutes INTEGER DEFAULT 0,
-  notes TEXT,
-  date_completed TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_uworld_blocks_user ON public.uworld_blocks(user_id);
-
-CREATE TABLE IF NOT EXISTS public.mrcp_syllabus (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  name TEXT NOT NULL,
-  status TEXT DEFAULT 'Not Started',
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_mrcp_syllabus_user ON public.mrcp_syllabus(user_id);
-
-CREATE TABLE IF NOT EXISTS public.mrcp_topics (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  syllabus_id TEXT NOT NULL,
-  name TEXT NOT NULL,
-  status TEXT DEFAULT 'Not Started',
-  confidence INTEGER DEFAULT 0,
-  repetitions INTEGER DEFAULT 0,
-  notes TEXT,
-  last_reviewed TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_mrcp_topics_user ON public.mrcp_topics(user_id);
-CREATE INDEX IF NOT EXISTS idx_mrcp_topics_syllabus ON public.mrcp_topics(syllabus_id);
-
-CREATE TABLE IF NOT EXISTS public.local_board_cases (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  case_name TEXT NOT NULL,
-  subject_id TEXT,
-  past_paper_year TEXT,
-  repetition_count INTEGER DEFAULT 0,
-  mastery_level TEXT DEFAULT 'Started',
-  notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_board_cases_user ON public.local_board_cases(user_id);
-
-CREATE TABLE IF NOT EXISTS public.study_activity (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  module TEXT NOT NULL,
-  action TEXT NOT NULL,
-  entity_id TEXT,
-  summary TEXT,
-  metadata JSONB DEFAULT '{}',
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_activity_user ON public.study_activity(user_id);
-CREATE INDEX IF NOT EXISTS idx_activity_user_created ON public.study_activity(user_id, created_at);
-
--- ── Goals ──────────────────────────────────────────────────
-
-CREATE TABLE IF NOT EXISTS public.goals (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  title TEXT NOT NULL,
-  goal_type TEXT NOT NULL,
-  target_value REAL NOT NULL,
-  subject_id TEXT,
-  module TEXT,
-  category TEXT DEFAULT 'long_term',
-  deadline TIMESTAMPTZ,
-  sort_order INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_goals_user ON public.goals(user_id);
-
-ALTER TABLE public.goals ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY goal_user_isolation ON public.goals
-  USING (user_id = auth.jwt() ->> 'sub')
-  WITH CHECK (user_id = auth.jwt() ->> 'sub');
-
--- After running the above, run this to refresh PostgREST schema cache:
--- NOTIFY pgrst, 'reload schema';
-
 -- ═══════════════════════════════════════════
 -- NOTIFICATIONS
 -- ═══════════════════════════════════════════
@@ -1091,3 +954,86 @@ CREATE TABLE IF NOT EXISTS scheduled_pushes (
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_sched_push_due ON scheduled_pushes(scheduled_at, attempts);
+
+-- ════════════════════════════════════════════════════════════
+-- ROTATION PLANNER — plan configuration
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS rotation_plans (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  rotation TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  exam_date TEXT,
+  study_style TEXT DEFAULT 'active',
+  uworld_mode TEXT DEFAULT 'timed',
+  planning_buffer_minutes INTEGER DEFAULT 30,
+  uworld_total_questions INTEGER DEFAULT 0,
+  preferred_questions_per_day INTEGER DEFAULT 30,
+  questions_per_day_min INTEGER DEFAULT 20,
+  questions_per_day_max INTEGER DEFAULT 40,
+  avg_minutes_per_question REAL DEFAULT 1.5,
+  scheduling_style TEXT DEFAULT 'efficient',
+  flashcard_review_enabled INTEGER DEFAULT 1,
+  flashcard_max_minutes INTEGER DEFAULT 30,
+  personal_pace_multiplier REAL DEFAULT 1.0,
+  status TEXT DEFAULT 'draft',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_rotation_plans_user ON rotation_plans(user_id);
+CREATE INDEX IF NOT EXISTS idx_rotation_plans_status ON rotation_plans(user_id, status);
+
+CREATE TABLE IF NOT EXISTS rotation_availability (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL REFERENCES rotation_plans(id) ON DELETE CASCADE,
+  day_of_week INTEGER NOT NULL,
+  available_minutes INTEGER NOT NULL DEFAULT 0,
+  is_hospital_day INTEGER DEFAULT 0,
+  is_day_off INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_rotation_availability_plan ON rotation_availability(plan_id);
+
+CREATE TABLE IF NOT EXISTS rotation_schedule (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL REFERENCES rotation_plans(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  date TEXT NOT NULL,
+  topic_id TEXT,
+  activity_type TEXT NOT NULL,
+  description TEXT,
+  estimated_minutes INTEGER,
+  actual_minutes INTEGER,
+  uworld_questions INTEGER DEFAULT 0,
+  uworld_mode TEXT,
+  status TEXT DEFAULT 'pending',
+  sort_order INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_rotation_schedule_plan ON rotation_schedule(plan_id);
+CREATE INDEX IF NOT EXISTS idx_rotation_schedule_user ON rotation_schedule(user_id);
+CREATE INDEX IF NOT EXISTS idx_rotation_schedule_date ON rotation_schedule(plan_id, date);
+
+CREATE TABLE IF NOT EXISTS rotation_topic_progress (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL REFERENCES rotation_plans(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  topic_id TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  study_status TEXT DEFAULT 'not_started',
+  study_completed_at TEXT,
+  uworld_status TEXT DEFAULT 'not_started',
+  uworld_questions_done INTEGER DEFAULT 0,
+  uworld_questions_total INTEGER DEFAULT 0,
+  uworld_completed_at TEXT,
+  confidence INTEGER DEFAULT 0,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_rotation_progress_plan ON rotation_topic_progress(plan_id);
+CREATE INDEX IF NOT EXISTS idx_rotation_progress_user ON rotation_topic_progress(user_id);
+CREATE INDEX IF NOT EXISTS idx_rotation_progress_topic ON rotation_topic_progress(plan_id, topic_id);
