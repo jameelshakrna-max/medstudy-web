@@ -515,6 +515,18 @@ export function PomodoroProvider({ children }) {
     else setLongMins(safe)
   }, [sessionPhase])
 
+  const advanceToNextMode = useCallback(() => {
+    setCompleted(false)
+    setFailed(false)
+    setTreeStatus('IDLE')
+    const idx = MODES.indexOf(modeRef.current)
+    const next = MODES[(idx + 1) % MODES.length]
+    const dur = { study: focusMins, break: shortMins, long: longMins }[next] * 60
+    setMode(next)
+    setSeconds(dur)
+    setTotalSec(dur)
+  }, [focusMins, shortMins, longMins])
+
   const handleComplete = useCallback(() => {
     if (completingRef.current) return
     completingRef.current = true
@@ -806,18 +818,6 @@ export function PomodoroProvider({ children }) {
     setSeconds(dur)
     setTotalSec(dur)
   }, [focusMins])
-
-  const advanceToNextMode = useCallback(() => {
-    setCompleted(false)
-    setFailed(false)
-    setTreeStatus('IDLE')
-    const idx = MODES.indexOf(modeRef.current)
-    const next = MODES[(idx + 1) % MODES.length]
-    const dur = { study: focusMins, break: shortMins, long: longMins }[next] * 60
-    setMode(next)
-    setSeconds(dur)
-    setTotalSec(dur)
-  }, [focusMins, shortMins, longMins])
 
   // ── Focus mode + fullscreen ──
   const toggleFocusMode = useCallback(() => {
