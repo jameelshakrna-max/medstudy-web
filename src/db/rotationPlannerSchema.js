@@ -5,6 +5,8 @@ export const PLANNER_TABLES = {
   dailyTasks: 'rotation_planner_daily_tasks',
   taskSessions: 'rotation_planner_task_sessions',
   userSourcePace: 'user_source_pace',
+  taskMutations: 'rotation_planner_task_mutations',
+  planMutations: 'rotation_planner_plan_mutations',
 }
 
 export const PLAN_STATUSES = ['draft', 'active', 'paused', 'completed', 'archived']
@@ -60,7 +62,8 @@ export const ALL_PLANNER_COLUMNS = {
     'maximum_questions_per_day', 'average_minutes_per_question',
     'buffer_percentage', 'maximum_active_topics',
     'status', 'client_request_id', 'request_fingerprint',
-    'settings_json', 'created_at', 'updated_at',
+    'settings_json', 'revision', 'last_recalculated_at',
+    'created_at', 'updated_at',
   ],
   availability: [
     'id', 'plan_id', 'weekday', 'available_minutes', 'is_day_off',
@@ -71,24 +74,39 @@ export const ALL_PLANNER_COLUMNS = {
     'topic_title', 'group_id',
     'base_learning_minutes', 'personalized_learning_minutes',
     'total_uworld_questions', 'completed_uworld_questions',
+    'incorrect_questions_remaining',
     'learning_completed_at', 'questions_unlocked_at',
     'status', 'mastery_score', 'display_order',
   ],
   dailyTasks: [
     'id', 'plan_id', 'plan_topic_id', 'task_date', 'task_type',
     'provider', 'estimated_minutes', 'actual_minutes',
-    'target_count', 'completed_count', 'mode', 'question_pool',
+    'target_count', 'completed_count', 'completion_percentage',
+    'incorrect_count', 'completed_at', 'completed_on',
+    'mode', 'question_pool',
     'status', 'unlock_condition', 'display_order',
     'metadata_json', 'created_at', 'updated_at',
   ],
   taskSessions: [
     'id', 'user_id', 'task_id', 'source_id',
     'planned_minutes', 'active_minutes', 'completion_percentage',
-    'interrupted', 'valid_for_calibration', 'created_at',
+    'interrupted', 'valid_for_calibration',
+    'activity_type', 'mutation_id', 'calibration_invalid_reason',
+    'created_at',
   ],
   userSourcePace: [
     'user_id', 'source_id', 'activity_type',
     'pace_multiplier', 'sample_count', 'updated_at',
+  ],
+  taskMutations: [
+    'id', 'plan_id', 'task_id', 'user_id', 'client_request_id', 'request_fingerprint',
+    'expected_revision', 'resulting_revision',
+    'action', 'resulting_task_status', 'occurred_at', 'occurred_on', 'result_json', 'created_at',
+  ],
+  planMutations: [
+    'id', 'plan_id', 'user_id', 'client_request_id', 'request_fingerprint',
+    'expected_revision', 'resulting_revision',
+    'operation', 'result_json', 'created_at',
   ],
 }
 
@@ -101,6 +119,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 export function getMigrationSql() {
   return readFileSync(
     resolve(__dirname, '../../schema-migration13.sql'),
+    'utf8'
+  )
+}
+
+export function getMigration14Sql() {
+  return readFileSync(
+    resolve(__dirname, '../../schema-migration14.sql'),
     'utf8'
   )
 }

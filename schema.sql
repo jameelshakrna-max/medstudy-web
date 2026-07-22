@@ -1067,6 +1067,8 @@ CREATE TABLE IF NOT EXISTS rotation_planner_plans (
   client_request_id TEXT NOT NULL,
   request_fingerprint TEXT NOT NULL,
   settings_json TEXT DEFAULT '{}',
+  revision INTEGER NOT NULL DEFAULT 0,
+  last_recalculated_at TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -1121,6 +1123,8 @@ CREATE TABLE IF NOT EXISTS rotation_planner_topics (
       'maintenance',
       'completed'
     )),
+  incorrect_questions_remaining INTEGER NOT NULL DEFAULT 0
+    CHECK (incorrect_questions_remaining >= 0),
   mastery_score REAL,
   display_order INTEGER DEFAULT 0,
   UNIQUE(plan_id, normalized_topic_id)
@@ -1155,6 +1159,12 @@ CREATE TABLE IF NOT EXISTS rotation_planner_daily_tasks (
   actual_minutes INTEGER,
   target_count INTEGER,
   completed_count INTEGER DEFAULT 0,
+  completion_percentage REAL NOT NULL DEFAULT 0
+    CHECK (completion_percentage >= 0 AND completion_percentage <= 100),
+  incorrect_count INTEGER NOT NULL DEFAULT 0
+    CHECK (incorrect_count >= 0),
+  completed_at TEXT,
+  completed_on TEXT,
   mode TEXT,
   question_pool TEXT,
   status TEXT DEFAULT 'locked'
@@ -1193,12 +1203,62 @@ CREATE TABLE IF NOT EXISTS rotation_planner_task_sessions (
     CHECK (interrupted IN (0, 1)),
   valid_for_calibration INTEGER DEFAULT 1
     CHECK (valid_for_calibration IN (0, 1)),
+  activity_type TEXT,
+  mutation_id TEXT
+    REFERENCES rotation_planner_task_mutations(id) ON DELETE SET NULL,
+  calibration_invalid_reason TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_rpts_task ON rotation_planner_task_sessions(task_id);
 CREATE INDEX IF NOT EXISTS idx_rpts_user ON rotation_planner_task_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_rpts_source ON rotation_planner_task_sessions(source_id);
 CREATE INDEX IF NOT EXISTS idx_rpts_created ON rotation_planner_task_sessions(created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rpts_mutation ON rotation_planner_task_sessions(mutation_id);
+CREATE INDEX IF NOT EXISTS idx_rpts_pace_lookup ON rotation_planner_task_sessions(user_id, source_id, activity_type, created_at);
+
+-- ════════════════════════════════════════════════════════════
+-- ROTATION PLANNER v2 — task mutations (idempotency + replay)
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS rotation_planner_task_mutations (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL
+    REFERENCES rotation_planner_plans(id) ON DELETE CASCADE,
+  task_id TEXT
+    REFERENCES rotation_planner_daily_tasks(id) ON DELETE SET NULL,
+  user_id TEXT NOT NULL,
+  client_request_id TEXT NOT NULL,
+  request_fingerprint TEXT NOT NULL,
+  expected_revision INTEGER NOT NULL,
+  resulting_revision INTEGER NOT NULL,
+  action TEXT NOT NULL,
+  resulting_task_status TEXT NOT NULL,
+  occurred_at TEXT NOT NULL,
+  occurred_on TEXT NOT NULL,
+  result_json TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rptm_idempotency ON rotation_planner_task_mutations(user_id, client_request_id);
+CREATE INDEX IF NOT EXISTS idx_rptm_task ON rotation_planner_task_mutations(task_id);
+CREATE INDEX IF NOT EXISTS idx_rptm_plan ON rotation_planner_task_mutations(plan_id);
+
+-- ════════════════════════════════════════════════════════════
+-- ROTATION PLANNER v2 — plan mutations (recalc idempotency)
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS rotation_planner_plan_mutations (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL
+    REFERENCES rotation_planner_plans(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  client_request_id TEXT NOT NULL,
+  request_fingerprint TEXT NOT NULL,
+  expected_revision INTEGER NOT NULL,
+  resulting_revision INTEGER NOT NULL,
+  operation TEXT NOT NULL,
+  result_json TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rppm_idempotency ON rotation_planner_plan_mutations(user_id, client_request_id);
+CREATE INDEX IF NOT EXISTS idx_rppm_plan ON rotation_planner_plan_mutations(plan_id);
 
 -- ════════════════════════════════════════════════════════════
 -- ROTATION PLANNER v2 — user source pace calibration

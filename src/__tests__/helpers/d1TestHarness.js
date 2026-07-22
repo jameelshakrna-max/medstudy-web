@@ -6,10 +6,9 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 function loadMigrationSql() {
-  return readFileSync(
-    resolve(__dirname, '../../../schema-migration13.sql'),
-    'utf8'
-  )
+  return readFileSync(resolve(__dirname, '../../../schema-migration13.sql'), 'utf8')
+    + '\n'
+    + readFileSync(resolve(__dirname, '../../../schema-migration14.sql'), 'utf8')
 }
 
 class D1PreparedStatement {

@@ -86,7 +86,7 @@ function getFullyCompletedTopics(topics, topicStates) {
   })
 }
 
-export function buildRotationSchedule(planConfig) {
+export function buildRotationSchedule(planConfig, options = {}) {
   const planErrors = validatePlanConfig(planConfig)
   if (!planErrors.valid) {
     return { tasks: [], topicStates: [], unscheduledWork: [], feasibility: { feasible: false, totalRequiredMinutes: 0, availableMinutes: 0, missingCapacity: 0, requiredExtraMinutesPerDay: 0, topicsLeftUnscheduled: [], possibleSolutions: planErrors.errors }, deduplicationLog: [] }
