@@ -136,3 +136,132 @@ describe('Worker route dispatch — rotation planner', () => {
     })
   })
 })
+
+function makePostRequest(path, body, { headers = {} } = {}) {
+  return new Request(`https://medstudy.app${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-test-user-id': 'test-user', ...headers },
+    body: JSON.stringify(body),
+  })
+}
+
+async function postFetch(path, body, { headers = {} } = {}) {
+  return worker.fetch(makePostRequest(path, body, { headers }), makeEnv(), {})
+}
+
+async function deleteFetch(path) {
+  return worker.fetch(makeRequest(path, { method: 'DELETE' }), makeEnv(), {})
+}
+
+describe('Worker route dispatch — rotation planner plans', () => {
+  describe('POST /api/rotation-planner/plans (create)', () => {
+    it('returns 400 when body is invalid', async () => {
+      const res = await postFetch('/api/rotation-planner/plans', {})
+      expect(res.status).toBe(400)
+      const body = await res.json()
+      expect(body.error.code).toBe('VALIDATION_ERROR')
+    })
+
+    it('returns 400 when idempotency key is missing', async () => {
+      const res = await postFetch('/api/rotation-planner/plans', {
+        sourceId: 'step-up-medicine-6e-2024',
+        rotationId: 'cardiology',
+        startDate: '2026-01-05',
+        endDate: '2026-01-11',
+        studyStyle: 'active',
+        schedulingMode: 'efficient',
+        questionStartRule: 'next_available_day',
+        availability: Array.from({ length: 7 }, (_, i) => ({ weekday: i, availableMinutes: 120, isDayOff: false })),
+        topics: [{ normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.stable-angina-pectoris', uworldRemainingQuestions: 20, alreadyCompletedLearningPercentage: 0, alreadyCompletedQuestionCount: 0 }],
+      })
+      expect(res.status).toBe(400)
+      const body = await res.json()
+      expect(body.error.code).toBe('VALIDATION_ERROR')
+      expect(body.error.message).toContain('Idempotency-Key')
+    })
+
+    it('returns 409 when previewToken does not match', async () => {
+      const res = await postFetch('/api/rotation-planner/plans', {
+        sourceId: 'step-up-medicine-6e-2024',
+        rotationId: 'cardiology',
+        startDate: '2026-01-05',
+        endDate: '2026-01-11',
+        studyStyle: 'active',
+        schedulingMode: 'efficient',
+        questionStartRule: 'next_available_day',
+        availability: Array.from({ length: 7 }, (_, i) => ({ weekday: i, availableMinutes: 120, isDayOff: false })),
+        topics: [{ normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.stable-angina-pectoris', uworldRemainingQuestions: 20, alreadyCompletedLearningPercentage: 0, alreadyCompletedQuestionCount: 0 }],
+        previewToken: 'deadbeef',
+        clientRequestId: 'req-001',
+      }, { headers: { 'Idempotency-Key': 'req-001' } })
+      expect(res.status).toBe(409)
+      const body = await res.json()
+      expect(body.error.code).toBe('PREVIEW_STALE')
+    })
+
+    it('returns 422 when plan is infeasible and acceptOverload is false', async () => {
+      const res = await postFetch('/api/rotation-planner/plans', {
+        sourceId: 'step-up-medicine-6e-2024',
+        rotationId: 'cardiology',
+        startDate: '2026-01-05',
+        endDate: '2026-01-05',
+        studyStyle: 'active',
+        schedulingMode: 'efficient',
+        questionStartRule: 'next_available_day',
+        availability: [{ weekday: 0, availableMinutes: 0, isDayOff: true }, { weekday: 1, availableMinutes: 0, isDayOff: true }, { weekday: 2, availableMinutes: 0, isDayOff: true }, { weekday: 3, availableMinutes: 0, isDayOff: true }, { weekday: 4, availableMinutes: 0, isDayOff: true }, { weekday: 5, availableMinutes: 0, isDayOff: true }, { weekday: 6, availableMinutes: 0, isDayOff: true }],
+        topics: [{ normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.stable-angina-pectoris', uworldRemainingQuestions: 20, alreadyCompletedLearningPercentage: 0, alreadyCompletedQuestionCount: 0 }],
+        acceptOverload: false,
+        clientRequestId: 'req-002',
+      }, { headers: { 'Idempotency-Key': 'req-002' } })
+      expect(res.status).toBe(422)
+      const body = await res.json()
+      expect(body.error.code).toBe('PLAN_INFEASIBLE')
+    })
+  })
+
+  describe('POST /api/rotation-planner/plans/preview', () => {
+    it('returns 400 when body is invalid', async () => {
+      const res = await postFetch('/api/rotation-planner/plans/preview', {})
+      expect(res.status).toBe(400)
+    })
+
+    it('does not require idempotency key', async () => {
+      const res = await postFetch('/api/rotation-planner/plans/preview', {
+        sourceId: 'step-up-medicine-6e-2024',
+        rotationId: 'cardiology',
+        startDate: '2026-01-05',
+        endDate: '2026-01-11',
+        studyStyle: 'active',
+        schedulingMode: 'efficient',
+        questionStartRule: 'next_available_day',
+        availability: Array.from({ length: 7 }, (_, i) => ({ weekday: i, availableMinutes: 120, isDayOff: false })),
+        topics: [{ normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.stable-angina-pectoris', uworldRemainingQuestions: 20, alreadyCompletedLearningPercentage: 0, alreadyCompletedQuestionCount: 0 }],
+      })
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body).toHaveProperty('previewToken')
+      expect(body).toHaveProperty('tasks')
+    })
+  })
+
+  describe('GET /api/rotation-planner/plans (list)', () => {
+    it('returns 200 with empty array for new user', async () => {
+      const res = await fetch('/api/rotation-planner/plans')
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(Array.isArray(body)).toBe(true)
+    })
+  })
+
+  describe('GET/DELETE /api/rotation-planner/plans/:planId', () => {
+    it('GET returns 404 for nonexistent plan', async () => {
+      const res = await fetch('/api/rotation-planner/plans/nonexistent-id')
+      expect(res.status).toBe(404)
+    })
+
+    it('DELETE returns 404 for nonexistent plan', async () => {
+      const res = await deleteFetch('/api/rotation-planner/plans/nonexistent-id')
+      expect(res.status).toBe(404)
+    })
+  })
+})

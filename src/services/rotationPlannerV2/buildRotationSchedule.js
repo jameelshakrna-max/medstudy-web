@@ -32,6 +32,7 @@ function initTopicStates(topics, resolvedMinutes) {
     const t = topics[i]
     const remaining = resolvedMinutes[i]
     states[t.canonicalTopicId] = {
+      normalizedTopicId: t.normalizedTopicId || null,
       canonicalTopicId: t.canonicalTopicId,
       sourceTopicId: t.sourceTopicId,
       title: t.title,

@@ -50,7 +50,7 @@ export function scheduleUworldTasks({
     tasks.push({
       taskDate: dayDate,
       taskType: 'uworld_questions',
-      normalizedTopicId: null,
+      normalizedTopicId: topic.normalizedTopicId || null,
       canonicalTopicId: topic.canonicalTopicId,
       estimatedMinutes: minutesConsumed,
       targetCount: questionsToday,
@@ -117,7 +117,7 @@ export function scheduleIncorrectReview({
     tasks.push({
       taskDate: dayDate,
       taskType: 'incorrect_review',
-      normalizedTopicId: null,
+      normalizedTopicId: topic.normalizedTopicId || null,
       canonicalTopicId: topic.canonicalTopicId,
       estimatedMinutes: minutesConsumed,
       targetCount: questionsToday,

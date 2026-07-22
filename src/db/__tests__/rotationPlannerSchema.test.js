@@ -173,8 +173,8 @@ describe('Migration 13 — CHECK constraints accept valid values', () => {
   it('accepts all valid topic statuses', () => {
     for (const status of TOPIC_STATUSES) {
       const r = runSafe(
-        `INSERT INTO ${PLANNER_TABLES.topics} (id, plan_id, canonical_topic_id, topic_title, status)
-         VALUES ('topic-${status}', '${planId}', 'cardiology-${status}', 'Cardiology ${status}', '${status}')`
+        `INSERT INTO ${PLANNER_TABLES.topics} (id, plan_id, normalized_topic_id, canonical_topic_id, topic_title, status)
+         VALUES ('topic-${status}', '${planId}', 'test-source::cardiology-${status}', 'cardiology-${status}', 'Cardiology ${status}', '${status}')`
       )
       expect(r.ok).toBe(true)
     }
@@ -231,8 +231,8 @@ describe('Migration 13 — CHECK constraints reject invalid values', () => {
 
   it('rejects invalid topic status', () => {
     const r = runSafe(
-      `INSERT INTO ${PLANNER_TABLES.topics} (id, plan_id, canonical_topic_id, topic_title, status)
-       VALUES ('topic-bad', 'plan-check-1', 'cardio', 'Cardiology', 'invalid_status')`
+      `INSERT INTO ${PLANNER_TABLES.topics} (id, plan_id, normalized_topic_id, canonical_topic_id, topic_title, status)
+       VALUES ('topic-bad', 'plan-check-1', 'step-up::cardio', 'cardio', 'Cardiology', 'invalid_status')`
     )
     expect(r.ok).toBe(false)
   })
@@ -296,16 +296,49 @@ describe('Migration 13 — unique constraints', () => {
     expect(r.ok).toBe(false)
   })
 
-  it('enforces unique (plan_id, canonical_topic_id) in topics', () => {
+  it('enforces unique (plan_id, normalized_topic_id) in topics', () => {
     db.run(
-      `INSERT INTO ${PLANNER_TABLES.topics} (id, plan_id, canonical_topic_id, topic_title)
-       VALUES ('topic-1', '${planId}', 'cardiology', 'Cardiology')`
+      `INSERT INTO ${PLANNER_TABLES.topics} (id, plan_id, normalized_topic_id, canonical_topic_id, topic_title)
+       VALUES ('topic-1', '${planId}', 'step-up::cardiology', 'cardiology', 'Cardiology')`
     )
     const r = runSafe(
-      `INSERT INTO ${PLANNER_TABLES.topics} (id, plan_id, canonical_topic_id, topic_title)
-       VALUES ('topic-2', '${planId}', 'cardiology', 'Cardiology Again')`
+      `INSERT INTO ${PLANNER_TABLES.topics} (id, plan_id, normalized_topic_id, canonical_topic_id, topic_title)
+       VALUES ('topic-2', '${planId}', 'step-up::cardiology', 'cardiology', 'Cardiology Again')`
     )
     expect(r.ok).toBe(false)
+  })
+
+  it('allows same canonical_topic_id with different normalized_topic_id', () => {
+    const r = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.topics} (id, plan_id, normalized_topic_id, canonical_topic_id, topic_title)
+       VALUES ('topic-3', '${planId}', 'essentials::cardiology', 'cardiology', 'Cardiology via Essentials')`
+    )
+    expect(r.ok).toBe(true)
+  })
+
+  it('enforces unique (user_id, client_request_id) partial index on plans', () => {
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id)
+       VALUES ('plan-idem-1', 'u-idem', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'req-key-1')`
+    )
+    const r = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id)
+       VALUES ('plan-idem-2', 'u-idem', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'req-key-1')`
+    )
+    expect(r.ok).toBe(false)
+  })
+
+  it('allows NULL client_request_id without conflict', () => {
+    const r1 = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date)
+       VALUES ('plan-idem-null-1', 'u-idem2', 'cardiology', 'step-up', '2026-01-01', '2026-04-01')`
+    )
+    const r2 = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date)
+       VALUES ('plan-idem-null-2', 'u-idem2', 'cardiology', 'step-up', '2026-01-01', '2026-04-01')`
+    )
+    expect(r1.ok).toBe(true)
+    expect(r2.ok).toBe(true)
   })
 })
 
@@ -318,6 +351,7 @@ describe('Migration 13 — indexes', () => {
     expect(indexes).toContain('idx_rpp_user')
     expect(indexes).toContain('idx_rpp_status')
     expect(indexes).toContain('idx_rpp_rotation')
+    expect(indexes).toContain('idx_rpp_idempotency')
   })
 
   it('creates indexes on rotation_planner_availability', () => {
@@ -329,7 +363,8 @@ describe('Migration 13 — indexes', () => {
     const indexes = getIndexes(PLANNER_TABLES.topics)
     expect(indexes).toContain('idx_rpt_plan')
     expect(indexes).toContain('idx_rpt_status')
-    expect(indexes).toContain('idx_rpt_canonical')
+    expect(indexes).toContain('idx_rpt_normalized')
+    expect(indexes).toContain('idx_rpt_shared_key')
   })
 
   it('creates indexes on rotation_planner_daily_tasks', () => {
@@ -409,8 +444,8 @@ describe('Migration 13 — cascade delete', () => {
       [cascadePlanId]
     )
     db.run(
-      `INSERT INTO ${PLANNER_TABLES.topics} (id, plan_id, canonical_topic_id, topic_title)
-       VALUES ('topic-cascade', ?, 'cardiology', 'Cardiology')`,
+      `INSERT INTO ${PLANNER_TABLES.topics} (id, plan_id, normalized_topic_id, canonical_topic_id, topic_title)
+       VALUES ('topic-cascade', ?, 'step-up::cardiology', 'cardiology', 'Cardiology')`,
       [cascadePlanId]
     )
     db.run(
@@ -463,8 +498,8 @@ describe('Migration 13 — SET NULL on topic deletion', () => {
       [setNullPlanId]
     )
     db.run(
-      `INSERT INTO ${PLANNER_TABLES.topics} (id, plan_id, canonical_topic_id, topic_title)
-       VALUES ('topic-setnull', ?, 'cardiology', 'Cardiology')`,
+      `INSERT INTO ${PLANNER_TABLES.topics} (id, plan_id, normalized_topic_id, canonical_topic_id, topic_title)
+       VALUES ('topic-setnull', ?, 'step-up::cardiology', 'cardiology', 'Cardiology')`,
       [setNullPlanId]
     )
     db.run(

@@ -59,13 +59,15 @@ export const ALL_PLANNER_COLUMNS = {
     'preferred_questions_per_day', 'minimum_questions_per_session',
     'maximum_questions_per_day', 'average_minutes_per_question',
     'buffer_percentage', 'maximum_active_topics',
-    'status', 'settings_json', 'created_at', 'updated_at',
+    'status', 'client_request_id', 'request_fingerprint',
+    'settings_json', 'created_at', 'updated_at',
   ],
   availability: [
     'id', 'plan_id', 'weekday', 'available_minutes', 'is_day_off',
   ],
   topics: [
-    'id', 'plan_id', 'canonical_topic_id', 'source_topic_id',
+    'id', 'plan_id', 'normalized_topic_id', 'canonical_topic_id',
+    'source_topic_id', 'shared_topic_key',
     'topic_title', 'group_id',
     'base_learning_minutes', 'personalized_learning_minutes',
     'total_uworld_questions', 'completed_uworld_questions',

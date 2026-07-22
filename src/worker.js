@@ -119,6 +119,11 @@ import {
   getPlannerSourceRotations, getPlannerSourceRotationTopics,
 } from './handlers/rotationPlanner.js'
 
+import {
+  handlePreviewRotationPlan, handleCreateRotationPlan,
+  handleListRotationPlans, handleGetRotationPlan, handleDeleteRotationPlan,
+} from './handlers/rotationPlannerPlans.js'
+
 function ensureCORS(response) {
   const h = response.headers
   if (!h.get('access-control-allow-origin')) {
@@ -552,6 +557,13 @@ export default {
       if (path.match(/^\/api\/rotation-planner\/sources\/[^\/]+\/rotations$/) && request.method === 'GET') return getPlannerSourceRotations(request, env, user)
       if (path === '/api/rotation-planner/sources' && request.method === 'GET') return getPlannerSources(request, env, user)
       if (path === '/api/rotation-planner/rotations' && request.method === 'GET') return getPlannerRotations(request, env, user)
+
+      // ── Rotation Planner (plans) ──
+      if (path === '/api/rotation-planner/plans/preview' && request.method === 'POST') return handlePreviewRotationPlan(request, env, user)
+      if (path === '/api/rotation-planner/plans' && request.method === 'POST') return handleCreateRotationPlan(request, env, user)
+      if (path === '/api/rotation-planner/plans' && request.method === 'GET') return handleListRotationPlans(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'GET') return handleGetRotationPlan(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteRotationPlan(request, env, user)
 
       return json({ error: 'Not found' }, 404)
     } catch (err) {
