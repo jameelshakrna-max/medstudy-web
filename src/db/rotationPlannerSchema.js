@@ -9,11 +9,11 @@ export const PLANNER_TABLES = {
 
 export const PLAN_STATUSES = ['draft', 'active', 'paused', 'completed', 'archived']
 
-export const STUDY_STYLES = ['active', 'passive', 'mixed']
+export const STUDY_STYLES = ['focused', 'active', 'detailed_notes']
 
-export const SCHEDULING_MODES = ['efficient', 'balanced', 'relaxed']
+export const SCHEDULING_MODES = ['focused', 'efficient']
 
-export const QUESTION_START_RULES = ['learning_first', 'mixed', 'questions_only']
+export const QUESTION_START_RULES = ['next_available_day', 'same_day_if_capacity']
 
 export const TOPIC_STATUSES = [
   'not_started',

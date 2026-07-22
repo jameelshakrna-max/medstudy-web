@@ -17,11 +17,11 @@ CREATE TABLE IF NOT EXISTS rotation_planner_plans (
   end_date TEXT NOT NULL,
   exam_date TEXT,
   study_style TEXT DEFAULT 'active'
-    CHECK (study_style IN ('active', 'passive', 'mixed')),
+    CHECK (study_style IN ('focused', 'active', 'detailed_notes')),
   scheduling_mode TEXT DEFAULT 'efficient'
-    CHECK (scheduling_mode IN ('efficient', 'balanced', 'relaxed')),
-  question_start_rule TEXT DEFAULT 'learning_first'
-    CHECK (question_start_rule IN ('learning_first', 'mixed', 'questions_only')),
+    CHECK (scheduling_mode IN ('focused', 'efficient')),
+  question_start_rule TEXT DEFAULT 'next_available_day'
+    CHECK (question_start_rule IN ('next_available_day', 'same_day_if_capacity')),
   preferred_questions_per_day INTEGER DEFAULT 30,
   minimum_questions_per_session INTEGER DEFAULT 10,
   maximum_questions_per_day INTEGER DEFAULT 50,
