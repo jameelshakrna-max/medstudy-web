@@ -124,8 +124,8 @@ describe('Migration 13 — CHECK constraints accept valid values', () => {
 
   beforeAll(() => {
     db.run(
-      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date)
-       VALUES (?, 'u1', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01')`,
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES (?, 'u1', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-check-1', 'fp-check-1')`,
       [planId]
     )
   })
@@ -133,8 +133,8 @@ describe('Migration 13 — CHECK constraints accept valid values', () => {
   it('accepts all valid plan statuses', () => {
     for (const status of PLAN_STATUSES) {
       const r = runSafe(
-        `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, status)
-         VALUES ('plan-${status}', 'u1', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', '${status}')`
+        `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint, status)
+         VALUES ('plan-${status}', 'u1', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-status-${status}', 'fp-status-${status}', '${status}')`
       )
       expect(r.ok).toBe(true)
     }
@@ -143,8 +143,8 @@ describe('Migration 13 — CHECK constraints accept valid values', () => {
   it('accepts all valid study_style values', () => {
     for (const style of STUDY_STYLES) {
       const r = runSafe(
-        `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, study_style)
-         VALUES ('plan-style-${style}', 'u1', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', '${style}')`
+        `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint, study_style)
+         VALUES ('plan-style-${style}', 'u1', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-style-${style}', 'fp-style-${style}', '${style}')`
       )
       expect(r.ok).toBe(true)
     }
@@ -153,8 +153,8 @@ describe('Migration 13 — CHECK constraints accept valid values', () => {
   it('accepts all valid scheduling_mode values', () => {
     for (const mode of SCHEDULING_MODES) {
       const r = runSafe(
-        `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, scheduling_mode)
-         VALUES ('plan-mode-${mode}', 'u1', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', '${mode}')`
+        `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint, scheduling_mode)
+         VALUES ('plan-mode-${mode}', 'u1', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-mode-${mode}', 'fp-mode-${mode}', '${mode}')`
       )
       expect(r.ok).toBe(true)
     }
@@ -163,8 +163,8 @@ describe('Migration 13 — CHECK constraints accept valid values', () => {
   it('accepts all valid question_start_rule values', () => {
     for (const rule of QUESTION_START_RULES) {
       const r = runSafe(
-        `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, question_start_rule)
-         VALUES ('plan-rule-${rule}', 'u1', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', '${rule}')`
+        `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint, question_start_rule)
+         VALUES ('plan-rule-${rule}', 'u1', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-rule-${rule}', 'fp-rule-${rule}', '${rule}')`
       )
       expect(r.ok).toBe(true)
     }
@@ -207,24 +207,24 @@ describe('Migration 13 — CHECK constraints accept valid values', () => {
 describe('Migration 13 — CHECK constraints reject invalid values', () => {
   it('rejects invalid plan status', () => {
     const r = runSafe(
-      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, status)
-       VALUES ('plan-bad', 'u1', 'im', 'step-up', '2026-01-01', '2026-04-01', 'invalid_status')`
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint, status)
+       VALUES ('plan-bad', 'u1', 'im', 'step-up', '2026-01-01', '2026-04-01', 'req-bad', 'fp-bad', 'invalid_status')`
     )
     expect(r.ok).toBe(false)
   })
 
   it('rejects invalid study_style', () => {
     const r = runSafe(
-      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, study_style)
-       VALUES ('plan-bad2', 'u1', 'im', 'step-up', '2026-01-01', '2026-04-01', 'turbo')`
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint, study_style)
+       VALUES ('plan-bad2', 'u1', 'im', 'step-up', '2026-01-01', '2026-04-01', 'req-bad2', 'fp-bad2', 'turbo')`
     )
     expect(r.ok).toBe(false)
   })
 
   it('rejects invalid scheduling_mode', () => {
     const r = runSafe(
-      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, scheduling_mode)
-       VALUES ('plan-bad3', 'u1', 'im', 'step-up', '2026-01-01', '2026-04-01', 'turbo')`
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint, scheduling_mode)
+       VALUES ('plan-bad3', 'u1', 'im', 'step-up', '2026-01-01', '2026-04-01', 'req-bad3', 'fp-bad3', 'turbo')`
     )
     expect(r.ok).toBe(false)
   })
@@ -278,8 +278,8 @@ describe('Migration 13 — unique constraints', () => {
 
   beforeAll(() => {
     db.run(
-      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date)
-       VALUES (?, 'u1', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01')`,
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES (?, 'u1', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-uniq-1', 'fp-uniq-1')`,
       [planId]
     )
   })
@@ -316,29 +316,46 @@ describe('Migration 13 — unique constraints', () => {
     expect(r.ok).toBe(true)
   })
 
-  it('enforces unique (user_id, client_request_id) partial index on plans', () => {
+  it('enforces unique (user_id, client_request_id) index on plans', () => {
     db.run(
-      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id)
-       VALUES ('plan-idem-1', 'u-idem', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'req-key-1')`
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES ('plan-idem-1', 'u-idem', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'req-key-1', 'fp-key-1')`
     )
     const r = runSafe(
-      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id)
-       VALUES ('plan-idem-2', 'u-idem', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'req-key-1')`
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES ('plan-idem-2', 'u-idem', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'req-key-1', 'fp-key-dup')`
     )
     expect(r.ok).toBe(false)
   })
 
-  it('allows NULL client_request_id without conflict', () => {
-    const r1 = runSafe(
-      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date)
-       VALUES ('plan-idem-null-1', 'u-idem2', 'cardiology', 'step-up', '2026-01-01', '2026-04-01')`
+  it('rejects NULL client_request_id', () => {
+    const r = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, request_fingerprint)
+       VALUES ('plan-null-crid', 'u-null-test', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'fp-value')`
     )
-    const r2 = runSafe(
-      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date)
-       VALUES ('plan-idem-null-2', 'u-idem2', 'cardiology', 'step-up', '2026-01-01', '2026-04-01')`
+    expect(r.ok).toBe(false)
+    expect(r.error).toContain('NOT NULL')
+  })
+
+  it('rejects NULL request_fingerprint', () => {
+    const r = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id)
+       VALUES ('plan-null-rfp', 'u-null-test', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'req-key-nf')`
     )
-    expect(r1.ok).toBe(true)
-    expect(r2.ok).toBe(true)
+    expect(r.ok).toBe(false)
+    expect(r.error).toContain('NOT NULL')
+  })
+
+  it('allows same key for different users', () => {
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES ('plan-shared-key-1', 'u-shared-1', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'shared-key', 'fp-1')`
+    )
+    const r = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES ('plan-shared-key-2', 'u-shared-2', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'shared-key', 'fp-2')`
+    )
+    expect(r.ok).toBe(true)
   })
 })
 
@@ -434,8 +451,8 @@ describe('Migration 13 — cascade delete', () => {
   beforeAll(() => {
     cascadePlanId = 'plan-cascade-' + Date.now()
     db.run(
-      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date)
-       VALUES (?, 'u-cascade', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01')`,
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES (?, 'u-cascade', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-cascade', 'fp-cascade')`,
       [cascadePlanId]
     )
     db.run(
@@ -493,8 +510,8 @@ describe('Migration 13 — SET NULL on topic deletion', () => {
   beforeAll(() => {
     setNullPlanId = 'plan-setnull-' + Date.now()
     db.run(
-      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date)
-       VALUES (?, 'u-setnull', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01')`,
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES (?, 'u-setnull', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-setnull', 'fp-setnull')`,
       [setNullPlanId]
     )
     db.run(

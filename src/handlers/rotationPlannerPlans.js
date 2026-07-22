@@ -4,6 +4,7 @@ import {
   parseAndValidatePlanRequest,
   resolveTopicsFromRegistry,
   generatePlanPreview,
+  calculateScheduleFingerprint,
   calculateRequestFingerprint,
   checkIdempotency,
   persistPlanBatch,
@@ -34,7 +35,7 @@ export async function handlePreviewRotationPlan(request, env, user) {
     }
 
     const { preview, sourceVersion } = generatePlanPreview(resolvedTopics, validation.parsed)
-    const fingerprint = await calculateRequestFingerprint(user.sub, { ...validation.parsed, sourceVersion })
+    const fingerprint = await calculateScheduleFingerprint(user.sub, { ...validation.parsed, sourceVersion })
 
     return json({
       previewToken: fingerprint,
@@ -68,15 +69,16 @@ export async function handleCreateRotationPlan(request, env, user) {
     }
 
     const { preview, sourceVersion, config } = generatePlanPreview(resolvedTopics, validation.parsed)
-    const fingerprint = await calculateRequestFingerprint(user.sub, { ...validation.parsed, sourceVersion })
+    const scheduleFingerprint = await calculateScheduleFingerprint(user.sub, { ...validation.parsed, sourceVersion })
+    const requestFingerprint = await calculateRequestFingerprint(user.sub, { ...validation.parsed, sourceVersion })
 
-    if (validation.parsed.previewToken && validation.parsed.previewToken !== fingerprint) {
+    if (validation.parsed.previewToken && validation.parsed.previewToken !== scheduleFingerprint) {
       return errorResponse('PREVIEW_STALE', 'previewToken does not match current input. Regenerate preview.', 409)
     }
 
     const idemCheck = await checkIdempotency(env, user.sub, validation.parsed.clientRequestId)
     if (idemCheck.status === 'found') {
-      if (idemCheck.existingFingerprint === fingerprint) {
+      if (idemCheck.existingFingerprint === requestFingerprint) {
         const existing = await loadPlanFromDb(env, idemCheck.existingPlanId, user.sub)
         return json(existing)
       }
@@ -99,7 +101,7 @@ export async function handleCreateRotationPlan(request, env, user) {
 
     const { planId } = await persistPlanBatch(
       env, user.sub, validation.parsed, resolvedTopics, preview,
-      validation.parsed.clientRequestId, fingerprint
+      validation.parsed.clientRequestId, requestFingerprint
     )
 
     const plan = await loadPlanFromDb(env, planId, user.sub)

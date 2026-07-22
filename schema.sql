@@ -1064,15 +1064,14 @@ CREATE TABLE IF NOT EXISTS rotation_planner_plans (
   maximum_active_topics INTEGER DEFAULT 5,
   status TEXT DEFAULT 'draft'
     CHECK (status IN ('draft', 'active', 'paused', 'completed', 'archived')),
-  client_request_id TEXT,
-  request_fingerprint TEXT,
+  client_request_id TEXT NOT NULL,
+  request_fingerprint TEXT NOT NULL,
   settings_json TEXT DEFAULT '{}',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_rpp_idempotency
-  ON rotation_planner_plans(user_id, client_request_id)
-  WHERE client_request_id IS NOT NULL;
+  ON rotation_planner_plans(user_id, client_request_id);
 CREATE INDEX IF NOT EXISTS idx_rpp_user ON rotation_planner_plans(user_id);
 CREATE INDEX IF NOT EXISTS idx_rpp_status ON rotation_planner_plans(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_rpp_rotation ON rotation_planner_plans(user_id, rotation_id);

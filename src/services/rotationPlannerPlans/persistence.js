@@ -222,7 +222,7 @@ export async function loadPlanSummaries(env, userId) {
 
   const summaries = []
   for (const row of planRows) {
-    const planId = row[0]
+    const planId = row.id
 
     const { results: topicCounts } = await env.DB.prepare(
       'SELECT COUNT(*) as total, SUM(CASE WHEN status = \'completed\' THEN 1 ELSE 0 END) as completed FROM rotation_planner_topics WHERE plan_id = ?'
@@ -232,14 +232,14 @@ export async function loadPlanSummaries(env, userId) {
       'SELECT COUNT(*) as total, SUM(CASE WHEN status = \'completed\' THEN 1 ELSE 0 END) as completed FROM rotation_planner_daily_tasks WHERE plan_id = ?'
     ).bind(planId).all()
 
-    const source = getStudySource(row[3])
-    const sourceTitle = source?.title || row[3]
+    const source = getStudySource(row.source_id)
+    const sourceTitle = source?.title || row.source_id
 
     summaries.push(mapPlanSummaryDto(row, sourceTitle, {
-      topicCount: topicCounts[0]?.[0] ?? 0,
-      completedTopicCount: topicCounts[0]?.[1] ?? 0,
-      taskCount: taskCounts[0]?.[0] ?? 0,
-      completedTaskCount: taskCounts[0]?.[1] ?? 0,
+      topicCount: topicCounts[0]?.total ?? 0,
+      completedTopicCount: topicCounts[0]?.completed ?? 0,
+      taskCount: taskCounts[0]?.total ?? 0,
+      completedTaskCount: taskCounts[0]?.completed ?? 0,
     }))
   }
 

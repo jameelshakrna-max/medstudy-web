@@ -263,5 +263,15 @@ describe('Worker route dispatch — rotation planner plans', () => {
       const res = await deleteFetch('/api/rotation-planner/plans/nonexistent-id')
       expect(res.status).toBe(404)
     })
+
+    it('GET /plans/preview is not treated as a planId', async () => {
+      const res = await fetch('/api/rotation-planner/plans/preview')
+      expect(res.status).toBe(404)
+    })
+
+    it('DELETE /plans/preview is not treated as a planId', async () => {
+      const res = await deleteFetch('/api/rotation-planner/plans/preview')
+      expect(res.status).toBe(404)
+    })
   })
 })

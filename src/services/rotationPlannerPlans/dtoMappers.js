@@ -34,7 +34,8 @@ function toCamelCase(snakeStr) {
 function mapRow(row, columns) {
   const result = {}
   for (let i = 0; i < columns.length; i++) {
-    result[toCamelCase(columns[i])] = row[i]
+    const col = columns[i]
+    result[toCamelCase(col)] = row[col] ?? row[i] ?? null
   }
   return result
 }
