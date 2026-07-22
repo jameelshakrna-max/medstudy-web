@@ -114,6 +114,11 @@ import {
   handleActivatePlan, handleFlashcardSummary,
 } from './handlers/rotations.js'
 
+import {
+  getPlannerRotations, getPlannerSources,
+  getPlannerSourceRotations, getPlannerSourceRotationTopics,
+} from './handlers/rotationPlanner.js'
+
 function ensureCORS(response) {
   const h = response.headers
   if (!h.get('access-control-allow-origin')) {
@@ -541,6 +546,13 @@ export default {
       if (path.match(/^\/api\/rotations\/schedule\/[^\/]+$/) && request.method === 'PUT') return handleUpdateEntry(request, env, user)
       if (path.match(/^\/api\/rotations\/progress\/[^\/]+$/) && request.method === 'PUT') return handleUpdateProgress(request, env, user)
       if (path === '/api/rotations/flashcard-summary' && request.method === 'GET') return handleFlashcardSummary(request, env, user)
+
+      // ── Rotation Planner (read-only) ──
+      if (path.match(/^\/api\/rotation-planner\/sources\/[^\/]+\/rotations\/[^\/]+\/topics$/) && request.method === 'GET') return getPlannerSourceRotationTopics(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/sources\/[^\/]+\/rotations$/) && request.method === 'GET') return getPlannerSourceRotations(request, env, user)
+      if (path === '/api/rotation-planner/sources' && request.method === 'GET') return getPlannerSources(request, env, user)
+      if (path === '/api/rotation-planner/rotations' && request.method === 'GET') return getPlannerRotations(request, env, user)
+
       return json({ error: 'Not found' }, 404)
     } catch (err) {
       console.error(`[${requestId}]`, err)
