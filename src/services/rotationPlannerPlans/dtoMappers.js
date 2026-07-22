@@ -6,6 +6,7 @@ const PLAN_SUMMARY_COLUMNS = [
   'maximum_questions_per_day', 'average_minutes_per_question',
   'buffer_percentage', 'maximum_active_topics',
   'status', 'settings_json', 'created_at', 'updated_at',
+  'revision', 'last_recalculated_at',
 ]
 
 const PLAN_NESTED_COLUMNS = [...PLAN_SUMMARY_COLUMNS]
@@ -18,6 +19,7 @@ const TOPIC_COLUMNS = [
   'total_uworld_questions', 'completed_uworld_questions',
   'learning_completed_at', 'questions_unlocked_at',
   'status', 'mastery_score', 'display_order',
+  'incorrect_questions_remaining',
 ]
 const TASK_COLUMNS = [
   'id', 'plan_id', 'plan_topic_id', 'task_date', 'task_type',
@@ -25,6 +27,7 @@ const TASK_COLUMNS = [
   'target_count', 'completed_count', 'mode', 'question_pool',
   'status', 'unlock_condition', 'display_order',
   'metadata_json', 'created_at', 'updated_at',
+  'completion_percentage', 'incorrect_count', 'completed_at', 'completed_on',
 ]
 
 function toCamelCase(snakeStr) {

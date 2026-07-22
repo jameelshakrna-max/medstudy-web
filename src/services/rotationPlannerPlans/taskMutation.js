@@ -87,7 +87,7 @@ export async function checkTaskIdempotency(env, userId, clientRequestId) {
   return {
     status: 'found',
     existingFingerprint: row.request_fingerprint,
-    resultJson: row.result_json,
+    existingResult: typeof row.result_json === 'string' ? JSON.parse(row.result_json) : row.result_json,
   }
 }
 

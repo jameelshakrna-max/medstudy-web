@@ -26,12 +26,12 @@ function buildDayAvailabilityMap(dates, availabilityByWeekday, blockedDates) {
   return map
 }
 
-function initTopicStates(topics, resolvedMinutes) {
+function initTopicStates(topics, resolvedMinutes, initialTopicStates) {
   const states = {}
   for (let i = 0; i < topics.length; i++) {
     const t = topics[i]
     const remaining = resolvedMinutes[i]
-    states[t.canonicalTopicId] = {
+    const base = {
       normalizedTopicId: t.normalizedTopicId || null,
       canonicalTopicId: t.canonicalTopicId,
       sourceTopicId: t.sourceTopicId,
@@ -49,6 +49,17 @@ function initTopicStates(topics, resolvedMinutes) {
       isPrimarySharedUnit: t.isPrimarySharedUnit !== false,
       incorrectQuestionsRemaining: t.incorrectQuestionsRemaining || 0,
     }
+    if (initialTopicStates && initialTopicStates[t.canonicalTopicId]) {
+      const init = initialTopicStates[t.canonicalTopicId]
+      base.completedUworldQuestions = init.completedUworldQuestions ?? base.completedUworldQuestions
+      base.remainingUworldQuestions = init.remainingUworldQuestions ?? base.remainingUworldQuestions
+      base.learningCompletedAt = init.learningCompletedAt ?? base.learningCompletedAt
+      base.questionsUnlockedAt = init.questionsUnlockedAt ?? base.questionsUnlockedAt
+      base.status = init.status ?? base.status
+      base.incorrectQuestionsRemaining = init.incorrectQuestionsRemaining ?? base.incorrectQuestionsRemaining
+      base.personalizedLearningMinutes = init.personalizedLearningMinutes ?? base.personalizedLearningMinutes
+    }
+    states[t.canonicalTopicId] = base
   }
   return states
 }
@@ -115,7 +126,7 @@ export function buildRotationSchedule(planConfig, options = {}) {
     return resolveTopicLearningMinutes(t, studyStyle, pace)
   })
 
-  const topicStates = initTopicStates(orderedTopics, resolvedMinutes)
+  const topicStates = initTopicStates(orderedTopics, resolvedMinutes, options.initialTopicStates)
 
   const examReviewWindowDays = planConfig.examReviewWindowDays || 0
   const mixedReviewQPd = planConfig.mixedReviewQuestionsPerDay || 0
@@ -126,6 +137,7 @@ export function buildRotationSchedule(planConfig, options = {}) {
   for (const dateStr of dates) {
     const avail = dayAvailability.get(dateStr)
     if (avail.isDayOff || avail.isBlocked) continue
+    if (options.scheduleStartDate && dateStr < options.scheduleStartDate) continue
 
     const capacity = calculateDailyCapacity({
       availableMinutes: avail.availableMinutes,
@@ -154,6 +166,10 @@ export function buildRotationSchedule(planConfig, options = {}) {
     }
 
     let remainingMinutes = capacity.usableMinutes
+
+    if (options.reservedMinutesByDate && options.reservedMinutesByDate[dateStr]) {
+      remainingMinutes = Math.max(0, remainingMinutes - options.reservedMinutesByDate[dateStr])
+    }
 
     const topicsForLearning = getTopicsNeedingLearning(orderedTopics, topicStates)
     if (topicsForLearning.length > 0 && remainingMinutes > 0) {
@@ -260,4 +276,28 @@ export function buildRotationSchedule(planConfig, options = {}) {
     feasibility,
     deduplicationLog,
   }
+}
+
+export function mergeTopicProgress(existingDbTopics, schedulerTopicStates) {
+  const merged = {}
+  for (const dbTopic of existingDbTopics) {
+    const id = dbTopic.canonicalTopicId
+    if (!id) continue
+    merged[id] = { ...dbTopic }
+  }
+  for (const sched of schedulerTopicStates) {
+    const id = sched.canonicalTopicId
+    if (!id) continue
+    if (!merged[id]) {
+      merged[id] = { ...sched }
+    } else {
+      merged[id] = {
+        ...merged[id],
+        ...sched,
+        learningCompletedAt: merged[id].learningCompletedAt || sched.learningCompletedAt,
+        questionsUnlockedAt: merged[id].questionsUnlockedAt || sched.questionsUnlockedAt,
+      }
+    }
+  }
+  return merged
 }

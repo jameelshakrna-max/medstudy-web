@@ -6,6 +6,8 @@ import {
   handleListRotationPlans,
   handleGetRotationPlan,
   handleDeleteRotationPlan,
+  handleUpdateTask,
+  handleRecalculatePlan,
 } from '../rotationPlannerPlans.js'
 
 const USER_A = { sub: 'user-a', email: 'a@test.local', role: 'authenticated' }
@@ -72,6 +74,22 @@ async function getPlan(planId, user = USER_A) {
 async function deletePlan(planId, user = USER_A) {
   const req = makeRequest(`/api/rotation-planner/plans/${planId}`, { method: 'DELETE' })
   return handleDeleteRotationPlan(req, { DB: db }, user)
+}
+
+async function patchTask(planId, taskId, body, user = USER_A) {
+  const req = makeRequest(`/api/rotation-planner/plans/${planId}/tasks/${taskId}`, {
+    method: 'PATCH',
+    body,
+  })
+  return handleUpdateTask(req, { DB: db }, user)
+}
+
+async function recalculate(planId, body, user = USER_A) {
+  const req = makeRequest(`/api/rotation-planner/plans/${planId}/recalculate`, {
+    method: 'POST',
+    body,
+  })
+  return handleRecalculatePlan(req, { DB: db }, user)
 }
 
 function makeBody(overrides = {}) {
@@ -273,5 +291,126 @@ describe('Validation', () => {
     const req = makeRequest('/api/rotation-planner/plans', { method: 'POST', body: VALID_BODY })
     const res = await handleCreateRotationPlan(req, { DB: db }, USER_A)
     expect(res.status).toBe(400)
+  })
+})
+
+// ─── PATCH /plans/:planId/tasks/:taskId ───
+describe('handleUpdateTask', () => {
+  async function createPlanAndGetFirstTask(user = USER_A) {
+    const createRes = await createPlan(makeBody(), user)
+    expect(createRes.status).toBe(201)
+    const planBody = await createRes.json()
+    const planId = planBody.plan.id
+    const taskId = planBody.tasks[0].id
+    return { planId, taskId }
+  }
+
+  it('returns 400 for missing action', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, { payload: {} })
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('returns 400 for invalid action', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, { action: 'nonexistent_action' })
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('returns 404 for nonexistent plan', async () => {
+    const res = await patchTask('nonexistent-plan', 'nonexistent-task', { action: 'start' })
+    expect(res.status).toBe(404)
+    const body = await res.json()
+    expect(body.error.code).toBe('PLAN_NOT_FOUND')
+  })
+
+  it('returns 404 for nonexistent task', async () => {
+    const { planId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, 'nonexistent-task', { action: 'start' })
+    expect(res.status).toBe(404)
+    const body = await res.json()
+    expect(body.error.code).toBe('TASK_NOT_FOUND')
+  })
+
+  it('successfully starts a pending task', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, { action: 'start' })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.taskId).toBe(taskId)
+    expect(body.action).toBe('start')
+    expect(body.status).toBe('in_progress')
+  })
+
+  it('successfully completes a pending task', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, { action: 'complete', payload: { actualMinutes: 45 } })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.taskId).toBe(taskId)
+    expect(body.action).toBe('complete')
+    expect(body.status).toBe('completed')
+    expect(body.completedAt).toBeTruthy()
+  })
+
+  it('returns 409 for idempotency conflict', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res1 = await patchTask(planId, taskId, { action: 'start', clientRequestId: 'idem-1' })
+    expect(res1.status).toBe(200)
+
+    const res2 = await patchTask(planId, taskId, { action: 'complete', clientRequestId: 'idem-1' })
+    expect(res2.status).toBe(409)
+  })
+})
+
+// ─── POST /plans/:planId/recalculate ───
+describe('handleRecalculatePlan', () => {
+  async function createAndGetPlanId(user = USER_A) {
+    const createRes = await createPlan(makeBody(), user)
+    expect(createRes.status).toBe(201)
+    const planBody = await createRes.json()
+    return planBody.plan.id
+  }
+
+  it('returns 400 for missing recalculationDate', async () => {
+    const planId = await createAndGetPlanId()
+    const res = await recalculate(planId, {})
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('returns 404 for nonexistent plan', async () => {
+    const res = await recalculate('nonexistent-plan', { recalculationDate: '2026-01-06' })
+    expect(res.status).toBe(404)
+    const body = await res.json()
+    expect(body.error.code).toBe('PLAN_NOT_FOUND')
+  })
+
+  it('successfully recalculates a plan', async () => {
+    const planId = await createAndGetPlanId()
+    const res = await recalculate(planId, { recalculationDate: '2026-01-06' })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.planId).toBe(planId)
+    expect(body.recalculationDate).toBe('2026-01-06')
+    expect(body.revision).toBeDefined()
+    expect(body.topicStates).toBeDefined()
+  })
+
+  it('handles idempotent recalculation', async () => {
+    const planId = await createAndGetPlanId()
+    const res1 = await recalculate(planId, { recalculationDate: '2026-01-06', clientRequestId: 'recalc-idem-1' })
+    expect(res1.status).toBe(200)
+    const body1 = await res1.json()
+
+    const res2 = await recalculate(planId, { recalculationDate: '2026-01-06', clientRequestId: 'recalc-idem-1' })
+    expect(res2.status).toBe(200)
+    const body2 = await res2.json()
+    expect(body2.planId).toBe(body1.planId)
   })
 })

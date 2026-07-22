@@ -10,8 +10,14 @@ import {
   persistPlanBatch,
   loadPlanFromDb,
   loadPlanSummaries,
+  loadPlanById, loadTaskById, loadPlanRevision, updatePlanRevisionAndRecalculatedAt,
+  checkTaskIdempotency, checkPlanIdempotency,
+  classifyBatchError, buildTaskMutationBatch, executeTaskMutationBatch,
+  applyTaskUpdate, calculateTaskUpdateFingerprint,
+  recalculatePlan, buildRecalculationResult, recordSession,
+  TERMINAL_STATUSES, VALID_ACTIONS,
 } from '../services/rotationPlannerPlans/index.js'
-import { mapPlanSummaryDto, mapPlanDto, mapAvailabilityDto, mapTopicDto, mapTaskDto } from '../services/rotationPlannerPlans/dtoMappers.js'
+import { mapPlanSummaryDto, mapPlanDto, mapAvailabilityDto, mapTopicDto, mapTaskDto, mapToSnakeCase } from '../services/rotationPlannerPlans/dtoMappers.js'
 
 function errorResponse(code, message, status = 400) {
   return json({ error: { code, message } }, status)
@@ -169,5 +175,156 @@ export async function handleDeleteRotationPlan(request, env, user) {
     return json({ success: true })
   } catch (e) {
     return errorResponse('INTERNAL_ERROR', 'Failed to delete plan.', 500)
+  }
+}
+
+export async function handleUpdateTask(request, env, user) {
+  try {
+    const url = new URL(request.url)
+    const pathParts = url.pathname.split('/')
+    const taskId = pathParts[pathParts.length - 1]
+    const planId = pathParts[pathParts.length - 3]
+
+    if (!planId || !taskId) return errorResponse('VALIDATION_ERROR', 'Plan ID and Task ID are required.', 400)
+
+    const body = await request.json()
+    const { action, payload = {}, clientRequestId } = body
+
+    if (!action || !VALID_ACTIONS.has(action)) {
+      return errorResponse('VALIDATION_ERROR', `Invalid action. Must be one of: ${[...VALID_ACTIONS].join(', ')}`, 400)
+    }
+
+    const plan = await loadPlanById(env, planId, user.sub)
+    if (!plan) return errorResponse('PLAN_NOT_FOUND', 'Plan not found.', 404)
+
+    const taskRow = await loadTaskById(env, taskId)
+    if (!taskRow || taskRow.plan_id !== planId) return errorResponse('TASK_NOT_FOUND', 'Task not found.', 404)
+
+    const currentRevision = await loadPlanRevision(env, planId)
+    const occurredAt = new Date().toISOString()
+    const occurredOn = occurredAt.slice(0, 10)
+
+    const task = mapTaskDto(taskRow)
+    const { updatedTask } = applyTaskUpdate(task, action, payload, { occurredAt, occurredOn })
+
+    const fingerprint = await calculateTaskUpdateFingerprint(user.sub, taskId, action, payload)
+
+    if (clientRequestId) {
+      const idemCheck = await checkTaskIdempotency(env, user.sub, clientRequestId)
+      if (idemCheck.status === 'found') {
+        if (idemCheck.existingFingerprint === fingerprint) {
+          return json(idemCheck.existingResult)
+        }
+        return errorResponse('IDEMPOTENCY_CONFLICT', 'Same idempotency key with different input.', 409)
+      }
+    }
+
+    const resultingRevision = currentRevision + 1
+    const resultJson = {
+      taskId,
+      action,
+      status: updatedTask.status,
+      revision: resultingRevision,
+      startedAt: updatedTask.startedAt || null,
+      completedAt: updatedTask.completedAt || null,
+    }
+
+    const taskFields = mapToSnakeCase({
+      status: updatedTask.status,
+      actualMinutes: updatedTask.actualMinutes,
+      completedCount: updatedTask.completedCount,
+      completionPercentage: updatedTask.completionPercentage,
+      incorrectCount: updatedTask.incorrectCount,
+      completedAt: updatedTask.completedAt,
+      completedOn: updatedTask.completedOn,
+    })
+
+    const batch = await buildTaskMutationBatch({
+      env,
+      planId,
+      taskId,
+      userId: user.sub,
+      clientRequestId: clientRequestId || `task-${taskId}-${Date.now()}`,
+      requestFingerprint: fingerprint,
+      expectedRevision: currentRevision,
+      resultingRevision,
+      action,
+      resultingTaskStatus: updatedTask.status,
+      occurredAt,
+      occurredOn,
+      resultJson,
+      taskFields,
+    })
+
+    await executeTaskMutationBatch(env, batch)
+
+    return json(resultJson)
+  } catch (e) {
+    if (e.message && e.message.includes('UNIQUE constraint failed')) {
+      try {
+        const body = await request.clone().json()
+        if (body.clientRequestId) {
+          const idemCheck = await checkTaskIdempotency(env, user.sub, body.clientRequestId)
+          if (idemCheck.status === 'found') {
+            return json(idemCheck.existingResult)
+          }
+        }
+      } catch (_) {}
+    }
+    return errorResponse('INTERNAL_ERROR', 'Failed to update task.', 500)
+  }
+}
+
+export async function handleRecalculatePlan(request, env, user) {
+  try {
+    const url = new URL(request.url)
+    const pathParts = url.pathname.split('/')
+    const planId = pathParts[pathParts.length - 2]
+
+    if (!planId) return errorResponse('VALIDATION_ERROR', 'Plan ID is required.', 400)
+
+    const body = await request.json()
+    const { recalculationDate, clientRequestId } = body
+
+    if (!recalculationDate || isNaN(Date.parse(recalculationDate))) {
+      return errorResponse('VALIDATION_ERROR', 'Valid recalculationDate is required.', 400)
+    }
+
+    if (clientRequestId) {
+      const idemCheck = await checkPlanIdempotency(env, user.sub, clientRequestId)
+      if (idemCheck.status === 'found') {
+        return json(idemCheck.existingResult)
+      }
+    }
+
+    const currentRevision = await loadPlanRevision(env, planId)
+
+    let recalcResult
+    try {
+      recalcResult = await recalculatePlan(env, planId, user.sub, recalculationDate)
+    } catch (e) {
+      if (e.message === 'PLAN_NOT_FOUND') {
+        return errorResponse('PLAN_NOT_FOUND', 'Plan not found.', 404)
+      }
+      throw e
+    }
+
+    const result = buildRecalculationResult(recalcResult, recalcResult.plan, false)
+
+    const newRevision = currentRevision + 1
+    await updatePlanRevisionAndRecalculatedAt(env, planId, newRevision, recalculationDate)
+
+    for (const task of recalcResult.completedTasks || []) {
+      recordSession(env, user.sub, task).catch(() => {})
+    }
+
+    return json({
+      planId,
+      revision: newRevision,
+      recalculationDate,
+      ...result,
+    })
+  } catch (e) {
+    return errorResponse('INTERNAL_ERROR', 'Failed to recalculate plan.', 500)
   }
 }

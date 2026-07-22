@@ -100,3 +100,22 @@ export async function checkIdempotency(env, userId, clientRequestId) {
     existingFingerprint: results[0].request_fingerprint,
   }
 }
+
+export async function calculateTaskUpdateFingerprint(userId, taskId, action, payload) {
+  const canonical = JSON.stringify({
+    userId,
+    taskId,
+    action,
+    payload,
+  }, null, 0)
+  return sha256Hex(canonical)
+}
+
+export async function calculateRecalculationFingerprint(userId, planId, recalculationDate) {
+  const canonical = JSON.stringify({
+    userId,
+    planId,
+    recalculationDate,
+  }, null, 0)
+  return sha256Hex(canonical)
+}

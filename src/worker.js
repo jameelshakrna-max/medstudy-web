@@ -122,6 +122,7 @@ import {
 import {
   handlePreviewRotationPlan, handleCreateRotationPlan,
   handleListRotationPlans, handleGetRotationPlan, handleDeleteRotationPlan,
+  handleUpdateTask, handleRecalculatePlan,
 } from './handlers/rotationPlannerPlans.js'
 
 function ensureCORS(response) {
@@ -564,6 +565,12 @@ export default {
       if (path === '/api/rotation-planner/plans' && request.method === 'GET') return handleListRotationPlans(request, env, user)
       if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'GET') return handleGetRotationPlan(request, env, user)
       if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteRotationPlan(request, env, user)
+
+      // Task update: PATCH /plans/:planId/tasks/:taskId
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/tasks\/[^\/]+$/) && request.method === 'PATCH') return handleUpdateTask(request, env, user)
+
+      // Recalculate: POST /plans/:planId/recalculate
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/recalculate$/) && request.method === 'POST') return handleRecalculatePlan(request, env, user)
 
       return json({ error: 'Not found' }, 404)
     } catch (err) {

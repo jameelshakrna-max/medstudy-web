@@ -153,6 +153,18 @@ async function deleteFetch(path) {
   return worker.fetch(makeRequest(path, { method: 'DELETE' }), makeEnv(), {})
 }
 
+function makePatchRequest(path, body, { headers = {} } = {}) {
+  return new Request(`https://medstudy.app${path}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'x-test-user-id': 'test-user', ...headers },
+    body: JSON.stringify(body),
+  })
+}
+
+async function patchFetch(path, body, { headers = {} } = {}) {
+  return worker.fetch(makePatchRequest(path, body, { headers }), makeEnv(), {})
+}
+
 describe('Worker route dispatch — rotation planner plans', () => {
   describe('POST /api/rotation-planner/plans (create)', () => {
     it('returns 400 when body is invalid', async () => {
@@ -272,6 +284,20 @@ describe('Worker route dispatch — rotation planner plans', () => {
     it('DELETE /plans/preview is not treated as a planId', async () => {
       const res = await deleteFetch('/api/rotation-planner/plans/preview')
       expect(res.status).toBe(404)
+    })
+  })
+
+  describe('PATCH /api/rotation-planner/plans/:planId/tasks/:taskId', () => {
+    it('returns non-404 for route matching', async () => {
+      const res = await patchFetch('/api/rotation-planner/plans/fake-plan/tasks/fake-task', { action: 'start' })
+      expect(res.status).not.toBe(404)
+    })
+  })
+
+  describe('POST /api/rotation-planner/plans/:planId/recalculate', () => {
+    it('returns non-404 for route matching', async () => {
+      const res = await postFetch('/api/rotation-planner/plans/fake-plan/recalculate', { recalculationDate: '2026-01-06' })
+      expect(res.status).not.toBe(404)
     })
   })
 })

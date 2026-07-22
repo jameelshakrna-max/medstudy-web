@@ -190,7 +190,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
 
 export async function loadPlanFromDb(env, planId, userId) {
   const { results: planRows } = await env.DB.prepare(
-    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, settings_json, created_at, updated_at FROM rotation_planner_plans WHERE id = ? AND user_id = ?'
+    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, settings_json, created_at, updated_at, revision, last_recalculated_at FROM rotation_planner_plans WHERE id = ? AND user_id = ?'
   ).bind(planId, userId).all()
 
   if (!planRows.length) return null
@@ -200,11 +200,11 @@ export async function loadPlanFromDb(env, planId, userId) {
   ).bind(planId).all()
 
   const { results: topicRows } = await env.DB.prepare(
-    'SELECT id, plan_id, normalized_topic_id, canonical_topic_id, source_topic_id, shared_topic_key, topic_title, group_id, base_learning_minutes, personalized_learning_minutes, total_uworld_questions, completed_uworld_questions, learning_completed_at, questions_unlocked_at, status, mastery_score, display_order FROM rotation_planner_topics WHERE plan_id = ? ORDER BY display_order'
+    'SELECT id, plan_id, normalized_topic_id, canonical_topic_id, source_topic_id, shared_topic_key, topic_title, group_id, base_learning_minutes, personalized_learning_minutes, total_uworld_questions, completed_uworld_questions, learning_completed_at, questions_unlocked_at, status, mastery_score, display_order, incorrect_questions_remaining FROM rotation_planner_topics WHERE plan_id = ? ORDER BY display_order'
   ).bind(planId).all()
 
   const { results: taskRows } = await env.DB.prepare(
-    'SELECT id, plan_id, plan_topic_id, task_date, task_type, provider, estimated_minutes, actual_minutes, target_count, completed_count, mode, question_pool, status, unlock_condition, display_order, metadata_json, created_at, updated_at FROM rotation_planner_daily_tasks WHERE plan_id = ? ORDER BY task_date, display_order'
+    'SELECT id, plan_id, plan_topic_id, task_date, task_type, provider, estimated_minutes, actual_minutes, target_count, completed_count, mode, question_pool, status, unlock_condition, display_order, metadata_json, created_at, updated_at, completion_percentage, incorrect_count, completed_at, completed_on FROM rotation_planner_daily_tasks WHERE plan_id = ? ORDER BY task_date, display_order'
   ).bind(planId).all()
 
   return {
@@ -217,7 +217,7 @@ export async function loadPlanFromDb(env, planId, userId) {
 
 export async function loadPlanSummaries(env, userId) {
   const { results: planRows } = await env.DB.prepare(
-    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, settings_json, created_at, updated_at FROM rotation_planner_plans WHERE user_id = ? ORDER BY created_at DESC'
+    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, settings_json, created_at, updated_at, revision, last_recalculated_at FROM rotation_planner_plans WHERE user_id = ? ORDER BY created_at DESC'
   ).bind(userId).all()
 
   const summaries = []
@@ -244,4 +244,17 @@ export async function loadPlanSummaries(env, userId) {
   }
 
   return summaries
+}
+
+export async function loadPlanRevision(env, planId) {
+  const row = await env.DB.prepare(
+    `SELECT revision FROM ${PLANNER_TABLES.plans} WHERE id = ?`
+  ).bind(planId).first()
+  return row ? row.revision : 0
+}
+
+export async function updatePlanRevisionAndRecalculatedAt(env, planId, revision) {
+  await env.DB.prepare(
+    `UPDATE ${PLANNER_TABLES.plans} SET revision = ?, last_recalculated_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`
+  ).bind(revision, planId).run()
 }
