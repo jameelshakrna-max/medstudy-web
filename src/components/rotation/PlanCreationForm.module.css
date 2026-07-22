@@ -9,38 +9,349 @@
   margin: 0 0 20px;
 }
 
-/* Step indicator */
-.stepIndicator {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 20px;
+/* Wizard layout */
+.wizardBody {
+  padding: 0;
 }
 
-.stepDot {
-  width: 28px;
-  height: 28px;
+.stepDots {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.dot {
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--mist);
   background: var(--input-bg);
   border: 1px solid var(--card-border);
   transition: all 0.2s;
+  cursor: pointer;
+  padding: 0;
+  font-family: 'DM Sans', sans-serif;
 }
 
-.stepDotActive {
+.dot:disabled {
+  cursor: not-allowed;
+}
+
+.dotActive {
   background: var(--blueL);
   border-color: rgba(79, 140, 255, 0.3);
   color: var(--blue);
 }
 
-.stepDotDone {
+.dotDone {
   background: rgba(16, 185, 129, 0.12);
   border-color: rgba(16, 185, 129, 0.3);
   color: var(--emerald);
+}
+
+.stepContainer {
+  min-height: 280px;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.stepContent {
+  padding: 4px 0;
+}
+
+/* Form elements */
+.label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--mist);
+  margin-bottom: 6px;
+  margin-top: 16px;
+}
+
+.label:first-child {
+  margin-top: 0;
+}
+
+.input {
+  width: 100%;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  padding: 8px 12px;
+  outline: none;
+  transition: all 0.2s;
+  box-sizing: border-box;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px var(--blueL);
+}
+
+.inputSmall {
+  width: 80px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 4px 8px;
+  outline: none;
+  transition: all 0.2s;
+  box-sizing: border-box;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.inputSmall:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px var(--blueL);
+}
+
+.formField {
+  margin-bottom: 12px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--mist);
+  margin: 4px 0;
+}
+
+/* Buttons */
+.btnPrimary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, var(--blue), var(--blue2));
+  color: var(--navy);
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.btnPrimary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px var(--accent-glow);
+}
+
+.btnPrimary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btnSecondary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 18px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.btnSecondary:hover:not(:disabled) {
+  background: var(--card-border);
+  color: var(--text-primary);
+}
+
+.btnSecondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btnSmall {
+  padding: 4px 12px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.btnSmall:hover {
+  background: var(--card-border);
+  color: var(--text-primary);
+}
+
+/* Wizard footer */
+.wizardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid var(--input-bg);
+}
+
+/* Errors */
+.errorSummary {
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  margin-top: 12px;
+}
+
+.errorText {
+  font-size: 13px;
+  color: #ef4444;
+  margin: 2px 0;
+}
+
+/* Summary */
+.summarySection {
+  margin-top: 12px;
+}
+
+.summaryRow {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 4px 0;
+}
+
+/* Topics */
+.topicList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.topicRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--input-bg);
+}
+
+.topicTitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topicBadge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--blue);
+  background: var(--blueL);
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.topicMinutes {
+  font-size: 12px;
+  color: var(--mist);
+  flex-shrink: 0;
+}
+
+/* Batch row */
+.batchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* Checkbox label */
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--blue);
+}
+
+/* Preview */
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--card-border);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin: 12px auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.feasibilityBanner {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.feasible {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--emerald);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.infeasible {
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* Overload section */
+.overloadSection {
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(239, 68, 68, 0.04);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: 8px;
+}
+
+.warningText {
+  font-size: 13px;
+  color: #ef4444;
+  margin-bottom: 8px;
 }
 
 /* Radio cards */
@@ -75,6 +386,7 @@
 }
 
 .radioLabel {
+  display: block;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
@@ -84,6 +396,40 @@
 .radioDesc {
   font-size: 12px;
   color: var(--mist);
+}
+
+/* Step indicator */
+.stepIndicator {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.stepDot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mist);
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  transition: all 0.2s;
+}
+
+.stepDotActive {
+  background: var(--blueL);
+  border-color: rgba(79, 140, 255, 0.3);
+  color: var(--blue);
+}
+
+.stepDotDone {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: var(--emerald);
 }
 
 /* Availability */
@@ -308,6 +654,29 @@
   box-shadow: 0 4px 20px var(--accent-glow);
 }
 
+/* Availability grid for wizard */
+.availabilityGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.availabilityRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--input-bg);
+}
+
+.dayLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  width: 100px;
+  flex-shrink: 0;
+}
+
 @media (max-width: 480px) {
   .availHeader,
   .availRow {
@@ -331,5 +700,22 @@
 
   .reviewValue {
     text-align: left;
+  }
+
+  .stepDots {
+    display: none;
+  }
+
+  .stepContainer {
+    max-height: 60vh;
+  }
+
+  .availabilityRow {
+    gap: 8px;
+  }
+
+  .dayLabel {
+    width: 70px;
+    font-size: 12px;
   }
 }

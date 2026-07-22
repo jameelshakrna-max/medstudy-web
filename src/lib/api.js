@@ -24,11 +24,15 @@ export async function apiGet(path) {
 /** queryFn adapter for useQuery — wraps apiGet */
 export const queryFn = (path) => () => apiGet(path)
 
-export async function apiPost(path, body) {
+export async function apiPost(path, body, { headers: extraHeaders } = {}) {
   const { data: { session } } = await supabase.auth.getSession()
   const res = await fetch(API + path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + session.access_token,
+      ...extraHeaders,
+    },
     body: JSON.stringify(body)
   })
   return apiJson(res)

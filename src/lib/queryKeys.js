@@ -164,5 +164,8 @@ export const queryKeys = {
     schedule: (planId) => [...queryKeys.rotations.all, 'schedule', planId],
     progress: (planId) => [...queryKeys.rotations.all, 'progress', planId],
     flashcardSummary: () => [...queryKeys.rotations.all, 'flashcardSummary'],
+    sources: () => [...queryKeys.rotations.all, 'sources'],
+    sourceRotations: (sourceId) => [...queryKeys.rotations.all, 'sourceRotations', sourceId],
+    sourceTopics: (sourceId, rotationId) => [...queryKeys.rotations.all, 'sourceTopics', sourceId, rotationId],
   },
 }
