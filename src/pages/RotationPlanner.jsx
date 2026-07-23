@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo, lazy, Suspense } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
-import { apiGet, apiPost, apiDelete } from '../lib/api'
+import { apiGet, apiPost, apiDelete, apiPut } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import { CalendarRange, Plus, ChevronLeft, Play, Pause, Trash2, RotateCcw, BookOpen } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
@@ -12,6 +12,8 @@ import TodaySchedule from '../components/rotation/TodaySchedule'
 import Modal from '../components/ui/Modal/Modal'
 import styles from './RotationPlanner.module.css'
 import './Page.module.css'
+
+const V2PlanDetail = lazy(() => import('../components/rotation/V2PlanDetail'))
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -37,12 +39,34 @@ export default function RotationPlanner() {
   const [selectedPlanId, setSelectedPlanId] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
 
-  // ── Fetch plans ──
-  const { data: plans = [], isLoading: plansLoading } = useQuery({
-    queryKey: queryKeys.rotations.plans(),
+  // ── Fetch V1 plans (legacy) ──
+  const { data: v1Plans = [], isLoading: v1PlansLoading } = useQuery({
+    queryKey: queryKeys.rotations.legacyPlans(),
     enabled: !!user,
     queryFn: () => apiGet('/rotations/plans'),
   })
+
+  // ── Fetch V2 plans ──
+  const { data: v2Plans = [], isLoading: v2PlansLoading } = useQuery({
+    queryKey: queryKeys.rotations.plans(),
+    enabled: !!user,
+    queryFn: () => apiGet('/api/rotation-planner/plans'),
+  })
+
+  const plansLoading = v1PlansLoading || v2PlansLoading
+
+  // ── Merge and tag plans ──
+  const plans = useMemo(() => {
+    const tagged = [
+      ...v1Plans.map(p => ({ ...p, version: 1 })),
+      ...v2Plans.map(p => ({ ...p, version: 2 })),
+    ]
+    return tagged
+  }, [v1Plans, v2Plans])
+
+  // ── Detect selected plan version ──
+  const selectedPlan = plans.find(p => p.id === selectedPlanId)
+  const selectedVersion = selectedPlan?.version || 1
 
   // ── Fetch single plan details ──
   const { data: planDetail, isLoading: detailLoading } = useQuery({
@@ -112,6 +136,22 @@ export default function RotationPlanner() {
   // ── Detail View ──
   if (selectedPlanId) {
     if (detailLoading) return <LoadingScreen fullPage={false} message="Loading plan details..." />
+
+    // V2 plan: render new tabbed detail view
+    if (selectedVersion === 2) {
+      return (
+        <div className={styles.page}>
+          <Suspense fallback={<LoadingScreen fullPage={false} message="Loading plan details..." />}>
+            <V2PlanDetail
+              planId={selectedPlanId}
+              onBack={() => setSelectedPlanId(null)}
+            />
+          </Suspense>
+        </div>
+      )
+    }
+
+    // V1 plan: render legacy detail view
 
     return (
       <div className={styles.page}>
@@ -279,7 +319,9 @@ export default function RotationPlanner() {
           {plans.map((p) => {
             const completionPct = p.total_entries
               ? Math.round((p.completed_entries / p.total_entries) * 100)
-              : 0
+              : p.taskCount
+                ? Math.round(((p.completedTaskCount || 0) / p.taskCount) * 100)
+                : 0
 
             return (
               <div
@@ -288,32 +330,43 @@ export default function RotationPlanner() {
                 onClick={() => setSelectedPlanId(p.id)}
               >
                 <div className={styles.planCardTop}>
-                  <h3 className={styles.planCardName}>{p.name}</h3>
-                  <span
-                    className={`${styles.statusBadge} ${
-                      p.status === 'active'
-                        ? styles.statusActive
+                  <h3 className={styles.planCardName}>{p.name || p.sourceTitle}</h3>
+                  <div className={styles.planCardBadges}>
+                    {p.version === 2 && (
+                      <span className={styles.versionBadge}>v2</span>
+                    )}
+                    <span
+                      className={`${styles.statusBadge} ${
+                        p.status === 'active'
+                          ? styles.statusActive
+                          : p.status === 'completed'
+                            ? styles.statusCompleted
+                            : p.status === 'paused'
+                              ? styles.statusPaused
+                              : styles.statusDraft
+                      }`}
+                    >
+                      {p.status === 'active'
+                        ? 'Active'
                         : p.status === 'completed'
-                          ? styles.statusCompleted
+                          ? 'Completed'
                           : p.status === 'paused'
-                            ? styles.statusPaused
-                            : styles.statusDraft
-                    }`}
-                  >
-                    {p.status === 'active'
-                      ? 'Active'
-                      : p.status === 'completed'
-                        ? 'Completed'
-                        : p.status === 'paused'
-                          ? 'Paused'
-                          : 'Draft'}
-                  </span>
+                            ? 'Paused'
+                            : 'Draft'}
+                    </span>
+                  </div>
                 </div>
-                <div className={styles.planCardRotation}>{p.rotation}</div>
+                <div className={styles.planCardRotation}>
+                  {p.rotation || p.sourceTitle || ''}
+                </div>
                 <div className={styles.planCardDates}>
-                  {formatDateRange(p.start_date, p.end_date)}
-                  {p.exam_date && (
-                    <> &middot; Exam: {new Date(p.exam_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>
+                  {p.start_date && p.end_date
+                    ? formatDateRange(p.start_date, p.end_date)
+                    : p.startDate && p.endDate
+                      ? formatDateRange(p.startDate, p.endDate)
+                      : ''}
+                  {(p.exam_date || p.examDate) && (
+                    <> &middot; Exam: {new Date((p.exam_date || p.examDate) + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>
                   )}
                 </div>
                 <div className={styles.planProgress}>
@@ -326,6 +379,7 @@ export default function RotationPlanner() {
                   <div className={styles.planProgressText}>
                     {completionPct}% complete
                     {p.total_entries > 0 && <> &middot; {p.completed_entries}/{p.total_entries} entries</>}
+                    {p.taskCount > 0 && <> &middot; {p.completedTaskCount || 0}/{p.taskCount} tasks</>}
                   </div>
                 </div>
                 <div className={styles.planStats}>
@@ -334,6 +388,9 @@ export default function RotationPlanner() {
                   )}
                   {p.total_uworld_questions > 0 && (
                     <span className={styles.planStat}>{p.total_uworld_questions} UWorld Qs</span>
+                  )}
+                  {p.topicCount > 0 && (
+                    <span className={styles.planStat}>{p.topicCount} topics</span>
                   )}
                 </div>
               </div>

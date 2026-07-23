@@ -1,0 +1,77 @@
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm, 8px);
+  padding: var(--space-sm, 8px) var(--space-md, 16px);
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+}
+
+.dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: opacity var(--duration-fast, 120ms) ease;
+}
+
+.dismiss:hover {
+  opacity: 1;
+}
+
+.action {
+  background: none;
+  border: none;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+  font-family: inherit;
+  transition: opacity var(--duration-fast, 120ms) ease;
+}
+
+.action:hover {
+  opacity: 0.8;
+}
+
+/* Variants */
+.info {
+  background: rgba(79, 140, 255, 0.08);
+  border-color: rgba(79, 140, 255, 0.2);
+  color: var(--blue);
+}
+
+.warning {
+  background: rgba(255, 184, 0, 0.08);
+  border-color: rgba(255, 184, 0, 0.2);
+  color: var(--amber, #ffb800);
+}
+
+.error {
+  background: rgba(245, 107, 107, 0.08);
+  border-color: rgba(245, 107, 107, 0.2);
+  color: var(--red);
+}
+
+.success {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: var(--emerald);
+}

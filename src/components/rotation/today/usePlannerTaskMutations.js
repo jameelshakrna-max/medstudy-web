@@ -123,16 +123,25 @@ export default function usePlannerTaskMutations({ planId, initialRevision, getRe
   })
 
   const retryRecalculation = useCallback(() => {
-    if (!recalculationState) return
-
     const requestId = generateClientId()
-    setRecalculationState(prev => prev ? { ...prev, status: 'in_flight' } : null)
+    const recalcDate = getRecalculationDate?.()
+    if (!recalcDate) return
+
+    if (!recalculationState) {
+      setRecalculationState({
+        planId,
+        recalculationDate: recalcDate,
+        status: 'in_flight',
+      })
+    } else {
+      setRecalculationState(prev => prev ? { ...prev, status: 'in_flight' } : null)
+    }
 
     return recalculationMutation.mutateAsync({
-      recalculationDate: recalculationState.recalculationDate,
+      recalculationDate: recalcDate,
       requestId,
     })
-  }, [recalculationState, recalculationMutation, currentRevision])
+  }, [recalculationState, recalculationMutation, currentRevision, planId, getRecalculationDate])
 
   const startTask = useCallback(
     (taskId) => executeTaskAction('start', taskId),

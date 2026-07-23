@@ -1,0 +1,67 @@
+.tabs {}
+
+/* Segmented inset variant (default) */
+.tabList {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 4px;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  justify-content: center;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: none;
+  background: none;
+  color: var(--mist);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-normal, 200ms) ease;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.tab:hover {
+  color: var(--text-secondary);
+}
+
+.tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tabActive {
+  background: var(--blueL);
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.tabContent {
+  outline: none;
+}
+
+.tabContent:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm, 6px);
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+  .tabList {
+    gap: 2px;
+  }
+
+  .tab {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+}
