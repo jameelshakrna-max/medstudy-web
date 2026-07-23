@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { PomodoroProvider, usePomodoro } from './context/PomodoroContext'
+import PlannerPomodoroSyncBridge from './components/rotation/today/PlannerPomodoroSyncBridge'
 import { PresenceProvider } from './context/PresenceContext'
 import { NotificationProvider } from './context/NotificationContext'
 import { ProfilePanelProvider } from './context/ProfilePanelContext'
@@ -125,6 +126,7 @@ export default function App() {
         <BrowserRouter>
           <LayerProvider>
             <PomodoroProvider>
+            <PlannerPomodoroSyncBridge />
             <PresenceProvider>
               <NotificationProvider>
                 <CommunityPanelProvider>
