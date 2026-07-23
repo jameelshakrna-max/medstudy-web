@@ -111,11 +111,12 @@ export async function calculateTaskUpdateFingerprint(userId, taskId, action, pay
   return sha256Hex(canonical)
 }
 
-export async function calculateRecalculationFingerprint(userId, planId, recalculationDate) {
+export async function calculateRecalculationFingerprint(userId, planId, recalculationDate, expectedRevision) {
   const canonical = JSON.stringify({
     userId,
     planId,
     recalculationDate,
+    expectedRevision,
   }, null, 0)
   return sha256Hex(canonical)
 }

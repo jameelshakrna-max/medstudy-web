@@ -2,15 +2,60 @@ import { supabase } from './supabase'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
-export async function apiJson(res) {
-  if (!res.ok) {
-    const text = await res.text()
-    let msg
-    try { msg = JSON.parse(text).error || text } catch { msg = text.slice(0, 300) }
-    throw new Error(msg || `Request failed (${res.status})`)
+export class ApiError extends Error {
+  constructor({
+    code = 'API_ERROR',
+    message = 'Request failed',
+    details = null,
+    status = null,
+    payload = null,
+  } = {}) {
+    super(message)
+    this.name = 'ApiError'
+    this.code = code
+    this.details = details
+    this.status = status
+    this.payload = payload
   }
+}
+
+export async function apiJson(res) {
   const text = await res.text()
-  try { return JSON.parse(text) } catch { throw new Error(text.slice(0, 300)) }
+
+  let payload = null
+  try { payload = text ? JSON.parse(text) : null } catch { payload = null }
+
+  if (!res.ok) {
+    const nestedError = payload?.error
+
+    if (nestedError && typeof nestedError === 'object') {
+      throw new ApiError({
+        code: nestedError.code || 'API_ERROR',
+        message: nestedError.message || `Request failed with ${res.status}`,
+        details: nestedError.details || null,
+        status: res.status,
+        payload,
+      })
+    }
+
+    if (typeof nestedError === 'string') {
+      throw new ApiError({
+        code: payload?.code || 'API_ERROR',
+        message: nestedError,
+        details: payload?.details || null,
+        status: res.status,
+        payload,
+      })
+    }
+
+    throw new ApiError({
+      message: text ? text.slice(0, 500) : `Request failed with ${res.status}`,
+      status: res.status,
+      payload,
+    })
+  }
+
+  return payload
 }
 
 export async function apiGet(path) {
@@ -28,6 +73,20 @@ export async function apiPost(path, body, { headers: extraHeaders } = {}) {
   const { data: { session } } = await supabase.auth.getSession()
   const res = await fetch(API + path, {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + session.access_token,
+      ...extraHeaders,
+    },
+    body: JSON.stringify(body)
+  })
+  return apiJson(res)
+}
+
+export async function apiPatch(path, body, { headers: extraHeaders } = {}) {
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch(API + path, {
+    method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
       Authorization: 'Bearer ' + session.access_token,

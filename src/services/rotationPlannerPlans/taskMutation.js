@@ -100,7 +100,7 @@ export async function checkPlanIdempotency(env, userId, clientRequestId) {
   return {
     status: 'found',
     existingFingerprint: row.request_fingerprint,
-    resultJson: row.result_json,
+    resultJson: typeof row.result_json === 'string' ? JSON.parse(row.result_json) : row.result_json,
   }
 }
 

@@ -452,7 +452,7 @@ describe('handleRecalculatePlan', () => {
   })
 
   it('returns 404 for nonexistent plan', async () => {
-    const res = await recalculate('nonexistent-plan', { recalculationDate: '2026-01-06' })
+    const res = await recalculate('nonexistent-plan', { recalculationDate: '2026-01-06', expectedRevision: 0 })
     expect(res.status).toBe(404)
     const body = await res.json()
     expect(body.error.code).toBe('PLAN_NOT_FOUND')
@@ -460,7 +460,7 @@ describe('handleRecalculatePlan', () => {
 
   it('successfully recalculates a plan', async () => {
     const planId = await createAndGetPlanId()
-    const res = await recalculate(planId, { recalculationDate: '2026-01-06' })
+    const res = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 0 })
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.planId).toBe(planId)
@@ -471,11 +471,11 @@ describe('handleRecalculatePlan', () => {
 
   it('handles idempotent recalculation', async () => {
     const planId = await createAndGetPlanId()
-    const res1 = await recalculate(planId, { recalculationDate: '2026-01-06', clientRequestId: 'recalc-idem-1' })
+    const res1 = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 0, clientRequestId: 'recalc-idem-1' })
     expect(res1.status).toBe(200)
     const body1 = await res1.json()
 
-    const res2 = await recalculate(planId, { recalculationDate: '2026-01-06', clientRequestId: 'recalc-idem-1' })
+    const res2 = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 1, clientRequestId: 'recalc-idem-1' })
     expect(res2.status).toBe(200)
     const body2 = await res2.json()
     expect(body2.planId).toBe(body1.planId)
@@ -490,10 +490,158 @@ describe('handleRecalculatePlan', () => {
     const startRes = await patchTask(planId, taskId, { action: 'start', expectedRevision: 0 })
     expect(startRes.status).toBe(200)
 
-    const res = await recalculate(planId, { recalculationDate: '2026-01-06' })
+    const res = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 1 })
     expect(res.status).toBe(409)
     const body = await res.json()
     expect(body.error.code).toBe('TASK_IN_PROGRESS')
     expect(body.error.details.inProgressTaskId).toBe(taskId)
+  })
+})
+
+// ─── PATCH recalculationRequired ───
+describe('handleUpdateTask recalculationRequired', () => {
+  async function createPlanAndGetFirstTask(user = USER_A) {
+    const createRes = await createPlan(makeBody(), user)
+    expect(createRes.status).toBe(201)
+    const planBody = await createRes.json()
+    return { planId: planBody.plan.id, taskId: planBody.tasks[0].id }
+  }
+
+  it('start action returns recalculationRequired: false', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, { action: 'start', expectedRevision: 0 })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.recalculationRequired).toBe(false)
+  })
+
+  it('complete action returns recalculationRequired: true', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, { action: 'complete', payload: { actualMinutes: 45 }, expectedRevision: 0 })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.recalculationRequired).toBe(true)
+  })
+
+  it('partial action returns recalculationRequired: true', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const startRes = await patchTask(planId, taskId, { action: 'start', expectedRevision: 0 })
+    expect(startRes.status).toBe(200)
+    const res = await patchTask(planId, taskId, { action: 'partial', payload: { completedPercentage: 50, actualMinutes: 30 }, expectedRevision: 1 })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.recalculationRequired).toBe(true)
+  })
+
+  it('skip action returns recalculationRequired: true', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, { action: 'skip', expectedRevision: 0 })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.recalculationRequired).toBe(true)
+  })
+
+  it('record_time action returns recalculationRequired: false', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const startRes = await patchTask(planId, taskId, { action: 'start', expectedRevision: 0 })
+    expect(startRes.status).toBe(200)
+    const res = await patchTask(planId, taskId, { action: 'record_time', payload: { actualMinutes: 15 }, expectedRevision: 1 })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.recalculationRequired).toBe(false)
+  })
+
+  it('idempotent replay returns same recalculationRequired', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res1 = await patchTask(planId, taskId, { action: 'complete', payload: { actualMinutes: 45 }, expectedRevision: 0 }, USER_A, { 'Idempotency-Key': 'recalc-idem' })
+    expect(res1.status).toBe(200)
+    const body1 = await res1.json()
+    expect(body1.recalculationRequired).toBe(true)
+
+    const res2 = await patchTask(planId, taskId, { action: 'complete', payload: { actualMinutes: 45 }, expectedRevision: 1 }, USER_A, { 'Idempotency-Key': 'recalc-idem' })
+    expect(res2.status).toBe(200)
+    const body2 = await res2.json()
+    expect(body2.recalculationRequired).toBe(true)
+    expect(body2.recalculationRequired).toBe(body1.recalculationRequired)
+  })
+})
+
+// ─── POST /plans/:planId/recalculate expectedRevision ───
+describe('handleRecalculatePlan expectedRevision', () => {
+  async function createAndGetPlanId(user = USER_A) {
+    const createRes = await createPlan(makeBody(), user)
+    expect(createRes.status).toBe(201)
+    const planBody = await createRes.json()
+    return planBody.plan.id
+  }
+
+  it('returns 400 when expectedRevision is missing', async () => {
+    const planId = await createAndGetPlanId()
+    const res = await recalculate(planId, { recalculationDate: '2026-01-06' })
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('returns 400 when expectedRevision is negative', async () => {
+    const planId = await createAndGetPlanId()
+    const res = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: -1 })
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('returns 400 when expectedRevision is not an integer', async () => {
+    const planId = await createAndGetPlanId()
+    const res = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 1.5 })
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('returns 409 when expectedRevision is stale', async () => {
+    const createRes = await createPlan(makeBody(), USER_A)
+    const planBody = await createRes.json()
+    const pid = planBody.plan.id
+    const tid = planBody.tasks[0].id
+
+    const startRes = await patchTask(pid, tid, { action: 'start', expectedRevision: 0 })
+    expect(startRes.status).toBe(200)
+
+    const res = await recalculate(pid, { recalculationDate: '2026-01-06', expectedRevision: 0 })
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.error.code).toBe('PLAN_REVISION_CONFLICT')
+  })
+
+  it('successfully recalculates with matching expectedRevision', async () => {
+    const planId = await createAndGetPlanId()
+    const res = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 0 })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.planId).toBe(planId)
+    expect(body.revision).toBeDefined()
+  })
+
+  it('records revision in response', async () => {
+    const planId = await createAndGetPlanId()
+    const res = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 0 })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.revision).toBe(1)
+  })
+
+  it('idempotent replay returns same result', async () => {
+    const planId = await createAndGetPlanId()
+    const res1 = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 0, clientRequestId: 'recalc-replay' })
+    expect(res1.status).toBe(200)
+    const body1 = await res1.json()
+
+    const res2 = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 1, clientRequestId: 'recalc-replay' })
+    expect(res2.status).toBe(200)
+    const body2 = await res2.json()
+    expect(body2.planId).toBe(body1.planId)
+    expect(body2.revision).toBe(body1.revision)
+    expect(body2.recalculationDate).toBe(body1.recalculationDate)
   })
 })

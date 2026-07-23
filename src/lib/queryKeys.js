@@ -167,5 +167,7 @@ export const queryKeys = {
     sources: () => [...queryKeys.rotations.all, 'sources'],
     sourceRotations: (sourceId) => [...queryKeys.rotations.all, 'sourceRotations', sourceId],
     sourceTopics: (sourceId, rotationId) => [...queryKeys.rotations.all, 'sourceTopics', sourceId, rotationId],
+    legacyPlans: () => [...queryKeys.rotations.all, 'legacyPlans'],
+    legacyPlan: (id) => [...queryKeys.rotations.all, 'legacyPlan', id],
   },
 }

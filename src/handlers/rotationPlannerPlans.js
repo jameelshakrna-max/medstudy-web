@@ -14,7 +14,7 @@ import {
   loadPlanById, loadTaskById, loadPlanRevision, updatePlanRevisionAndRecalculatedAt,
   checkTaskIdempotency, checkPlanIdempotency,
   classifyBatchError, buildTaskMutationBatch, executeTaskMutationBatch,
-  applyTaskUpdate, calculateTaskUpdateFingerprint,
+  applyTaskUpdate, calculateTaskUpdateFingerprint, calculateRecalculationFingerprint,
   recalculatePlan, buildRecalculationResult, recordSession,
   TERMINAL_STATUSES, VALID_ACTIONS,
 } from '../services/rotationPlannerPlans/index.js'
@@ -182,7 +182,7 @@ export async function handleDeleteRotationPlan(request, env, user) {
 }
 
 export async function handleUpdateTask(request, env, user) {
-  let planId, taskId, clientRequestId, expectedRevision, fingerprint
+  let planId, taskId, clientRequestId, expectedRevision, fingerprint, recalculationRequired
   try {
     const url = new URL(request.url)
     const pathParts = url.pathname.split('/')
@@ -234,7 +234,7 @@ export async function handleUpdateTask(request, env, user) {
     const task = mapTaskDto(taskRow)
     let updatedTask
     try {
-      ({ updatedTask } = applyTaskUpdate(task, action, payload, { occurredAt, occurredOn }))
+      ({ updatedTask, recalculationRequired } = applyTaskUpdate(task, action, payload, { occurredAt, occurredOn }))
     } catch (stateErr) {
       if (stateErr.message === 'INVALID_ACTION_TRANSITION') {
         return errorResponse('INVALID_ACTION_TRANSITION', `Action '${action}' is not allowed for task status '${task.status}'.`, 409)
@@ -256,6 +256,7 @@ export async function handleUpdateTask(request, env, user) {
       revision: resultingRevision,
       startedAt: updatedTask.startedAt || null,
       completedAt: updatedTask.completedAt || null,
+      recalculationRequired: Boolean(recalculationRequired),
     }
 
     const taskFields = mapToSnakeCase({
@@ -308,25 +309,40 @@ export async function handleUpdateTask(request, env, user) {
 }
 
 export async function handleRecalculatePlan(request, env, user) {
+  let planId, clientRequestId, expectedRevision, fingerprint
   try {
     const url = new URL(request.url)
     const pathParts = url.pathname.split('/')
-    const planId = pathParts[pathParts.length - 2]
+    planId = pathParts[pathParts.length - 2]
 
     if (!planId) return errorResponse('VALIDATION_ERROR', 'Plan ID is required.', 400)
 
     const body = await request.json()
-    const { recalculationDate, clientRequestId } = body
+    const { recalculationDate, clientRequestId: bodyClientId, expectedRevision: bodyRev } = body
+    clientRequestId = request.headers.get('Idempotency-Key') || bodyClientId || null
+    expectedRevision = bodyRev
 
     if (!recalculationDate || isNaN(Date.parse(recalculationDate))) {
       return errorResponse('VALIDATION_ERROR', 'Valid recalculationDate is required.', 400)
     }
 
+    if (typeof expectedRevision !== 'number' || expectedRevision < 0 || !Number.isInteger(expectedRevision)) {
+      return errorResponse('VALIDATION_ERROR', 'expectedRevision is required and must be a non-negative integer.', 400)
+    }
+
     if (clientRequestId) {
       const idemCheck = await checkPlanIdempotency(env, user.sub, clientRequestId)
       if (idemCheck.status === 'found') {
-        return json(idemCheck.existingResult)
+        return json(idemCheck.resultJson)
       }
+    }
+
+    fingerprint = await calculateRecalculationFingerprint(user.sub, planId, recalculationDate, expectedRevision)
+
+    const currentRevision = await loadPlanRevision(env, planId)
+
+    if (expectedRevision !== currentRevision) {
+      return errorResponse('PLAN_REVISION_CONFLICT', 'Plan has been modified since you last loaded it. Please refresh.', 409)
     }
 
     const { results: inProgressTasks } = await env.DB.prepare(
@@ -338,8 +354,6 @@ export async function handleRecalculatePlan(request, env, user) {
         inProgressTaskId: inProgressTasks[0].id,
       })
     }
-
-    const currentRevision = await loadPlanRevision(env, planId)
 
     let recalcResult
     try {
@@ -360,13 +374,34 @@ export async function handleRecalculatePlan(request, env, user) {
       recordSession(env, user.sub, task).catch(() => {})
     }
 
-    return json({
+    const resultJson = {
+      ...result,
       planId,
       revision: newRevision,
       recalculationDate,
-      ...result,
-    })
+    }
+
+    const mutationId = crypto.randomUUID()
+    await env.DB.prepare(
+      `INSERT INTO ${PLANNER_TABLES.planMutations} (id, plan_id, user_id, client_request_id, request_fingerprint, expected_revision, resulting_revision, operation, result_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(mutationId, planId, user.sub, clientRequestId || `recalc-${planId}-${Date.now()}`, fingerprint, expectedRevision, newRevision, 'recalculate', JSON.stringify(resultJson)).run()
+
+    return json(resultJson)
   } catch (e) {
+    if (clientRequestId && e.message && e.message.includes('UNIQUE constraint failed')) {
+      try {
+        const classified = await classifyBatchError(
+          env, user.sub, clientRequestId, fingerprint, planId, expectedRevision, 'plan'
+        )
+        if (classified.type === 'replay') return json(classified.resultJson)
+        if (classified.type === 'IDEMPOTENCY_CONFLICT') {
+          return errorResponse('IDEMPOTENCY_CONFLICT', 'Same idempotency key with different input.', 409)
+        }
+        if (classified.type === 'PLAN_REVISION_CONFLICT') {
+          return errorResponse('PLAN_REVISION_CONFLICT', 'Plan was modified by another request.', 409)
+        }
+      } catch (_) {}
+    }
     return errorResponse('INTERNAL_ERROR', 'Failed to recalculate plan.', 500)
   }
 }
