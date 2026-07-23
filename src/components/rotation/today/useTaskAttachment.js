@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { usePomodoro } from '../../../context/PomodoroContext'
 
-export default function useTaskAttachment() {
+export default function useTaskAttachment({ startTask, currentRevision } = {}) {
   const {
     plannerTaskContext,
     attachTask,
@@ -33,7 +33,7 @@ export default function useTaskAttachment() {
   )
 
   const handlePlay = useCallback(
-    (task) => {
+    async (task) => {
       const check = prepareTaskAttachment({
         taskId: task.id,
         planId: task.planId,
@@ -44,17 +44,32 @@ export default function useTaskAttachment() {
 
       if (!check.allowed) return check
 
+      let lastKnownRevision = task.lastKnownRevision ?? currentRevision ?? 0
+
+      if (task.status === 'pending' && startTask) {
+        const startResult = await startTask(task.id)
+
+        if (startResult?.error) {
+          return { allowed: false, reason: 'Failed to start task', error: startResult.error }
+        }
+
+        const returnedRevision = startResult?.result?.revision
+        if (returnedRevision != null) {
+          lastKnownRevision = returnedRevision
+        }
+      }
+
       const result = attachTask({
         taskId: task.id,
         planId: task.planId,
         taskType: task.taskType,
         actualMinutes: task.actualMinutes ?? 0,
-        lastKnownRevision: task.lastKnownRevision ?? 0,
+        lastKnownRevision,
       })
 
       return result
     },
-    [prepareTaskAttachment, attachTask]
+    [prepareTaskAttachment, attachTask, startTask, currentRevision]
   )
 
   const handleDetach = useCallback(() => {

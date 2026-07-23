@@ -55,18 +55,17 @@ export default function RotationPlanner() {
 
   const plansLoading = v1PlansLoading || v2PlansLoading
 
-  // ── Merge and tag plans ──
+  // ── Merge and tag plans with explicit version from query source ──
   const plans = useMemo(() => {
-    const tagged = [
-      ...v1Plans.map(p => ({ ...p, version: 1 })),
-      ...v2Plans.map(p => ({ ...p, version: 2 })),
+    return [
+      ...v1Plans.map(p => ({ key: `v1:${p.id}`, version: 'v1', plan: p })),
+      ...v2Plans.map(p => ({ key: `v2:${p.id}`, version: 'v2', plan: p })),
     ]
-    return tagged
   }, [v1Plans, v2Plans])
 
-  // ── Detect selected plan version ──
-  const selectedPlan = plans.find(p => p.id === selectedPlanId)
-  const selectedVersion = selectedPlan?.version || 1
+  // ── Resolve selected plan version from explicit tag ──
+  const selectedEntry = plans.find(e => e.plan.id === selectedPlanId)
+  const selectedVersion = selectedEntry?.version ?? 'v1'
 
   // ── Fetch single plan details ──
   const { data: planDetail, isLoading: detailLoading } = useQuery({
@@ -138,7 +137,7 @@ export default function RotationPlanner() {
     if (detailLoading) return <LoadingScreen fullPage={false} message="Loading plan details..." />
 
     // V2 plan: render new tabbed detail view
-    if (selectedVersion === 2) {
+    if (selectedVersion === 'v2') {
       return (
         <div className={styles.page}>
           <Suspense fallback={<LoadingScreen fullPage={false} message="Loading plan details..." />}>
@@ -316,7 +315,8 @@ export default function RotationPlanner() {
         </div>
       ) : (
         <div className={styles.planGrid}>
-          {plans.map((p) => {
+          {plans.map((entry) => {
+            const p = entry.plan
             const completionPct = p.total_entries
               ? Math.round((p.completed_entries / p.total_entries) * 100)
               : p.taskCount
@@ -325,14 +325,14 @@ export default function RotationPlanner() {
 
             return (
               <div
-                key={p.id}
+                key={entry.key}
                 className={styles.planCard}
                 onClick={() => setSelectedPlanId(p.id)}
               >
                 <div className={styles.planCardTop}>
                   <h3 className={styles.planCardName}>{p.name || p.sourceTitle}</h3>
                   <div className={styles.planCardBadges}>
-                    {p.version === 2 && (
+                    {entry.version === 'v2' && (
                       <span className={styles.versionBadge}>v2</span>
                     )}
                     <span

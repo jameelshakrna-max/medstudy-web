@@ -45,6 +45,21 @@ describe('TODAY_SECTIONS', () => {
     expect(overdue.filter(makeTask({ ...base, status: 'in_progress' }), '2025-07-15')).toBe(false);
   });
 
+  it('overdue filter excludes partial (historical, not actionable)', () => {
+    const overdue = TODAY_SECTIONS.find((s) => s.key === 'overdue');
+    expect(overdue.filter(makeTask({ status: 'partial', taskDate: '2025-07-14' }), '2025-07-15')).toBe(false);
+  });
+
+  it('overdue filter includes pending', () => {
+    const overdue = TODAY_SECTIONS.find((s) => s.key === 'overdue');
+    expect(overdue.filter(makeTask({ status: 'pending', taskDate: '2025-07-14' }), '2025-07-15')).toBe(true);
+  });
+
+  it('overdue filter includes locked', () => {
+    const overdue = TODAY_SECTIONS.find((s) => s.key === 'overdue');
+    expect(overdue.filter(makeTask({ status: 'locked', taskDate: '2025-07-14' }), '2025-07-15')).toBe(true);
+  });
+
   it('overdue filter requires taskDate before todayKey', () => {
     const overdue = TODAY_SECTIONS.find((s) => s.key === 'overdue');
     expect(overdue.filter(makeTask({ taskDate: '2025-07-16', status: 'pending' }), '2025-07-15')).toBe(false);
@@ -238,6 +253,22 @@ describe('calculateDayProgress', () => {
     ];
     const result = calculateDayProgress(tasks, '2025-07-15');
     expect(result.overdueTasks).toBe(1);
+  });
+
+  it('counts locked tasks as overdue', () => {
+    const tasks = [
+      makeTask({ taskDate: '2025-07-14', status: 'locked', estimatedMinutes: 10 }),
+    ];
+    const result = calculateDayProgress(tasks, '2025-07-15');
+    expect(result.overdueTasks).toBe(1);
+  });
+
+  it('does not count partial tasks as overdue', () => {
+    const tasks = [
+      makeTask({ taskDate: '2025-07-14', status: 'partial', estimatedMinutes: 10 }),
+    ];
+    const result = calculateDayProgress(tasks, '2025-07-15');
+    expect(result.overdueTasks).toBe(0);
   });
 
   it('excludes skipped from overdue count', () => {

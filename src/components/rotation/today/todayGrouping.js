@@ -1,6 +1,6 @@
 export const TODAY_SECTIONS = [
   { key: 'active', label: 'Active Task', filter: (task) => task.status === 'in_progress' },
-  { key: 'overdue', label: 'Overdue', filter: (task, todayKey) => task.status !== 'completed' && task.status !== 'skipped' && task.status !== 'in_progress' && task.taskDate < todayKey },
+  { key: 'overdue', label: 'Overdue', filter: (task, todayKey) => (task.status === 'pending' || task.status === 'locked') && task.taskDate < todayKey },
   { key: 'due_reviews', label: 'Due Reviews', filter: (task, todayKey) => task.taskType === 'flashcard_review' && task.taskDate === todayKey && task.status !== 'completed' && task.status !== 'skipped' },
   { key: 'learn', label: 'Learn', filter: (task, todayKey) => (task.taskType === 'learning' || task.taskType === 'consolidation') && task.taskDate === todayKey && task.status !== 'completed' && task.status !== 'skipped' && task.status !== 'in_progress' },
   { key: 'uworld', label: 'UWorld', filter: (task, todayKey) => task.taskType === 'uworld_questions' && task.taskDate === todayKey && task.status !== 'completed' && task.status !== 'skipped' && task.status !== 'in_progress' },
@@ -58,7 +58,7 @@ export function calculateDayProgress(allTasks, todayKey) {
       completedMinutes += minutes;
     } else if (task.status === 'in_progress') {
       activeTasks++;
-    } else if (task.taskDate < todayKey && task.status !== 'skipped') {
+    } else if ((task.status === 'pending' || task.status === 'locked') && task.taskDate < todayKey) {
       overdueTasks++;
     }
 
