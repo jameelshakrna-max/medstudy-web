@@ -7,7 +7,7 @@ export default function useRotationPlanDetail(planId) {
   return useQuery({
     queryKey: queryKeys.rotations.plan(planId),
     enabled: !!planId,
-    queryFn: () => apiGet(`/api/rotation-planner/plans/${planId}`),
+    queryFn: () => apiGet(`/rotation-planner/plans/${planId}`),
     select: (raw) => normalizePlanResponse(raw),
   })
 }

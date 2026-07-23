@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ApiError } from '../api'
+import { ApiError, joinApiPath } from '../api'
 
 const mockGetSession = vi.fn().mockResolvedValue({
   data: { session: { access_token: 'test-token' } },
@@ -284,5 +284,45 @@ describe('apiPatch', () => {
     await expect(apiPatch('/api/test', {})).rejects.toMatchObject({
       message: 'x'.repeat(500),
     })
+  })
+})
+
+describe('joinApiPath', () => {
+  it('joins base ending /api with path /rotation-planner/... → single /api', () => {
+    expect(joinApiPath('https://host.com/api', '/rotation-planner/plans'))
+      .toBe('https://host.com/api/rotation-planner/plans')
+  })
+
+  it('prevents /api/api when path accidentally starts with /api/', () => {
+    expect(joinApiPath('https://host.com/api', '/api/rotation-planner/plans'))
+      .toBe('https://host.com/api/rotation-planner/plans')
+  })
+
+  it('prevents /api/api with template literal path', () => {
+    const path = `/api/rotation-planner/plans/plan-1/tasks/task-1`
+    expect(joinApiPath('https://medstudy-api.medstudy.workers.dev/api', path))
+      .toBe('https://medstudy-api.medstudy.workers.dev/api/rotation-planner/plans/plan-1/tasks/task-1')
+  })
+
+  it('handles no double slashes', () => {
+    expect(joinApiPath('https://host.com/api', 'rotation-planner/plans'))
+      .toBe('https://host.com/api/rotation-planner/plans')
+  })
+
+  it('preserves query strings in path', () => {
+    expect(joinApiPath('https://host.com/api', '/rotation-planner/plans?page=1'))
+      .toBe('https://host.com/api/rotation-planner/plans?page=1')
+  })
+
+  it('works with local dev base /api', () => {
+    expect(joinApiPath('/api', '/rotation-planner/plans'))
+      .toBe('/api/rotation-planner/plans')
+    expect(joinApiPath('/api', '/api/rotation-planner/plans'))
+      .toBe('/api/rotation-planner/plans')
+  })
+
+  it('strips trailing slash from base', () => {
+    expect(joinApiPath('https://host.com/api/', '/rotation-planner/plans'))
+      .toBe('https://host.com/api/rotation-planner/plans')
   })
 })

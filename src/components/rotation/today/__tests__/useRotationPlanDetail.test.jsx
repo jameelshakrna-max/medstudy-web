@@ -131,7 +131,7 @@ describe('useRotationPlanDetail', () => {
     )
 
     await waitFor(() => {
-      expect(apiGet).toHaveBeenCalledWith(`/api/rotation-planner/plans/${PLAN_ID}`)
+      expect(apiGet).toHaveBeenCalledWith(`/rotation-planner/plans/${PLAN_ID}`)
     })
   })
 })

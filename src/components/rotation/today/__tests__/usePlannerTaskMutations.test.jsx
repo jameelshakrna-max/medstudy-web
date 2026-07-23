@@ -71,7 +71,7 @@ describe('usePlannerTaskMutations', () => {
   })
 
   describe('basic functionality', () => {
-    it('sends PATCH to the correct route /api/rotation-planner/plans/:planId/tasks/:taskId', async () => {
+    it('sends PATCH to the correct route /rotation-planner/plans/:planId/tasks/:taskId', async () => {
       apiPatch.mockResolvedValueOnce({ taskId: TASK_ID, action: 'start', status: 'in_progress', revision: 1 })
 
       const { result } = renderMutationsHook({}, { wrapper })
@@ -82,7 +82,7 @@ describe('usePlannerTaskMutations', () => {
 
       expect(apiPatch).toHaveBeenCalledOnce()
       const [path] = apiPatch.mock.calls[0]
-      expect(path).toBe(`/api/rotation-planner/plans/${PLAN_ID}/tasks/${TASK_ID}`)
+      expect(path).toBe(`/rotation-planner/plans/${PLAN_ID}/tasks/${TASK_ID}`)
     })
 
     it('sends body with action, payload, expectedRevision, and clientRequestId', async () => {
@@ -369,7 +369,7 @@ describe('usePlannerTaskMutations', () => {
 
       expect(apiPost).toHaveBeenCalledOnce()
       const [path, body, opts] = apiPost.mock.calls[0]
-      expect(path).toBe(`/api/rotation-planner/plans/${PLAN_ID}/recalculate`)
+      expect(path).toBe(`/rotation-planner/plans/${PLAN_ID}/recalculate`)
       expect(body.recalculationDate).toBe('2026-01-06')
       expect(body.expectedRevision).toBe(1)
       expect(typeof body.clientRequestId).toBe('string')

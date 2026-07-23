@@ -111,7 +111,7 @@ describe('PlannerPomodoroSyncBridge', () => {
     })
 
     const [path, body, opts] = apiPatch.mock.calls[0]
-    expect(path).toBe('/api/rotation-planner/plans/plan-1/tasks/task-1')
+    expect(path).toBe('/rotation-planner/plans/plan-1/tasks/task-1')
     expect(body).toEqual({
       action: 'record_time',
       payload: { actualMinutes: 15 },
@@ -169,7 +169,7 @@ describe('PlannerPomodoroSyncBridge', () => {
 
     await waitFor(() => {
       expect(mock.setRevisionRecoveryStatus).toHaveBeenCalled()
-      expect(apiGet).toHaveBeenCalledWith('/api/rotation-planner/plans/plan-1')
+      expect(apiGet).toHaveBeenCalledWith('/rotation-planner/plans/plan-1')
       expect(normalizePlanResponse).toHaveBeenCalled()
       expect(mock.rebaseAfterConflict).toHaveBeenCalledWith({
         newRevision: 5,

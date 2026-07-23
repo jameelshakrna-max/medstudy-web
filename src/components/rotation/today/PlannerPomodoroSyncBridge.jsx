@@ -31,7 +31,7 @@ export default function PlannerPomodoroSyncBridge() {
     setRevisionRecoveryStatus()
 
     try {
-      const rawPlan = await apiGet(`/api/rotation-planner/plans/${planId}`)
+      const rawPlan = await apiGet(`/rotation-planner/plans/${planId}`)
       const detail = normalizePlanResponse(rawPlan)
 
       const task = detail.tasks?.find(t => t.id === taskId)
@@ -59,7 +59,7 @@ export default function PlannerPomodoroSyncBridge() {
 
     try {
       const result = await apiPatch(
-        `/api/rotation-planner/plans/${planId}/tasks/${taskId}`,
+        `/rotation-planner/plans/${planId}/tasks/${taskId}`,
         syncPayload,
         { headers: { 'Idempotency-Key': syncRequestId } }
       )

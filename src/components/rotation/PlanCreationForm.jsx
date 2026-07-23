@@ -46,14 +46,14 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
   // React Query — sources
   const { data: sourcesRaw, isLoading: sourcesLoading } = useQuery({
     queryKey: queryKeys.rotations.sources(),
-    queryFn: () => apiGet('/api/rotation-planner/sources'),
+    queryFn: () => apiGet('/rotation-planner/sources'),
   })
   const sources = normalizeSourcesResponse(sourcesRaw)
 
   // React Query — rotations for selected source
   const { data: rotationsRaw, isLoading: rotationsLoading } = useQuery({
     queryKey: queryKeys.rotations.sourceRotations(form.sourceId),
-    queryFn: () => apiGet(`/api/rotation-planner/sources/${form.sourceId}/rotations`),
+    queryFn: () => apiGet(`/rotation-planner/sources/${form.sourceId}/rotations`),
     enabled: Boolean(form.sourceId),
   })
   const rotations = normalizeRotationsResponse(rotationsRaw)
@@ -61,7 +61,7 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
   // React Query — topics for selected source+rotation
   const { data: topicsRaw } = useQuery({
     queryKey: queryKeys.rotations.sourceTopics(form.sourceId, form.rotationId),
-    queryFn: () => apiGet(`/api/rotation-planner/sources/${form.sourceId}/rotations/${form.rotationId}/topics`),
+    queryFn: () => apiGet(`/rotation-planner/sources/${form.sourceId}/rotations/${form.rotationId}/topics`),
     enabled: Boolean(form.sourceId && form.rotationId),
   })
   const apiTopics = normalizeTopicsResponse(topicsRaw)
@@ -80,7 +80,7 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
 
   // Preview mutation
   const previewMutation = useMutation({
-    mutationFn: (payload) => apiPost('/api/rotation-planner/plans/preview', payload),
+    mutationFn: (payload) => apiPost('/rotation-planner/plans/preview', payload),
     onSuccess: (data) => {
       setPreview(data)
       setPreviewToken(data.previewToken)
@@ -95,7 +95,7 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
   // Create mutation
   const createMutation = useMutation({
     mutationFn: ({ payload, idempotencyKey }) =>
-      apiPost('/api/rotation-planner/plans', payload, {
+      apiPost('/rotation-planner/plans', payload, {
         headers: { 'Idempotency-Key': idempotencyKey },
       }),
     onSuccess: (result) => {

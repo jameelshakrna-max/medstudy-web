@@ -23,7 +23,7 @@ export default function usePlannerTaskMutations({ planId, initialRevision, getRe
   const taskMutation = useMutation({
     mutationFn: async ({ operationId, taskId, action, payload = {}, requestId }) => {
       const result = await apiPatch(
-        `/api/rotation-planner/plans/${planId}/tasks/${taskId}`,
+        `/rotation-planner/plans/${planId}/tasks/${taskId}`,
         {
           action,
           payload,
@@ -91,7 +91,7 @@ export default function usePlannerTaskMutations({ planId, initialRevision, getRe
   const recalculationMutation = useMutation({
     mutationFn: async ({ recalculationDate, requestId }) => {
       const result = await apiPost(
-        `/api/rotation-planner/plans/${planId}/recalculate`,
+        `/rotation-planner/plans/${planId}/recalculate`,
         {
           recalculationDate,
           expectedRevision: currentRevision,

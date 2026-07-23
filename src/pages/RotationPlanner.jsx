@@ -50,7 +50,7 @@ export default function RotationPlanner() {
   const { data: v2Plans = [], isLoading: v2PlansLoading } = useQuery({
     queryKey: queryKeys.rotations.plans(),
     enabled: !!user,
-    queryFn: () => apiGet('/api/rotation-planner/plans'),
+    queryFn: () => apiGet('/rotation-planner/plans'),
   })
 
   const plansLoading = v1PlansLoading || v2PlansLoading

@@ -2,6 +2,15 @@ import { supabase } from './supabase'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
+export function joinApiPath(base, path) {
+  const b = base.replace(/\/+$/, '')
+  let p = path.replace(/^\/+/, '')
+  if (b.endsWith('/api') && p.startsWith('api/')) {
+    p = p.slice(4)
+  }
+  return `${b}/${p}`
+}
+
 export class ApiError extends Error {
   constructor({
     code = 'API_ERROR',
@@ -60,7 +69,7 @@ export async function apiJson(res) {
 
 export async function apiGet(path) {
   const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(API + path, {
+  const res = await fetch(joinApiPath(API, path), {
     headers: { Authorization: 'Bearer ' + session.access_token }
   })
   return apiJson(res)
@@ -71,7 +80,7 @@ export const queryFn = (path) => () => apiGet(path)
 
 export async function apiPost(path, body, { headers: extraHeaders } = {}) {
   const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(API + path, {
+  const res = await fetch(joinApiPath(API, path), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -85,7 +94,7 @@ export async function apiPost(path, body, { headers: extraHeaders } = {}) {
 
 export async function apiPatch(path, body, { headers: extraHeaders } = {}) {
   const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(API + path, {
+  const res = await fetch(joinApiPath(API, path), {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -99,7 +108,7 @@ export async function apiPatch(path, body, { headers: extraHeaders } = {}) {
 
 export async function apiPut(path, body) {
   const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(API + path, {
+  const res = await fetch(joinApiPath(API, path), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
     body: JSON.stringify(body)
@@ -109,7 +118,7 @@ export async function apiPut(path, body) {
 
 export async function apiDelete(path) {
   const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(API + path, {
+  const res = await fetch(joinApiPath(API, path), {
     method: 'DELETE',
     headers: { Authorization: 'Bearer ' + session.access_token }
   })
