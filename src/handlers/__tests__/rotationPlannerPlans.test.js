@@ -76,10 +76,11 @@ async function deletePlan(planId, user = USER_A) {
   return handleDeleteRotationPlan(req, { DB: db }, user)
 }
 
-async function patchTask(planId, taskId, body, user = USER_A) {
+async function patchTask(planId, taskId, body, user = USER_A, extraHeaders = {}) {
   const req = makeRequest(`/api/rotation-planner/plans/${planId}/tasks/${taskId}`, {
     method: 'PATCH',
     body,
+    headers: extraHeaders,
   })
   return handleUpdateTask(req, { DB: db }, user)
 }
@@ -307,7 +308,7 @@ describe('handleUpdateTask', () => {
 
   it('returns 400 for missing action', async () => {
     const { planId, taskId } = await createPlanAndGetFirstTask()
-    const res = await patchTask(planId, taskId, { payload: {} })
+    const res = await patchTask(planId, taskId, { payload: {}, expectedRevision: 0 })
     expect(res.status).toBe(400)
     const body = await res.json()
     expect(body.error.code).toBe('VALIDATION_ERROR')
@@ -315,14 +316,14 @@ describe('handleUpdateTask', () => {
 
   it('returns 400 for invalid action', async () => {
     const { planId, taskId } = await createPlanAndGetFirstTask()
-    const res = await patchTask(planId, taskId, { action: 'nonexistent_action' })
+    const res = await patchTask(planId, taskId, { action: 'nonexistent_action', expectedRevision: 0 })
     expect(res.status).toBe(400)
     const body = await res.json()
     expect(body.error.code).toBe('VALIDATION_ERROR')
   })
 
   it('returns 404 for nonexistent plan', async () => {
-    const res = await patchTask('nonexistent-plan', 'nonexistent-task', { action: 'start' })
+    const res = await patchTask('nonexistent-plan', 'nonexistent-task', { action: 'start', expectedRevision: 0 })
     expect(res.status).toBe(404)
     const body = await res.json()
     expect(body.error.code).toBe('PLAN_NOT_FOUND')
@@ -330,7 +331,7 @@ describe('handleUpdateTask', () => {
 
   it('returns 404 for nonexistent task', async () => {
     const { planId } = await createPlanAndGetFirstTask()
-    const res = await patchTask(planId, 'nonexistent-task', { action: 'start' })
+    const res = await patchTask(planId, 'nonexistent-task', { action: 'start', expectedRevision: 0 })
     expect(res.status).toBe(404)
     const body = await res.json()
     expect(body.error.code).toBe('TASK_NOT_FOUND')
@@ -338,7 +339,7 @@ describe('handleUpdateTask', () => {
 
   it('successfully starts a pending task', async () => {
     const { planId, taskId } = await createPlanAndGetFirstTask()
-    const res = await patchTask(planId, taskId, { action: 'start' })
+    const res = await patchTask(planId, taskId, { action: 'start', expectedRevision: 0 })
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.taskId).toBe(taskId)
@@ -348,7 +349,7 @@ describe('handleUpdateTask', () => {
 
   it('successfully completes a pending task', async () => {
     const { planId, taskId } = await createPlanAndGetFirstTask()
-    const res = await patchTask(planId, taskId, { action: 'complete', payload: { actualMinutes: 45 } })
+    const res = await patchTask(planId, taskId, { action: 'complete', payload: { actualMinutes: 45 }, expectedRevision: 0 })
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.taskId).toBe(taskId)
@@ -359,10 +360,76 @@ describe('handleUpdateTask', () => {
 
   it('returns 409 for idempotency conflict', async () => {
     const { planId, taskId } = await createPlanAndGetFirstTask()
-    const res1 = await patchTask(planId, taskId, { action: 'start', clientRequestId: 'idem-1' })
+    const res1 = await patchTask(planId, taskId, { action: 'start', clientRequestId: 'idem-1', expectedRevision: 0 })
     expect(res1.status).toBe(200)
 
-    const res2 = await patchTask(planId, taskId, { action: 'complete', clientRequestId: 'idem-1' })
+    const res2 = await patchTask(planId, taskId, { action: 'complete', clientRequestId: 'idem-1', expectedRevision: 1 })
+    expect(res2.status).toBe(409)
+  })
+
+  it('returns 400 when expectedRevision is missing', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, { action: 'start' })
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error.code).toBe('VALIDATION_ERROR')
+    expect(body.error.message).toContain('expectedRevision')
+  })
+
+  it('returns 400 when expectedRevision is not an integer', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, { action: 'start', expectedRevision: 1.5 })
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('returns 400 when expectedRevision is negative', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, { action: 'start', expectedRevision: -1 })
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('returns 409 PLAN_REVISION_CONFLICT when expectedRevision does not match', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, { action: 'start', expectedRevision: 999 })
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.error.code).toBe('PLAN_REVISION_CONFLICT')
+  })
+
+  it('reads Idempotency-Key header and uses it for idempotency', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res1 = await patchTask(planId, taskId, { action: 'start', expectedRevision: 0 }, USER_A, { 'Idempotency-Key': 'header-key-1' })
+    expect(res1.status).toBe(200)
+
+    const res2 = await patchTask(planId, taskId, { action: 'start', expectedRevision: 1 }, USER_A, { 'Idempotency-Key': 'header-key-1' })
+    expect(res2.status).toBe(200)
+    const body2 = await res2.json()
+    expect(body2.status).toBe('in_progress')
+  })
+
+  it('returns idempotent replay result for same header key + same input', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res1 = await patchTask(planId, taskId, { action: 'start', expectedRevision: 0 }, USER_A, { 'Idempotency-Key': 'replay-key' })
+    expect(res1.status).toBe(200)
+    const body1 = await res1.json()
+
+    const res2 = await patchTask(planId, taskId, { action: 'start', expectedRevision: 1 }, USER_A, { 'Idempotency-Key': 'replay-key' })
+    expect(res2.status).toBe(200)
+    const body2 = await res2.json()
+    expect(body2.taskId).toBe(body1.taskId)
+    expect(body2.status).toBe(body1.status)
+  })
+
+  it('header Idempotency-Key takes precedence over body clientRequestId', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, { action: 'start', clientRequestId: 'body-key', expectedRevision: 0 }, USER_A, { 'Idempotency-Key': 'header-key' })
+    expect(res.status).toBe(200)
+
+    const res2 = await patchTask(planId, taskId, { action: 'start', clientRequestId: 'body-key', expectedRevision: 1 }, USER_A, { 'Idempotency-Key': 'different-header-key' })
     expect(res2.status).toBe(409)
   })
 })
@@ -412,5 +479,21 @@ describe('handleRecalculatePlan', () => {
     expect(res2.status).toBe(200)
     const body2 = await res2.json()
     expect(body2.planId).toBe(body1.planId)
+  })
+
+  it('returns 409 TASK_IN_PROGRESS when a task is in_progress', async () => {
+    const createRes = await createPlan(makeBody(), USER_A)
+    const planBody = await createRes.json()
+    const planId = planBody.plan.id
+    const taskId = planBody.tasks[0].id
+
+    const startRes = await patchTask(planId, taskId, { action: 'start', expectedRevision: 0 })
+    expect(startRes.status).toBe(200)
+
+    const res = await recalculate(planId, { recalculationDate: '2026-01-06' })
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.error.code).toBe('TASK_IN_PROGRESS')
+    expect(body.error.details.inProgressTaskId).toBe(taskId)
   })
 })

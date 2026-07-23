@@ -1,5 +1,6 @@
 import { json } from '../lib/worker-utils.js'
 import { getStudySource } from '../data/studySources/sourceRegistry.js'
+import { PLANNER_TABLES } from '../db/rotationPlannerSchema.js'
 import {
   parseAndValidatePlanRequest,
   resolveTopicsFromRegistry,
@@ -19,8 +20,10 @@ import {
 } from '../services/rotationPlannerPlans/index.js'
 import { mapPlanSummaryDto, mapPlanDto, mapAvailabilityDto, mapTopicDto, mapTaskDto, mapToSnakeCase } from '../services/rotationPlannerPlans/dtoMappers.js'
 
-function errorResponse(code, message, status = 400) {
-  return json({ error: { code, message } }, status)
+function errorResponse(code, message, status = 400, details = null) {
+  const body = { error: { code, message } }
+  if (details) body.error.details = details
+  return json(body, status)
 }
 
 export async function handlePreviewRotationPlan(request, env, user) {
@@ -179,19 +182,26 @@ export async function handleDeleteRotationPlan(request, env, user) {
 }
 
 export async function handleUpdateTask(request, env, user) {
+  let planId, taskId, clientRequestId, expectedRevision, fingerprint
   try {
     const url = new URL(request.url)
     const pathParts = url.pathname.split('/')
-    const taskId = pathParts[pathParts.length - 1]
-    const planId = pathParts[pathParts.length - 3]
+    taskId = pathParts[pathParts.length - 1]
+    planId = pathParts[pathParts.length - 3]
 
     if (!planId || !taskId) return errorResponse('VALIDATION_ERROR', 'Plan ID and Task ID are required.', 400)
 
     const body = await request.json()
-    const { action, payload = {}, clientRequestId } = body
+    const { action, payload = {}, clientRequestId: bodyClientId, expectedRevision: bodyRev } = body
+    clientRequestId = request.headers.get('Idempotency-Key') || bodyClientId || null
+    expectedRevision = bodyRev
 
     if (!action || !VALID_ACTIONS.has(action)) {
       return errorResponse('VALIDATION_ERROR', `Invalid action. Must be one of: ${[...VALID_ACTIONS].join(', ')}`, 400)
+    }
+
+    if (typeof expectedRevision !== 'number' || expectedRevision < 0 || !Number.isInteger(expectedRevision)) {
+      return errorResponse('VALIDATION_ERROR', 'expectedRevision is required and must be a non-negative integer.', 400)
     }
 
     const plan = await loadPlanById(env, planId, user.sub)
@@ -201,13 +211,15 @@ export async function handleUpdateTask(request, env, user) {
     if (!taskRow || taskRow.plan_id !== planId) return errorResponse('TASK_NOT_FOUND', 'Task not found.', 404)
 
     const currentRevision = await loadPlanRevision(env, planId)
+
+    if (expectedRevision !== currentRevision) {
+      return errorResponse('PLAN_REVISION_CONFLICT', 'Plan has been modified since you last loaded it. Please refresh.', 409)
+    }
+
     const occurredAt = new Date().toISOString()
     const occurredOn = occurredAt.slice(0, 10)
 
-    const task = mapTaskDto(taskRow)
-    const { updatedTask } = applyTaskUpdate(task, action, payload, { occurredAt, occurredOn })
-
-    const fingerprint = await calculateTaskUpdateFingerprint(user.sub, taskId, action, payload)
+    fingerprint = await calculateTaskUpdateFingerprint(user.sub, taskId, action, payload)
 
     if (clientRequestId) {
       const idemCheck = await checkTaskIdempotency(env, user.sub, clientRequestId)
@@ -217,6 +229,23 @@ export async function handleUpdateTask(request, env, user) {
         }
         return errorResponse('IDEMPOTENCY_CONFLICT', 'Same idempotency key with different input.', 409)
       }
+    }
+
+    const task = mapTaskDto(taskRow)
+    let updatedTask
+    try {
+      ({ updatedTask } = applyTaskUpdate(task, action, payload, { occurredAt, occurredOn }))
+    } catch (stateErr) {
+      if (stateErr.message === 'INVALID_ACTION_TRANSITION') {
+        return errorResponse('INVALID_ACTION_TRANSITION', `Action '${action}' is not allowed for task status '${task.status}'.`, 409)
+      }
+      if (stateErr.message === 'COMPLETED_TASK_IMMUTABLE') {
+        return errorResponse('COMPLETED_TASK_IMMUTABLE', 'Cannot modify a completed or skipped task.', 409)
+      }
+      if (stateErr.message && stateErr.message.endsWith('_REQUIRED')) {
+        return errorResponse('VALIDATION_ERROR', stateErr.message, 400)
+      }
+      return errorResponse('VALIDATION_ERROR', stateErr.message, 400)
     }
 
     const resultingRevision = currentRevision + 1
@@ -260,14 +289,17 @@ export async function handleUpdateTask(request, env, user) {
 
     return json(resultJson)
   } catch (e) {
-    if (e.message && e.message.includes('UNIQUE constraint failed')) {
+    if (clientRequestId && e.message && e.message.includes('UNIQUE constraint failed')) {
       try {
-        const body = await request.clone().json()
-        if (body.clientRequestId) {
-          const idemCheck = await checkTaskIdempotency(env, user.sub, body.clientRequestId)
-          if (idemCheck.status === 'found') {
-            return json(idemCheck.existingResult)
-          }
+        const classified = await classifyBatchError(
+          env, user.sub, clientRequestId, fingerprint, planId, expectedRevision, 'task'
+        )
+        if (classified.type === 'replay') return json(classified.resultJson)
+        if (classified.type === 'IDEMPOTENCY_CONFLICT') {
+          return errorResponse('IDEMPOTENCY_CONFLICT', 'Same idempotency key with different input.', 409)
+        }
+        if (classified.type === 'PLAN_REVISION_CONFLICT') {
+          return errorResponse('PLAN_REVISION_CONFLICT', 'Plan was modified by another request.', 409)
         }
       } catch (_) {}
     }
@@ -295,6 +327,16 @@ export async function handleRecalculatePlan(request, env, user) {
       if (idemCheck.status === 'found') {
         return json(idemCheck.existingResult)
       }
+    }
+
+    const { results: inProgressTasks } = await env.DB.prepare(
+      `SELECT id FROM ${PLANNER_TABLES.dailyTasks} WHERE plan_id = ? AND status = 'in_progress' LIMIT 1`
+    ).bind(planId).all()
+
+    if (inProgressTasks.length > 0) {
+      return errorResponse('TASK_IN_PROGRESS', 'Finish the active task before recalculating.', 409, {
+        inProgressTaskId: inProgressTasks[0].id,
+      })
     }
 
     const currentRevision = await loadPlanRevision(env, planId)
