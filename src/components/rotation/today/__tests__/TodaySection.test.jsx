@@ -9,6 +9,8 @@ const TODAY = new Date().toISOString().slice(0, 10)
 
 const defaultPlan = { id: 'plan-1', revision: 1 }
 
+const noop = vi.fn()
+
 const mockSection = {
   key: 'learn',
   label: 'Learn',
@@ -55,7 +57,21 @@ const mockSection = {
 describe('TodaySection', () => {
   it('renders section header with label and count', () => {
     render(
-      <TodaySection section={mockSection} planId="plan-1" plan={defaultPlan} todayKey={TODAY} topicsById={new Map()} />
+      <TodaySection
+        section={mockSection}
+        planId="plan-1"
+        plan={defaultPlan}
+        todayKey={TODAY}
+        topicsById={new Map()}
+        isMutating={false}
+        onStart={noop}
+        onComplete={noop}
+        onPartial={noop}
+        onRecordTime={noop}
+        onRecordQuestions={noop}
+        onSkip={noop}
+        onStudyPomodoro={noop}
+      />
     )
     expect(screen.getByText('Learn')).toBeInTheDocument()
     expect(screen.getByText('1/2')).toBeInTheDocument()
@@ -63,7 +79,21 @@ describe('TodaySection', () => {
 
   it('renders TaskCards for each task', () => {
     render(
-      <TodaySection section={mockSection} planId="plan-1" plan={defaultPlan} todayKey={TODAY} topicsById={new Map()} />
+      <TodaySection
+        section={mockSection}
+        planId="plan-1"
+        plan={defaultPlan}
+        todayKey={TODAY}
+        topicsById={new Map()}
+        isMutating={false}
+        onStart={noop}
+        onComplete={noop}
+        onPartial={noop}
+        onRecordTime={noop}
+        onRecordQuestions={noop}
+        onSkip={noop}
+        onStudyPomodoro={noop}
+      />
     )
     expect(screen.getByText('Stable Angina Pectoris')).toBeInTheDocument()
     expect(screen.getByText('Heart Failure')).toBeInTheDocument()

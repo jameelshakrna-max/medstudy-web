@@ -2,7 +2,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import TodayView from '../TodayView'
-import { TODAY_SECTIONS } from '../todayGrouping'
 
 vi.mock('../../../../lib/api', () => ({ apiGet: vi.fn() }))
 
@@ -27,6 +26,18 @@ const makeTask = (overrides = {}) => ({
 
 const defaultPlan = { id: 'plan-1', revision: 1 }
 
+const noop = vi.fn()
+
+const defaultCallbacks = {
+  onStart: noop,
+  onComplete: noop,
+  onPartial: noop,
+  onRecordTime: noop,
+  onRecordQuestions: noop,
+  onSkip: noop,
+  onStudyPomodoro: noop,
+}
+
 function renderTodayView(tasks = [], planOverrides = {}, extraProps = {}) {
   return render(
     <TodayView
@@ -34,6 +45,8 @@ function renderTodayView(tasks = [], planOverrides = {}, extraProps = {}) {
       tasks={tasks}
       topicsById={new Map()}
       plan={{ ...defaultPlan, ...planOverrides }}
+      isMutating={false}
+      {...defaultCallbacks}
       {...extraProps}
     />
   )
@@ -76,7 +89,7 @@ describe('TodayView', () => {
     const futureTasks = [
       { id: 't1', taskDate: '2099-01-10', status: 'locked', taskType: 'learning', estimatedMinutes: 60 },
     ]
-    render(<TodayView planId="plan-1" tasks={futureTasks} topicsById={new Map()} plan={futurePlan} />)
+    render(<TodayView planId="plan-1" tasks={futureTasks} topicsById={new Map()} plan={futurePlan} isMutating={false} {...defaultCallbacks} />)
     expect(screen.getByText(/Your rotation starts/)).toBeInTheDocument()
     expect(screen.queryByText('All done for today!')).not.toBeInTheDocument()
     expect(screen.queryByText('1/1 tasks')).not.toBeInTheDocument()
@@ -88,7 +101,7 @@ describe('TodayView', () => {
       { id: 't1', taskDate: '2099-01-10', status: 'locked', taskType: 'learning', estimatedMinutes: 60 },
       { id: 't2', taskDate: '2099-01-11', status: 'locked', taskType: 'uworld_questions', estimatedMinutes: 30 },
     ]
-    render(<TodayView planId="plan-1" tasks={futureTasks} topicsById={new Map()} plan={futurePlan} />)
+    render(<TodayView planId="plan-1" tasks={futureTasks} topicsById={new Map()} plan={futurePlan} isMutating={false} {...defaultCallbacks} />)
     expect(screen.getByText('2 upcoming tasks')).toBeInTheDocument()
   })
 
@@ -97,7 +110,7 @@ describe('TodayView', () => {
     const futureTasks = [
       { id: 't1', taskDate: '2099-01-10', status: 'locked', taskType: 'learning', estimatedMinutes: 60 },
     ]
-    render(<TodayView planId="plan-1" tasks={futureTasks} topicsById={new Map()} plan={plan} />)
+    render(<TodayView planId="plan-1" tasks={futureTasks} topicsById={new Map()} plan={plan} isMutating={false} {...defaultCallbacks} />)
     expect(screen.getByText('Nothing scheduled for today')).toBeInTheDocument()
     expect(screen.queryByText('All done for today!')).not.toBeInTheDocument()
   })

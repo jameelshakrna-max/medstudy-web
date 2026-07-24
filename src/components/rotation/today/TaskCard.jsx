@@ -1,7 +1,6 @@
-import { useMemo, useCallback, useState } from 'react'
-import { Play, Pause, Check, SkipForward, Brain, BookOpen, FileQuestion, RotateCcw, Layers, Bookmark, GraduationCap, Timer, X } from 'lucide-react'
+import { useMemo, useCallback } from 'react'
+import { Play, Check, SkipForward, Brain, BookOpen, FileQuestion, RotateCcw, Layers, Bookmark, GraduationCap, Timer } from 'lucide-react'
 import { getAvailableTaskActions, TASK_TYPE_ICONS } from './taskActionRules'
-import { STATUS_LABELS } from './taskDisplayModel'
 import ProgressBar from '../../ui/ProgressBar/ProgressBar'
 import styles from './TaskCard.module.css'
 
@@ -15,7 +14,23 @@ const ICON_MAP = {
   GraduationCap,
 }
 
-export default function TaskCard({ task, planId, plan, todayKey, topicsById, mutations, taskAttachment, sourceTitle }) {
+export default function TaskCard({
+  task,
+  planId,
+  plan,
+  todayKey,
+  topicsById,
+  sourceTitle,
+  isMutating,
+  onStart,
+  onComplete,
+  onPartial,
+  onRecordTime,
+  onRecordQuestions,
+  onSkip,
+  onStudyPomodoro,
+  canStudy,
+}) {
   const actions = useMemo(() => getAvailableTaskActions(task), [task])
   const TypeIcon = ICON_MAP[TASK_TYPE_ICONS[task.taskType]] || BookOpen
 
@@ -24,61 +39,9 @@ export default function TaskCard({ task, planId, plan, todayKey, topicsById, mut
   const isOverdue = task.isOverdue
   const isTerminal = task.isTerminal
 
-  const topic = topicsById?.get(task.planTopicId) || null
   const displayName = task.topicTitle || task.typeLabel
   const sourceName = sourceTitle || task.topicSource || null
   const sectionName = task.topicSection || null
-
-  const isMutating = mutations?.isPending ?? false
-
-  const [showCompleteDialog, setShowCompleteDialog] = useState(false)
-  const [showPartialDialog, setShowPartialDialog] = useState(false)
-  const [showSkipDialog, setShowSkipDialog] = useState(false)
-  const [completeMinutes, setCompleteMinutes] = useState('')
-  const [partialPercentage, setPartialPercentage] = useState('')
-  const [partialMinutes, setPartialMinutes] = useState('')
-
-  const handleStart = useCallback(() => {
-    mutations?.startTask(task.id)
-  }, [mutations, task.id])
-
-  const handleComplete = useCallback(() => {
-    const payload = {}
-    const mins = parseInt(completeMinutes, 10)
-    if (!isNaN(mins) && mins > 0) {
-      payload.actualMinutes = mins
-    }
-    mutations?.completeTask(task.id, payload)
-    setShowCompleteDialog(false)
-    setCompleteMinutes('')
-  }, [mutations, task.id, completeMinutes])
-
-  const handlePartial = useCallback(() => {
-    const payload = {}
-    const pct = parseInt(partialPercentage, 10)
-    if (!isNaN(pct) && pct > 0 && pct < 100) {
-      payload.completedPercentage = pct
-    }
-    const mins = parseInt(partialMinutes, 10)
-    if (!isNaN(mins) && mins > 0) {
-      payload.actualMinutes = mins
-    }
-    mutations?.partialTask(task.id, payload)
-    setShowPartialDialog(false)
-    setPartialPercentage('')
-    setPartialMinutes('')
-  }, [mutations, task.id, partialPercentage, partialMinutes])
-
-  const handleSkip = useCallback(() => {
-    mutations?.skipTask(task.id)
-    setShowSkipDialog(false)
-  }, [mutations, task.id])
-
-  const handleStudyPomodoro = useCallback(() => {
-    taskAttachment?.handlePlay(task)
-  }, [taskAttachment, task])
-
-  const canStudy = task.status === 'pending' || task.status === 'in_progress'
 
   return (
     <div
@@ -112,7 +75,7 @@ export default function TaskCard({ task, planId, plan, todayKey, topicsById, mut
         </div>
         {sourceName && (
           <div className={styles.sourceInfo}>
-            {sectionName ? `${sourceName} • ${sectionName}` : sourceName}
+            {sectionName ? `${sourceName} \u2022 ${sectionName}` : sourceName}
           </div>
         )}
         <div className={styles.timeInfo}>
@@ -129,7 +92,7 @@ export default function TaskCard({ task, planId, plan, todayKey, topicsById, mut
         <div className={styles.pomodoroRow}>
           <button
             className={`${styles.actionBtn} ${styles.pomodoroBtn}`}
-            onClick={handleStudyPomodoro}
+            onClick={() => onStudyPomodoro(task)}
             disabled={isMutating}
           >
             <Timer size={14} /> Study with Pomodoro
@@ -141,7 +104,7 @@ export default function TaskCard({ task, planId, plan, todayKey, topicsById, mut
         {actions.includes('start') && (
           <button
             className={`${styles.actionBtn} ${styles.playBtn}`}
-            onClick={handleStart}
+            onClick={() => onStart(task)}
             disabled={isMutating}
           >
             {isMutating ? 'Starting...' : <><Play size={14} /> Start</>}
@@ -150,7 +113,7 @@ export default function TaskCard({ task, planId, plan, todayKey, topicsById, mut
         {actions.includes('complete') && (
           <button
             className={`${styles.actionBtn} ${styles.completeBtn}`}
-            onClick={() => setShowCompleteDialog(true)}
+            onClick={() => onComplete(task)}
             disabled={isMutating}
           >
             <Check size={14} /> Done
@@ -159,7 +122,7 @@ export default function TaskCard({ task, planId, plan, todayKey, topicsById, mut
         {actions.includes('partial') && (
           <button
             className={styles.actionBtn}
-            onClick={() => setShowPartialDialog(true)}
+            onClick={() => onPartial(task)}
             disabled={isMutating}
           >
             Partial
@@ -168,7 +131,7 @@ export default function TaskCard({ task, planId, plan, todayKey, topicsById, mut
         {actions.includes('skip') && (
           <button
             className={`${styles.actionBtn} ${styles.skipBtn}`}
-            onClick={() => setShowSkipDialog(true)}
+            onClick={() => onSkip(task)}
             disabled={isMutating}
           >
             <SkipForward size={14} /> Skip
@@ -177,6 +140,7 @@ export default function TaskCard({ task, planId, plan, todayKey, topicsById, mut
         {actions.includes('record_time') && (
           <button
             className={styles.actionBtn}
+            onClick={() => onRecordTime(task)}
             disabled={isMutating}
           >
             Log Time
@@ -185,122 +149,13 @@ export default function TaskCard({ task, planId, plan, todayKey, topicsById, mut
         {actions.includes('record_questions') && (
           <button
             className={styles.actionBtn}
+            onClick={() => onRecordQuestions(task)}
             disabled={isMutating}
           >
             Log Questions
           </button>
         )}
       </div>
-
-      {showCompleteDialog && (
-        <div className={styles.dialogOverlay} onClick={() => setShowCompleteDialog(false)}>
-          <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.dialogHeader}>
-              <h4>Mark as Complete</h4>
-              <button className={styles.dialogClose} onClick={() => setShowCompleteDialog(false)}>
-                <X size={16} />
-              </button>
-            </div>
-            <div className={styles.dialogBody}>
-              <label className={styles.dialogLabel}>
-                Actual time (minutes)
-                <input
-                  type="number"
-                  className={styles.dialogInput}
-                  value={completeMinutes}
-                  onChange={(e) => setCompleteMinutes(e.target.value)}
-                  placeholder="Optional"
-                  min="0"
-                />
-              </label>
-            </div>
-            <div className={styles.dialogActions}>
-              <button className={styles.dialogCancel} onClick={() => setShowCompleteDialog(false)}>Cancel</button>
-              <button
-                className={`${styles.actionBtn} ${styles.completeBtn}`}
-                onClick={handleComplete}
-                disabled={isMutating}
-              >
-                {isMutating ? 'Saving...' : 'Complete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showPartialDialog && (
-        <div className={styles.dialogOverlay} onClick={() => setShowPartialDialog(false)}>
-          <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.dialogHeader}>
-              <h4>Mark as Partial</h4>
-              <button className={styles.dialogClose} onClick={() => setShowPartialDialog(false)}>
-                <X size={16} />
-              </button>
-            </div>
-            <div className={styles.dialogBody}>
-              <label className={styles.dialogLabel}>
-                Completion percentage (1-99)
-                <input
-                  type="number"
-                  className={styles.dialogInput}
-                  value={partialPercentage}
-                  onChange={(e) => setPartialPercentage(e.target.value)}
-                  placeholder="Required"
-                  min="1"
-                  max="99"
-                />
-              </label>
-              <label className={styles.dialogLabel}>
-                Actual time (minutes)
-                <input
-                  type="number"
-                  className={styles.dialogInput}
-                  value={partialMinutes}
-                  onChange={(e) => setPartialMinutes(e.target.value)}
-                  placeholder="Optional"
-                  min="0"
-                />
-              </label>
-            </div>
-            <div className={styles.dialogActions}>
-              <button className={styles.dialogCancel} onClick={() => setShowPartialDialog(false)}>Cancel</button>
-              <button
-                className={styles.actionBtn}
-                onClick={handlePartial}
-                disabled={isMutating}
-              >
-                {isMutating ? 'Saving...' : 'Save Partial'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showSkipDialog && (
-        <div className={styles.dialogOverlay} onClick={() => setShowSkipDialog(false)}>
-          <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.dialogHeader}>
-              <h4>Skip Task</h4>
-              <button className={styles.dialogClose} onClick={() => setShowSkipDialog(false)}>
-                <X size={16} />
-              </button>
-            </div>
-            <div className={styles.dialogBody}>
-              <p className={styles.dialogText}>Are you sure you want to skip this task?</p>
-            </div>
-            <div className={styles.dialogActions}>
-              <button className={styles.dialogCancel} onClick={() => setShowSkipDialog(false)}>Cancel</button>
-              <button
-                className={`${styles.actionBtn} ${styles.skipBtn}`}
-                onClick={handleSkip}
-                disabled={isMutating}
-              >
-                {isMutating ? 'Skipping...' : 'Skip Task'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

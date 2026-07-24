@@ -6,7 +6,22 @@ import TodaySection from './TodaySection'
 import ProgressBar from '../../ui/ProgressBar/ProgressBar'
 import styles from './TodayView.module.css'
 
-export default function TodayView({ planId, tasks, topics, topicsById, plan, mutations, taskAttachment, sourceTitle }) {
+export default function TodayView({
+  planId,
+  tasks,
+  topics,
+  topicsById,
+  plan,
+  sourceTitle,
+  isMutating,
+  onStart,
+  onComplete,
+  onPartial,
+  onRecordTime,
+  onRecordQuestions,
+  onSkip,
+  onStudyPomodoro,
+}) {
   const todayKey = useMemo(() => getTodayKey(new Date()), [])
 
   const displayTasks = useMemo(
@@ -112,9 +127,15 @@ export default function TodayView({ planId, tasks, topics, topicsById, plan, mut
           plan={plan}
           todayKey={todayKey}
           topicsById={topicsById}
-          mutations={mutations}
-          taskAttachment={taskAttachment}
           sourceTitle={sourceTitle}
+          isMutating={isMutating}
+          onStart={onStart}
+          onComplete={onComplete}
+          onPartial={onPartial}
+          onRecordTime={onRecordTime}
+          onRecordQuestions={onRecordQuestions}
+          onSkip={onSkip}
+          onStudyPomodoro={onStudyPomodoro}
         />
       ))}
     </div>

@@ -2,7 +2,22 @@ import TaskCard from './TaskCard'
 import { calculateSectionProgress } from './todayGrouping'
 import styles from './TodaySection.module.css'
 
-export default function TodaySection({ section, planId, plan, todayKey, topicsById, mutations, taskAttachment, sourceTitle }) {
+export default function TodaySection({
+  section,
+  planId,
+  plan,
+  todayKey,
+  topicsById,
+  sourceTitle,
+  isMutating,
+  onStart,
+  onComplete,
+  onPartial,
+  onRecordTime,
+  onRecordQuestions,
+  onSkip,
+  onStudyPomodoro,
+}) {
   const progress = calculateSectionProgress(section.tasks)
 
   return (
@@ -22,9 +37,16 @@ export default function TodaySection({ section, planId, plan, todayKey, topicsBy
             plan={plan}
             todayKey={todayKey}
             topicsById={topicsById}
-            mutations={mutations}
-            taskAttachment={taskAttachment}
             sourceTitle={sourceTitle}
+            isMutating={isMutating}
+            onStart={onStart}
+            onComplete={onComplete}
+            onPartial={onPartial}
+            onRecordTime={onRecordTime}
+            onRecordQuestions={onRecordQuestions}
+            onSkip={onSkip}
+            onStudyPomodoro={onStudyPomodoro}
+            canStudy={task.status === 'pending' || task.status === 'in_progress'}
           />
         ))}
       </div>

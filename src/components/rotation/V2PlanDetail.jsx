@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs/Tabs'
@@ -8,6 +8,11 @@ import usePlannerTaskMutations from './today/usePlannerTaskMutations'
 import useTaskAttachment from './today/useTaskAttachment'
 import TodayView from './today/TodayView'
 import RecalculationBanner from './today/RecalculationBanner'
+import RecordTimeDialog from './today/dialogs/RecordTimeDialog'
+import TaskCompletionDialog from './today/dialogs/TaskCompletionDialog'
+import PartialDialog from './today/dialogs/PartialDialog'
+import SkipConfirmDialog from './today/dialogs/SkipConfirmDialog'
+import RecordQuestionsDialog from './today/dialogs/RecordQuestionsDialog'
 import styles from './V2PlanDetail.module.css'
 
 function getRecalculationDate() {
@@ -18,6 +23,16 @@ function getRecalculationDate() {
 export default function V2PlanDetail({ planId, onBack }) {
   const navigate = useNavigate()
   const { data, isLoading, error } = useRotationPlanDetail(planId)
+
+  const [dialogState, setDialogState] = useState({ type: null, task: null })
+
+  const openDialog = useCallback((type, task) => {
+    setDialogState({ type, task })
+  }, [])
+
+  const closeDialog = useCallback(() => {
+    setDialogState({ type: null, task: null })
+  }, [])
 
   const topicsById = useMemo(() => {
     const topics = data?.topics || []
@@ -39,6 +54,54 @@ export default function V2PlanDetail({ planId, onBack }) {
     currentRevision: mutations.currentRevision,
     onAttached: () => navigate('/pomodoro'),
   })
+
+  const handleStart = useCallback((task) => {
+    mutations.startTask(task.id)
+  }, [mutations])
+
+  const handleComplete = useCallback((task) => {
+    openDialog('complete', task)
+  }, [openDialog])
+
+  const handlePartial = useCallback((task) => {
+    openDialog('partial', task)
+  }, [openDialog])
+
+  const handleRecordTime = useCallback((task) => {
+    openDialog('recordTime', task)
+  }, [openDialog])
+
+  const handleRecordQuestions = useCallback((task) => {
+    openDialog('recordQuestions', task)
+  }, [openDialog])
+
+  const handleSkip = useCallback((task) => {
+    openDialog('skip', task)
+  }, [openDialog])
+
+  const handleStudyPomodoro = useCallback((task) => {
+    taskAttachment.handlePlay(task)
+  }, [taskAttachment])
+
+  const handleCompleteSubmit = useCallback(async (payload) => {
+    await mutations.completeTask(dialogState.task.id, payload)
+  }, [mutations, dialogState.task])
+
+  const handlePartialSubmit = useCallback(async (payload) => {
+    await mutations.partialTask(dialogState.task.id, payload)
+  }, [mutations, dialogState.task])
+
+  const handleRecordTimeSubmit = useCallback(async (payload) => {
+    await mutations.recordTime(dialogState.task.id, payload.actualMinutes)
+  }, [mutations, dialogState.task])
+
+  const handleRecordQuestionsSubmit = useCallback(async (payload) => {
+    await mutations.recordQuestions(dialogState.task.id, payload)
+  }, [mutations, dialogState.task])
+
+  const handleSkipSubmit = useCallback(async () => {
+    await mutations.skipTask(dialogState.task.id)
+  }, [mutations, dialogState.task])
 
   if (isLoading) return <LoadingScreen fullPage={false} message="Loading plan details..." />
 
@@ -90,9 +153,15 @@ export default function V2PlanDetail({ planId, onBack }) {
             topics={topics}
             topicsById={topicsById}
             plan={plan}
-            mutations={mutations}
-            taskAttachment={taskAttachment}
             sourceTitle={plan.sourceTitle}
+            isMutating={mutations.isPending}
+            onStart={handleStart}
+            onComplete={handleComplete}
+            onPartial={handlePartial}
+            onRecordTime={handleRecordTime}
+            onRecordQuestions={handleRecordQuestions}
+            onSkip={handleSkip}
+            onStudyPomodoro={handleStudyPomodoro}
           />
         </TabsContent>
         <TabsContent value="schedule">
@@ -102,6 +171,51 @@ export default function V2PlanDetail({ planId, onBack }) {
           <div className={styles.tabPlaceholder}>Topics view coming soon</div>
         </TabsContent>
       </Tabs>
+
+      {dialogState.type === 'recordTime' && (
+        <RecordTimeDialog
+          open
+          task={dialogState.task}
+          onClose={closeDialog}
+          onSubmit={handleRecordTimeSubmit}
+        />
+      )}
+
+      {dialogState.type === 'complete' && (
+        <TaskCompletionDialog
+          open
+          task={dialogState.task}
+          onClose={closeDialog}
+          onSubmit={handleCompleteSubmit}
+        />
+      )}
+
+      {dialogState.type === 'partial' && (
+        <PartialDialog
+          open
+          task={dialogState.task}
+          onClose={closeDialog}
+          onSubmit={handlePartialSubmit}
+        />
+      )}
+
+      {dialogState.type === 'skip' && (
+        <SkipConfirmDialog
+          open
+          task={dialogState.task}
+          onClose={closeDialog}
+          onSubmit={handleSkipSubmit}
+        />
+      )}
+
+      {dialogState.type === 'recordQuestions' && (
+        <RecordQuestionsDialog
+          open
+          task={dialogState.task}
+          onClose={closeDialog}
+          onSubmit={handleRecordQuestionsSubmit}
+        />
+      )}
     </div>
   )
 }
