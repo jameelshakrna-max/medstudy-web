@@ -2,6 +2,7 @@ import { useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs/Tabs'
+import Toast from '../ui/Toast/Toast'
 import LoadingScreen from '../LoadingScreen'
 import useRotationPlanDetail from './today/useRotationPlanDetail'
 import usePlannerTaskMutations from './today/usePlannerTaskMutations'
@@ -25,6 +26,7 @@ export default function V2PlanDetail({ planId, onBack }) {
   const { data, isLoading, error } = useRotationPlanDetail(planId)
 
   const [dialogState, setDialogState] = useState({ type: null, task: null })
+  const [toast, setToast] = useState({ open: false, title: '', description: '', variant: 'default' })
 
   const openDialog = useCallback((type, task) => {
     setDialogState({ type, task })
@@ -55,8 +57,12 @@ export default function V2PlanDetail({ planId, onBack }) {
     onAttached: () => navigate('/pomodoro'),
   })
 
-  const handleStart = useCallback((task) => {
-    mutations.startTask(task.id)
+  const handleStart = useCallback(async (task) => {
+    try {
+      await mutations.startTask(task.id)
+    } catch (err) {
+      setToast({ open: true, title: 'Failed to start task', description: err?.message || 'Please try again.', variant: 'error' })
+    }
   }, [mutations])
 
   const handleComplete = useCallback((task) => {
@@ -83,6 +89,8 @@ export default function V2PlanDetail({ planId, onBack }) {
     const result = await taskAttachment.handlePlay(task)
     if (result?.alreadyAttached || result?.allowed) {
       navigate('/pomodoro')
+    } else if (result?.reason) {
+      setToast({ open: true, title: 'Cannot start Pomodoro', description: result.reason, variant: 'error' })
     }
   }, [taskAttachment, navigate])
 
@@ -219,6 +227,17 @@ export default function V2PlanDetail({ planId, onBack }) {
           onSubmit={handleRecordQuestionsSubmit}
         />
       )}
+
+      <Toast.Provider>
+        <Toast
+          open={toast.open}
+          onOpenChange={(open) => setToast(prev => ({ ...prev, open }))}
+          title={toast.title}
+          description={toast.description}
+          variant={toast.variant}
+        />
+        <Toast.Viewport />
+      </Toast.Provider>
     </div>
   )
 }
