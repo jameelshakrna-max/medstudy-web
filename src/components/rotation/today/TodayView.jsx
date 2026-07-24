@@ -1,17 +1,17 @@
 import { useMemo } from 'react'
 import { getTodayKey } from './todayUtils'
-import { groupTasksBySection, calculateDayProgress } from './todayGrouping'
+import { groupTasksBySection, calculateDayProgress, classifyTodayState, getTodayRelevantTasks } from './todayGrouping'
 import { getTaskDisplayModel } from './taskDisplayModel'
 import TodaySection from './TodaySection'
 import ProgressBar from '../../ui/ProgressBar/ProgressBar'
 import styles from './TodayView.module.css'
 
-export default function TodayView({ planId, tasks, plan }) {
+export default function TodayView({ planId, tasks, topics, topicsById, plan, mutations, taskAttachment, sourceTitle }) {
   const todayKey = useMemo(() => getTodayKey(new Date()), [])
 
   const displayTasks = useMemo(
-    () => tasks.map(t => getTaskDisplayModel(t, todayKey)),
-    [tasks, todayKey]
+    () => tasks.map(t => getTaskDisplayModel(t, todayKey, topicsById.get(t.planTopicId) || null)),
+    [tasks, todayKey, topicsById]
   )
 
   const sections = useMemo(
@@ -19,17 +19,68 @@ export default function TodayView({ planId, tasks, plan }) {
     [displayTasks, todayKey]
   )
 
-  const dayProgress = useMemo(
-    () => calculateDayProgress(displayTasks, todayKey),
-    [displayTasks, todayKey]
+  const todayState = useMemo(
+    () => classifyTodayState({ todayKey, plan, displayTasks, sections }),
+    [todayKey, plan, displayTasks, sections]
   )
 
-  if (displayTasks.length === 0) {
+  const todayRelevantTasks = useMemo(
+    () => todayState.state === 'HAS_WORK' ? todayState.todayRelevantTasks : getTodayRelevantTasks(displayTasks, todayKey),
+    [todayState, displayTasks, todayKey]
+  )
+
+  const dayProgress = useMemo(
+    () => calculateDayProgress(displayTasks, todayKey, (t) => todayRelevantTasks.includes(t)),
+    [displayTasks, todayKey, todayRelevantTasks]
+  )
+
+  if (todayState.state === 'PRE_START') {
+    const startDate = todayState.startDate
+    const dateDisplay = startDate ? formatDateShort(startDate) : 'soon'
     return (
       <div className={styles.empty}>
-        <div className={styles.emptyTitle}>Nothing due today</div>
+        <div className={styles.emptyTitle}>Your rotation starts {dateDisplay}</div>
         <div className={styles.emptyDesc}>
-          All caught up! Check the Schedule tab for upcoming tasks.
+          {tasks.length > 0 && `${tasks.length} upcoming tasks`}
+        </div>
+      </div>
+    )
+  }
+
+  if (todayState.state === 'ALL_DONE') {
+    return (
+      <div className={styles.container}>
+        <div className={styles.progressHeader}>
+          <div className={styles.progressStats}>
+            <span className={styles.statPrimary}>
+              {dayProgress.completedTasks}/{dayProgress.totalTasks} tasks
+            </span>
+            <span className={styles.statSecondary}>
+              {formatMinutes(dayProgress.completedMinutes)} of {formatMinutes(dayProgress.totalMinutes)}
+            </span>
+          </div>
+          <ProgressBar
+            value={dayProgress.weightedProgress}
+            label={`${Math.round(dayProgress.weightedProgress * 100)}%`}
+            size="default"
+          />
+        </div>
+        <div className={styles.allDone}>
+          <div className={styles.allDoneTitle}>All done for today!</div>
+          <div className={styles.allDoneDesc}>
+            Every task is complete. Great work!
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (todayState.state === 'EMPTY_TODAY') {
+    return (
+      <div className={styles.empty}>
+        <div className={styles.emptyTitle}>Nothing scheduled for today</div>
+        <div className={styles.emptyDesc}>
+          Check the Schedule tab for upcoming tasks.
         </div>
       </div>
     )
@@ -53,24 +104,19 @@ export default function TodayView({ planId, tasks, plan }) {
         />
       </div>
 
-      {sections.length > 0 ? (
-        sections.map(section => (
-          <TodaySection
-            key={section.key}
-            section={section}
-            planId={planId}
-            plan={plan}
-            todayKey={todayKey}
-          />
-        ))
-      ) : (
-        <div className={styles.allDone}>
-          <div className={styles.allDoneTitle}>All done for today!</div>
-          <div className={styles.allDoneDesc}>
-            Every task is complete. Great work!
-          </div>
-        </div>
-      )}
+      {sections.map(section => (
+        <TodaySection
+          key={section.key}
+          section={section}
+          planId={planId}
+          plan={plan}
+          todayKey={todayKey}
+          topicsById={topicsById}
+          mutations={mutations}
+          taskAttachment={taskAttachment}
+          sourceTitle={sourceTitle}
+        />
+      ))}
     </div>
   )
 }
@@ -82,4 +128,11 @@ function formatMinutes(mins) {
   if (h === 0) return `${m}m`
   if (m === 0) return `${h}h`
   return `${h}h ${m}m`
+}
+
+function formatDateShort(dateKey) {
+  const [year, month, day] = dateKey.split('-')
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const monthName = months[parseInt(month, 10) - 1]
+  return `on ${monthName} ${parseInt(day, 10)}`
 }

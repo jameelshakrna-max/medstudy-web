@@ -18,7 +18,7 @@ export const INITIAL_FORM = {
   schedulingMode: 'efficient',
   questionStartRule: 'next_available_day',
   bufferPercentage: 20,
-  maximumActiveTopics: 5,
+  maximumActiveTopics: 2,
 };
 
 export const PREVIEW_STEP = 10;

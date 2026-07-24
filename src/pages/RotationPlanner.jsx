@@ -67,10 +67,10 @@ export default function RotationPlanner() {
   const selectedEntry = plans.find(e => e.plan.id === selectedPlanId)
   const selectedVersion = selectedEntry?.version ?? 'v1'
 
-  // ── Fetch single plan details ──
+  // ── Fetch single plan details (V1 only — V2 has its own hook) ──
   const { data: planDetail, isLoading: detailLoading } = useQuery({
     queryKey: queryKeys.rotations.plan(selectedPlanId),
-    enabled: !!selectedPlanId,
+    enabled: !!selectedPlanId && selectedVersion === 'v1',
     queryFn: () => apiGet(`/rotations/plans/${selectedPlanId}`),
   })
 

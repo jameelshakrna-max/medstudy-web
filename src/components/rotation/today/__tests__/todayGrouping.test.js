@@ -5,6 +5,8 @@ import {
   sortTasksForSection,
   calculateSectionProgress,
   calculateDayProgress,
+  classifyTodayState,
+  getTodayRelevantTasks,
 } from '../todayGrouping';
 
 function makeTask(overrides) {
@@ -327,3 +329,137 @@ describe('default export', () => {
     expect(mod.default.calculateDayProgress).toBe(calculateDayProgress);
   });
 });
+
+describe('classifyTodayState', () => {
+  it('returns PRE_START when todayKey < plan.startDate', () => {
+    const result = classifyTodayState({
+      todayKey: '2026-07-23',
+      plan: { startDate: '2026-07-24' },
+      displayTasks: [{ taskDate: '2026-07-24', status: 'locked' }],
+      sections: [],
+    })
+    expect(result.state).toBe('PRE_START')
+    expect(result.startDate).toBe('2026-07-24')
+  })
+
+  it('PRE_START never shows ALL_DONE even with tasks', () => {
+    const result = classifyTodayState({
+      todayKey: '2026-07-23',
+      plan: { startDate: '2026-07-24' },
+      displayTasks: [
+        { taskDate: '2026-07-24', status: 'completed' },
+        { taskDate: '2026-07-25', status: 'completed' },
+      ],
+      sections: [],
+    })
+    expect(result.state).toBe('PRE_START')
+    expect(result.state).not.toBe('ALL_DONE')
+  })
+
+  it('returns ALL_DONE when today-relevant tasks exist but sections are empty', () => {
+    const result = classifyTodayState({
+      todayKey: '2026-07-23',
+      plan: { startDate: '2026-07-22' },
+      displayTasks: [
+        { taskDate: '2026-07-23', status: 'completed', taskType: 'learning' },
+      ],
+      sections: [],
+    })
+    expect(result.state).toBe('ALL_DONE')
+  })
+
+  it('ALL_DONE requires tasks relevant for today', () => {
+    const result = classifyTodayState({
+      todayKey: '2026-07-23',
+      plan: { startDate: '2026-07-22' },
+      displayTasks: [
+        { taskDate: '2026-07-24', status: 'locked', taskType: 'learning' },
+      ],
+      sections: [],
+    })
+    expect(result.state).toBe('EMPTY_TODAY')
+    expect(result.state).not.toBe('ALL_DONE')
+  })
+
+  it('returns EMPTY_TODAY when plan is active but no tasks today', () => {
+    const result = classifyTodayState({
+      todayKey: '2026-07-23',
+      plan: { startDate: '2026-07-22' },
+      displayTasks: [
+        { taskDate: '2026-07-24', status: 'locked', taskType: 'learning' },
+      ],
+      sections: [],
+    })
+    expect(result.state).toBe('EMPTY_TODAY')
+  })
+
+  it('returns HAS_WORK when sections have tasks', () => {
+    const result = classifyTodayState({
+      todayKey: '2026-07-23',
+      plan: { startDate: '2026-07-22' },
+      displayTasks: [
+        { taskDate: '2026-07-23', status: 'pending', taskType: 'learning' },
+      ],
+      sections: [{ key: 'learn', label: 'Learn', tasks: [{ id: '1' }] }],
+    })
+    expect(result.state).toBe('HAS_WORK')
+  })
+
+  it('future completed tasks do not trigger ALL_DONE', () => {
+    const result = classifyTodayState({
+      todayKey: '2026-07-23',
+      plan: { startDate: '2026-07-22' },
+      displayTasks: [
+        { taskDate: '2026-07-25', status: 'completed', taskType: 'learning' },
+      ],
+      sections: [],
+    })
+    expect(result.state).toBe('EMPTY_TODAY')
+  })
+})
+
+describe('getTodayRelevantTasks', () => {
+  it('includes tasks scheduled for today', () => {
+    const tasks = [
+      { taskDate: '2026-07-23', status: 'pending' },
+      { taskDate: '2026-07-24', status: 'locked' },
+    ]
+    const result = getTodayRelevantTasks(tasks, '2026-07-23')
+    expect(result).toHaveLength(1)
+    expect(result[0].taskDate).toBe('2026-07-23')
+  })
+
+  it('includes in_progress tasks regardless of date', () => {
+    const tasks = [
+      { taskDate: '2026-07-25', status: 'in_progress' },
+    ]
+    const result = getTodayRelevantTasks(tasks, '2026-07-23')
+    expect(result).toHaveLength(1)
+  })
+
+  it('includes overdue tasks (pending/locked before today)', () => {
+    const tasks = [
+      { taskDate: '2026-07-22', status: 'pending' },
+      { taskDate: '2026-07-22', status: 'locked' },
+    ]
+    const result = getTodayRelevantTasks(tasks, '2026-07-23')
+    expect(result).toHaveLength(2)
+  })
+
+  it('excludes future pending/locked tasks', () => {
+    const tasks = [
+      { taskDate: '2026-07-24', status: 'locked' },
+      { taskDate: '2026-07-25', status: 'pending' },
+    ]
+    const result = getTodayRelevantTasks(tasks, '2026-07-23')
+    expect(result).toHaveLength(0)
+  })
+
+  it('excludes completed tasks not scheduled for today', () => {
+    const tasks = [
+      { taskDate: '2026-07-22', status: 'completed' },
+    ]
+    const result = getTodayRelevantTasks(tasks, '2026-07-23')
+    expect(result).toHaveLength(0)
+  })
+})

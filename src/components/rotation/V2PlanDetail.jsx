@@ -1,14 +1,44 @@
 import { useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs/Tabs'
 import LoadingScreen from '../LoadingScreen'
 import useRotationPlanDetail from './today/useRotationPlanDetail'
+import usePlannerTaskMutations from './today/usePlannerTaskMutations'
+import useTaskAttachment from './today/useTaskAttachment'
 import TodayView from './today/TodayView'
 import RecalculationBanner from './today/RecalculationBanner'
 import styles from './V2PlanDetail.module.css'
 
+function getRecalculationDate() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
 export default function V2PlanDetail({ planId, onBack }) {
+  const navigate = useNavigate()
   const { data, isLoading, error } = useRotationPlanDetail(planId)
+
+  const topicsById = useMemo(() => {
+    const topics = data?.topics || []
+    const map = new Map()
+    for (const t of topics) {
+      if (t.id) map.set(t.id, t)
+    }
+    return map
+  }, [data?.topics])
+
+  const mutations = usePlannerTaskMutations({
+    planId,
+    initialRevision: data?.plan?.revision,
+    getRecalculationDate,
+  })
+
+  const taskAttachment = useTaskAttachment({
+    startTask: mutations.startTask,
+    currentRevision: mutations.currentRevision,
+    onAttached: () => navigate('/pomodoro'),
+  })
 
   if (isLoading) return <LoadingScreen fullPage={false} message="Loading plan details..." />
 
@@ -23,7 +53,7 @@ export default function V2PlanDetail({ planId, onBack }) {
     )
   }
 
-  const { plan, tasks, schedule, progress } = data
+  const { plan, tasks, topics, schedule, progress } = data
 
   return (
     <div className={styles.container}>
@@ -54,7 +84,16 @@ export default function V2PlanDetail({ planId, onBack }) {
           <TabsTrigger value="topics">Topics</TabsTrigger>
         </TabsList>
         <TabsContent value="today">
-          <TodayView planId={planId} tasks={tasks} plan={plan} />
+          <TodayView
+            planId={planId}
+            tasks={tasks}
+            topics={topics}
+            topicsById={topicsById}
+            plan={plan}
+            mutations={mutations}
+            taskAttachment={taskAttachment}
+            sourceTitle={plan.sourceTitle}
+          />
         </TabsContent>
         <TabsContent value="schedule">
           <div className={styles.tabPlaceholder}>Schedule view coming soon</div>

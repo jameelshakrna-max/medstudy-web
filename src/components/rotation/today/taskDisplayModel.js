@@ -26,7 +26,7 @@ export function formatMinutes(mins) {
   return `${h}h ${m}m`;
 }
 
-export function formatProgress(task) {
+export function formatProgress(task, status) {
   if (task.targetCount && task.targetCount > 0) {
     const completed = task.completedCount || 0;
     const percent = Math.round((completed / task.targetCount) * 100);
@@ -37,11 +37,15 @@ export function formatProgress(task) {
     return { percent: Math.round(task.completionPercentage), label: `${Math.round(task.completionPercentage)}%` };
   }
 
+  if (status === 'in_progress') {
+    return { percent: 0, label: 'In progress' };
+  }
+
   return { percent: 0, label: 'Not started' };
 }
 
-export function getTaskDisplayModel(task, todayKey) {
-  const progress = formatProgress(task);
+export function getTaskDisplayModel(task, todayKey, topic = null) {
+  const progress = formatProgress(task, task.status);
   const taskDate = task.taskDate || '';
   const isOverdue = todayKey ? taskDate < todayKey && !TERMINAL_STATUSES.has(task.status) : false;
 
@@ -79,5 +83,9 @@ export function getTaskDisplayModel(task, todayKey) {
     mode: task.mode,
 
     metadataJson: task.metadataJson,
+
+    topicTitle: topic?.topicTitle || null,
+    topicSource: topic?.normalizedTopicId?.split('::')[0] || null,
+    topicSection: topic?.normalizedTopicId?.split('::')[1]?.split('.')[0] || null,
   };
 }

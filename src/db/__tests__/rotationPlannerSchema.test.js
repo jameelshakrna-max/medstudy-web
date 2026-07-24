@@ -14,8 +14,10 @@ import {
   TASK_STATUSES,
   V1_TABLES,
   ALL_PLANNER_COLUMNS,
-  getMigration14Sql,
 } from '../rotationPlannerSchema.js'
+import {
+  getMigration14Sql,
+} from '../rotationPlannerSchema.node.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 

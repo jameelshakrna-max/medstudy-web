@@ -30,7 +30,10 @@ export function getAvailableTaskActions(task) {
     case 'pending':
       return ['start', 'complete', 'partial', 'skip'];
     case 'in_progress':
-      return ['complete', 'partial', 'record_time', 'record_questions'];
+      if (task.taskType === 'uworld_questions' || task.taskType === 'incorrect_review') {
+        return ['complete', 'partial', 'record_time', 'record_questions']
+      }
+      return ['complete', 'partial', 'record_time']
     case 'partial':
     case 'completed':
     case 'skipped':

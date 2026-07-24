@@ -61,10 +61,34 @@ describe("getAvailableTaskActions", () => {
     ]);
   });
 
-  it("returns complete/partial/record_time/record_questions for in_progress", () => {
+  it("returns complete/partial/record_time/record_questions for in_progress uworld_questions", () => {
     expect(
       getAvailableTaskActions({ status: "in_progress", taskType: "uworld_questions" })
     ).toEqual(["complete", "partial", "record_time", "record_questions"]);
+  });
+
+  it("returns complete/partial/record_time (no record_questions) for in_progress learning", () => {
+    expect(
+      getAvailableTaskActions({ status: "in_progress", taskType: "learning" })
+    ).toEqual(["complete", "partial", "record_time"]);
+  });
+
+  it("returns complete/partial/record_time/record_questions for in_progress incorrect_review", () => {
+    expect(
+      getAvailableTaskActions({ status: "in_progress", taskType: "incorrect_review" })
+    ).toEqual(["complete", "partial", "record_time", "record_questions"]);
+  });
+
+  it("returns complete/partial/record_time (no record_questions) for in_progress consolidation", () => {
+    expect(
+      getAvailableTaskActions({ status: "in_progress", taskType: "consolidation" })
+    ).toEqual(["complete", "partial", "record_time"]);
+  });
+
+  it("returns complete/partial/record_time (no record_questions) for in_progress mixed_review", () => {
+    expect(
+      getAvailableTaskActions({ status: "in_progress", taskType: "mixed_review" })
+    ).toEqual(["complete", "partial", "record_time"]);
   });
 
   it("returns empty for partial (terminal)", () => {
@@ -81,12 +105,6 @@ describe("getAvailableTaskActions", () => {
 
   it("returns empty for unknown status", () => {
     expect(getAvailableTaskActions({ status: "bogus", taskType: "learning" })).toEqual([]);
-  });
-
-  it("does not use taskType in its logic", () => {
-    const a = getAvailableTaskActions({ status: "pending", taskType: "uworld_questions" });
-    const b = getAvailableTaskActions({ status: "pending", taskType: "flashcard_review" });
-    expect(a).toEqual(b);
   });
 });
 

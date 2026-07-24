@@ -129,8 +129,8 @@ function ensureCORS(response) {
   const h = response.headers
   if (!h.get('access-control-allow-origin')) {
     h.set('access-control-allow-origin', '*')
-    h.set('access-control-allow-methods', 'GET, POST, PUT, DELETE, OPTIONS')
-    h.set('access-control-allow-headers', 'Content-Type, Authorization')
+    h.set('access-control-allow-methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS')
+    h.set('access-control-allow-headers', 'Content-Type, Authorization, Idempotency-Key')
   }
   return response
 }

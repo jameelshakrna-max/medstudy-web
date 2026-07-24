@@ -109,23 +109,3 @@ export const ALL_PLANNER_COLUMNS = {
     'operation', 'result_json', 'created_at',
   ],
 }
-
-import { readFileSync } from 'node:fs'
-import { resolve, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
-
-export function getMigrationSql() {
-  return readFileSync(
-    resolve(__dirname, '../../schema-migration13.sql'),
-    'utf8'
-  )
-}
-
-export function getMigration14Sql() {
-  return readFileSync(
-    resolve(__dirname, '../../schema-migration14.sql'),
-    'utf8'
-  )
-}

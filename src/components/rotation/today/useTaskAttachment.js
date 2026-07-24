@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { usePomodoro } from '../../../context/PomodoroContext'
 
-export default function useTaskAttachment({ startTask, currentRevision } = {}) {
+export default function useTaskAttachment({ startTask, currentRevision, onAttached } = {}) {
   const {
     plannerTaskContext,
     attachTask,
@@ -67,9 +67,11 @@ export default function useTaskAttachment({ startTask, currentRevision } = {}) {
         lastKnownRevision,
       })
 
+      if (onAttached) onAttached()
+
       return result
     },
-    [prepareTaskAttachment, attachTask, startTask, currentRevision]
+    [prepareTaskAttachment, attachTask, startTask, currentRevision, onAttached]
   )
 
   const handleDetach = useCallback(() => {

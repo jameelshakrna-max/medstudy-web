@@ -35,7 +35,10 @@ function buildSchedulerConfig(resolvedTopics, validatedInput, sourceVersion) {
     maximumQuestionsPerDay: validatedInput.maximumQuestionsPerDay,
     averageMinutesPerQuestion: validatedInput.averageMinutesPerQuestion,
     bufferPercentage: validatedInput.bufferPercentage,
-    maximumActiveTopics: validatedInput.maximumActiveTopics,
+    maximumActiveTopics: Math.min(
+      validatedInput.maximumActiveTopics,
+      validatedInput.schedulingMode === 'efficient' ? 2 : 1
+    ),
     availabilityByWeekday: validatedInput.availability,
     blockedDates: validatedInput.blockedDates || [],
     topics: resolvedTopics.map(t => ({

@@ -130,6 +130,12 @@ function validateSchedulingConfigStep(form) {
   if (!Number.isInteger(form.maximumActiveTopics) || form.maximumActiveTopics < 1) {
     errors.push('maximumActiveTopics must be an integer >= 1.')
   }
+  if (form.schedulingMode === 'efficient' && form.maximumActiveTopics > 2) {
+    errors.push('maximumActiveTopics must be <= 2 in efficient mode.')
+  }
+  if (form.schedulingMode === 'focused' && form.maximumActiveTopics > 1) {
+    errors.push('maximumActiveTopics must be <= 1 in focused mode.')
+  }
   return errors
 }
 

@@ -259,4 +259,62 @@ describe('useTaskAttachment', () => {
     expect(result.current.totalSec).toBeGreaterThan(0)
     expect(result.current.running).toBe(false)
   })
+
+  it('calls onAttached after successful attachment for in_progress task', async () => {
+    const onAttached = vi.fn()
+    const { result } = renderHook(() => useTaskAttachment({ onAttached }), {
+      wrapper: createWrapper(),
+    })
+
+    await act(async () => {
+      await result.current.handlePlay(IN_PROGRESS_TASK)
+    })
+
+    expect(onAttached).toHaveBeenCalledOnce()
+  })
+
+  it('calls onAttached after successful attachment for pending task', async () => {
+    const onAttached = vi.fn()
+    const startTask = vi.fn().mockResolvedValue({ result: { revision: 6 } })
+    const { result } = renderHook(() => useTaskAttachment({ startTask, currentRevision: 5, onAttached }), {
+      wrapper: createWrapper(),
+    })
+
+    await act(async () => {
+      await result.current.handlePlay(PENDING_TASK)
+    })
+
+    expect(onAttached).toHaveBeenCalledOnce()
+  })
+
+  it('does not call onAttached when prepareTaskAttachment returns blocked', async () => {
+    const onAttached = vi.fn()
+    const { result } = renderHook(() => useTaskAttachment({ onAttached }), {
+      wrapper: createWrapper(),
+    })
+
+    await act(async () => {
+      await result.current.handlePlay(IN_PROGRESS_TASK)
+    })
+
+    await act(async () => {
+      await result.current.handlePlay(IN_PROGRESS_TASK)
+    })
+
+    expect(onAttached).toHaveBeenCalledOnce()
+  })
+
+  it('does not call onAttached when startTask fails', async () => {
+    const onAttached = vi.fn()
+    const startTask = vi.fn().mockResolvedValue({ error: { code: 'PLAN_REVISION_CONFLICT' } })
+    const { result } = renderHook(() => useTaskAttachment({ startTask, currentRevision: 5, onAttached }), {
+      wrapper: createWrapper(),
+    })
+
+    await act(async () => {
+      await result.current.handlePlay(PENDING_TASK)
+    })
+
+    expect(onAttached).not.toHaveBeenCalled()
+  })
 })

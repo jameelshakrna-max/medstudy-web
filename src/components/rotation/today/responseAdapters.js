@@ -33,11 +33,13 @@ export function normalizePlanResponse(response) {
 
   if (version === 2) {
     const tasks = Array.isArray(response.tasks) ? response.tasks : [];
+    const topics = Array.isArray(response.topics) ? response.topics : [];
     return {
       key: plan.id,
       version: 2,
       plan,
       tasks,
+      topics,
       schedule: [],
       progress: Array.isArray(response.progress) ? response.progress : [],
       availability: Array.isArray(response.availability) ? response.availability : [],

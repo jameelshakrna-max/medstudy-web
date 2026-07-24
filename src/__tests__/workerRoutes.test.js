@@ -165,6 +165,38 @@ async function patchFetch(path, body, { headers = {} } = {}) {
   return worker.fetch(makePatchRequest(path, body, { headers }), makeEnv(), {})
 }
 
+describe('CORS headers', () => {
+  it('OPTIONS preflight includes PATCH in Access-Control-Allow-Methods', async () => {
+    const req = new Request('https://medstudy.app/api/rotation-planner/plans/plan-1/tasks/task-1', {
+      method: 'OPTIONS',
+    })
+    const res = await worker.fetch(req, makeEnv(), {})
+    expect(res.status).toBe(200)
+    expect(res.headers.get('access-control-allow-methods')).toContain('PATCH')
+  })
+
+  it('OPTIONS preflight includes Idempotency-Key in Access-Control-Allow-Headers', async () => {
+    const req = new Request('https://medstudy.app/api/rotation-planner/plans/plan-1/tasks/task-1', {
+      method: 'OPTIONS',
+    })
+    const res = await worker.fetch(req, makeEnv(), {})
+    expect(res.headers.get('access-control-allow-headers')).toContain('Idempotency-Key')
+  })
+
+  it('PATCH request returns CORS headers (even on auth failure)', async () => {
+    const req = new Request('https://medstudy.app/api/rotation-planner/plans/plan-1/tasks/task-1', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'start' }),
+    })
+    const res = await worker.fetch(req, makeEnv(), {})
+    expect(res.status).toBe(401)
+    expect(res.headers.get('access-control-allow-origin')).toBe('*')
+    expect(res.headers.get('access-control-allow-methods')).toContain('PATCH')
+    expect(res.headers.get('access-control-allow-headers')).toContain('Idempotency-Key')
+  })
+})
+
 describe('Worker route dispatch — rotation planner plans', () => {
   describe('POST /api/rotation-planner/plans (create)', () => {
     it('returns 400 when body is invalid', async () => {

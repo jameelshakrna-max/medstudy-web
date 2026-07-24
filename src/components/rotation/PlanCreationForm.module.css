@@ -254,11 +254,37 @@
 
 .topicTitle {
   font-size: 13px;
-  color: var(--text-secondary);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.topicSubtitle {
+  font-size: 11px;
+  color: var(--mist);
+  margin-top: 1px;
+}
+
+.topicInfo {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.topicStats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.topicCount {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--blue);
+  background: var(--blueL);
+  padding: 2px 6px;
+  border-radius: 4px;
   white-space: nowrap;
 }
 
@@ -667,6 +693,16 @@
   gap: 12px;
   padding: 8px 0;
   border-bottom: 1px solid var(--input-bg);
+  transition: opacity 0.2s;
+}
+
+.availabilityRowDayOff {
+  opacity: 0.5;
+}
+
+.inputDisabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .dayLabel {

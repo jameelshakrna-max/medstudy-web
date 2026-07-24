@@ -173,7 +173,10 @@ export function parseAndValidatePlanRequest(request, body, { requireIdempotencyK
       maximumQuestionsPerDay: body.maximumQuestionsPerDay ?? 50,
       averageMinutesPerQuestion: body.averageMinutesPerQuestion ?? 1.5,
       bufferPercentage: body.bufferPercentage ?? 20,
-      maximumActiveTopics: body.maximumActiveTopics ?? 5,
+      maximumActiveTopics: Math.min(
+        body.maximumActiveTopics ?? 5,
+        (body.schedulingMode || 'focused') === 'efficient' ? 2 : 1
+      ),
       personalSourcePaceMultiplier: body.personalSourcePaceMultiplier ?? 1.0,
       examReviewWindowDays: body.examReviewWindowDays ?? 0,
       mixedReviewQuestionsPerDay: body.mixedReviewQuestionsPerDay ?? 0,

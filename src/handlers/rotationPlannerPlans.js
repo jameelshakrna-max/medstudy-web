@@ -1,4 +1,4 @@
-import { json } from '../lib/worker-utils.js'
+import { json, log } from '../lib/worker-utils.js'
 import { getStudySource } from '../data/studySources/sourceRegistry.js'
 import { PLANNER_TABLES } from '../db/rotationPlannerSchema.js'
 import {
@@ -56,6 +56,7 @@ export async function handlePreviewRotationPlan(request, env, user) {
       deduplicationLog: preview.deduplicationLog,
     })
   } catch (e) {
+    log('rotation_planner:preview:error', { message: e.message, stack: e.stack?.slice(0, 500), cause: e.cause?.message })
     return errorResponse('INTERNAL_ERROR', 'Failed to generate preview.', 500)
   }
 }
@@ -116,6 +117,12 @@ export async function handleCreateRotationPlan(request, env, user) {
     const plan = await loadPlanFromDb(env, planId, user.sub)
     return json(plan, 201)
   } catch (e) {
+    log('rotation_planner:create_plan:error', {
+      message: e.message,
+      stack: e.stack?.slice(0, 500),
+      cause: e.cause?.message,
+      userId: user?.sub,
+    })
     if (e.message && e.message.includes('UNIQUE constraint failed')) {
       try {
         const body = await request.clone().json()
@@ -138,6 +145,7 @@ export async function handleListRotationPlans(request, env, user) {
     const summaries = await loadPlanSummaries(env, user.sub)
     return json(summaries)
   } catch (e) {
+    log('rotation_planner:list_plans:error', { message: e.message, stack: e.stack?.slice(0, 500) })
     return errorResponse('INTERNAL_ERROR', 'Failed to list plans.', 500)
   }
 }
@@ -155,6 +163,7 @@ export async function handleGetRotationPlan(request, env, user) {
 
     return json(plan)
   } catch (e) {
+    log('rotation_planner:get_plan:error', { message: e.message, stack: e.stack?.slice(0, 500) })
     return errorResponse('INTERNAL_ERROR', 'Failed to get plan.', 500)
   }
 }
@@ -177,6 +186,7 @@ export async function handleDeleteRotationPlan(request, env, user) {
 
     return json({ success: true })
   } catch (e) {
+    log('rotation_planner:delete_plan:error', { message: e.message, stack: e.stack?.slice(0, 500) })
     return errorResponse('INTERNAL_ERROR', 'Failed to delete plan.', 500)
   }
 }
@@ -304,6 +314,7 @@ export async function handleUpdateTask(request, env, user) {
         }
       } catch (_) {}
     }
+    log('rotation_planner:update_task:error', { message: e.message, stack: e.stack?.slice(0, 500), taskId, planId })
     return errorResponse('INTERNAL_ERROR', 'Failed to update task.', 500)
   }
 }
@@ -402,6 +413,7 @@ export async function handleRecalculatePlan(request, env, user) {
         }
       } catch (_) {}
     }
+    log('rotation_planner:recalculate:error', { message: e.message, stack: e.stack?.slice(0, 500), planId })
     return errorResponse('INTERNAL_ERROR', 'Failed to recalculate plan.', 500)
   }
 }

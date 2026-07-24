@@ -79,11 +79,32 @@ describe('formatProgress', () => {
     expect(result.label).toBe('75%');
   });
 
-  it('returns "Not started" when no target', () => {
+  it('returns "Not started" when no target for pending', () => {
     const task = makeTask({ targetCount: null, completionPercentage: 0 });
     const result = formatProgress(task);
     expect(result.percent).toBe(0);
     expect(result.label).toBe('Not started');
+  });
+
+  it('returns "In progress" when no target for in_progress', () => {
+    const task = makeTask({ targetCount: null, completionPercentage: 0 });
+    const result = formatProgress(task, 'in_progress');
+    expect(result.percent).toBe(0);
+    expect(result.label).toBe('In progress');
+  });
+
+  it('returns percentage label when in_progress with partial data', () => {
+    const task = makeTask({ targetCount: null, completionPercentage: 45 });
+    const result = formatProgress(task, 'in_progress');
+    expect(result.percent).toBe(45);
+    expect(result.label).toBe('45%');
+  });
+
+  it('returns count label when in_progress with target count', () => {
+    const task = makeTask({ targetCount: 10, completedCount: 3 });
+    const result = formatProgress(task, 'in_progress');
+    expect(result.percent).toBe(30);
+    expect(result.label).toBe('3/10 questions');
   });
 
   it('handles zero completed count', () => {
@@ -148,6 +169,21 @@ describe('getTaskDisplayModel', () => {
     const model = getTaskDisplayModel(makeTask({ targetCount: 10, completedCount: 4 }));
     expect(model.progressPercent).toBe(40);
     expect(model.progressLabel).toBe('4/10 questions');
+  });
+
+  it('shows "In progress" for in_progress task with no completion data', () => {
+    const model = getTaskDisplayModel(makeTask({ status: 'in_progress', targetCount: null, completionPercentage: 0 }));
+    expect(model.progressLabel).toBe('In progress');
+  });
+
+  it('shows "Not started" for pending task with no completion data', () => {
+    const model = getTaskDisplayModel(makeTask({ status: 'pending', targetCount: null, completionPercentage: 0 }));
+    expect(model.progressLabel).toBe('Not started');
+  });
+
+  it('shows "Completed" status label for completed task', () => {
+    const model = getTaskDisplayModel(makeTask({ status: 'completed' }));
+    expect(model.statusLabel).toBe('Completed');
   });
 
   it('sets boolean flags correctly for pending status', () => {

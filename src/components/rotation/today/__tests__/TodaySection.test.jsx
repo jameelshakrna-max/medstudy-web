@@ -29,6 +29,7 @@ const mockSection = {
       isCompleted: false,
       isTerminal: false,
       isOverdue: false,
+      topicTitle: 'Stable Angina Pectoris',
     },
     {
       id: 'task-2',
@@ -46,6 +47,7 @@ const mockSection = {
       isCompleted: true,
       isTerminal: true,
       isOverdue: false,
+      topicTitle: 'Heart Failure',
     },
   ],
 }
@@ -53,7 +55,7 @@ const mockSection = {
 describe('TodaySection', () => {
   it('renders section header with label and count', () => {
     render(
-      <TodaySection section={mockSection} planId="plan-1" plan={defaultPlan} todayKey={TODAY} />
+      <TodaySection section={mockSection} planId="plan-1" plan={defaultPlan} todayKey={TODAY} topicsById={new Map()} />
     )
     expect(screen.getByText('Learn')).toBeInTheDocument()
     expect(screen.getByText('1/2')).toBeInTheDocument()
@@ -61,8 +63,9 @@ describe('TodaySection', () => {
 
   it('renders TaskCards for each task', () => {
     render(
-      <TodaySection section={mockSection} planId="plan-1" plan={defaultPlan} todayKey={TODAY} />
+      <TodaySection section={mockSection} planId="plan-1" plan={defaultPlan} todayKey={TODAY} topicsById={new Map()} />
     )
-    expect(screen.getAllByText('Learning')).toHaveLength(2)
+    expect(screen.getByText('Stable Angina Pectoris')).toBeInTheDocument()
+    expect(screen.getByText('Heart Failure')).toBeInTheDocument()
   })
 })

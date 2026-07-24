@@ -27,8 +27,16 @@ const makeTask = (overrides = {}) => ({
 
 const defaultPlan = { id: 'plan-1', revision: 1 }
 
-function renderTodayView(tasks = []) {
-  return render(<TodayView planId="plan-1" tasks={tasks} plan={defaultPlan} />)
+function renderTodayView(tasks = [], planOverrides = {}, extraProps = {}) {
+  return render(
+    <TodayView
+      planId="plan-1"
+      tasks={tasks}
+      topicsById={new Map()}
+      plan={{ ...defaultPlan, ...planOverrides }}
+      {...extraProps}
+    />
+  )
 }
 
 describe('TodayView', () => {
@@ -51,15 +59,55 @@ describe('TodayView', () => {
 
   it('shows empty state when no tasks', () => {
     renderTodayView([])
-    expect(screen.getByText('Nothing due today')).toBeInTheDocument()
+    expect(screen.getByText('Nothing scheduled for today')).toBeInTheDocument()
   })
 
   it('hides completed tasks from sections and shows all-done message', () => {
     renderTodayView([
       makeTask({ id: 't1', status: 'completed' }),
     ])
-    expect(screen.queryByText('Nothing due today')).not.toBeInTheDocument()
+    expect(screen.queryByText('Nothing scheduled for today')).not.toBeInTheDocument()
     expect(screen.getByText('All done for today!')).toBeInTheDocument()
+    expect(screen.getByText('1/1 tasks')).toBeInTheDocument()
+  })
+
+  it('shows PRE_START state when plan has not started', () => {
+    const futurePlan = { id: 'plan-1', revision: 1, startDate: '2099-01-10' }
+    const futureTasks = [
+      { id: 't1', taskDate: '2099-01-10', status: 'locked', taskType: 'learning', estimatedMinutes: 60 },
+    ]
+    render(<TodayView planId="plan-1" tasks={futureTasks} topicsById={new Map()} plan={futurePlan} />)
+    expect(screen.getByText(/Your rotation starts/)).toBeInTheDocument()
+    expect(screen.queryByText('All done for today!')).not.toBeInTheDocument()
+    expect(screen.queryByText('1/1 tasks')).not.toBeInTheDocument()
+  })
+
+  it('shows task count in PRE_START state', () => {
+    const futurePlan = { id: 'plan-1', revision: 1, startDate: '2099-01-10' }
+    const futureTasks = [
+      { id: 't1', taskDate: '2099-01-10', status: 'locked', taskType: 'learning', estimatedMinutes: 60 },
+      { id: 't2', taskDate: '2099-01-11', status: 'locked', taskType: 'uworld_questions', estimatedMinutes: 30 },
+    ]
+    render(<TodayView planId="plan-1" tasks={futureTasks} topicsById={new Map()} plan={futurePlan} />)
+    expect(screen.getByText('2 upcoming tasks')).toBeInTheDocument()
+  })
+
+  it('shows EMPTY_TODAY when plan active but no tasks today', () => {
+    const plan = { id: 'plan-1', revision: 1, startDate: '2026-07-20' }
+    const futureTasks = [
+      { id: 't1', taskDate: '2099-01-10', status: 'locked', taskType: 'learning', estimatedMinutes: 60 },
+    ]
+    render(<TodayView planId="plan-1" tasks={futureTasks} topicsById={new Map()} plan={plan} />)
+    expect(screen.getByText('Nothing scheduled for today')).toBeInTheDocument()
+    expect(screen.queryByText('All done for today!')).not.toBeInTheDocument()
+  })
+
+  it('progress header only counts today-relevant tasks', () => {
+    const plan = { id: 'plan-1', revision: 1, startDate: '2026-07-20' }
+    renderTodayView([
+      makeTask({ id: 't1', status: 'completed', taskDate: TODAY, estimatedMinutes: 30 }),
+      makeTask({ id: 't2', status: 'locked', taskDate: '2099-01-10', estimatedMinutes: 60 }),
+    ], plan)
     expect(screen.getByText('1/1 tasks')).toBeInTheDocument()
   })
 })

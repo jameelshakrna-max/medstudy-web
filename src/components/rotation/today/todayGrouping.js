@@ -40,7 +40,35 @@ function getTaskProgressRatio(task) {
   return 0;
 }
 
-export function calculateDayProgress(allTasks, todayKey) {
+export function getTodayRelevantTasks(displayTasks, todayKey) {
+  return displayTasks.filter(t => {
+    if (t.taskDate === todayKey) return true
+    if (t.status === 'in_progress') return true
+    if ((t.status === 'pending' || t.status === 'locked') && t.taskDate < todayKey) return true
+    return false
+  })
+}
+
+export function classifyTodayState({ todayKey, plan, displayTasks, sections }) {
+  if (plan?.startDate && todayKey < plan.startDate) {
+    return { state: 'PRE_START', startDate: plan.startDate }
+  }
+
+  const todayRelevantTasks = getTodayRelevantTasks(displayTasks, todayKey)
+
+  if (todayRelevantTasks.length > 0 && sections.length === 0) {
+    return { state: 'ALL_DONE' }
+  }
+
+  if (sections.length > 0) {
+    return { state: 'HAS_WORK', todayRelevantTasks }
+  }
+
+  return { state: 'EMPTY_TODAY' }
+}
+
+export function calculateDayProgress(allTasks, todayKey, taskFilter = null) {
+  const tasks = taskFilter ? allTasks.filter(taskFilter) : allTasks;
   let completedTasks = 0;
   let activeTasks = 0;
   let overdueTasks = 0;
@@ -49,7 +77,7 @@ export function calculateDayProgress(allTasks, todayKey) {
   let weightedSum = 0;
   let weightSum = 0;
 
-  for (const task of allTasks) {
+  for (const task of tasks) {
     const minutes = task.estimatedMinutes || 0;
     totalMinutes += minutes;
 
@@ -68,7 +96,7 @@ export function calculateDayProgress(allTasks, todayKey) {
   }
 
   return {
-    totalTasks: allTasks.length,
+    totalTasks: tasks.length,
     completedTasks,
     activeTasks,
     overdueTasks,
@@ -84,6 +112,8 @@ const todayGrouping = {
   sortTasksForSection,
   calculateSectionProgress,
   calculateDayProgress,
+  classifyTodayState,
+  getTodayRelevantTasks,
 };
 
 export default todayGrouping;

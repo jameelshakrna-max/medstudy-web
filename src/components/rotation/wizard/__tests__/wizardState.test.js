@@ -18,7 +18,7 @@ describe('INITIAL_FORM', () => {
     expect(INITIAL_FORM.schedulingMode).toBe('efficient')
     expect(INITIAL_FORM.questionStartRule).toBe('next_available_day')
     expect(INITIAL_FORM.bufferPercentage).toBe(20)
-    expect(INITIAL_FORM.maximumActiveTopics).toBe(5)
+    expect(INITIAL_FORM.maximumActiveTopics).toBe(2)
   })
 
   it('has 7 availability entries', () => {

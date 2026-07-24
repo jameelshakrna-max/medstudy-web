@@ -2,7 +2,7 @@ import TaskCard from './TaskCard'
 import { calculateSectionProgress } from './todayGrouping'
 import styles from './TodaySection.module.css'
 
-export default function TodaySection({ section, planId, plan, todayKey }) {
+export default function TodaySection({ section, planId, plan, todayKey, topicsById, mutations, taskAttachment, sourceTitle }) {
   const progress = calculateSectionProgress(section.tasks)
 
   return (
@@ -21,6 +21,10 @@ export default function TodaySection({ section, planId, plan, todayKey }) {
             planId={planId}
             plan={plan}
             todayKey={todayKey}
+            topicsById={topicsById}
+            mutations={mutations}
+            taskAttachment={taskAttachment}
+            sourceTitle={sourceTitle}
           />
         ))}
       </div>

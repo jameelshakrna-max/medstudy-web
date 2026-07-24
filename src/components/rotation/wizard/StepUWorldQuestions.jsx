@@ -20,9 +20,12 @@ export default function StepUWorldQuestions({ form, onFormChange }) {
   }
 
   const totalQuestions = form.topics.reduce((sum, t) => sum + (t.uworldRemainingQuestions || 0), 0)
+  const topicsWithQuestions = form.topics.filter(t => t.uworldRemainingQuestions > 0).length
 
   return (
     <div className={styles.stepContent}>
+      <p className={styles.hint}>{topicsWithQuestions} of {form.topics.length} topics with questions, {totalQuestions} total</p>
+
       <div className={styles.batchRow}>
         <label className={styles.label}>Set all topics to:</label>
         <input
@@ -39,14 +42,22 @@ export default function StepUWorldQuestions({ form, onFormChange }) {
       <div className={styles.topicList}>
         {form.topics.map((t, i) => (
           <div key={t.normalizedTopicId} className={styles.topicRow}>
-            <span className={styles.topicTitle}>{t.normalizedTopicId}</span>
-            <input
-              type="number"
-              min="0"
-              value={t.uworldRemainingQuestions}
-              onChange={e => updateTopic(i, 'uworldRemainingQuestions', e.target.value)}
-              className={styles.inputSmall}
-            />
+            <div className={styles.topicInfo}>
+              <span className={styles.topicTitle}>{t.title || t.normalizedTopicId}</span>
+              {t.title && t.title !== t.normalizedTopicId && (
+                <span className={styles.topicSubtitle}>{t.normalizedTopicId}</span>
+              )}
+            </div>
+            <div className={styles.topicStats}>
+              <span className={styles.topicCount}>{t.uworldRemainingQuestions || 0} Q</span>
+              <input
+                type="number"
+                min="0"
+                value={t.uworldRemainingQuestions}
+                onChange={e => updateTopic(i, 'uworldRemainingQuestions', e.target.value)}
+                className={styles.inputSmall}
+              />
+            </div>
           </div>
         ))}
       </div>

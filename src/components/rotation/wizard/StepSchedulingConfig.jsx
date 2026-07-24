@@ -19,7 +19,14 @@ export default function StepSchedulingConfig({ form, onFormChange }) {
           <label key={m.value} className={`${styles.radioCard} ${form.schedulingMode === m.value ? styles.radioCardActive : ''}`}>
             <input type="radio" name="schedulingMode" value={m.value}
               checked={form.schedulingMode === m.value}
-              onChange={() => onFormChange({ schedulingMode: m.value })}
+              onChange={() => {
+                const newMode = m.value
+                const maxAllowed = newMode === 'efficient' ? 2 : 1
+                onFormChange({
+                  schedulingMode: newMode,
+                  maximumActiveTopics: Math.min(form.maximumActiveTopics, maxAllowed)
+                })
+              }}
               className={styles.radioInput} />
             <span className={styles.radioLabel}>{m.label}</span>
             <span className={styles.hint}>{m.desc}</span>
@@ -50,9 +57,20 @@ export default function StepSchedulingConfig({ form, onFormChange }) {
 
       <div className={styles.formField}>
         <label htmlFor="wiz-max-active" className={styles.label}>Maximum Active Topics</label>
-        <input id="wiz-max-active" type="number" min="1" value={form.maximumActiveTopics}
-          onChange={e => onFormChange({ maximumActiveTopics: Math.max(1, parseInt(e.target.value, 10) || 1) })}
-          className={styles.input} />
+        {(() => {
+          const maxAllowed = form.schedulingMode === 'efficient' ? 2 : 1
+          return (
+            <>
+              <input id="wiz-max-active" type="number" min="1" max={maxAllowed}
+                value={form.maximumActiveTopics}
+                onChange={e => onFormChange({
+                  maximumActiveTopics: Math.max(1, Math.min(maxAllowed, parseInt(e.target.value, 10) || 1))
+                })}
+                className={styles.input} />
+              <p className={styles.hint}>Max {maxAllowed} in {form.schedulingMode} mode</p>
+            </>
+          )
+        })()}
       </div>
 
       <p className={styles.hint}>Due flashcard reviews will be incorporated through daily recalculation when FSRS integration is connected.</p>
