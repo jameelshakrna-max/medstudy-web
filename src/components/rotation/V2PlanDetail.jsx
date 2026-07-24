@@ -79,9 +79,12 @@ export default function V2PlanDetail({ planId, onBack }) {
     openDialog('skip', task)
   }, [openDialog])
 
-  const handleStudyPomodoro = useCallback((task) => {
-    taskAttachment.handlePlay(task)
-  }, [taskAttachment])
+  const handleStudyPomodoro = useCallback(async (task) => {
+    const result = await taskAttachment.handlePlay(task)
+    if (result?.alreadyAttached || result?.allowed) {
+      navigate('/pomodoro')
+    }
+  }, [taskAttachment, navigate])
 
   const handleCompleteSubmit = useCallback(async (payload) => {
     await mutations.completeTask(dialogState.task.id, payload)
