@@ -7,6 +7,7 @@ import {
   calculateDayProgress,
   classifyTodayState,
   getTodayRelevantTasks,
+  groupTasksByDate,
 } from '../todayGrouping';
 
 function makeTask(overrides) {
@@ -461,5 +462,60 @@ describe('getTodayRelevantTasks', () => {
     ]
     const result = getTodayRelevantTasks(tasks, '2026-07-23')
     expect(result).toHaveLength(0)
+  })
+})
+
+describe('groupTasksByDate', () => {
+  const baseTask = {
+    id: 'task-1',
+    planTopicId: 'topic-1',
+    taskDate: '2026-07-24',
+    taskType: 'learning',
+    status: 'pending',
+    estimatedMinutes: 30,
+    displayOrder: 0,
+  }
+
+  it('groups tasks by taskDate', () => {
+    const tasks = [
+      { ...baseTask, id: 't1', taskDate: '2026-07-24' },
+      { ...baseTask, id: 't2', taskDate: '2026-07-24' },
+      { ...baseTask, id: 't3', taskDate: '2026-07-25' },
+    ]
+    const result = groupTasksByDate(tasks)
+    expect(result.get('2026-07-24')).toHaveLength(2)
+    expect(result.get('2026-07-25')).toHaveLength(1)
+  })
+
+  it('sorts tasks within each day by displayOrder', () => {
+    const tasks = [
+      { ...baseTask, id: 't1', displayOrder: 3 },
+      { ...baseTask, id: 't2', displayOrder: 1 },
+      { ...baseTask, id: 't3', displayOrder: 2 },
+    ]
+    const result = groupTasksByDate(tasks)
+    const dayTasks = result.get('2026-07-24')
+    expect(dayTasks.map(t => t.id)).toEqual(['t2', 't3', 't1'])
+  })
+
+  it('skips tasks with no taskDate', () => {
+    const tasks = [
+      { ...baseTask, id: 't1', taskDate: '2026-07-24' },
+      { ...baseTask, id: 't2', taskDate: null },
+      { ...baseTask, id: 't3', taskDate: undefined },
+    ]
+    const result = groupTasksByDate(tasks)
+    expect(result.get('2026-07-24')).toHaveLength(1)
+  })
+
+  it('returns empty map for empty input', () => {
+    const result = groupTasksByDate([])
+    expect(result.size).toBe(0)
+  })
+
+  it('preserves all task fields', () => {
+    const task = { ...baseTask, id: 't1', customField: 'value' }
+    const result = groupTasksByDate([task])
+    expect(result.get('2026-07-24')[0]).toEqual(task)
   })
 })

@@ -14,6 +14,7 @@ import TaskCompletionDialog from './today/dialogs/TaskCompletionDialog'
 import PartialDialog from './today/dialogs/PartialDialog'
 import SkipConfirmDialog from './today/dialogs/SkipConfirmDialog'
 import RecordQuestionsDialog from './today/dialogs/RecordQuestionsDialog'
+import ScheduleView from './today/ScheduleView'
 import styles from './V2PlanDetail.module.css'
 
 function getRecalculationDate() {
@@ -176,7 +177,10 @@ export default function V2PlanDetail({ planId, onBack }) {
           />
         </TabsContent>
         <TabsContent value="schedule">
-          <div className={styles.tabPlaceholder}>Schedule view coming soon</div>
+          <ScheduleView
+            tasks={tasks}
+            topicsById={topicsById}
+          />
         </TabsContent>
         <TabsContent value="topics">
           <div className={styles.tabPlaceholder}>Topics view coming soon</div>

@@ -106,6 +106,20 @@ export function calculateDayProgress(allTasks, todayKey, taskFilter = null) {
   };
 }
 
+export function groupTasksByDate(tasks) {
+  const map = new Map()
+  for (const task of tasks) {
+    const date = task.taskDate
+    if (!date) continue
+    if (!map.has(date)) map.set(date, [])
+    map.get(date).push(task)
+  }
+  for (const [, dayTasks] of map) {
+    dayTasks.sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
+  }
+  return map
+}
+
 const todayGrouping = {
   TODAY_SECTIONS,
   groupTasksBySection,
