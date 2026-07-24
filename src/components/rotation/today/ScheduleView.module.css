@@ -168,6 +168,18 @@
   font-size: 13px;
 }
 
+.dayOffTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.dayOffDesc {
+  font-size: 13px;
+  color: var(--mist);
+}
+
 /* Task list */
 .taskList {
   display: flex;

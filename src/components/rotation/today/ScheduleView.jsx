@@ -27,6 +27,8 @@ const TASK_TYPE_COLORS = {
   optional_book_questions: 'var(--text-secondary)',
 }
 
+const QUESTION_TASK_TYPES = new Set(['uworld_questions', 'incorrect_review'])
+
 function parseDate(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number)
   return new Date(y, m - 1, d)
@@ -47,6 +49,10 @@ function formatDisplayDate(dateStr) {
 function formatFullDate(dateStr) {
   const d = parseDate(dateStr)
   return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+}
+
+function getDayOfWeek(dateStr) {
+  return parseDate(dateStr).getDay()
 }
 
 function isOverdue(taskDate, todayKey, status) {
@@ -109,7 +115,13 @@ function StatusBadge({ status, overdue }) {
   )
 }
 
-export default function ScheduleView({ tasks, topicsById, todayKey: externalTodayKey }) {
+export default function ScheduleView({
+  tasks,
+  topicsById,
+  sourceTitle,
+  availability,
+  todayKey: externalTodayKey,
+}) {
   const timezone = resolvePlannerTimezone({
     browserTimezone: getBrowserTimezone(),
   })
@@ -119,6 +131,15 @@ export default function ScheduleView({ tasks, topicsById, todayKey: externalToda
   const [selectedDate, setSelectedDate] = useState(todayKey)
 
   const tasksByDate = useMemo(() => groupTasksByDate(tasks), [tasks])
+
+  const availabilityByWeekday = useMemo(() => {
+    if (!availability || !Array.isArray(availability)) return null
+    const map = new Map()
+    for (const entry of availability) {
+      map.set(entry.weekday, entry)
+    }
+    return map
+  }, [availability])
 
   const weekStart = useMemo(() => {
     const d = parseDate(todayKey)
@@ -151,13 +172,28 @@ export default function ScheduleView({ tasks, topicsById, todayKey: externalToda
     return map
   }, [selectedTasks, topicsById])
 
+  const selectedDayAvailability = useMemo(() => {
+    if (!availabilityByWeekday) return null
+    const dow = getDayOfWeek(selectedDate)
+    return availabilityByWeekday.get(dow) || null
+  }, [availabilityByWeekday, selectedDate])
+
+  const isDayOff = selectedDayAvailability?.isDayOff === true
+
   const selectedDaySummary = useMemo(() => {
-    const totalTasks = selectedTasks.length
-    const totalMinutes = selectedTasks.reduce((sum, t) => sum + (t.estimatedMinutes || 0), 0)
-    const totalQuestions = selectedTasks
-      .filter(t => t.taskType === 'uworld_questions' || t.taskType === 'incorrect_review')
-      .reduce((sum, t) => sum + (t.targetCount || 0), 0)
-    return { totalTasks, totalMinutes, totalQuestions }
+    const learningTasks = selectedTasks.filter(t => !QUESTION_TASK_TYPES.has(t.taskType))
+    const questionTasks = selectedTasks.filter(t => QUESTION_TASK_TYPES.has(t.taskType))
+
+    const learningMinutes = learningTasks.reduce((sum, t) => sum + (t.estimatedMinutes || 0), 0)
+    const questionCount = questionTasks.reduce((sum, t) => sum + (t.targetCount || 0), 0)
+
+    return {
+      totalTasks: selectedTasks.length,
+      learningTasks: learningTasks.length,
+      learningMinutes,
+      questionTasks: questionTasks.length,
+      questionCount,
+    }
   }, [selectedTasks])
 
   const handlePrevWeek = useCallback(() => setWeekOffset(o => o - 1), [])
@@ -222,19 +258,32 @@ export default function ScheduleView({ tasks, topicsById, todayKey: externalToda
 
         {selectedDaySummary.totalTasks > 0 && (
           <div className={styles.agendaSummary}>
-            {selectedDaySummary.totalTasks} task{selectedDaySummary.totalTasks !== 1 ? 's' : ''}
-            {selectedDaySummary.totalMinutes > 0 && (
-              <> · {formatMinutes(selectedDaySummary.totalMinutes)} planned</>
+            {selectedDaySummary.learningTasks > 0 && (
+              <span>
+                {selectedDaySummary.learningTasks} learning task{selectedDaySummary.learningTasks !== 1 ? 's' : ''}
+                {selectedDaySummary.learningMinutes > 0 && ` · ${formatMinutes(selectedDaySummary.learningMinutes)}`}
+              </span>
             )}
-            {selectedDaySummary.totalQuestions > 0 && (
-              <> · {selectedDaySummary.totalQuestions} questions</>
+            {selectedDaySummary.questionTasks > 0 && (
+              <span>
+                {selectedDaySummary.learningTasks > 0 && ' · '}
+                {selectedDaySummary.questionTasks} UWorld task{selectedDaySummary.questionTasks !== 1 ? 's' : ''}
+                {selectedDaySummary.questionCount > 0 && ` · ${selectedDaySummary.questionCount} questions`}
+              </span>
             )}
           </div>
         )}
 
         {selectedTasks.length === 0 ? (
           <div className={styles.emptyDay}>
-            {selectedDate < todayKey ? 'No tasks scheduled' : 'Nothing scheduled for this day'}
+            {isDayOff ? (
+              <>
+                <div className={styles.dayOffTitle}>Day off</div>
+                <div className={styles.dayOffDesc}>No study time planned.</div>
+              </>
+            ) : (
+              <div>Nothing scheduled for this day.</div>
+            )}
           </div>
         ) : (
           <div className={styles.taskList}>
@@ -244,9 +293,6 @@ export default function ScheduleView({ tasks, topicsById, todayKey: externalToda
               const workload = formatWorkload(task)
               const typeLabel = TASK_TYPE_LABELS[task.taskType] || task.taskType
               const typeColor = TASK_TYPE_COLORS[task.taskType] || 'var(--text-secondary)'
-              const sourceParts = topic?.normalizedTopicId?.split('::')
-              const sourceName = sourceParts?.[0]?.replace(/-/g, ' ') || null
-              const sectionName = sourceParts?.[1]?.split('.').slice(0, 2).join(' · ') || null
 
               return (
                 <div
@@ -262,11 +308,8 @@ export default function ScheduleView({ tasks, topicsById, todayKey: externalToda
                     <div className={styles.taskTitle}>
                       {topic?.topicTitle || typeLabel}
                     </div>
-                    {(sourceName || sectionName) && (
-                      <div className={styles.taskSource}>
-                        {sourceName && <span>{sourceName}</span>}
-                        {sectionName && <span> · {sectionName}</span>}
-                      </div>
+                    {sourceTitle && (
+                      <div className={styles.taskSource}>{sourceTitle}</div>
                     )}
                     <div className={styles.taskMeta}>
                       {workload && <span className={styles.workload}>{workload}</span>}

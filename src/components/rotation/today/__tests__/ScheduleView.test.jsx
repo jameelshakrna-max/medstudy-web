@@ -13,6 +13,7 @@ const TOPICS = new Map([
 ])
 
 const TODAY = '2026-07-24'
+const SOURCE_TITLE = 'Step-Up to Medicine'
 
 const learningTask = {
   id: 'task-1',
@@ -66,6 +67,14 @@ const overdueTask = {
   displayOrder: 0,
 }
 
+function availabilityForWeekday(weekday, { availableMinutes = 120, isDayOff = false } = {}) {
+  return Array.from({ length: 7 }, (_, i) => ({
+    weekday: i,
+    availableMinutes: i === weekday ? availableMinutes : 120,
+    isDayOff: i === weekday ? isDayOff : false,
+  }))
+}
+
 describe('ScheduleView', () => {
   it('renders week strip with day names', () => {
     render(<ScheduleView tasks={[]} topicsById={TOPICS} todayKey={TODAY} />)
@@ -98,6 +107,25 @@ describe('ScheduleView', () => {
     render(<ScheduleView tasks={[learningTask]} topicsById={TOPICS} todayKey={TODAY} />)
     expect(screen.getByText('Stable Angina Pectoris')).toBeInTheDocument()
     expect(screen.queryByText('amboss::cardiology.stable-angina')).not.toBeInTheDocument()
+    expect(screen.queryByText('amboss')).not.toBeInTheDocument()
+    expect(screen.queryByText('cardiology')).not.toBeInTheDocument()
+  })
+
+  it('never renders normalizedTopicId slugs', () => {
+    render(<ScheduleView tasks={[learningTask, uworldTask]} topicsById={TOPICS} todayKey={TODAY} />)
+    expect(screen.queryByText(/amboss::/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/stable-angina/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/heart-failure/)).not.toBeInTheDocument()
+  })
+
+  it('shows sourceTitle when provided', () => {
+    render(<ScheduleView tasks={[learningTask]} topicsById={TOPICS} todayKey={TODAY} sourceTitle={SOURCE_TITLE} />)
+    expect(screen.getByText(SOURCE_TITLE)).toBeInTheDocument()
+  })
+
+  it('does not show sourceTitle when not provided', () => {
+    render(<ScheduleView tasks={[learningTask]} topicsById={TOPICS} todayKey={TODAY} />)
+    expect(screen.queryByText(SOURCE_TITLE)).not.toBeInTheDocument()
   })
 
   it('shows learning workload as minutes', () => {
@@ -108,6 +136,22 @@ describe('ScheduleView', () => {
   it('shows UWorld workload as question counts', () => {
     render(<ScheduleView tasks={[uworldTask]} topicsById={TOPICS} todayKey={TODAY} />)
     expect(screen.getByText('12 / 40 questions')).toBeInTheDocument()
+  })
+
+  it('shows type-aware summary: learning tasks with minutes', () => {
+    render(<ScheduleView tasks={[learningTask]} topicsById={TOPICS} todayKey={TODAY} />)
+    expect(screen.getByText(/1 learning task · 45m/)).toBeInTheDocument()
+  })
+
+  it('shows type-aware summary: UWorld tasks with questions', () => {
+    render(<ScheduleView tasks={[uworldTask]} topicsById={TOPICS} todayKey={TODAY} />)
+    expect(screen.getByText(/1 UWorld task · 40 questions/)).toBeInTheDocument()
+  })
+
+  it('shows type-aware summary: mixed learning and question tasks', () => {
+    render(<ScheduleView tasks={[learningTask, uworldTask]} topicsById={TOPICS} todayKey={TODAY} />)
+    expect(screen.getByText(/1 learning task · 45m/)).toBeInTheDocument()
+    expect(screen.getByText(/1 UWorld task · 40 questions/)).toBeInTheDocument()
   })
 
   it('shows In Progress status for in_progress tasks', () => {
@@ -167,13 +211,36 @@ describe('ScheduleView', () => {
     expect(screen.getByText(/Jul 20/)).toBeInTheDocument()
   })
 
-  it('shows task summary with total tasks and minutes', () => {
-    render(<ScheduleView tasks={[learningTask, uworldTask]} topicsById={TOPICS} todayKey={TODAY} />)
-    expect(screen.getByText(/2 tasks/)).toBeInTheDocument()
-  })
-
   it('renders without topicsById', () => {
     render(<ScheduleView tasks={[learningTask]} topicsById={null} todayKey={TODAY} />)
     expect(screen.getAllByText('Learning').length).toBeGreaterThan(0)
+  })
+
+  describe('day-off vs empty day', () => {
+    it('shows day-off message when availability isDayOff and no tasks', () => {
+      const availability = availabilityForWeekday(5, { isDayOff: true }) // Saturday = day 6, but Fri=5
+      // Jul 24 2026 is Friday (day 5)
+      const avail = Array.from({ length: 7 }, (_, i) => ({
+        weekday: i,
+        availableMinutes: i === 5 ? 0 : 120,
+        isDayOff: i === 5,
+      }))
+      render(<ScheduleView tasks={[]} topicsById={TOPICS} todayKey={TODAY} availability={avail} />)
+      expect(screen.getByText('Day off')).toBeInTheDocument()
+      expect(screen.getByText('No study time planned.')).toBeInTheDocument()
+    })
+
+    it('shows nothing-scheduled when availability > 0 but no tasks', () => {
+      const avail = availabilityForWeekday(5, { availableMinutes: 120, isDayOff: false })
+      render(<ScheduleView tasks={[]} topicsById={TOPICS} todayKey={TODAY} availability={avail} />)
+      expect(screen.getByText(/Nothing scheduled/)).toBeInTheDocument()
+      expect(screen.queryByText('Day off')).not.toBeInTheDocument()
+    })
+
+    it('shows nothing-scheduled when no availability data', () => {
+      render(<ScheduleView tasks={[]} topicsById={TOPICS} todayKey={TODAY} />)
+      expect(screen.getByText(/Nothing scheduled/)).toBeInTheDocument()
+      expect(screen.queryByText('Day off')).not.toBeInTheDocument()
+    })
   })
 })

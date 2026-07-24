@@ -180,6 +180,8 @@ export default function V2PlanDetail({ planId, onBack }) {
           <ScheduleView
             tasks={tasks}
             topicsById={topicsById}
+            sourceTitle={plan.sourceTitle}
+            availability={data.availability}
           />
         </TabsContent>
         <TabsContent value="topics">
