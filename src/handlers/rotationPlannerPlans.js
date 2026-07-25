@@ -11,7 +11,7 @@ import {
   persistPlanBatch,
   loadPlanFromDb,
   loadPlanSummaries,
-  loadPlanById, loadTaskById, loadPlanRevision, updatePlanRevisionAndRecalculatedAt,
+  loadPlanById, loadTaskById, loadTopicById, loadPlanRevision, updatePlanRevisionAndRecalculatedAt,
   checkTaskIdempotency, checkPlanIdempotency,
   classifyBatchError, buildTaskMutationBatch, executeTaskMutationBatch,
   applyTaskUpdate, calculateTaskUpdateFingerprint, calculateRecalculationFingerprint,
@@ -279,6 +279,32 @@ export async function handleUpdateTask(request, env, user) {
       completedOn: updatedTask.completedOn,
     })
 
+    let topicFields = null
+    const topicRow = await loadTopicById(env, taskRow.plan_topic_id)
+    if (topicRow) {
+      const currentStatus = topicRow.status || 'not_started'
+      const STATUS_ORDER = ['not_started', 'learning', 'questions_locked', 'uworld_in_progress', 'incorrect_review', 'maintenance', 'completed']
+      const currentIdx = STATUS_ORDER.indexOf(currentStatus)
+
+      let newTopicStatus = null
+
+      if (action === 'start') {
+        if ((task.taskType === 'learning' || task.taskType === 'consolidation') && currentStatus === 'not_started') {
+          newTopicStatus = 'learning'
+        } else if (task.taskType === 'uworld_questions' && currentIdx < STATUS_ORDER.indexOf('uworld_in_progress')) {
+          newTopicStatus = 'uworld_in_progress'
+        }
+      } else if (action === 'complete') {
+        if ((task.taskType === 'learning' || task.taskType === 'consolidation') && currentStatus === 'learning') {
+          newTopicStatus = 'questions_locked'
+        }
+      }
+
+      if (newTopicStatus && newTopicStatus !== currentStatus) {
+        topicFields = { topicId: topicRow.id, status: newTopicStatus }
+      }
+    }
+
     const batch = await buildTaskMutationBatch({
       env,
       planId,
@@ -294,6 +320,7 @@ export async function handleUpdateTask(request, env, user) {
       occurredOn,
       resultJson,
       taskFields,
+      topicFields,
     })
 
     await executeTaskMutationBatch(env, batch)

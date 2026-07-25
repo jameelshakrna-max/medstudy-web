@@ -208,7 +208,12 @@ export async function loadPlanFromDb(env, planId, userId) {
   ).bind(planId).all()
 
   return {
-    plan: mapPlanDto(planRows[0]),
+    plan: (() => {
+      const dto = mapPlanDto(planRows[0])
+      const source = getStudySource(planRows[0].source_id)
+      dto.sourceTitle = source?.title || planRows[0].source_id
+      return dto
+    })(),
     availability: availRows.map(r => mapAvailabilityDto(r)),
     topics: topicRows.map(r => mapTopicDto(r)),
     tasks: taskRows.map(r => mapTaskDto(r)),

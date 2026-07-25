@@ -120,6 +120,61 @@ export function groupTasksByDate(tasks) {
   return map
 }
 
+export const TOPIC_STATUS_LABELS = {
+  not_started: 'Not Started',
+  learning: 'Learning',
+  questions_locked: 'Questions Locked',
+  uworld_in_progress: 'UWorld In Progress',
+  incorrect_review: 'Incorrect Review',
+  maintenance: 'Maintenance',
+  completed: 'Completed',
+}
+
+const ACTIVE_STATUSES = new Set(['learning', 'uworld_in_progress'])
+
+export function filterTopics(topics, filter) {
+  if (filter === 'all') return topics
+  if (filter === 'active') return topics.filter(t => ACTIVE_STATUSES.has(t.status))
+  if (filter === 'not_started') return topics.filter(t => t.status === 'not_started')
+  if (filter === 'locked') return topics.filter(t => t.status === 'questions_locked')
+  if (filter === 'completed') return topics.filter(t => t.status === 'completed')
+  return topics
+}
+
+export function groupTopicsByGroup(topics) {
+  const map = new Map()
+  for (const topic of topics) {
+    const group = topic.groupId || null
+    if (!map.has(group)) map.set(group, [])
+    map.get(group).push(topic)
+  }
+  const groups = []
+  for (const [groupId, groupTopics] of map) {
+    groupTopics.sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
+    groups.push({ groupId, topics: groupTopics })
+  }
+  groups.sort((a, b) => {
+    if (a.groupId === null) return 1
+    if (b.groupId === null) return 1
+    return a.groupId.localeCompare(b.groupId)
+  })
+  return groups
+}
+
+export function summarizeTopics(topics) {
+  const total = topics.length
+  const completed = topics.filter(t => t.status === 'completed').length
+  const active = topics.filter(t => ACTIVE_STATUSES.has(t.status)).length
+  const remaining = total - completed - active
+  let totalUworld = 0
+  let completedUworld = 0
+  for (const t of topics) {
+    totalUworld += t.totalUworldQuestions || 0
+    completedUworld += t.completedUworldQuestions || 0
+  }
+  return { total, completed, active, remaining, totalUworld, completedUworld }
+}
+
 const todayGrouping = {
   TODAY_SECTIONS,
   groupTasksBySection,
@@ -128,6 +183,10 @@ const todayGrouping = {
   calculateDayProgress,
   classifyTodayState,
   getTodayRelevantTasks,
+  TOPIC_STATUS_LABELS,
+  filterTopics,
+  groupTopicsByGroup,
+  summarizeTopics,
 };
 
 export default todayGrouping;

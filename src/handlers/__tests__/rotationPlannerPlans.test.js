@@ -645,3 +645,56 @@ describe('handleRecalculatePlan expectedRevision', () => {
     expect(body2.recalculationDate).toBe(body1.recalculationDate)
   })
 })
+
+// ─── Topic status transitions ───
+describe('topic status transitions on task mutations', () => {
+  async function createPlanAndGetFirstTask(user = USER_A) {
+    const createRes = await createPlan(makeBody(), user)
+    expect(createRes.status).toBe(201)
+    const planBody = await createRes.json()
+    return { planId: planBody.plan.id, taskId: planBody.tasks[0].id, topicId: planBody.topics[0].id }
+  }
+
+  async function getTopicStatus(topicId) {
+    const row = await db.prepare('SELECT status FROM rotation_planner_topics WHERE id = ?').bind(topicId).first()
+    return row?.status
+  }
+
+  it('starts a learning task and advances topic to learning', async () => {
+    const { planId, taskId, topicId } = await createPlanAndGetFirstTask()
+    const initialStatus = await getTopicStatus(topicId)
+
+    const res = await patchTask(planId, taskId, { action: 'start', expectedRevision: 0 })
+    expect(res.status).toBe(200)
+
+    const afterStatus = await getTopicStatus(topicId)
+    const STATUS_ORDER = ['not_started', 'learning', 'questions_locked', 'uworld_in_progress', 'incorrect_review', 'maintenance', 'completed']
+    expect(STATUS_ORDER.indexOf(afterStatus)).toBeGreaterThanOrEqual(STATUS_ORDER.indexOf(initialStatus))
+  })
+
+  it('does not regress topic status on partial action', async () => {
+    const { planId, taskId, topicId } = await createPlanAndGetFirstTask()
+
+    await patchTask(planId, taskId, { action: 'start', expectedRevision: 0 })
+    const statusAfterStart = await getTopicStatus(topicId)
+
+    await patchTask(planId, taskId, { action: 'partial', payload: { completionPercentage: 50, actualMinutes: 15 }, expectedRevision: 1 })
+    const statusAfterPartial = await getTopicStatus(topicId)
+
+    const STATUS_ORDER = ['not_started', 'learning', 'questions_locked', 'uworld_in_progress', 'incorrect_review', 'maintenance', 'completed']
+    expect(STATUS_ORDER.indexOf(statusAfterPartial)).toBeGreaterThanOrEqual(STATUS_ORDER.indexOf(statusAfterStart))
+  })
+
+  it('does not regress topic status on skip action', async () => {
+    const { planId, taskId, topicId } = await createPlanAndGetFirstTask()
+
+    await patchTask(planId, taskId, { action: 'start', expectedRevision: 0 })
+    const statusAfterStart = await getTopicStatus(topicId)
+
+    await patchTask(planId, taskId, { action: 'skip', expectedRevision: 1 })
+    const statusAfterSkip = await getTopicStatus(topicId)
+
+    const STATUS_ORDER = ['not_started', 'learning', 'questions_locked', 'uworld_in_progress', 'incorrect_review', 'maintenance', 'completed']
+    expect(STATUS_ORDER.indexOf(statusAfterSkip)).toBeGreaterThanOrEqual(STATUS_ORDER.indexOf(statusAfterStart))
+  })
+})
