@@ -8,6 +8,19 @@ const PomodoroSettingsContext = createContext(null)
 const MODES = ['study', 'break', 'long']
 const PLANNER_TASK_CONTEXT_VERSION = 1
 
+function hasUnsyncedPlannerData(ctx) {
+  if (!ctx) return false
+  if (ctx.syncRequestId) return true
+  if (['pending', 'in_flight', 'network_outcome_unknown', 'revision_recovery'].includes(ctx.syncStatus)) return true
+  const synced = ctx.syncedFocusMinutes ?? 0
+  if (ctx.syncPayload) return true
+  if (ctx.syncTargetFocusMinutes != null && ctx.syncTargetFocusMinutes > synced) return true
+  if (secondsToPlannerMinutes(ctx.accumulatedFocusSeconds ?? 0) > synced) return true
+  if (ctx.syncStatus === 'terminal_error' && (ctx.syncPayload || secondsToPlannerMinutes(ctx.accumulatedFocusSeconds ?? 0) > synced)) return true
+  if (ctx.syncStatus === 'idempotency_conflict' && (ctx.syncPayload || secondsToPlannerMinutes(ctx.accumulatedFocusSeconds ?? 0) > synced)) return true
+  return false
+}
+
 // ══════════════════════════════════════════════════
 //  VAPID PUBLIC KEY — REPLACE WITH YOUR OWN KEY
 // ══════════════════════════════════════════════════
@@ -900,11 +913,7 @@ export function PomodoroProvider({ children }) {
       return { allowed: false, alreadyAttached: true }
     }
 
-    const hasFrozenOperation = !!(ctx?.syncRequestId)
-    const hasBlockingStatus = ['pending', 'in_flight', 'network_outcome_unknown', 'revision_recovery'].includes(ctx?.syncStatus)
-    const hasUnsyncedFocus = ctx ? secondsToPlannerMinutes(ctx.accumulatedFocusSeconds) > ctx.syncedFocusMinutes : false
-
-    if (hasFrozenOperation || hasBlockingStatus || hasUnsyncedFocus) {
+    if (ctx && hasUnsyncedPlannerData(ctx)) {
       return { allowed: false, reason: 'Finish or discard the pending sync before switching tasks.' }
     }
 
@@ -951,9 +960,8 @@ export function PomodoroProvider({ children }) {
   const detachTask = useCallback(() => {
     const ctx = plannerTaskContextRef.current
     if (!ctx) return { allowed: true }
-    const hasBlocking = ctx.syncRequestId || ['pending', 'in_flight', 'network_outcome_unknown', 'revision_recovery'].includes(ctx.syncStatus)
-    if (hasBlocking) {
-      return { allowed: false, reason: 'Cannot detach while sync is in progress.' }
+    if (hasUnsyncedPlannerData(ctx)) {
+      return { allowed: false, reason: 'Cannot detach while unsynced time exists. Discard or sync first.' }
     }
     updatePlannerTaskContext(() => null)
     return { allowed: true }
@@ -1080,6 +1088,10 @@ export function PomodoroProvider({ children }) {
     updatePlannerTaskContext(() => null)
   }, [updatePlannerTaskContext])
 
+  const discardPlannerTaskContext = useCallback(() => {
+    updatePlannerTaskContext(() => null)
+  }, [updatePlannerTaskContext])
+
   // ── Focus mode + fullscreen ──
   const toggleFocusMode = useCallback(() => {
     setFocusMode(prev => {
@@ -1140,6 +1152,7 @@ export function PomodoroProvider({ children }) {
     prepareTaskAttachment,
     attachTask,
     detachTask,
+    hasUnsyncedPlannerData,
     reservePlannerSyncOperation,
     markPlannerSyncInFlight,
     markPlannerSyncSucceeded,
@@ -1150,6 +1163,7 @@ export function PomodoroProvider({ children }) {
     setRevisionRecoveryStatus,
     setIdempotencyConflictStatus,
     discardPendingPlannerSync,
+    discardPlannerTaskContext,
   }), [
     mode, running, done, seconds, totalSec,
     displayRemaining, progress,
@@ -1173,6 +1187,7 @@ export function PomodoroProvider({ children }) {
     setRevisionRecoveryStatus,
     setIdempotencyConflictStatus,
     discardPendingPlannerSync,
+    discardPlannerTaskContext,
   ])
 
   const settingsValue = useMemo(() => ({

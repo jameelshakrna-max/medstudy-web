@@ -10,14 +10,11 @@ function isStale(lastRecalculatedAt) {
   return diff > STALE_THRESHOLD_MS
 }
 
-export default function RecalculationBanner({ planId, lastRecalculatedAt, revision }) {
+export default function RecalculationBanner({ planId, lastRecalculatedAt, revision, getRecalculationDate }) {
   const mutations = usePlannerTaskMutations({
     planId,
     initialRevision: revision,
-    getRecalculationDate: () => {
-      const now = new Date()
-      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-    },
+    getRecalculationDate,
   })
 
   if (mutations.recalculationState?.status === 'pending' || mutations.recalculationState?.status === 'in_flight') {

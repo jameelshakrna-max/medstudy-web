@@ -1,12 +1,14 @@
 import { useCallback, useMemo } from 'react'
 import { usePomodoro } from '../../../context/PomodoroContext'
 
-export default function useTaskAttachment({ startTask, currentRevision, onAttached } = {}) {
+export default function useTaskAttachment({ startTask, currentRevision, onAttached, tasks, planId } = {}) {
   const {
     plannerTaskContext,
     attachTask,
     prepareTaskAttachment,
     detachTask,
+    hasUnsyncedPlannerData,
+    discardPlannerTaskContext,
     seconds,
     totalSec,
     running,
@@ -17,6 +19,20 @@ export default function useTaskAttachment({ startTask, currentRevision, onAttach
 
   const isAttached = attachedTaskId !== null
   const isTimerRunning = running && isAttached
+
+  const hasLoadedTasks = Array.isArray(tasks)
+
+  const isOrphaned = useMemo(() => {
+    if (!hasLoadedTasks) return false
+    if (!attachedTaskId) return false
+    if (attachedPlanId !== planId) return false
+    return !tasks.some(t => t.id === attachedTaskId)
+  }, [hasLoadedTasks, attachedTaskId, attachedPlanId, planId, tasks])
+
+  const hasUnsyncedData = useMemo(() => {
+    if (!plannerTaskContext) return false
+    return hasUnsyncedPlannerData(plannerTaskContext)
+  }, [plannerTaskContext, hasUnsyncedPlannerData])
 
   const isTaskAttached = useCallback(
     (taskId) => attachedTaskId === taskId,
@@ -78,6 +94,16 @@ export default function useTaskAttachment({ startTask, currentRevision, onAttach
     return detachTask()
   }, [detachTask])
 
+  const discardOrphanedPlannerContext = useCallback(() => {
+    if (!isOrphaned) return { cleared: false, reason: 'Task is not orphaned.' }
+    const ctx = plannerTaskContext
+    if (!ctx) return { cleared: false, reason: 'No planner context.' }
+    if (ctx.planId !== planId) return { cleared: false, reason: 'Plan mismatch.' }
+    if (ctx.taskId !== attachedTaskId) return { cleared: false, reason: 'Task mismatch.' }
+    discardPlannerTaskContext()
+    return { cleared: true }
+  }, [isOrphaned, plannerTaskContext, planId, attachedTaskId, discardPlannerTaskContext])
+
   const attachedTask = useMemo(() => {
     if (!plannerTaskContext) return null
     return {
@@ -95,10 +121,13 @@ export default function useTaskAttachment({ startTask, currentRevision, onAttach
     attachedTask,
     isAttached,
     isTimerRunning,
+    isOrphaned,
+    hasUnsyncedData,
     isTaskAttached,
     canAttach,
     handlePlay,
     handleDetach,
+    discardOrphanedPlannerContext,
     seconds,
     totalSec,
     running,

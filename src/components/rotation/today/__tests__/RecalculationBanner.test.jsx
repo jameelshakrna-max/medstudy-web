@@ -20,6 +20,8 @@ vi.mock('../../../../lib/api', () => ({
 
 import { apiPatch, apiPost } from '../../../../lib/api'
 
+const mockGetRecalculationDate = () => '2026-07-26'
+
 function createWrapper() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -35,7 +37,7 @@ describe('RecalculationBanner', () => {
     const { wrapper } = createWrapper()
     const oldDate = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
     render(
-      <RecalculationBanner planId="plan-1" lastRecalculatedAt={oldDate} revision={5} />,
+      <RecalculationBanner planId="plan-1" lastRecalculatedAt={oldDate} revision={5} getRecalculationDate={mockGetRecalculationDate} />,
       { wrapper }
     )
     expect(screen.getByText(/Plan may be out of date/)).toBeInTheDocument()
@@ -45,7 +47,7 @@ describe('RecalculationBanner', () => {
   it('shows stale warning when lastRecalculatedAt is null', () => {
     const { wrapper } = createWrapper()
     render(
-      <RecalculationBanner planId="plan-1" lastRecalculatedAt={null} revision={5} />,
+      <RecalculationBanner planId="plan-1" lastRecalculatedAt={null} revision={5} getRecalculationDate={mockGetRecalculationDate} />,
       { wrapper }
     )
     expect(screen.getByText(/Plan may be out of date/)).toBeInTheDocument()
@@ -55,7 +57,7 @@ describe('RecalculationBanner', () => {
     const { wrapper } = createWrapper()
     const recentDate = new Date().toISOString()
     const { container } = render(
-      <RecalculationBanner planId="plan-1" lastRecalculatedAt={recentDate} revision={5} />,
+      <RecalculationBanner planId="plan-1" lastRecalculatedAt={recentDate} revision={5} getRecalculationDate={mockGetRecalculationDate} />,
       { wrapper }
     )
     expect(container.innerHTML).toBe('')
@@ -66,7 +68,7 @@ describe('RecalculationBanner', () => {
     const { wrapper } = createWrapper()
     const oldDate = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
     render(
-      <RecalculationBanner planId="plan-1" lastRecalculatedAt={oldDate} revision={5} />,
+      <RecalculationBanner planId="plan-1" lastRecalculatedAt={oldDate} revision={5} getRecalculationDate={mockGetRecalculationDate} />,
       { wrapper }
     )
     fireEvent.click(screen.getByText('Recalculate'))

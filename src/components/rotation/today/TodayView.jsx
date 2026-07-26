@@ -4,6 +4,7 @@ import { groupTasksBySection, calculateDayProgress, classifyTodayState, getToday
 import { getTaskDisplayModel } from './taskDisplayModel'
 import TodaySection from './TodaySection'
 import ProgressBar from '../../ui/ProgressBar/ProgressBar'
+import { Banner, BannerAction } from '../../ui/Banner/Banner'
 import styles from './TodayView.module.css'
 
 export default function TodayView({
@@ -14,6 +15,9 @@ export default function TodayView({
   plan,
   sourceTitle,
   isMutating,
+  isOrphaned,
+  hasUnsyncedData,
+  discardOrphanedPlannerContext,
   onStart,
   onComplete,
   onPartial,
@@ -103,6 +107,20 @@ export default function TodayView({
 
   return (
     <div className={styles.container}>
+      {isOrphaned && (
+        <Banner variant="warning" className={styles.orphanBanner}>
+          This planner task no longer exists after recalculation.
+          {hasUnsyncedData
+            ? ' Your unsynced focus time has been preserved.'
+            : null}
+          {hasUnsyncedData ? (
+            <BannerAction onClick={() => discardOrphanedPlannerContext()}>
+              Discard unsynced time
+            </BannerAction>
+          ) : null}
+        </Banner>
+      )}
+
       <div className={styles.progressHeader}>
         <div className={styles.progressStats}>
           <span className={styles.statPrimary}>

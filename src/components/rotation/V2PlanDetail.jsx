@@ -16,12 +16,8 @@ import SkipConfirmDialog from './today/dialogs/SkipConfirmDialog'
 import RecordQuestionsDialog from './today/dialogs/RecordQuestionsDialog'
 import ScheduleView from './today/ScheduleView'
 import TopicsView from './today/TopicsView'
+import { getTodayKey, resolvePlannerTimezone, getBrowserTimezone } from './today/todayUtils'
 import styles from './V2PlanDetail.module.css'
-
-function getRecalculationDate() {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-}
 
 export default function V2PlanDetail({ planId, onBack }) {
   const navigate = useNavigate()
@@ -47,16 +43,30 @@ export default function V2PlanDetail({ planId, onBack }) {
     return map
   }, [data?.topics])
 
+  const resolvedTimezone = useMemo(
+    () => resolvePlannerTimezone({ browserTimezone: getBrowserTimezone() }),
+    []
+  )
+
+  const getRecalculationDate = useCallback(
+    () => getTodayKey(new Date(), resolvedTimezone),
+    [resolvedTimezone]
+  )
+
   const mutations = usePlannerTaskMutations({
     planId,
     initialRevision: data?.plan?.revision,
     getRecalculationDate,
   })
 
+  const tasks = data?.tasks || []
+
   const taskAttachment = useTaskAttachment({
     startTask: mutations.startTask,
     currentRevision: mutations.currentRevision,
     onAttached: () => navigate('/pomodoro'),
+    tasks,
+    planId,
   })
 
   const handleStart = useCallback(async (task) => {
@@ -129,7 +139,7 @@ export default function V2PlanDetail({ planId, onBack }) {
     )
   }
 
-  const { plan, tasks, topics, schedule, progress } = data
+  const { plan, topics, schedule, progress } = data
 
   return (
     <div className={styles.container}>
@@ -151,6 +161,7 @@ export default function V2PlanDetail({ planId, onBack }) {
         planId={planId}
         lastRecalculatedAt={plan.lastRecalculatedAt}
         revision={plan.revision}
+        getRecalculationDate={getRecalculationDate}
       />
 
       <Tabs defaultValue="today">
@@ -168,6 +179,9 @@ export default function V2PlanDetail({ planId, onBack }) {
             plan={plan}
             sourceTitle={plan.sourceTitle}
             isMutating={mutations.isPending}
+            isOrphaned={taskAttachment.isOrphaned}
+            hasUnsyncedData={taskAttachment.hasUnsyncedData}
+            discardOrphanedPlannerContext={taskAttachment.discardOrphanedPlannerContext}
             onStart={handleStart}
             onComplete={handleComplete}
             onPartial={handlePartial}
