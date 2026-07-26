@@ -9,6 +9,7 @@ import {
   handleUpdateTask,
   handleRecalculatePlan,
 } from '../rotationPlannerPlans.js'
+import { persistRecalculationBatch } from '../../services/rotationPlannerPlans/persistence.js'
 
 const USER_A = { sub: 'user-a', email: 'a@test.local', role: 'authenticated' }
 const USER_B = { sub: 'user-b', email: 'b@test.local', role: 'authenticated' }
@@ -475,7 +476,7 @@ describe('handleRecalculatePlan', () => {
     expect(res1.status).toBe(200)
     const body1 = await res1.json()
 
-    const res2 = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 1, clientRequestId: 'recalc-idem-1' })
+    const res2 = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 0, clientRequestId: 'recalc-idem-1' })
     expect(res2.status).toBe(200)
     const body2 = await res2.json()
     expect(body2.planId).toBe(body1.planId)
@@ -637,7 +638,7 @@ describe('handleRecalculatePlan expectedRevision', () => {
     expect(res1.status).toBe(200)
     const body1 = await res1.json()
 
-    const res2 = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 1, clientRequestId: 'recalc-replay' })
+    const res2 = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 0, clientRequestId: 'recalc-replay' })
     expect(res2.status).toBe(200)
     const body2 = await res2.json()
     expect(body2.planId).toBe(body1.planId)
@@ -696,5 +697,182 @@ describe('topic status transitions on task mutations', () => {
 
     const STATUS_ORDER = ['not_started', 'learning', 'questions_locked', 'uworld_in_progress', 'incorrect_review', 'maintenance', 'completed']
     expect(STATUS_ORDER.indexOf(statusAfterSkip)).toBeGreaterThanOrEqual(STATUS_ORDER.indexOf(statusAfterStart))
+  })
+})
+
+// ─── R1 integration — persistence durability, rollback, bulk ───
+describe('R1 integration — persistence durability, rollback, bulk', () => {
+  it('POST→GET deep durability — recalculate persists all data to DB', async () => {
+    const createRes = await createPlan()
+    expect(createRes.status).toBe(201)
+    const createBody = await createRes.json()
+    const planId = createBody.plan.id
+
+    const recalcRes = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 0 })
+    expect(recalcRes.status).toBe(200)
+    const recalcBody = await recalcRes.json()
+    expect(recalcBody.revision).toBe(1)
+
+    const getRes1 = await getPlan(planId)
+    expect(getRes1.status).toBe(200)
+    const getBody1 = await getRes1.json()
+
+    expect(getBody1.plan.id).toBe(planId)
+    expect(getBody1.plan.revision).toBe(1)
+
+    expect(getBody1.tasks.length).toBeGreaterThan(0)
+    for (const task of getBody1.tasks) {
+      expect(task.id).toBeDefined()
+      expect(task.planTopicId).toBeDefined()
+      expect(task.taskDate).toBeDefined()
+      expect(task.taskType).toBeDefined()
+      expect(task.status).toBe('pending')
+      expect(task.estimatedMinutes).toBeGreaterThan(0)
+    }
+
+    expect(getBody1.topics.length).toBe(1)
+    expect(getBody1.topics[0].normalizedTopicId).toBe('step-up-medicine-6e-2024::cardiology.stable-angina-pectoris')
+    expect(getBody1.topics[0].totalUworldQuestions).toBe(20)
+
+    const getRes2 = await getPlan(planId)
+    expect(getRes2.status).toBe(200)
+    const getBody2 = await getRes2.json()
+
+    expect(getBody2.plan.id).toBe(getBody1.plan.id)
+    expect(getBody2.plan.revision).toBe(getBody1.plan.revision)
+    expect(getBody2.tasks.length).toBe(getBody1.tasks.length)
+    expect(getBody2.tasks.map(t => t.id).sort()).toEqual(getBody1.tasks.map(t => t.id).sort())
+  })
+
+  it('transaction rollback — invalid data does not corrupt existing state', async () => {
+    const createRes = await createPlan()
+    expect(createRes.status).toBe(201)
+    const createBody = await createRes.json()
+    const planId = createBody.plan.id
+    const originalTopics = createBody.topics
+    const originalTasks = createBody.tasks
+
+    const tasksBefore = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_daily_tasks WHERE plan_id = ?').bind(planId).first()
+    const topicsBefore = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_topics WHERE plan_id = ?').bind(planId).first()
+    const planBefore = await db.prepare('SELECT revision FROM rotation_planner_plans WHERE id = ?').bind(planId).first()
+
+    expect(tasksBefore.c).toBe(originalTasks.length)
+    expect(topicsBefore.c).toBe(originalTopics.length)
+    expect(planBefore.revision).toBe(0)
+
+    await expect(
+      persistRecalculationBatch({ DB: db }, {
+        planId,
+        userId: USER_A.sub,
+        expectedRevision: 0,
+        clientRequestId: 'test-rollback-' + Date.now(),
+        requestFingerprint: 'test-fingerprint',
+        operation: 'recalculate',
+        regeneratedTasks: [{
+          id: crypto.randomUUID(),
+          planTopicId: originalTopics[0].id,
+          taskDate: '2026-01-06',
+          taskType: 'INVALID_TYPE',
+          provider: null,
+          estimatedMinutes: 30,
+          targetCount: 0,
+          mode: null,
+          questionPool: null,
+          status: 'pending',
+          unlockCondition: null,
+          displayOrder: 0,
+          metadata: {},
+        }],
+        updatedTopics: [{
+          planTopicId: originalTopics[0].id,
+          completedUworldQuestions: 0,
+          incorrectQuestionsRemaining: 0,
+          learningCompletedAt: null,
+          questionsUnlockedAt: null,
+          status: 'not_started',
+        }],
+        resultJson: {
+          planId,
+          revision: 1,
+          recalculationDate: '2026-01-06',
+          replayed: false,
+          tasks: { created: 1, modified: 0, preserved: 0 },
+          topicStates: [],
+        },
+        recalculationMutationId: crypto.randomUUID(),
+        recalculatedAt: new Date().toISOString(),
+      })
+    ).rejects.toThrow()
+
+    const tasksAfter = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_daily_tasks WHERE plan_id = ?').bind(planId).first()
+    const topicsAfter = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_topics WHERE plan_id = ?').bind(planId).first()
+    const planAfter = await db.prepare('SELECT revision FROM rotation_planner_plans WHERE id = ?').bind(planId).first()
+
+    expect(tasksAfter.c).toBe(tasksBefore.c)
+    expect(topicsAfter.c).toBe(topicsBefore.c)
+    expect(planAfter.revision).toBe(0)
+  })
+
+  it('bulk persistence — 120+ topics generate persisted tasks with unique IDs', async () => {
+    const createRes = await createPlan()
+    expect(createRes.status).toBe(201)
+    const createBody = await createRes.json()
+    const planId = createBody.plan.id
+
+    const TOPIC_COUNT = 120
+    for (let i = 0; i < TOPIC_COUNT; i++) {
+      const topicId = crypto.randomUUID()
+      await db.prepare(
+        `INSERT INTO rotation_planner_topics (
+          id, plan_id, normalized_topic_id, canonical_topic_id, source_topic_id,
+          shared_topic_key, topic_title, group_id,
+          base_learning_minutes, personalized_learning_minutes,
+          total_uworld_questions, completed_uworld_questions,
+          learning_completed_at, questions_unlocked_at,
+          status, incorrect_questions_remaining, mastery_score, display_order
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        topicId, planId,
+        `step-up-medicine-6e-2024::cardiology.topic-${i}`,
+        `cardiology.topic-${i}`,
+        `cardiology.topic-${i}`,
+        null,
+        `Topic ${i}`,
+        'cardiology',
+        60, 60,
+        10, 0,
+        null, null,
+        'not_started', 0, null, i + 1,
+      ).run()
+    }
+
+    const topicCountBefore = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_topics WHERE plan_id = ?').bind(planId).first()
+    expect(topicCountBefore.c).toBe(TOPIC_COUNT + 1)
+
+    const recalcRes = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 0 })
+    expect(recalcRes.status).toBe(200)
+    const recalcBody = await recalcRes.json()
+    expect(recalcBody.revision).toBe(1)
+
+    const getRes = await getPlan(planId)
+    expect(getRes.status).toBe(200)
+    const getBody = await getRes.json()
+
+    expect(getBody.tasks.length).toBeGreaterThan(0)
+    expect(getBody.tasks.length).toBe(recalcBody.tasks.created + recalcBody.tasks.preserved)
+
+    const taskIds = getBody.tasks.map(t => t.id)
+    const uniqueIds = new Set(taskIds)
+    expect(uniqueIds.size).toBe(taskIds.length)
+
+    expect(getBody.plan.revision).toBe(1)
+
+    const VALID_TOPIC_STATUSES = new Set([
+      'not_started', 'learning', 'questions_locked', 'uworld_in_progress',
+      'incorrect_review', 'maintenance', 'completed',
+    ])
+    for (const topic of getBody.topics) {
+      expect(VALID_TOPIC_STATUSES.has(topic.status)).toBe(true)
+    }
   })
 })

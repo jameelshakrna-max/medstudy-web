@@ -11,11 +11,12 @@ import {
   persistPlanBatch,
   loadPlanFromDb,
   loadPlanSummaries,
-  loadPlanById, loadTaskById, loadTopicById, loadPlanRevision, updatePlanRevisionAndRecalculatedAt,
+  loadPlanById, loadTaskById, loadTopicById, loadPlanRevision,
+  loadTopicsByPlan, loadTasksByPlan, loadAvailabilityByPlan,
   checkTaskIdempotency, checkPlanIdempotency,
   classifyBatchError, buildTaskMutationBatch, executeTaskMutationBatch,
   applyTaskUpdate, calculateTaskUpdateFingerprint, calculateRecalculationFingerprint,
-  recalculatePlan, buildRecalculationResult, recordSession,
+  recalculatePlan, deriveActualTopicStates, persistRecalculationBatch,
   TERMINAL_STATUSES, VALID_ACTIONS,
 } from '../services/rotationPlannerPlans/index.js'
 import { mapPlanSummaryDto, mapPlanDto, mapAvailabilityDto, mapTopicDto, mapTaskDto, mapToSnakeCase } from '../services/rotationPlannerPlans/dtoMappers.js'
@@ -368,14 +369,20 @@ export async function handleRecalculatePlan(request, env, user) {
       return errorResponse('VALIDATION_ERROR', 'expectedRevision is required and must be a non-negative integer.', 400)
     }
 
+    fingerprint = await calculateRecalculationFingerprint(user.sub, planId, recalculationDate, expectedRevision)
+
     if (clientRequestId) {
       const idemCheck = await checkPlanIdempotency(env, user.sub, clientRequestId)
       if (idemCheck.status === 'found') {
-        return json(idemCheck.resultJson)
+        if (idemCheck.existingFingerprint === fingerprint) {
+          return json(idemCheck.resultJson)
+        }
+        return errorResponse('IDEMPOTENCY_CONFLICT', 'Same idempotency key with different input.', 409)
       }
     }
 
-    fingerprint = await calculateRecalculationFingerprint(user.sub, planId, recalculationDate, expectedRevision)
+    const plan = await loadPlanById(env, planId, user.sub)
+    if (!plan) return errorResponse('PLAN_NOT_FOUND', 'Plan not found.', 404)
 
     const currentRevision = await loadPlanRevision(env, planId)
 
@@ -393,9 +400,23 @@ export async function handleRecalculatePlan(request, env, user) {
       })
     }
 
+    const [topics, allTasks, availability] = await Promise.all([
+      loadTopicsByPlan(env, planId),
+      loadTasksByPlan(env, planId),
+      loadAvailabilityByPlan(env, planId),
+    ])
+
+    const PRESERVED_STATUSES = new Set(['completed', 'partial', 'skipped'])
+    const preservedTasks = allTasks.filter(t => PRESERVED_STATUSES.has(t.status))
+
+    const derivedTopicStates = deriveActualTopicStates(topics, preservedTasks, { asOfDate: recalculationDate })
+
     let recalcResult
     try {
-      recalcResult = await recalculatePlan(env, planId, user.sub, recalculationDate)
+      recalcResult = await recalculatePlan(env, planId, user.sub, recalculationDate, {
+        derivedTopicStates,
+        preservedTasks,
+      })
     } catch (e) {
       if (e.message === 'PLAN_NOT_FOUND') {
         return errorResponse('PLAN_NOT_FOUND', 'Plan not found.', 404)
@@ -403,26 +424,58 @@ export async function handleRecalculatePlan(request, env, user) {
       throw e
     }
 
-    const result = buildRecalculationResult(recalcResult, recalcResult.plan, false)
-
-    const newRevision = currentRevision + 1
-    await updatePlanRevisionAndRecalculatedAt(env, planId, newRevision, recalculationDate)
-
-    for (const task of recalcResult.completedTasks || []) {
-      recordSession(env, user.sub, task).catch(() => {})
+    const topicIdByNormalized = new Map()
+    for (const topic of topics) {
+      topicIdByNormalized.set(topic.normalized_topic_id, topic.id)
     }
+
+    const schedulerTasks = recalcResult.recalculation?.tasks || recalcResult.recalculation?.recalculation?.tasks || []
+    const regeneratedTasks = schedulerTasks.map(task => ({
+      ...task,
+      id: crypto.randomUUID(),
+      planTopicId: topicIdByNormalized.get(task.normalizedTopicId) || null,
+    }))
+
+    const resultingRevision = expectedRevision + 1
+    const recalculatedAt = new Date().toISOString()
 
     const resultJson = {
-      ...result,
       planId,
-      revision: newRevision,
+      revision: resultingRevision,
       recalculationDate,
+      replayed: false,
+      tasks: {
+        created: regeneratedTasks.length,
+        modified: 0,
+        preserved: preservedTasks.length,
+      },
+      topicStates: derivedTopicStates.map(ts => ({
+        id: ts.canonicalTopicId,
+        status: ts.status,
+        learningComplete: !!ts.learningCompletedAt,
+        projectedQuestionsRemaining: Math.max(0, ts.totalUworldQuestions - ts.completedUworldQuestions),
+      })),
+      feasibility: recalcResult.recalculation?.feasibility || recalcResult.recalculation?.recalculation?.feasibility || {},
     }
 
-    const mutationId = crypto.randomUUID()
-    await env.DB.prepare(
-      `INSERT INTO ${PLANNER_TABLES.planMutations} (id, plan_id, user_id, client_request_id, request_fingerprint, expected_revision, resulting_revision, operation, result_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(mutationId, planId, user.sub, clientRequestId || `recalc-${planId}-${Date.now()}`, fingerprint, expectedRevision, newRevision, 'recalculate', JSON.stringify(resultJson)).run()
+    const recalculationMutationId = crypto.randomUUID()
+    const batchResults = await persistRecalculationBatch(env, {
+      planId,
+      userId: user.sub,
+      expectedRevision,
+      clientRequestId: clientRequestId || `recalc-${planId}-${Date.now()}`,
+      requestFingerprint: fingerprint,
+      operation: 'recalculate',
+      regeneratedTasks,
+      updatedTopics: derivedTopicStates,
+      resultJson,
+      recalculationMutationId,
+      recalculatedAt,
+    })
+
+    if (batchResults[0]?.meta?.changes === 0) {
+      return errorResponse('PLAN_REVISION_CONFLICT', 'Plan has been modified since you last loaded it. Please refresh.', 409)
+    }
 
     return json(resultJson)
   } catch (e) {

@@ -17,7 +17,7 @@ const TASK_METADATA_FIELDS = {
   optional_book_questions: [],
 }
 
-function filterMetadata(taskType, metadata) {
+export function filterMetadata(taskType, metadata) {
   const allowed = TASK_METADATA_FIELDS[taskType] || []
   if (!allowed.length || !metadata) return {}
   const filtered = {}
@@ -262,4 +262,111 @@ export async function updatePlanRevisionAndRecalculatedAt(env, planId, revision)
   await env.DB.prepare(
     `UPDATE ${PLANNER_TABLES.plans} SET revision = ?, last_recalculated_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`
   ).bind(revision, planId).run()
+}
+
+export async function persistRecalculationBatch(env, {
+  planId,
+  userId,
+  expectedRevision,
+  clientRequestId,
+  requestFingerprint,
+  operation,
+  regeneratedTasks,
+  updatedTopics,
+  resultJson,
+  recalculationMutationId,
+  recalculatedAt,
+}) {
+  const T = PLANNER_TABLES
+  const resultingRevision = expectedRevision + 1
+
+  const claimStmt = env.DB.prepare(
+    `INSERT INTO ${T.planMutations} (id, plan_id, user_id, client_request_id, request_fingerprint, expected_revision, resulting_revision, operation, result_json)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+     WHERE EXISTS (
+       SELECT 1 FROM ${T.plans} WHERE id = ? AND user_id = ? AND revision = ?
+     )`
+  ).bind(
+    recalculationMutationId, planId, userId, clientRequestId, requestFingerprint,
+    expectedRevision, resultingRevision, operation, JSON.stringify(resultJson),
+    planId, userId, expectedRevision
+  )
+
+  const revisionStmt = env.DB.prepare(
+    `UPDATE ${T.plans} SET revision = ?, last_recalculated_at = ?, updated_at = ?
+     WHERE id = ? AND user_id = ? AND EXISTS (
+       SELECT 1 FROM ${T.planMutations} WHERE id = ?
+     )`
+  ).bind(resultingRevision, recalculatedAt, recalculatedAt, planId, userId, recalculationMutationId)
+
+  const deleteStmt = env.DB.prepare(
+    `DELETE FROM ${T.dailyTasks}
+     WHERE plan_id = ? AND status IN ('pending', 'locked')
+     AND EXISTS (
+       SELECT 1 FROM ${T.planMutations} WHERE id = ?
+     )`
+  ).bind(planId, recalculationMutationId)
+
+  const tasksJson = JSON.stringify(regeneratedTasks.map(task => ({
+    id: task.id,
+    planTopicId: task.planTopicId || null,
+    taskDate: task.taskDate,
+    taskType: task.taskType,
+    provider: task.provider || null,
+    estimatedMinutes: task.estimatedMinutes || 0,
+    targetCount: task.targetCount || 0,
+    mode: task.mode || null,
+    questionPool: task.questionPool || null,
+    status: 'pending',
+    unlockCondition: task.unlockCondition || null,
+    displayOrder: task.displayOrder || 0,
+    metadataJson: JSON.stringify(filterMetadata(task.taskType, task.metadata)),
+  })))
+
+  const insertTasksStmt = env.DB.prepare(
+    `INSERT INTO ${T.dailyTasks} (
+       id, plan_id, plan_topic_id, task_date, task_type, provider,
+       estimated_minutes, target_count, completed_count,
+       mode, question_pool, status, unlock_condition, display_order, metadata_json
+     )
+     SELECT
+       json_extract(value, '$.id'), ?,
+       json_extract(value, '$.planTopicId'), json_extract(value, '$.taskDate'),
+       json_extract(value, '$.taskType'), json_extract(value, '$.provider'),
+       json_extract(value, '$.estimatedMinutes'), json_extract(value, '$.targetCount'),
+       0,
+       json_extract(value, '$.mode'), json_extract(value, '$.questionPool'),
+       json_extract(value, '$.status'), json_extract(value, '$.unlockCondition'),
+       json_extract(value, '$.displayOrder'), json_extract(value, '$.metadataJson')
+     FROM json_each(?)
+     WHERE EXISTS (
+       SELECT 1 FROM ${T.planMutations} WHERE id = ?
+     )`
+  ).bind(planId, tasksJson, recalculationMutationId)
+
+  const topicsJson = JSON.stringify(updatedTopics.map(topic => ({
+    id: topic.planTopicId,
+    completedUworldQuestions: topic.completedUworldQuestions,
+    incorrectQuestionsRemaining: topic.incorrectQuestionsRemaining,
+    learningCompletedAt: topic.learningCompletedAt,
+    questionsUnlockedAt: topic.questionsUnlockedAt,
+    status: topic.status,
+  })))
+
+  const updateTopicsStmt = env.DB.prepare(
+    `UPDATE ${T.topics} SET
+       completed_uworld_questions = CAST(json_extract(j.value, '$.completedUworldQuestions') AS INTEGER),
+       incorrect_questions_remaining = CAST(json_extract(j.value, '$.incorrectQuestionsRemaining') AS INTEGER),
+       learning_completed_at = json_extract(j.value, '$.learningCompletedAt'),
+       questions_unlocked_at = json_extract(j.value, '$.questionsUnlockedAt'),
+       status = json_extract(j.value, '$.status')
+     FROM json_each(?) AS j
+     WHERE ${T.topics}.id = json_extract(j.value, '$.id')
+       AND ${T.topics}.plan_id = ?
+       AND EXISTS (
+         SELECT 1 FROM ${T.planMutations} WHERE id = ?
+       )`
+  ).bind(topicsJson, planId, recalculationMutationId)
+
+  return env.DB.batch([claimStmt, revisionStmt, deleteStmt, insertTasksStmt, updateTopicsStmt])
 }

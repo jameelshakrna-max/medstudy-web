@@ -88,46 +88,54 @@ describe('deriveActualTopicStates', () => {
       estimated_minutes: 30,
       completed_count: null,
       completed_at: null,
+      completed_on: null,
+      incorrect_count: 0,
+      completion_percentage: null,
       ...overrides,
     }
   }
 
+  const AS_OF = { asOfDate: '2026-01-07' }
+
   it('returns topic states from DB rows', () => {
     const topics = [makeTopic()]
-    const result = deriveActualTopicStates(topics, [])
+    const result = deriveActualTopicStates(topics, [], AS_OF)
     expect(result).toHaveLength(1)
     expect(result[0].planTopicId).toBe('topic-1')
     expect(result[0].canonicalTopicId).toBe('cardiology.stable-angina')
     expect(result[0].normalizedTopicId).toBe('src::cardiology.stable-angina')
+    expect(result[0].completedUworldQuestions).toBe(0)
   })
 
-  it('updates learningCompletedAt from completed learning tasks', () => {
+  it('sets learningCompletedAt from completed_on of completed tasks', () => {
     const topics = [makeTopic()]
     const tasks = [
-      makeTask({ task_type: 'learning', status: 'completed', completed_at: '2026-01-05T10:00:00Z' }),
+      makeTask({ task_type: 'learning', status: 'completed', completed_on: '2026-01-05', estimated_minutes: 45 }),
     ]
-    const result = deriveActualTopicStates(topics, tasks)
-    expect(result[0].learningCompletedAt).toBe('2026-01-05T10:00:00Z')
+    const result = deriveActualTopicStates(topics, tasks, AS_OF)
+    expect(result[0].learningCompletedAt).toBe('2026-01-05')
+    expect(result[0].status).toBe('uworld_in_progress')
   })
 
-  it('accumulates completedUworldQuestions from uworld tasks', () => {
+  it('computes completedUworldQuestions from scratch via task history', () => {
     const topics = [makeTopic({ completed_uworld_questions: 5 })]
     const tasks = [
       makeTask({ task_type: 'uworld_questions', status: 'completed', completed_count: 10 }),
       makeTask({ task_type: 'uworld_questions', status: 'completed', completed_count: 3 }),
     ]
-    const result = deriveActualTopicStates(topics, tasks)
-    expect(result[0].completedUworldQuestions).toBe(18) // 5 + 10 + 3
+    const result = deriveActualTopicStates(topics, tasks, AS_OF)
+    expect(result[0].completedUworldQuestions).toBe(13)
   })
 
-  it('decrements incorrectQuestionsRemaining from incorrect_review tasks', () => {
+  it('computes incorrectQuestionsRemaining from scratch', () => {
     const topics = [makeTopic({ incorrect_questions_remaining: 10 })]
     const tasks = [
+      makeTask({ task_type: 'uworld_questions', status: 'completed', incorrect_count: 7 }),
       makeTask({ task_type: 'incorrect_review', status: 'completed', completed_count: 4 }),
       makeTask({ task_type: 'incorrect_review', status: 'completed', completed_count: 3 }),
     ]
-    const result = deriveActualTopicStates(topics, tasks)
-    expect(result[0].incorrectQuestionsRemaining).toBe(3) // 10 - 4 - 3
+    const result = deriveActualTopicStates(topics, tasks, AS_OF)
+    expect(result[0].incorrectQuestionsRemaining).toBe(0)
   })
 
   it('preserves questionsUnlockedAt when already set', () => {
@@ -135,17 +143,24 @@ describe('deriveActualTopicStates', () => {
     const tasks = [
       makeTask({ task_type: 'uworld_questions', status: 'completed', completed_count: 5 }),
     ]
-    const result = deriveActualTopicStates(topics, tasks)
+    const result = deriveActualTopicStates(topics, tasks, AS_OF)
     expect(result[0].questionsUnlockedAt).toBe('2026-01-01')
   })
 
-  it('sets questionsUnlockedAt when completedUworldQuestions > 0', () => {
-    const topics = [makeTopic({ completed_uworld_questions: 0, questions_unlocked_at: null, learning_completed_at: null })]
+  it('sets questionsUnlockedAt when learning complete and UWorld > 0', () => {
+    const topics = [makeTopic({
+      personalized_learning_minutes: 30,
+      completed_uworld_questions: 0,
+      questions_unlocked_at: null,
+      learning_completed_at: null,
+      total_uworld_questions: 10,
+    })]
     const tasks = [
+      makeTask({ task_type: 'learning', status: 'completed', estimated_minutes: 30, completed_on: '2026-01-05' }),
       makeTask({ task_type: 'uworld_questions', status: 'completed', completed_count: 5 }),
     ]
-    const result = deriveActualTopicStates(topics, tasks)
-    expect(result[0].questionsUnlockedAt).toBeTruthy()
+    const result = deriveActualTopicStates(topics, tasks, AS_OF)
+    expect(result[0].questionsUnlockedAt).toBe('2026-01-05')
   })
 })
 

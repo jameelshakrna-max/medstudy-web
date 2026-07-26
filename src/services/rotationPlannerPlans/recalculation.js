@@ -2,10 +2,18 @@ import { PLANNER_TABLES } from '../../db/rotationPlannerSchema.js'
 import { buildRotationSchedule } from '../rotationPlannerV2/buildRotationSchedule.js'
 import { generateDateRange } from '../rotationPlannerV2/dateUtils.js'
 import { loadTasksByPlan, loadTopicsByPlan, loadAvailabilityByPlan } from './taskMutation.js'
+import { findNormalizedTopic } from '../../data/studySources/normalizedRegistry.js'
 
 const T = PLANNER_TABLES
 
 const TERMINAL_STATUSES = new Set(['completed', 'skipped', 'partial'])
+
+export function getCompletionFraction(task) {
+  if (task.status === 'completed') return 1
+  const pct = task.completion_percentage ?? task.completionPercentage
+  if ((task.status === 'partial' || task.status === 'in_progress') && typeof pct === 'number') return pct / 100
+  return 0
+}
 
 export function buildReservedMinutesMap(tasks, dateRange) {
   const reservedByDate = new Map()
@@ -26,7 +34,7 @@ export function buildReservedMinutesMap(tasks, dateRange) {
   return result
 }
 
-export function deriveActualTopicStates(topics, tasks) {
+export function deriveActualTopicStates(topics, tasks, { asOfDate }) {
   const stateMap = new Map()
   for (const topic of topics) {
     stateMap.set(topic.id, {
@@ -35,8 +43,8 @@ export function deriveActualTopicStates(topics, tasks) {
       normalizedTopicId: topic.normalized_topic_id,
       learningCompletedAt: topic.learning_completed_at || null,
       questionsUnlockedAt: topic.questions_unlocked_at || null,
-      completedUworldQuestions: topic.completed_uworld_questions || 0,
-      incorrectQuestionsRemaining: topic.incorrect_questions_remaining || 0,
+      completedUworldQuestions: 0,
+      incorrectQuestionsRemaining: 0,
       personalizedLearningMinutes: topic.personalized_learning_minutes || 0,
       baseLearningMinutes: topic.base_learning_minutes || 0,
       totalUworldQuestions: topic.total_uworld_questions || 0,
@@ -44,56 +52,96 @@ export function deriveActualTopicStates(topics, tasks) {
     })
   }
 
+  const topicCompletedEquivalent = new Map()
+  const topicLatestCompletionDate = new Map()
+  const topicIncorrectFromUworld = new Map()
+  const topicIncorrectFromReview = new Map()
+
   for (const task of tasks) {
     if (!task.plan_topic_id) continue
     const state = stateMap.get(task.plan_topic_id)
     if (!state) continue
 
-    if (task.task_type === 'learning' && task.status === 'completed') {
-      if (!state.learningCompletedAt || task.completed_at > state.learningCompletedAt) {
-        state.learningCompletedAt = task.completed_at
+    const fraction = getCompletionFraction(task)
+    const estimated = task.estimated_minutes || 0
+
+    if (fraction > 0) {
+      const current = topicCompletedEquivalent.get(task.plan_topic_id) || 0
+      topicCompletedEquivalent.set(task.plan_topic_id, current + estimated * fraction)
+
+      if (task.completed_on) {
+        const latest = topicLatestCompletionDate.get(task.plan_topic_id)
+        if (!latest || task.completed_on > latest) {
+          topicLatestCompletionDate.set(task.plan_topic_id, task.completed_on)
+        }
       }
-      state.personalizedLearningMinutes = Math.max(
-        0,
-        state.personalizedLearningMinutes - (task.actual_minutes || task.estimated_minutes || 0)
-      )
     }
 
-    if (task.task_type === 'uworld_questions' && task.completed_count > 0) {
+    if ((task.task_type === 'uworld_questions' || task.task_type === 'mixed_review') && task.completed_count > 0) {
       state.completedUworldQuestions += task.completed_count
     }
 
-    if (task.task_type === 'incorrect_review' && task.completed_count > 0) {
-      state.incorrectQuestionsRemaining = Math.max(
-        0,
-        state.incorrectQuestionsRemaining - task.completed_count
-      )
+    if ((task.task_type === 'uworld_questions' || task.task_type === 'mixed_review') && task.incorrect_count > 0) {
+      const current = topicIncorrectFromUworld.get(task.plan_topic_id) || 0
+      topicIncorrectFromUworld.set(task.plan_topic_id, current + task.incorrect_count)
     }
 
-    if (state.completedUworldQuestions > 0 && !state.questionsUnlockedAt) {
-      state.questionsUnlockedAt = state.learningCompletedAt || new Date().toISOString().slice(0, 10)
+    if (task.task_type === 'incorrect_review' && task.completed_count > 0) {
+      const current = topicIncorrectFromReview.get(task.plan_topic_id) || 0
+      topicIncorrectFromReview.set(task.plan_topic_id, current + task.completed_count)
+    }
+  }
+
+  for (const [topicId, state] of stateMap) {
+    const completedEquivalent = topicCompletedEquivalent.get(topicId) || 0
+    const remainingLearningMinutes = Math.max(0, state.personalizedLearningMinutes - completedEquivalent)
+    const incorrectFromUworld = topicIncorrectFromUworld.get(topicId) || 0
+    const incorrectFromReview = topicIncorrectFromReview.get(topicId) || 0
+    state.incorrectQuestionsRemaining = Math.max(0, incorrectFromUworld - incorrectFromReview)
+
+    const hasProgress = completedEquivalent > 0
+    if (remainingLearningMinutes <= 0) {
+      const totalUworld = state.totalUworldQuestions
+      if (state.completedUworldQuestions < totalUworld || state.incorrectQuestionsRemaining > 0) {
+        state.status = 'uworld_in_progress'
+      } else {
+        state.status = 'completed'
+      }
+    } else if (hasProgress) {
+      state.status = 'learning'
+    } else {
+      state.status = 'not_started'
+    }
+
+    if (remainingLearningMinutes <= 0 && !state.learningCompletedAt) {
+      state.learningCompletedAt = topicLatestCompletionDate.get(topicId) || asOfDate
+    }
+
+    if (remainingLearningMinutes <= 0 && state.totalUworldQuestions > 0 && !state.questionsUnlockedAt) {
+      state.questionsUnlockedAt = state.learningCompletedAt || asOfDate
     }
   }
 
   return Array.from(stateMap.values())
 }
 
-export async function recalculatePlan(env, planId, userId, recalculationDate) {
+export async function recalculatePlan(env, planId, userId, recalculationDate, opts = {}) {
   const planRow = await env.DB.prepare(
     `SELECT * FROM ${T.plans} WHERE id = ? AND user_id = ?`
   ).bind(planId, userId).first()
 
   if (!planRow) throw new Error('PLAN_NOT_FOUND')
 
-  const [topics, tasks, availability] = await Promise.all([
+  const [topics, dbTasks, availability] = await Promise.all([
     loadTopicsByPlan(env, planId),
     loadTasksByPlan(env, planId),
     loadAvailabilityByPlan(env, planId),
   ])
 
-  const actualStates = deriveActualTopicStates(topics, tasks)
+  const actualStates = opts.derivedTopicStates || deriveActualTopicStates(topics, dbTasks, { asOfDate: recalculationDate })
+  const tasksForReserved = opts.preservedTasks || dbTasks
 
-  const futureTasks = tasks.filter(t => {
+  const futureTasks = tasksForReserved.filter(t => {
     const dateStr = t.task_date || t.taskDate
     return dateStr && dateStr >= recalculationDate
   })
@@ -131,21 +179,27 @@ export async function recalculatePlan(env, planId, userId, recalculationDate) {
     examReviewWindowDays: settings.examReviewWindowDays || 0,
     mixedReviewQuestionsPerDay: settings.mixedReviewQuestionsPerDay || 0,
     dueReviewMinutesByDate: settings.dueReviewMinutesByDate || {},
-    topics: topics.map(t => ({
-      normalizedTopicId: t.normalized_topic_id,
-      canonicalTopicId: t.canonical_topic_id,
-      sourceTopicId: t.source_topic_id,
-      title: t.topic_title,
-      learningMinutes: {
+    topics: topics.map(t => {
+      const registryTopic = findNormalizedTopic(planRow.source_id, t.normalized_topic_id?.split('::')[1])
+      const learningMinutes = registryTopic?.learningMinutes || {
+        focused: t.base_learning_minutes || 0,
         activeExpected: t.base_learning_minutes || 0,
-      },
-      uworldRemainingQuestions: Math.max(0, (t.total_uworld_questions || 0) - (t.completed_uworld_questions || 0)),
-      alreadyCompletedLearningPercentage: t.learning_completed_at ? 100 : 0,
-      alreadyCompletedQuestionCount: t.completed_uworld_questions || 0,
-      incorrectQuestionsRemaining: t.incorrect_questions_remaining || 0,
-      prerequisiteTopicIds: [],
-      sharedTopicKey: t.shared_topic_key || null,
-    })),
+        detailedNotes: t.base_learning_minutes || 0,
+      }
+      return {
+        normalizedTopicId: t.normalized_topic_id,
+        canonicalTopicId: t.canonical_topic_id,
+        sourceTopicId: t.source_topic_id || registryTopic?.sourceTopicId || '',
+        title: t.topic_title,
+        learningMinutes,
+        uworldRemainingQuestions: Math.max(0, (t.total_uworld_questions || 0) - (t.completed_uworld_questions || 0)),
+        alreadyCompletedLearningPercentage: t.learning_completed_at ? 1.0 : 0,
+        alreadyCompletedQuestionCount: t.completed_uworld_questions || 0,
+        incorrectQuestionsRemaining: t.incorrect_questions_remaining || 0,
+        prerequisiteTopicIds: [],
+        sharedTopicKey: t.shared_topic_key || registryTopic?.sharedTopicKey || null,
+      }
+    }),
   }
 
   const initialTopicStates = {}

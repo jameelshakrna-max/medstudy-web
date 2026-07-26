@@ -71,7 +71,11 @@ export async function loadAvailabilityByPlan(env, planId) {
   const { results } = await env.DB.prepare(
     `SELECT * FROM ${T.availability} WHERE plan_id = ? ORDER BY weekday`
   ).bind(planId).all()
-  return results || []
+  return (results || []).map(r => ({
+    weekday: r.weekday,
+    availableMinutes: r.available_minutes,
+    isDayOff: r.is_day_off === 1,
+  }))
 }
 
 export async function executeTaskMutationBatch(env, statements) {
