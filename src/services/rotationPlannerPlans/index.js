@@ -7,3 +7,4 @@ export { applyTaskUpdate, TERMINAL_STATUSES, VALID_ACTIONS, ALLOWED_ACTIONS } fr
 export { loadTaskById, loadTasksByPlan, loadPlanById, loadTopicById, loadTopicsByPlan, loadAvailabilityByPlan, checkTaskIdempotency, checkPlanIdempotency, classifyBatchError, buildTaskMutationBatch, executeTaskMutationBatch } from './taskMutation.js'
 export { computeSessionValidity, getActivityIdentity, recordSession, calculateSourcePace, updateUserSourcePace } from './sourcePace.js'
 export { recalculatePlan, buildRecalculationResult, deriveActualTopicStates, buildReservedMinutesMap, getCompletionFraction } from './recalculation.js'
+export { assignStudyBlocks } from '../rotationPlannerV2/studyBlockAssignment.js'

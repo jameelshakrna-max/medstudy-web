@@ -1,6 +1,7 @@
 import { PLANNER_TABLES } from '../../db/rotationPlannerSchema.js'
 import { buildRotationSchedule } from '../rotationPlannerV2/buildRotationSchedule.js'
 import { generateDateRange } from '../rotationPlannerV2/dateUtils.js'
+import { assignStudyBlocks } from '../rotationPlannerV2/studyBlockAssignment.js'
 import { loadTasksByPlan, loadTopicsByPlan, loadAvailabilityByPlan } from './taskMutation.js'
 import { findNormalizedTopic } from '../../data/studySources/normalizedRegistry.js'
 
@@ -229,6 +230,20 @@ export async function recalculatePlan(env, planId, userId, recalculationDate, op
     scheduleStartDate: recalculationDate,
     reservedMinutesByDate,
   })
+
+  const topicMap = new Map()
+  for (const t of topics) {
+    topicMap.set(t.normalized_topic_id, { sourceId: planRow.source_id, groupId: t.group_id })
+  }
+
+  const tasks = recalculation.recalculation?.tasks || recalculation.tasks || []
+  const assignedTasks = assignStudyBlocks(tasks, topicMap)
+
+  if (recalculation.recalculation?.tasks) {
+    recalculation.recalculation.tasks = assignedTasks
+  } else if (recalculation.tasks) {
+    recalculation.tasks = assignedTasks
+  }
 
   return {
     recalculation,

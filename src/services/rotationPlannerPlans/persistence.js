@@ -11,7 +11,7 @@ const TASK_METADATA_FIELDS = {
   flashcard_review: ['priority', 'dueCardCount', 'unmetReviewMinutes'],
   mixed_review: ['topicCount', 'includedTopicIds'],
   uworld_questions: ['selection'],
-  learning: ['pageRange', 'studyStyle'],
+  learning: ['pageRange', 'studyStyle', 'studyBlockId'],
   incorrect_review: [],
   consolidation: [],
   optional_book_questions: [],

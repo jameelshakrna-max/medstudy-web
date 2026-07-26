@@ -1,5 +1,6 @@
 import { getStudySource } from '../../data/studySources/sourceRegistry.js'
 import { buildRotationSchedule } from '../rotationPlannerV2/buildRotationSchedule.js'
+import { assignStudyBlocks } from '../rotationPlannerV2/studyBlockAssignment.js'
 
 export function generatePlanPreview(resolvedTopics, validatedInput) {
   const source = getStudySource(validatedInput.sourceId)
@@ -7,6 +8,13 @@ export function generatePlanPreview(resolvedTopics, validatedInput) {
 
   const config = buildSchedulerConfig(resolvedTopics, validatedInput, sourceVersion)
   const preview = buildRotationSchedule(config)
+
+  const topicMap = new Map()
+  for (const t of resolvedTopics) {
+    topicMap.set(t.normalizedTopicId, { sourceId: t.sourceId, groupId: t.groupId })
+  }
+
+  preview.tasks = assignStudyBlocks(preview.tasks, topicMap)
 
   return {
     preview,

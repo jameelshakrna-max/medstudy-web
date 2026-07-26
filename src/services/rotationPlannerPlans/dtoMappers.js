@@ -77,6 +77,7 @@ function mapTopicDto(row) {
 function mapTaskDto(row) {
   const dto = mapRow(row, TASK_COLUMNS)
   dto.metadataJson = safeParseJson(dto.metadataJson, {})
+  dto.studyBlockId = dto.metadataJson?.studyBlockId ?? null
   return dto
 }
 
