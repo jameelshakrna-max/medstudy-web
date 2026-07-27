@@ -63,7 +63,7 @@ export default function TodayView({
       <div className={styles.empty}>
         <div className={styles.emptyTitle}>Your rotation starts {dateDisplay}</div>
         <div className={styles.emptyDesc}>
-          {tasks.length > 0 && `${tasks.length} upcoming tasks`}
+          {tasks.length > 0 && `${tasks.length} upcoming task${tasks.length === 1 ? '' : 's'}`}
         </div>
       </div>
     )
@@ -73,19 +73,22 @@ export default function TodayView({
     return (
       <div className={styles.container}>
         <div className={styles.progressHeader}>
+          <div className={styles.heading}>Today's progress</div>
           <div className={styles.progressStats}>
             <span className={styles.statPrimary}>
-              {dayProgress.completedTasks}/{dayProgress.totalTasks} tasks
+              {dayProgress.completedTasks} of {dayProgress.totalTasks} task{dayProgress.totalTasks === 1 ? '' : 's'} completed
             </span>
             <span className={styles.statSecondary}>
-              {formatMinutes(dayProgress.completedMinutes)} of {formatMinutes(dayProgress.totalMinutes)}
+              {formatMinutes(dayProgress.completedMinutes)} / {formatMinutes(dayProgress.totalMinutes)}
             </span>
           </div>
-          <ProgressBar
-            value={dayProgress.weightedProgress}
-            label={`${Math.round(dayProgress.weightedProgress * 100)}%`}
-            size="default"
-          />
+          <div className={styles.progressRow}>
+            <ProgressBar
+              value={dayProgress.weightedProgress}
+              label={`${Math.round(dayProgress.weightedProgress * 100)}%`}
+              size="default"
+            />
+          </div>
         </div>
         <div className={styles.allDone}>
           <div className={styles.allDoneTitle}>All done for today!</div>
@@ -108,6 +111,8 @@ export default function TodayView({
     )
   }
 
+  const remainingMinutes = dayProgress.totalMinutes - dayProgress.completedMinutes
+
   return (
     <div className={styles.container}>
       {isOrphaned && (
@@ -125,19 +130,25 @@ export default function TodayView({
       )}
 
       <div className={styles.progressHeader}>
+        <div className={styles.heading}>Today's progress</div>
         <div className={styles.progressStats}>
           <span className={styles.statPrimary}>
-            {dayProgress.completedTasks}/{dayProgress.totalTasks} tasks
+            {dayProgress.completedTasks} of {dayProgress.totalTasks} task{dayProgress.totalTasks === 1 ? '' : 's'} completed
           </span>
           <span className={styles.statSecondary}>
-            {formatMinutes(dayProgress.completedMinutes)} of {formatMinutes(dayProgress.totalMinutes)}
+            {formatMinutes(dayProgress.completedMinutes)} / {formatMinutes(dayProgress.totalMinutes)}
           </span>
         </div>
-        <ProgressBar
-          value={dayProgress.weightedProgress}
-          label={`${Math.round(dayProgress.weightedProgress * 100)}%`}
-          size="default"
-        />
+        <div className={styles.progressRow}>
+          <ProgressBar
+            value={dayProgress.weightedProgress}
+            label={`${Math.round(dayProgress.weightedProgress * 100)}%`}
+            size="default"
+          />
+        </div>
+        {remainingMinutes > 0 && (
+          <div className={styles.remaining}>{remainingMinutes} min remaining</div>
+        )}
       </div>
 
       {sections.map(section => (

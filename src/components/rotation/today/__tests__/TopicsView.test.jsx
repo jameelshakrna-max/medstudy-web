@@ -45,17 +45,17 @@ describe('TopicsView', () => {
 
     it('displays completed count', () => {
       render(<TopicsView topics={ALL_TOPICS} sourceTitle={SOURCE_TITLE} />)
-      expect(screen.getByText('1 completed')).toBeTruthy()
+      expect(screen.getByText(/1 Completed/)).toBeTruthy()
     })
 
     it('displays active count', () => {
       render(<TopicsView topics={ALL_TOPICS} sourceTitle={SOURCE_TITLE} />)
-      expect(screen.getByText('2 active')).toBeTruthy()
+      expect(screen.getByText(/2 Active/)).toBeTruthy()
     })
 
     it('displays remaining count', () => {
       render(<TopicsView topics={ALL_TOPICS} sourceTitle={SOURCE_TITLE} />)
-      expect(screen.getByText('2 remaining')).toBeTruthy()
+      expect(screen.getByText(/2 Remaining/)).toBeTruthy()
     })
 
     it('displays UWorld progress when total > 0', () => {
@@ -175,10 +175,21 @@ describe('TopicsView', () => {
       expect(screen.getByText('In progress')).toBeTruthy()
     })
 
-    it('shows "Complete" learning when learningCompletedAt is set', () => {
+    it('shows blue ● indicator for learning in progress', () => {
+      render(<TopicsView topics={[learning]} sourceTitle={SOURCE_TITLE} />)
+      expect(screen.getByText('●')).toBeTruthy()
+    })
+
+    it('shows "Completed" learning with ✓ indicator', () => {
       render(<TopicsView topics={[uworldInProgress]} sourceTitle={SOURCE_TITLE} />)
-      const learningComplete = screen.getAllByText('Complete')
+      expect(screen.getByText('✓')).toBeTruthy()
+      const learningComplete = screen.getAllByText('Completed')
       expect(learningComplete.length).toBeGreaterThanOrEqual(1)
+    })
+
+    it('shows 🔒 indicator for locked UWorld', () => {
+      render(<TopicsView topics={[questionsLocked]} sourceTitle={SOURCE_TITLE} />)
+      expect(screen.getByText('🔒')).toBeTruthy()
     })
 
     it('shows UWorld progress with question counts', () => {
@@ -231,7 +242,7 @@ describe('TopicsView', () => {
     it('shows "Complete" for incorrect review when 0 remaining', () => {
       render(<TopicsView topics={[completed]} sourceTitle={SOURCE_TITLE} />)
       const incorrectComplete = screen.getAllByText('Complete')
-      expect(incorrectComplete.length).toBeGreaterThanOrEqual(2)
+      expect(incorrectComplete.length).toBeGreaterThanOrEqual(1)
     })
 
     it('shows planned learning minutes', () => {
@@ -257,6 +268,12 @@ describe('TopicsView', () => {
       const topics = [notStarted]
       render(<TopicsView topics={topics} sourceTitle={SOURCE_TITLE} />)
       expect(screen.queryByText('Chest Pain')).toBeNull()
+    })
+
+    it('renders groupId in topic meta, not raw normalizedTopicId slug', () => {
+      render(<TopicsView topics={[learning]} sourceTitle={SOURCE_TITLE} />)
+      expect(screen.getByText('Chest Pain')).toBeTruthy()
+      expect(screen.queryByText('amboss::cardiology.stable-angina')).toBeNull()
     })
   })
 

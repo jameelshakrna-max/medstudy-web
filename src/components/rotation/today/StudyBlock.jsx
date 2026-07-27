@@ -75,7 +75,7 @@ export default function StudyBlock({
           </div>
 
           <div className={styles.meta}>
-            {totalEstimatedMinutes}m &middot; {topicCount} topic{topicCount !== 1 ? 's' : ''}
+            {totalEstimatedMinutes} min &middot; {topicCount} topic{topicCount !== 1 ? 's' : ''}
           </div>
 
           <div className={styles.topicPreview}>
@@ -94,6 +94,7 @@ export default function StudyBlock({
           )}
 
           <div className={styles.progressRow}>
+            <span className={styles.progressPercent}>{progress.percent}%</span>
             <ProgressBar value={progress.percent / 100} size="sm" />
           </div>
 

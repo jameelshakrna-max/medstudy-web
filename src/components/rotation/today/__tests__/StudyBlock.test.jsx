@@ -75,7 +75,7 @@ describe('StudyBlock', () => {
   it('renders summary when collapsed', () => {
     renderBlock()
     expect(screen.getByText('Abdominal Trauma Study Block')).toBeInTheDocument()
-    expect(screen.getByText(/13m/)).toBeInTheDocument()
+    expect(screen.getByText(/13 min/)).toBeInTheDocument()
     expect(screen.getByText(/2 topics/)).toBeInTheDocument()
   })
 

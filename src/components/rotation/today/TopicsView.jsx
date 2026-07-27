@@ -31,11 +31,14 @@ const STATUS_ICON = {
   completed: Check,
 }
 
-function PipelineRow({ label, state, detail }) {
+function PipelineRow({ label, state, detail, indicator }) {
   return (
     <div className={styles.pipelineRow}>
       <span className={styles.pipelineLabel}>{label}</span>
-      <span className={styles.pipelineValue}>{state}</span>
+      <span className={styles.pipelineValue}>
+        {indicator && <span className={`${styles.pipelineIndicator} ${indicator.class}`}>{indicator.icon}</span>}
+        {state}
+      </span>
       {detail && <span className={styles.pipelineDetail}>{detail}</span>}
     </div>
   )
@@ -46,10 +49,10 @@ function getLearningRow(topic) {
     return null
   }
   if (topic.status === 'learning') {
-    return { state: 'In progress', detail: null }
+    return { state: 'In progress', detail: null, indicator: { icon: '●', class: styles.indicatorBlue } }
   }
   if (topic.learningCompletedAt) {
-    return { state: 'Complete', detail: null }
+    return { state: 'Completed', detail: null, indicator: { icon: '✓', class: styles.indicatorEmerald } }
   }
   return null
 }
@@ -61,12 +64,13 @@ function getUworldRow(topic) {
     return null
   }
   if (topic.status === 'not_started' || topic.status === 'learning' || topic.status === 'questions_locked') {
-    return { state: 'Locked', detail: 'Complete learning first' }
+    return { state: 'Locked', detail: 'Complete learning first', indicator: { icon: '🔒', class: styles.indicatorMist } }
   }
   const remaining = total - completed
   return {
     state: `${completed} / ${total} questions`,
     detail: remaining > 0 ? `${remaining} remaining` : null,
+    indicator: remaining > 0 ? { icon: '●', class: styles.indicatorBlue } : { icon: '✓', class: styles.indicatorEmerald },
   }
 }
 
@@ -74,8 +78,8 @@ function getIncorrectRow(topic) {
   const remaining = topic.incorrectQuestionsRemaining
   if (topic.status === 'completed') {
     return remaining > 0
-      ? { state: `${remaining} remaining`, detail: null }
-      : { state: 'Complete', detail: null }
+      ? { state: `${remaining} remaining`, detail: null, indicator: { icon: '●', class: styles.indicatorBlue } }
+      : { state: 'Complete', detail: null, indicator: { icon: '✓', class: styles.indicatorEmerald } }
   }
   if (topic.status !== 'uworld_in_progress' && topic.status !== 'incorrect_review') {
     return null
@@ -83,7 +87,7 @@ function getIncorrectRow(topic) {
   if (remaining == null || remaining === 0) {
     return null
   }
-  return { state: `${remaining} remaining`, detail: null }
+  return { state: `${remaining} remaining`, detail: null, indicator: { icon: '●', class: styles.indicatorBlue } }
 }
 
 function TopicCard({ topic, sourceTitle }) {
@@ -110,9 +114,9 @@ function TopicCard({ topic, sourceTitle }) {
         </span>
       </div>
       <div className={styles.pipeline}>
-        {learning && <PipelineRow label="Learning" state={learning.state} detail={learning.detail} />}
-        {uworld && <PipelineRow label="UWorld" state={uworld.state} detail={uworld.detail} />}
-        {incorrect && <PipelineRow label="Incorrect Review" state={incorrect.state} detail={incorrect.detail} />}
+        {learning && <PipelineRow label="Learning" state={learning.state} detail={learning.detail} indicator={learning.indicator} />}
+        {uworld && <PipelineRow label="UWorld" state={uworld.state} detail={uworld.detail} indicator={uworld.indicator} />}
+        {incorrect && <PipelineRow label="Incorrect Review" state={incorrect.state} detail={incorrect.detail} indicator={incorrect.indicator} />}
         {plannedMinutes > 0 && (
           <PipelineRow label="Planned learning" state={`${plannedMinutes} min`} detail={null} />
         )}
@@ -136,19 +140,19 @@ export default function TopicsView({ topics, sourceTitle }) {
         <span className={styles.summaryPrimary}>
           {summary.total} topic{summary.total !== 1 ? 's' : ''}
         </span>
-        <span className={styles.summarySep}>·</span>
-        <span className={styles.summaryCompleted}>{summary.completed} completed</span>
-        <span className={styles.summarySep}>·</span>
-        <span className={styles.summaryActive}>{summary.active} active</span>
-        <span className={styles.summarySep}>·</span>
-        <span className={styles.summaryRemaining}>{summary.remaining} remaining</span>
+        <div className={styles.summaryStats}>
+          <span className={styles.summaryCompleted}>{summary.completed} Completed</span>
+          <span className={styles.summarySep}>·</span>
+          <span className={styles.summaryActive}>{summary.active} Active</span>
+          <span className={styles.summarySep}>·</span>
+          <span className={styles.summaryRemaining}>{summary.remaining} Remaining</span>
+        </div>
         {summary.totalUworld > 0 && (
-          <>
-            <span className={styles.summarySep}>·</span>
+          <div className={styles.summaryUworldRow}>
             <span className={styles.summaryUworld}>
-              UWorld: {summary.completedUworld} / {summary.totalUworld}
+              UWorld {summary.completedUworld} / {summary.totalUworld}
             </span>
-          </>
+          </div>
         )}
       </div>
 

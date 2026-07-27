@@ -40,7 +40,6 @@ export default function TaskCard({
   const isTerminal = task.isTerminal
 
   const displayName = task.topicTitle || task.typeLabel
-  const sourceName = sourceTitle || task.topicSource || null
   const sectionName = task.topicSection || null
 
   return (
@@ -73,19 +72,18 @@ export default function TaskCard({
         <div className={styles.titleRow}>
           <span className={styles.topicTitle}>{displayName}</span>
         </div>
-        {sourceName && (
+        {(sourceTitle || sectionName) && (
           <div className={styles.sourceInfo}>
-            {sectionName ? `${sourceName} \u2022 ${sectionName}` : sourceName}
+            {sourceTitle}{sectionName && sourceTitle ? ` \u00b7 ${sectionName}` : sectionName}
           </div>
         )}
-        <div className={styles.timeInfo}>
+        <div className={styles.progressRow}>
           <span className={styles.timeEstimate}>{task.timeEstimate}</span>
-          {task.timeActual && (
-            <span className={styles.timeActual}>{task.timeActual} spent</span>
-          )}
+          <div className={styles.progressInline}>
+            <ProgressBar value={task.progressPercent} size="sm" />
+            <span className={styles.progressLabel}>{task.progressLabel}</span>
+          </div>
         </div>
-        <ProgressBar value={task.progressPercent} size="sm" />
-        <span className={styles.progressLabel}>{task.progressLabel}</span>
       </div>
 
       {canStudy && (
@@ -107,7 +105,7 @@ export default function TaskCard({
             onClick={() => onStart(task)}
             disabled={isMutating}
           >
-            {isMutating ? 'Starting...' : <><Play size={14} /> Start</>}
+            {isMutating ? 'Starting...' : <><Play size={12} /> Start</>}
           </button>
         )}
         {actions.includes('complete') && (
@@ -116,7 +114,7 @@ export default function TaskCard({
             onClick={() => onComplete(task)}
             disabled={isMutating}
           >
-            <Check size={14} /> Done
+            <Check size={12} /> Done
           </button>
         )}
         {actions.includes('partial') && (
@@ -134,7 +132,7 @@ export default function TaskCard({
             onClick={() => onSkip(task)}
             disabled={isMutating}
           >
-            <SkipForward size={14} /> Skip
+            <SkipForward size={12} /> Skip
           </button>
         )}
         {actions.includes('record_time') && (

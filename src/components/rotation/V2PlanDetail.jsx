@@ -142,20 +142,36 @@ export default function V2PlanDetail({ planId, onBack }) {
 
   const { plan, topics, schedule, progress } = data
 
+  const completedTopicCount = useMemo(() => {
+    return topics.filter(t => t.status === 'completed').length
+  }, [topics])
+
+  const dateRange = useMemo(() => {
+    if (!plan.startDate || !plan.endDate) return null
+    const start = new Date(plan.startDate + 'T00:00:00')
+    const end = new Date(plan.endDate + 'T00:00:00')
+    const fmt = { month: 'short', day: 'numeric' }
+    return `${start.toLocaleDateString('en-US', fmt)} – ${end.toLocaleDateString('en-US', fmt)}`
+  }, [plan.startDate, plan.endDate])
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <button className={styles.backButton} onClick={onBack}>
           <ChevronLeft size={18} /> Plans
         </button>
-        <div>
-          <h1 className={styles.title}>{plan.sourceTitle || 'Rotation Plan'}</h1>
-          <div className={styles.meta}>
-            {plan.topicCount > 0 && <span>{plan.topicCount} topics</span>}
-            {plan.taskCount > 0 && <span>{plan.taskCount} tasks</span>}
-            {plan.schedulingMode && <span className={styles.mode}>{plan.schedulingMode}</span>}
-          </div>
+        <h1 className={styles.title}>{plan.sourceTitle || 'Rotation Plan'}</h1>
+        <div className={styles.meta}>
+          {plan.schedulingMode && <span className={styles.mode}>{plan.schedulingMode}</span>}
         </div>
+        {(dateRange || plan.topicCount > 0) && (
+          <div className={styles.headerDetails}>
+            {dateRange && <span>{dateRange}</span>}
+            {plan.topicCount > 0 && (
+              <span>{completedTopicCount} / {plan.topicCount} topics completed</span>
+            )}
+          </div>
+        )}
       </div>
 
       <RecalculationBanner

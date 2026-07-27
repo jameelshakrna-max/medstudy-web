@@ -1,7 +1,7 @@
 .section {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
@@ -9,15 +9,17 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 20px;
+  padding: var(--space-sm) var(--space-lg);
   border-bottom: 1px solid var(--card-border);
 }
 
 .sectionTitle {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .sectionProgress {

@@ -1,61 +1,78 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-md);
 }
 
 /* Summary */
 .summary {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: var(--space-xs);
   font-size: 13px;
   color: var(--mist);
 }
 
 .summaryPrimary {
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.summaryStats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
 }
 
 .summarySep {
   color: var(--card-border);
+  font-weight: 400;
 }
 
 .summaryCompleted {
   color: var(--emerald);
+  font-weight: 600;
 }
 
 .summaryActive {
   color: var(--blue);
+  font-weight: 600;
 }
 
 .summaryRemaining {
   color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.summaryUworldRow {
+  margin-top: 2px;
 }
 
 .summaryUworld {
   color: var(--text-secondary);
+  font-size: 12px;
 }
 
 /* Filters */
 .filters {
   display: flex;
-  gap: 4px;
+  gap: var(--space-xs);
   flex-wrap: wrap;
 }
 
 .filterBtn {
-  padding: 6px 14px;
-  border-radius: 100px;
+  padding: 6px var(--space-md);
+  border-radius: var(--radius-full);
   border: 1px solid var(--card-border);
   background: var(--input-bg);
   color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-normal);
   font-family: 'DM Sans', sans-serif;
 }
 
@@ -78,12 +95,12 @@
 /* Empty */
 .empty {
   text-align: center;
-  padding: 48px 32px;
+  padding: var(--space-2xl) var(--space-lg);
   color: var(--mist);
   font-size: 14px;
   background: var(--card-bg);
   border: 1px dashed var(--card-border);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
 }
 
 /* Group label */
@@ -92,9 +109,9 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--mist);
+  color: var(--text-secondary);
   margin: 0;
-  padding: 12px 0 6px;
+  padding: var(--space-md) 0 var(--space-xs);
 }
 
 .groupLabel:first-child {
@@ -112,9 +129,9 @@
 .topicCard {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-radius: 12px;
-  padding: 12px 14px;
-  transition: border-color 0.15s;
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  transition: border-color var(--duration-normal);
 }
 
 .topicCard:hover {
@@ -125,8 +142,8 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
 }
 
 .topicTitleGroup {
@@ -143,7 +160,7 @@
 
 .topicMeta {
   display: flex;
-  gap: 4px;
+  gap: var(--space-xs);
   font-size: 12px;
   color: var(--mist);
   margin-top: 2px;
@@ -157,7 +174,7 @@
   font-size: 11px;
   font-weight: 600;
   padding: 3px 10px;
-  border-radius: 100px;
+  border-radius: var(--radius-full);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -186,30 +203,52 @@
 .pipeline {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .pipelineRow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   font-size: 12px;
 }
 
 .pipelineLabel {
-  min-width: 110px;
-  color: var(--mist);
+  min-width: 120px;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .pipelineValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--text-primary);
   font-weight: 500;
 }
 
-.pipelineDetail {
+.pipelineIndicator {
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.indicatorBlue {
+  color: var(--blue);
+}
+
+.indicatorEmerald {
+  color: var(--emerald);
+}
+
+.indicatorMist {
   color: var(--mist);
+}
+
+.pipelineDetail {
+  color: var(--text-secondary);
   font-size: 12px;
+  margin-left: auto;
 }
 
 /* Mobile */
@@ -218,8 +257,12 @@
     font-size: 12px;
   }
 
+  .summaryPrimary {
+    font-size: 16px;
+  }
+
   .topicCard {
-    padding: 14px;
+    padding: var(--space-sm);
   }
 
   .topicTitle {

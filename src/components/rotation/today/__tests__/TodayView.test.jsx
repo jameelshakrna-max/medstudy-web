@@ -58,7 +58,7 @@ describe('TodayView', () => {
       makeTask({ id: 't1', status: 'completed' }),
       makeTask({ id: 't2', status: 'pending' }),
     ])
-    expect(screen.getByText('1/2 tasks')).toBeInTheDocument()
+    expect(screen.getByText(/1 of 2 tasks completed/)).toBeInTheDocument()
   })
 
   it('renders sections with tasks', () => {
@@ -81,7 +81,7 @@ describe('TodayView', () => {
     ])
     expect(screen.queryByText('Nothing scheduled for today')).not.toBeInTheDocument()
     expect(screen.getByText('All done for today!')).toBeInTheDocument()
-    expect(screen.getByText('1/1 tasks')).toBeInTheDocument()
+    expect(screen.getByText(/1 of 1 task completed/)).toBeInTheDocument()
   })
 
   it('shows PRE_START state when plan has not started', () => {
@@ -121,6 +121,6 @@ describe('TodayView', () => {
       makeTask({ id: 't1', status: 'completed', taskDate: TODAY, estimatedMinutes: 30 }),
       makeTask({ id: 't2', status: 'locked', taskDate: '2099-01-10', estimatedMinutes: 60 }),
     ], plan)
-    expect(screen.getByText('1/1 tasks')).toBeInTheDocument()
+    expect(screen.getByText(/1 of 1 task completed/)).toBeInTheDocument()
   })
 })

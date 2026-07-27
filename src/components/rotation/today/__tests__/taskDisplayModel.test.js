@@ -315,4 +315,25 @@ describe('getTaskDisplayModel', () => {
       expect(model.studyBlockId).toBeNull();
     });
   });
+
+  describe('topicSection derivation', () => {
+    it('derives topicSection from topic.groupId, not from normalizedTopicId', () => {
+      const topic = { groupId: 'Cardiology', topicTitle: 'Angina' };
+      const model = getTaskDisplayModel(makeTask(), null, topic);
+      expect(model.topicSection).toBe('Cardiology');
+    });
+
+    it('returns null topicSection when topic has no groupId', () => {
+      const topic = { topicTitle: 'Angina' };
+      const model = getTaskDisplayModel(makeTask(), null, topic);
+      expect(model.topicSection).toBeNull();
+    });
+
+    it('does not derive topicSection from normalizedTopicId slug', () => {
+      const task = makeTask();
+      const topic = { groupId: null, normalizedTopicId: 'uworld::cardiology.stable-angina' };
+      const model = getTaskDisplayModel(makeTask(), null, topic);
+      expect(model.topicSection).toBeNull();
+    });
+  });
 });

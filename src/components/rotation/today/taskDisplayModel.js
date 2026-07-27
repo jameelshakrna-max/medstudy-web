@@ -80,7 +80,6 @@ export function getTaskDisplayModel(task, todayKey, topic = null) {
     metadataJson: task.metadataJson,
 
     topicTitle: topic?.topicTitle || null,
-    topicSource: topic?.normalizedTopicId?.split('::')[0] || null,
-    topicSection: topic?.normalizedTopicId?.split('::')[1]?.split('.')[0] || null,
+    topicSection: topic?.groupId || null,
   };
 }

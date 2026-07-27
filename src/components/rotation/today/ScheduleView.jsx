@@ -304,19 +304,17 @@ export default function ScheduleView({
                       <span className={styles.taskType} style={{ color: typeColor }}>
                         {typeLabel}
                       </span>
+                      {workload && <span className={styles.workload}>{workload}</span>}
                     </div>
-                    <div className={styles.taskTitle}>
-                      {topic?.topicTitle || typeLabel}
+                    <div className={styles.taskTitleRow}>
+                      <div className={styles.taskTitle}>
+                        {topic?.topicTitle || typeLabel}
+                      </div>
+                      <StatusBadge status={task.status} overdue={overdue} />
                     </div>
                     {sourceTitle && (
                       <div className={styles.taskSource}>{sourceTitle}</div>
                     )}
-                    <div className={styles.taskMeta}>
-                      {workload && <span className={styles.workload}>{workload}</span>}
-                    </div>
-                  </div>
-                  <div className={styles.taskStatus}>
-                    <StatusBadge status={task.status} overdue={overdue} />
                   </div>
                 </div>
               )

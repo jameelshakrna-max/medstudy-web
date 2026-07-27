@@ -1,14 +1,14 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-md);
 }
 
 /* Week navigation */
 .weekNav {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   justify-content: center;
 }
 
@@ -18,12 +18,12 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--card-border);
   background: var(--input-bg);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
 }
 
 .navBtn:hover {
@@ -40,27 +40,27 @@
 }
 
 .todayBtn {
-  padding: 4px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(79, 140, 255, 0.3);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent);
   background: var(--blueL);
   color: var(--blue);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   font-family: 'DM Sans', sans-serif;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
 }
 
 .todayBtn:hover {
-  background: rgba(79, 140, 255, 0.2);
+  background: color-mix(in srgb, var(--blue) 20%, transparent);
 }
 
 /* Week strip */
 .weekStrip {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .dayCell {
@@ -68,12 +68,12 @@
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 8px 4px;
-  border-radius: 10px;
+  padding: var(--space-sm) var(--space-xs);
+  border-radius: var(--radius-md);
   background: var(--input-bg);
   border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
 }
 
 .dayCell:hover {
@@ -82,16 +82,16 @@
 
 .dayCellToday {
   background: var(--blueL);
-  border-color: rgba(79, 140, 255, 0.3);
+  border-color: color-mix(in srgb, var(--blue) 30%, transparent);
 }
 
 .dayCellToday:hover {
-  background: rgba(79, 140, 255, 0.15);
+  background: color-mix(in srgb, var(--blue) 15%, transparent);
 }
 
 .dayCellSelected {
   border-color: var(--blue);
-  background: rgba(79, 140, 255, 0.08);
+  background: color-mix(in srgb, var(--blue) 8%, transparent);
 }
 
 .dayName {
@@ -112,9 +112,9 @@
   font-size: 10px;
   font-weight: 600;
   color: var(--blue);
-  background: rgba(79, 140, 255, 0.12);
+  background: color-mix(in srgb, var(--blue) 12%, transparent);
   padding: 1px 6px;
-  border-radius: 100px;
+  border-radius: var(--radius-full);
   min-width: 18px;
   text-align: center;
 }
@@ -127,15 +127,15 @@
 .agenda {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-radius: 16px;
-  padding: 20px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
 }
 
 .agendaHeader {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 4px;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
 }
 
 .agendaTitle {
@@ -150,20 +150,20 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--blue);
-  background: rgba(79, 140, 255, 0.12);
-  padding: 2px 8px;
-  border-radius: 100px;
+  background: color-mix(in srgb, var(--blue) 12%, transparent);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-full);
 }
 
 .agendaSummary {
   font-size: 13px;
   color: var(--mist);
-  margin-bottom: 16px;
+  margin-bottom: var(--space-md);
 }
 
 .emptyDay {
   text-align: center;
-  padding: 32px;
+  padding: var(--space-xl);
   color: var(--mist);
   font-size: 13px;
 }
@@ -172,7 +172,7 @@
   font-size: 15px;
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 4px;
+  margin-bottom: var(--space-xs);
 }
 
 .dayOffDesc {
@@ -184,20 +184,20 @@
 .taskList {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-xs);
 }
 
 .taskRow {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 12px 14px;
-  border-radius: 10px;
-  transition: background 0.15s;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast);
 }
 
 .taskRow:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: color-mix(in srgb, var(--text-primary) 2%, transparent);
 }
 
 .taskRowCompleted {
@@ -206,7 +206,7 @@
 
 .taskRowOverdue {
   border-left: 3px solid var(--amber, #ffb800);
-  padding-left: 11px;
+  padding-left: calc(var(--space-md) - 3px);
 }
 
 .taskMain {
@@ -214,12 +214,14 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1;
 }
 
 .taskTypeRow {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: var(--space-sm);
 }
 
 .taskType {
@@ -229,11 +231,19 @@
   letter-spacing: 0.04em;
 }
 
+.taskTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
 .taskTitle {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
   line-height: 1.3;
+  min-width: 0;
 }
 
 .taskSource {
@@ -242,25 +252,15 @@
   line-height: 1.3;
 }
 
-.taskMeta {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-top: 2px;
-}
-
 .workload {
   font-size: 12px;
   color: var(--text-secondary);
   font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* Status badges */
-.taskStatus {
-  flex-shrink: 0;
-  margin-left: 12px;
-}
-
 .statusBadge {
   display: inline-flex;
   align-items: center;
@@ -268,8 +268,9 @@
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 100px;
+  border-radius: var(--radius-full);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .statusLocked {
@@ -283,17 +284,17 @@
 }
 
 .statusActive {
-  background: rgba(79, 140, 255, 0.12);
+  background: color-mix(in srgb, var(--blue) 12%, transparent);
   color: var(--blue);
 }
 
 .statusPartial {
-  background: rgba(255, 184, 0, 0.12);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
   color: var(--amber, #ffb800);
 }
 
 .statusTerminal {
-  background: rgba(16, 185, 129, 0.12);
+  background: color-mix(in srgb, var(--emerald) 12%, transparent);
   color: var(--emerald);
 }
 
@@ -303,7 +304,7 @@
 }
 
 .statusOverdue {
-  background: rgba(255, 184, 0, 0.12);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
   color: var(--amber, #ffb800);
 }
 
@@ -332,7 +333,7 @@
   }
 
   .agenda {
-    padding: 14px;
+    padding: var(--space-md);
   }
 
   .agendaTitle {
@@ -340,7 +341,7 @@
   }
 
   .taskRow {
-    padding: 10px 12px;
+    padding: var(--space-sm) var(--space-sm);
   }
 
   .taskTitle {

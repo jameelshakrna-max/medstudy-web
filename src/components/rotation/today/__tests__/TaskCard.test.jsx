@@ -96,6 +96,24 @@ describe('TaskCard', () => {
     expect(screen.queryByText('step-up-medicine-6e-2024::cardiology.stable-angina-pectoris')).not.toBeInTheDocument()
   })
 
+  it('does not render raw provider slug fragments as visible text', () => {
+    renderCard()
+    const body = document.body.textContent
+    expect(body).not.toMatch(/\b(uworld|amboss|step-up-medicine-6e)\b/i)
+  })
+
+  it('renders sourceTitle prop instead of topicSource', () => {
+    renderCard()
+    expect(screen.getByText(/Step-Up to Medicine/)).toBeInTheDocument()
+    expect(screen.queryByText('step-up-medicine-6e-2024')).not.toBeInTheDocument()
+  })
+
+  it('renders groupId as topicSection, not a parsed slug fragment', () => {
+    renderCard()
+    expect(screen.getByText(/cardiology/)).toBeInTheDocument()
+    expect(screen.queryByText('step-up-medicine-6e-2024')).not.toBeInTheDocument()
+  })
+
   it('Start button calls onStart', () => {
     const { cbs } = renderCard()
     fireEvent.click(screen.getByText(/Start/))
