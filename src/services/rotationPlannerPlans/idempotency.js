@@ -101,13 +101,11 @@ export async function checkIdempotency(env, userId, clientRequestId) {
   }
 }
 
-export async function calculateTaskUpdateFingerprint(userId, taskId, action, payload) {
-  const canonical = JSON.stringify({
-    userId,
-    taskId,
-    action,
-    payload,
-  }, null, 0)
+export async function calculateTaskUpdateFingerprint(userId, taskId, action, payload, timezone) {
+  const fingerprintTimezone = (timezone && timezone !== 'UTC') ? timezone : undefined
+  const obj = { userId, taskId, action, payload }
+  if (fingerprintTimezone) obj.timezone = fingerprintTimezone
+  const canonical = JSON.stringify(obj, null, 0)
   return sha256Hex(canonical)
 }
 

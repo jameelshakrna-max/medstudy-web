@@ -7,7 +7,7 @@ function generateClientId() {
   return `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-export default function usePlannerTaskMutations({ planId, initialRevision, getRecalculationDate }) {
+export default function usePlannerTaskMutations({ planId, initialRevision, getRecalculationDate, timezone }) {
   const queryClient = useQueryClient()
   const [currentRevision, setCurrentRevision] = useState(initialRevision ?? 0)
   const [recalculationState, setRecalculationState] = useState(null)
@@ -35,6 +35,7 @@ export default function usePlannerTaskMutations({ planId, initialRevision, getRe
           payload,
           expectedRevision: currentRevision,
           clientRequestId: requestId,
+          timezone,
         },
         { headers: { 'Idempotency-Key': requestId } }
       )

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { createTestDb } from '../../__tests__/helpers/d1TestHarness.js'
 import {
   handlePreviewRotationPlan,
@@ -1749,5 +1749,242 @@ describe('R2 — Failure Atomicity', () => {
     expect(tasksAfter.c).toBe(tasksBefore.c)
     expect(topicsAfter.c).toBe(topicsBefore.c)
     expect(planAfter.revision).toBe(planBefore.revision)
+  })
+})
+
+// ─── F9: timezone-aware completedOn ───
+describe('F9 timezone-aware completedOn', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function createPlanAndGetFirstTask(user = USER_A) {
+    const createRes = await createPlan(makeBody(), user)
+    expect(createRes.status).toBe(201)
+    const planBody = await createRes.json()
+    return { planId: planBody.plan.id, taskId: planBody.tasks[0].id }
+  }
+
+  it('invalid timezone returns 400', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, {
+      action: 'complete',
+      payload: { actualMinutes: 45 },
+      expectedRevision: 0,
+      timezone: 'Not/A/Timezone',
+    })
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error.code).toBe('VALIDATION_ERROR')
+    expect(body.error.message).toContain('timezone')
+  })
+
+  it('F: complete with America/New_York — completedOn is planner-local date', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-27T03:30:00.000Z'))
+
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, {
+      action: 'complete',
+      payload: { actualMinutes: 45 },
+      expectedRevision: 0,
+      timezone: 'America/New_York',
+    })
+    expect(res.status).toBe(200)
+
+    const taskRow = await db.prepare('SELECT completed_on FROM rotation_planner_daily_tasks WHERE id = ?').bind(taskId).first()
+    expect(taskRow.completed_on).toBe('2026-07-26')
+  })
+
+  it('G: partial with America/New_York — completedOn is planner-local date', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-27T03:30:00.000Z'))
+
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const startRes = await patchTask(planId, taskId, { action: 'start', expectedRevision: 0, clientRequestId: 'g-start' }, USER_A, { 'Idempotency-Key': 'g-start' })
+    expect(startRes.status).toBe(200)
+
+    const res = await patchTask(planId, taskId, {
+      action: 'partial',
+      payload: { completedPercentage: 50, actualMinutes: 30 },
+      expectedRevision: 1,
+      timezone: 'America/New_York',
+      clientRequestId: 'g-partial',
+    }, USER_A, { 'Idempotency-Key': 'g-partial' })
+    expect(res.status).toBe(200)
+
+    const taskRow = await db.prepare('SELECT completed_on FROM rotation_planner_daily_tasks WHERE id = ?').bind(taskId).first()
+    expect(taskRow.completed_on).toBe('2026-07-26')
+  })
+
+  it('H: skip with America/New_York — completedOn is planner-local date', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-27T03:30:00.000Z'))
+
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, {
+      action: 'skip',
+      expectedRevision: 0,
+      timezone: 'America/New_York',
+    })
+    expect(res.status).toBe(200)
+
+    const taskRow = await db.prepare('SELECT completed_on FROM rotation_planner_daily_tasks WHERE id = ?').bind(taskId).first()
+    expect(taskRow.completed_on).toBe('2026-07-26')
+  })
+
+  it('J: complete without timezone — defaults to UTC date', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, {
+      action: 'complete',
+      payload: { actualMinutes: 45 },
+      expectedRevision: 0,
+    })
+    expect(res.status).toBe(200)
+
+    const taskRow = await db.prepare('SELECT completed_on FROM rotation_planner_daily_tasks WHERE id = ?').bind(taskId).first()
+    const todayUtc = new Date().toISOString().slice(0, 10)
+    expect(taskRow.completed_on).toBe(todayUtc)
+  })
+
+  it('K: idempotent retry — same timezone + same key returns exact replay', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-27T03:30:00.000Z'))
+
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res1 = await patchTask(planId, taskId, {
+      action: 'complete',
+      payload: { actualMinutes: 45 },
+      expectedRevision: 0,
+      timezone: 'America/New_York',
+      clientRequestId: 'idem-tz-1',
+    }, USER_A, { 'Idempotency-Key': 'idem-tz-1' })
+    expect(res1.status).toBe(200)
+    const body1 = await res1.json()
+
+    const res2 = await patchTask(planId, taskId, {
+      action: 'complete',
+      payload: { actualMinutes: 45 },
+      expectedRevision: 1,
+      timezone: 'America/New_York',
+      clientRequestId: 'idem-tz-1',
+    }, USER_A, { 'Idempotency-Key': 'idem-tz-1' })
+    expect(res2.status).toBe(200)
+    const body2 = await res2.json()
+    expect(body2.taskId).toBe(body1.taskId)
+    expect(body2.status).toBe(body1.status)
+  })
+
+  it('L: different timezone with same key — IDEMPOTENCY_CONFLICT', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-27T03:30:00.000Z'))
+
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res1 = await patchTask(planId, taskId, {
+      action: 'complete',
+      payload: { actualMinutes: 45 },
+      expectedRevision: 0,
+      timezone: 'America/New_York',
+      clientRequestId: 'idem-tz-conflict',
+    }, USER_A, { 'Idempotency-Key': 'idem-tz-conflict' })
+    expect(res1.status).toBe(200)
+
+    const res2 = await patchTask(planId, taskId, {
+      action: 'complete',
+      payload: { actualMinutes: 45 },
+      expectedRevision: 1,
+      timezone: 'Asia/Tokyo',
+      clientRequestId: 'idem-tz-conflict',
+    }, USER_A, { 'Idempotency-Key': 'idem-tz-conflict' })
+    expect(res2.status).toBe(409)
+    const body2 = await res2.json()
+    expect(body2.error.code).toBe('IDEMPOTENCY_CONFLICT')
+  })
+
+  it('I: milestone propagation — completedOn feeds into recalculation', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-06T03:30:00.000Z'))
+
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res = await patchTask(planId, taskId, {
+      action: 'complete',
+      payload: { actualMinutes: 45 },
+      expectedRevision: 0,
+      timezone: 'America/New_York',
+    })
+    expect(res.status).toBe(200)
+
+    const taskRow = await db.prepare('SELECT completed_on FROM rotation_planner_daily_tasks WHERE id = ?').bind(taskId).first()
+    expect(taskRow.completed_on).toBe('2026-01-05')
+
+    const recalRes = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 1 })
+    expect(recalRes.status).toBe(200)
+
+    const topicId = (await db.prepare('SELECT plan_topic_id FROM rotation_planner_daily_tasks WHERE id = ?').bind(taskId).first()).plan_topic_id
+    const updatedTopic = await db.prepare('SELECT learning_completed_at FROM rotation_planner_topics WHERE id = ?').bind(topicId).first()
+    expect(updatedTopic.learning_completed_at).toBe('2026-01-05')
+  })
+
+  it('M: legacy mutation retry — no timezone produces same fingerprint as no timezone', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res1 = await patchTask(planId, taskId, {
+      action: 'complete',
+      payload: { actualMinutes: 45 },
+      expectedRevision: 0,
+      clientRequestId: 'legacy-retry-1',
+    }, USER_A, { 'Idempotency-Key': 'legacy-retry-1' })
+    expect(res1.status).toBe(200)
+
+    const res2 = await patchTask(planId, taskId, {
+      action: 'complete',
+      payload: { actualMinutes: 45 },
+      expectedRevision: 1,
+      clientRequestId: 'legacy-retry-1',
+    }, USER_A, { 'Idempotency-Key': 'legacy-retry-1' })
+    expect(res2.status).toBe(200)
+    const body2 = await res2.json()
+    expect(body2.taskId).toBeDefined()
+  })
+
+  it('N: explicit UTC same as no timezone — replay (no conflict)', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res1 = await patchTask(planId, taskId, {
+      action: 'complete',
+      payload: { actualMinutes: 45 },
+      expectedRevision: 0,
+      clientRequestId: 'utc-same-as-none',
+    }, USER_A, { 'Idempotency-Key': 'utc-same-as-none' })
+    expect(res1.status).toBe(200)
+
+    const res2 = await patchTask(planId, taskId, {
+      action: 'complete',
+      payload: { actualMinutes: 45 },
+      expectedRevision: 1,
+      timezone: 'UTC',
+      clientRequestId: 'utc-same-as-none',
+    }, USER_A, { 'Idempotency-Key': 'utc-same-as-none' })
+    expect(res2.status).toBe(200)
+  })
+
+  it('O: non-UTC timezone retry conflict — different fingerprint', async () => {
+    const { planId, taskId } = await createPlanAndGetFirstTask()
+    const res1 = await patchTask(planId, taskId, {
+      action: 'complete',
+      payload: { actualMinutes: 45 },
+      expectedRevision: 0,
+      clientRequestId: 'tz-conflict-legacy',
+    }, USER_A, { 'Idempotency-Key': 'tz-conflict-legacy' })
+    expect(res1.status).toBe(200)
+
+    const res2 = await patchTask(planId, taskId, {
+      action: 'complete',
+      payload: { actualMinutes: 45 },
+      expectedRevision: 1,
+      timezone: 'America/New_York',
+      clientRequestId: 'tz-conflict-legacy',
+    }, USER_A, { 'Idempotency-Key': 'tz-conflict-legacy' })
+    expect(res2.status).toBe(409)
+    const body2 = await res2.json()
+    expect(body2.error.code).toBe('IDEMPOTENCY_CONFLICT')
   })
 })

@@ -5,6 +5,7 @@ import {
   resolvePlannerTimezone,
   getDateKeyInTimezone,
   getTodayKey,
+  getDateKeyForTimezone,
   isOverdue,
   secondsToPlannerMinutes,
 } from "../todayUtils";
@@ -39,6 +40,11 @@ describe("isValidTimezone", () => {
     expect(isValidTimezone(null)).toBe(false);
     expect(isValidTimezone(undefined)).toBe(false);
     expect(isValidTimezone(42)).toBe(false);
+  });
+
+  it("returns false for malformed timezone strings", () => {
+    expect(isValidTimezone("Not/A/Timezone")).toBe(false);
+    expect(isValidTimezone("GMT+5")).toBe(false);
   });
 });
 
@@ -149,6 +155,24 @@ describe("getTodayKey", () => {
   });
 });
 
+describe("getDateKeyForTimezone", () => {
+  it("negative UTC offset: America/New_York produces previous day", () => {
+    expect(getDateKeyForTimezone("2026-07-27T03:30:00.000Z", "America/New_York")).toBe("2026-07-26");
+  });
+
+  it("positive UTC offset: Asia/Tokyo produces next day", () => {
+    expect(getDateKeyForTimezone("2026-07-26T16:30:00.000Z", "Asia/Tokyo")).toBe("2026-07-27");
+  });
+
+  it("UTC: returns UTC calendar date", () => {
+    expect(getDateKeyForTimezone("2026-07-26T16:30:00.000Z", "UTC")).toBe("2026-07-26");
+  });
+
+  it("date boundary: instant where UTC and local dates differ", () => {
+    expect(getDateKeyForTimezone("2025-01-01T00:00:00.000Z", "America/New_York")).toBe("2024-12-31");
+  });
+});
+
 describe("isOverdue", () => {
   it("returns true when task is before today", () => {
     expect(isOverdue("2025-07-14", "2025-07-15")).toBe(true);
@@ -201,6 +225,7 @@ describe("default export", () => {
       expect(typeof mod.default.resolvePlannerTimezone).toBe("function");
       expect(typeof mod.default.getDateKeyInTimezone).toBe("function");
       expect(typeof mod.default.getTodayKey).toBe("function");
+      expect(typeof mod.default.getDateKeyForTimezone).toBe("function");
       expect(typeof mod.default.isOverdue).toBe("function");
       expect(typeof mod.default.secondsToPlannerMinutes).toBe("function");
     });

@@ -1,15 +1,9 @@
+import { isValidTimezone, getDateKeyInTimezone, getDateKeyForTimezone } from '../../../lib/dateUtils.js'
+
+export { isValidTimezone, getDateKeyInTimezone, getDateKeyForTimezone }
+
 export function getBrowserTimezone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
-}
-
-export function isValidTimezone(tz) {
-  if (!tz || typeof tz !== "string") return false;
-  try {
-    Intl.DateTimeFormat(undefined, { timeZone: tz });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export function resolvePlannerTimezone({
@@ -22,18 +16,6 @@ export function resolvePlannerTimezone({
     if (isValidTimezone(tz)) return tz;
   }
   return "UTC";
-}
-
-export function getDateKeyInTimezone(date, timezone) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-
-  const get = (type) => parts.find((p) => p.type === type).value;
-  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
 export function getTodayKey(now, timezone) {
@@ -54,6 +36,7 @@ export default {
   resolvePlannerTimezone,
   getDateKeyInTimezone,
   getTodayKey,
+  getDateKeyForTimezone,
   isOverdue,
   secondsToPlannerMinutes,
 };

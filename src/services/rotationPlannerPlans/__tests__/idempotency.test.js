@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sha256Hex, calculateScheduleFingerprint, calculateRequestFingerprint } from '../idempotency.js'
+import { sha256Hex, calculateScheduleFingerprint, calculateRequestFingerprint, calculateTaskUpdateFingerprint } from '../idempotency.js'
 
 const BASE_INPUT = {
   sourceId: 'step-up-medicine-6e-2024',
@@ -117,5 +117,66 @@ describe('acceptOverload flow', () => {
     const previewFingerprint = await calculateScheduleFingerprint('user-1', { ...BASE_INPUT, acceptOverload: false })
     const createFingerprint = await calculateScheduleFingerprint('user-1', { ...BASE_INPUT, acceptOverload: true })
     expect(previewFingerprint).toBe(createFingerprint)
+  })
+})
+
+describe('calculateTaskUpdateFingerprint', () => {
+  it('is affected by timezone', async () => {
+    const a = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'complete', { actualMinutes: 30 }, 'America/New_York')
+    const b = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'complete', { actualMinutes: 30 }, 'Asia/Tokyo')
+    expect(a).not.toBe(b)
+  })
+
+  it('same timezone produces same fingerprint', async () => {
+    const a = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'complete', { actualMinutes: 30 }, 'America/New_York')
+    const b = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'complete', { actualMinutes: 30 }, 'America/New_York')
+    expect(a).toBe(b)
+  })
+
+  it('missing timezone defaults to UTC', async () => {
+    const a = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'complete', { actualMinutes: 30 })
+    const b = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'complete', { actualMinutes: 30 }, 'UTC')
+    expect(a).toBe(b)
+  })
+
+  describe('legacy fingerprint backward compatibility', () => {
+    const LEGACY_FIXTURE_HASH = '959c0c48343a3d7853db46a7d077539d1688405ca88f9fbe5433003ec9a117c7'
+
+    it('fixture match', async () => {
+      const result = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'complete', { actualMinutes: 30 })
+      expect(result).toBe(LEGACY_FIXTURE_HASH)
+    })
+
+    it('explicit UTC omits timezone from fingerprint (same as legacy)', async () => {
+      const legacy = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'complete', { actualMinutes: 30 })
+      const explicitUtc = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'complete', { actualMinutes: 30 }, 'UTC')
+      expect(legacy).toBe(explicitUtc)
+    })
+
+    it('non-UTC timezone produces different fingerprint', async () => {
+      const legacy = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'complete', { actualMinutes: 30 })
+      const nyTz = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'complete', { actualMinutes: 30 }, 'America/New_York')
+      expect(legacy).not.toBe(nyTz)
+    })
+
+    it('null and undefined produce same fingerprint as legacy', async () => {
+      const legacy = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'complete', { actualMinutes: 30 })
+      const nullTz = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'complete', { actualMinutes: 30 }, null)
+      const undefTz = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'complete', { actualMinutes: 30 }, undefined)
+      expect(legacy).toBe(nullTz)
+      expect(legacy).toBe(undefTz)
+    })
+
+    it('different actions produce different fingerprints', async () => {
+      const a = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'complete', { actualMinutes: 30 })
+      const b = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'partial', { actualMinutes: 30 })
+      expect(a).not.toBe(b)
+    })
+
+    it('different users produce different fingerprints', async () => {
+      const a = await calculateTaskUpdateFingerprint('user-1', 'task-1', 'complete', { actualMinutes: 30 })
+      const b = await calculateTaskUpdateFingerprint('user-2', 'task-1', 'complete', { actualMinutes: 30 })
+      expect(a).not.toBe(b)
+    })
   })
 })

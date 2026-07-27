@@ -20,6 +20,7 @@ import {
   TERMINAL_STATUSES, VALID_ACTIONS,
 } from '../services/rotationPlannerPlans/index.js'
 import { mapPlanSummaryDto, mapPlanDto, mapAvailabilityDto, mapTopicDto, mapTaskDto, mapToSnakeCase } from '../services/rotationPlannerPlans/dtoMappers.js'
+import { isValidTimezone, getDateKeyForTimezone } from '../lib/dateUtils.js'
 
 function errorResponse(code, message, status = 400, details = null) {
   const body = { error: { code, message } }
@@ -203,9 +204,14 @@ export async function handleUpdateTask(request, env, user) {
     if (!planId || !taskId) return errorResponse('VALIDATION_ERROR', 'Plan ID and Task ID are required.', 400)
 
     const body = await request.json()
-    const { action, payload = {}, clientRequestId: bodyClientId, expectedRevision: bodyRev } = body
+    const { action, payload = {}, clientRequestId: bodyClientId, expectedRevision: bodyRev, timezone: bodyTimezone } = body
     clientRequestId = request.headers.get('Idempotency-Key') || bodyClientId || null
     expectedRevision = bodyRev
+
+    if (bodyTimezone && !isValidTimezone(bodyTimezone)) {
+      return errorResponse('VALIDATION_ERROR', 'Invalid timezone.', 400)
+    }
+    const timezone = bodyTimezone || 'UTC'
 
     if (!action || !VALID_ACTIONS.has(action)) {
       return errorResponse('VALIDATION_ERROR', `Invalid action. Must be one of: ${[...VALID_ACTIONS].join(', ')}`, 400)
@@ -228,9 +234,9 @@ export async function handleUpdateTask(request, env, user) {
     }
 
     const occurredAt = new Date().toISOString()
-    const occurredOn = occurredAt.slice(0, 10)
+    const occurredOn = getDateKeyForTimezone(occurredAt, timezone)
 
-    fingerprint = await calculateTaskUpdateFingerprint(user.sub, taskId, action, payload)
+    fingerprint = await calculateTaskUpdateFingerprint(user.sub, taskId, action, payload, bodyTimezone)
 
     if (clientRequestId) {
       const idemCheck = await checkTaskIdempotency(env, user.sub, clientRequestId)

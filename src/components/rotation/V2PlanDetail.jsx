@@ -57,6 +57,7 @@ export default function V2PlanDetail({ planId, onBack }) {
     planId,
     initialRevision: data?.plan?.revision,
     getRecalculationDate,
+    timezone: resolvedTimezone,
   })
 
   const tasks = data?.tasks || []
@@ -162,6 +163,7 @@ export default function V2PlanDetail({ planId, onBack }) {
         lastRecalculatedAt={plan.lastRecalculatedAt}
         revision={plan.revision}
         getRecalculationDate={getRecalculationDate}
+        timezone={resolvedTimezone}
       />
 
       <Tabs defaultValue="today">
