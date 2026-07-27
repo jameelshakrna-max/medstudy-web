@@ -178,9 +178,9 @@ describe('deriveActualTopicStates', () => {
     expect(result[0].learningCompletedAt).toBeNull()
   })
 
-  it('consolidation task type contributes to completedEquivalentMinutes', () => {
+  it('consolidation does NOT contribute to completedEquivalentMinutes', () => {
     const topics = [makeTopic({
-      personalized_learning_minutes: 45,
+      personalized_learning_minutes: 60,
       total_uworld_questions: 10,
     })]
     const tasks = [
@@ -188,17 +188,17 @@ describe('deriveActualTopicStates', () => {
       makeTask({ task_type: 'consolidation', status: 'completed', estimated_minutes: 30, completed_on: '2026-01-06' }),
     ]
     const result = deriveActualTopicStates(topics, tasks, AS_OF)
-    expect(result[0].status).toBe('uworld_in_progress')
-    expect(result[0].learningCompletedAt).toBe('2026-01-06')
+    expect(result[0].status).toBe('learning')
+    expect(result[0].learningCompletedAt).toBeNull()
   })
 
-  it('partial learning still contributes to completedEquivalentMinutes via fraction', () => {
+  it('partial learning contributes via fraction but actualMinutes is irrelevant', () => {
     const topics = [makeTopic({
       personalized_learning_minutes: 60,
       total_uworld_questions: 0,
     })]
     const tasks = [
-      makeTask({ task_type: 'learning', status: 'partial', estimated_minutes: 40, completion_percentage: 50, completed_on: '2026-01-05' }),
+      makeTask({ task_type: 'learning', status: 'partial', estimated_minutes: 20, completion_percentage: 50, completed_on: '2026-01-05' }),
     ]
     const result = deriveActualTopicStates(topics, tasks, AS_OF)
     expect(result[0].status).toBe('learning')
