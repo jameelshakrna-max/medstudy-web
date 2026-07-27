@@ -21,6 +21,11 @@ import {
 } from '../services/rotationPlannerPlans/index.js'
 import { mapPlanSummaryDto, mapPlanDto, mapAvailabilityDto, mapTopicDto, mapTaskDto, mapToSnakeCase } from '../services/rotationPlannerPlans/dtoMappers.js'
 import { isValidTimezone, getDateKeyForTimezone } from '../lib/dateUtils.js'
+import { buildRotationSchedule } from '../services/rotationPlannerV2/buildRotationSchedule.js'
+import { generateDateRange } from '../services/rotationPlannerV2/dateUtils.js'
+import { assignStudyBlocks } from '../services/rotationPlannerV2/studyBlockAssignment.js'
+import { buildReservedMinutesMap } from '../services/rotationPlannerPlans/recalculation.js'
+import { findNormalizedTopic } from '../data/studySources/normalizedRegistry.js'
 
 function errorResponse(code, message, status = 400, details = null) {
   const body = { error: { code, message } }
@@ -163,6 +168,30 @@ export async function handleGetRotationPlan(request, env, user) {
     const plan = await loadPlanFromDb(env, planId, user.sub)
     if (!plan) return errorResponse('PLAN_NOT_FOUND', 'Plan not found.', 404)
 
+    try {
+      const { results: paceRows } = await env.DB.prepare(
+        'SELECT pace_multiplier, sample_count, updated_at FROM user_source_pace WHERE user_id = ? AND source_id = ? AND activity_type = ?'
+      ).bind(user.sub, plan.plan.source_id, 'learning').all()
+
+      plan.sourcePace = paceRows.length > 0 ? {
+        paceMultiplier: paceRows[0].pace_multiplier,
+        sampleCount: paceRows[0].sample_count,
+        updatedAt: paceRows[0].updated_at,
+      } : null
+    } catch (_e) {
+      plan.sourcePace = null
+    }
+
+    const source = getStudySource(plan.plan.source_id)
+    if (source && plan.topics) {
+      for (const topic of plan.topics) {
+        const registryTopic = source.topics?.find(
+          t => t.topic_id === topic.normalized_topic_id?.split('::').pop()
+        )
+        topic.estimateConfidence = registryTopic?.estimate_confidence || null
+      }
+    }
+
     return json(plan)
   } catch (e) {
     log('rotation_planner:get_plan:error', { message: e.message, stack: e.stack?.slice(0, 500) })
@@ -191,6 +220,277 @@ export async function handleDeleteRotationPlan(request, env, user) {
     log('rotation_planner:delete_plan:error', { message: e.message, stack: e.stack?.slice(0, 500) })
     return errorResponse('INTERNAL_ERROR', 'Failed to delete plan.', 500)
   }
+}
+
+const SUPPORTED_RESCHEDULE_TYPES = new Set(['learning', 'uworld_questions'])
+
+async function handleRescheduleCompound({
+  env, user, planId, taskId, plan, taskRow, task, updatedTask, payload,
+  timezone, occurredAt, occurredOn,
+  currentRevision, resultingRevision, clientRequestId, fingerprint,
+  resultJson,
+}) {
+  const T = PLANNER_TABLES
+  const newTaskDate = payload.newTaskDate
+
+  const [topics, dbTasks, availability] = await Promise.all([
+    loadTopicsByPlan(env, planId),
+    loadTasksByPlan(env, planId),
+    loadAvailabilityByPlan(env, planId),
+  ])
+
+  if (!SUPPORTED_RESCHEDULE_TYPES.has(task.taskType)) {
+    return errorResponse('UNSUPPORTED_TASK_TYPE', `Cannot reschedule task type '${task.taskType}'.`, 400)
+  }
+
+  if (newTaskDate < plan.startDate || newTaskDate > plan.endDate) {
+    return errorResponse('INVALID_TARGET_DATE', 'Target date must be within the plan date range.', 400)
+  }
+
+  const todayKey = getDateKeyForTimezone(new Date().toISOString(), timezone)
+  if (newTaskDate < todayKey) {
+    return errorResponse('INVALID_TARGET_DATE', 'Cannot reschedule to a past date.', 400)
+  }
+
+  const dayOfWeek = new Date(newTaskDate + 'T12:00:00Z').getUTCDay()
+  const availForDay = availability.find(a => a.weekday === dayOfWeek)
+  if (availForDay && availForDay.isDayOff) {
+    return errorResponse('TARGET_IS_DAY_OFF', 'Cannot reschedule to a day off.', 400)
+  }
+
+  const settings = typeof plan.settings_json === 'string'
+    ? JSON.parse(plan.settings_json)
+    : (plan.settings_json || {})
+  if (settings.blockedDates && settings.blockedDates.includes(newTaskDate)) {
+    return errorResponse('TARGET_IS_BLOCKED', 'Cannot reschedule to a blocked date.', 400)
+  }
+
+  if (task.taskType === 'uworld_questions' && taskRow.plan_topic_id) {
+    const topic = topics.find(t => t.id === taskRow.plan_topic_id)
+    if (topic && !topic.learning_completed_at) {
+      const hasPinnedLearning = dbTasks.some(t =>
+        t.is_pinned && t.plan_topic_id === taskRow.plan_topic_id &&
+        t.task_type === 'learning' && t.task_date <= newTaskDate
+      )
+      if (!hasPinnedLearning) {
+        return errorResponse('PREREQUISITE_NOT_MET', 'Learning must be completed before scheduling UWorld questions.', 400)
+      }
+    }
+  }
+
+  const actualStates = deriveActualTopicStates(topics, dbTasks, { asOfDate: occurredOn })
+
+  const topicInputMap = new Map()
+  for (const topic of topics) {
+    topicInputMap.set(topic.canonical_topic_id, topic)
+  }
+
+  const pinnedTasks = dbTasks
+    .filter(t => t.is_pinned && t.status === 'pending' && t.id !== taskId)
+    .map(t => {
+      const tp = topics.find(x => x.id === t.plan_topic_id)
+      return {
+        ...t,
+        taskDate: t.task_date,
+        taskType: t.task_type,
+        estimatedMinutes: t.estimated_minutes,
+        targetCount: t.target_count,
+        planTopicId: t.plan_topic_id,
+        canonicalTopicId: tp?.canonical_topic_id || null,
+      }
+    })
+
+  pinnedTasks.push({
+    id: taskId,
+    taskDate: newTaskDate,
+    taskType: task.taskType,
+    estimatedMinutes: task.estimatedMinutes,
+    targetCount: task.targetCount,
+    planTopicId: taskRow.plan_topic_id,
+    isPinned: 1,
+    canonicalTopicId: taskRow.plan_topic_id ? (topics.find(t => t.id === taskRow.plan_topic_id)?.canonical_topic_id || null) : null,
+  })
+
+  const remainingDates = generateDateRange(occurredOn, plan.end_date)
+  const terminalTasks = dbTasks.filter(t => TERMINAL_STATUSES.has(t.status))
+  const reservedMinutesByDate = buildReservedMinutesMap(terminalTasks, remainingDates)
+
+  const planConfig = {
+    rotationId: plan.rotation_id,
+    sourceId: plan.source_id,
+    startDate: occurredOn,
+    endDate: plan.end_date,
+    examDate: plan.exam_date || undefined,
+    studyStyle: plan.study_style,
+    schedulingMode: plan.scheduling_mode,
+    questionStartRule: plan.question_start_rule,
+    preferredQuestionsPerDay: plan.preferred_questions_per_day,
+    minimumQuestionsPerSession: plan.minimum_questions_per_session,
+    maximumQuestionsPerDay: plan.maximum_questions_per_day,
+    averageMinutesPerQuestion: plan.average_minutes_per_question,
+    bufferPercentage: plan.buffer_percentage,
+    maximumActiveTopics: plan.maximum_active_topics,
+    availabilityByWeekday: availability,
+    blockedDates: settings.blockedDates || [],
+    personalSourcePaceMultiplier: settings.personalSourcePaceMultiplier || 1.0,
+    examReviewWindowDays: settings.examReviewWindowDays || 0,
+    mixedReviewQuestionsPerDay: settings.mixedReviewQuestionsPerDay || 0,
+    dueReviewMinutesByDate: settings.dueReviewMinutesByDate || {},
+    topics: topics.map(t => {
+      const registryTopic = findNormalizedTopic(plan.source_id, t.normalized_topic_id?.split('::')[1])
+      const learningMinutes = registryTopic?.learningMinutes || {
+        focused: t.base_learning_minutes || 0,
+        activeExpected: t.base_learning_minutes || 0,
+        detailedNotes: t.base_learning_minutes || 0,
+      }
+      return {
+        normalizedTopicId: t.normalized_topic_id,
+        canonicalTopicId: t.canonical_topic_id,
+        sourceTopicId: t.source_topic_id || registryTopic?.sourceTopicId || '',
+        title: t.topic_title,
+        learningMinutes,
+        uworldRemainingQuestions: Math.max(0, (t.total_uworld_questions || 0) - (t.completed_uworld_questions || 0)),
+        alreadyCompletedLearningPercentage: t.learning_completed_at ? 1.0 : 0,
+        alreadyCompletedQuestionCount: t.completed_uworld_questions || 0,
+        incorrectQuestionsRemaining: t.incorrect_questions_remaining || 0,
+        prerequisiteTopicIds: [],
+        sharedTopicKey: t.shared_topic_key || registryTopic?.sharedTopicKey || null,
+      }
+    }),
+  }
+
+  const initialTopicStates = {}
+  for (const state of actualStates) {
+    initialTopicStates[state.canonicalTopicId] = {
+      normalizedTopicId: state.normalizedTopicId,
+      canonicalTopicId: state.canonicalTopicId,
+      sourceTopicId: topicInputMap.get(state.canonicalTopicId)?.source_topic_id || null,
+      title: topicInputMap.get(state.canonicalTopicId)?.topic_title || '',
+      baseLearningMinutes: state.baseLearningMinutes,
+      personalizedLearningMinutes: state.personalizedLearningMinutes,
+      totalUworldQuestions: state.totalUworldQuestions,
+      completedUworldQuestions: state.completedUworldQuestions,
+      remainingUworldQuestions: Math.max(0, state.totalUworldQuestions - state.completedUworldQuestions),
+      learningCompletedAt: state.learningCompletedAt,
+      questionsUnlockedAt: state.questionsUnlockedAt,
+      status: state.status,
+      incorrectQuestionsRemaining: state.incorrectQuestionsRemaining,
+      displayOrder: topics.findIndex(t => t.canonical_topic_id === state.canonicalTopicId),
+      satisfiedBySharedCompletion: false,
+      isPrimarySharedUnit: true,
+    }
+  }
+
+  const recalculation = buildRotationSchedule(planConfig, {
+    initialTopicStates,
+    scheduleStartDate: occurredOn,
+    reservedMinutesByDate,
+    pinnedTasks,
+  })
+
+  const topicMap = new Map()
+  for (const t of topics) {
+    topicMap.set(t.normalized_topic_id, { sourceId: plan.source_id, groupId: t.group_id })
+  }
+
+  const generatedTasks = recalculation.recalculation?.tasks || recalculation.tasks || []
+  const assignedTasks = assignStudyBlocks(generatedTasks, topicMap)
+
+  const movedTaskUpdated = assignedTasks.find(t => t.id === taskId)
+  const movedDisplayOrder = movedTaskUpdated?.displayOrder ?? 0
+  const movedMetadata = movedTaskUpdated?.metadata || {}
+
+  const regeneratedForInsert = assignedTasks
+    .filter(t => t.id !== taskId)
+    .map(t => ({
+      id: crypto.randomUUID(),
+      planTopicId: t.planTopicId || null,
+      taskDate: t.taskDate,
+      taskType: t.taskType,
+      provider: t.provider || null,
+      estimatedMinutes: t.estimatedMinutes || 0,
+      targetCount: t.targetCount || 0,
+      mode: t.mode || null,
+      questionPool: t.questionPool || null,
+      status: 'pending',
+      unlockCondition: t.unlockCondition || null,
+      displayOrder: t.displayOrder || 0,
+      metadataJson: JSON.stringify(t.metadata || {}),
+    }))
+
+  const mutationId = crypto.randomUUID()
+  const tasksJson = JSON.stringify(regeneratedForInsert)
+
+  const updatedTopicStates = recalculation.recalculation?.topicStates || recalculation.topicStates || []
+  const topicsJson = JSON.stringify(updatedTopicStates.map(ts => ({
+    id: topics.find(t => t.canonical_topic_id === ts.canonicalTopicId)?.id,
+    completedUworldQuestions: ts.completedUworldQuestions,
+    incorrectQuestionsRemaining: ts.incorrectQuestionsRemaining,
+    learningCompletedAt: ts.learningCompletedAt,
+    questionsUnlockedAt: ts.questionsUnlockedAt,
+    status: ts.status,
+  })).filter(t => t.id))
+
+  const statements = []
+
+  statements.push(env.DB.prepare(
+    `INSERT INTO ${T.planMutations} (id, plan_id, user_id, client_request_id, request_fingerprint, expected_revision, resulting_revision, operation, result_json)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+     WHERE EXISTS (
+       SELECT 1 FROM ${T.plans} WHERE id = ? AND user_id = ? AND revision = ?
+     )`
+  ).bind(
+    mutationId, planId, user.sub, clientRequestId || `reschedule-${taskId}-${Date.now()}`, fingerprint,
+    currentRevision, resultingRevision, 'reschedule', JSON.stringify(resultJson),
+    planId, user.sub, currentRevision
+  ))
+
+  statements.push(env.DB.prepare(
+    `UPDATE ${T.plans} SET revision = revision + 1, updated_at = datetime('now') WHERE id = ? AND user_id = ?`
+  ).bind(planId, user.sub))
+
+  statements.push(env.DB.prepare(
+    `UPDATE ${T.dailyTasks} SET task_date = ?, is_pinned = 1, display_order = ?, metadata_json = ?, updated_at = datetime('now') WHERE id = ?`
+  ).bind(newTaskDate, movedDisplayOrder, JSON.stringify({ ...movedMetadata, studyBlockId: movedTaskUpdated?.studyBlockId || null }), taskId))
+
+  statements.push(env.DB.prepare(
+    `DELETE FROM ${T.dailyTasks} WHERE plan_id = ? AND status IN ('pending', 'locked') AND is_pinned = 0`
+  ).bind(planId))
+
+  statements.push(env.DB.prepare(
+    `INSERT INTO ${T.dailyTasks} (id, plan_id, plan_topic_id, task_date, task_type, provider, estimated_minutes, target_count, completed_count, mode, question_pool, status, unlock_condition, display_order, is_pinned, metadata_json)
+     SELECT json_extract(value, '$.id'), ?, json_extract(value, '$.planTopicId'), json_extract(value, '$.taskDate'), json_extract(value, '$.taskType'), json_extract(value, '$.provider'), json_extract(value, '$.estimatedMinutes'), json_extract(value, '$.targetCount'), 0, json_extract(value, '$.mode'), json_extract(value, '$.questionPool'), json_extract(value, '$.status'), json_extract(value, '$.unlockCondition'), json_extract(value, '$.displayOrder'), 0, json_extract(value, '$.metadataJson')
+     FROM json_each(?)
+     WHERE EXISTS (SELECT 1 FROM ${T.planMutations} WHERE id = ?)`
+  ).bind(planId, tasksJson, mutationId))
+
+  if (topicsJson && topicsJson !== '[]') {
+    statements.push(env.DB.prepare(
+      `UPDATE ${T.topics} SET
+         completed_uworld_questions = CAST(json_extract(j.value, '$.completedUworldQuestions') AS INTEGER),
+         incorrect_questions_remaining = CAST(json_extract(j.value, '$.incorrectQuestionsRemaining') AS INTEGER),
+         learning_completed_at = json_extract(j.value, '$.learningCompletedAt'),
+         questions_unlocked_at = json_extract(j.value, '$.questionsUnlockedAt'),
+         status = json_extract(j.value, '$.status')
+       FROM json_each(?) AS j
+       WHERE ${T.topics}.id = json_extract(j.value, '$.id')
+         AND ${T.topics}.plan_id = ?
+         AND EXISTS (
+           SELECT 1 FROM ${T.planMutations} WHERE id = ?
+         )`
+    ).bind(topicsJson, planId, mutationId))
+  }
+
+  await env.DB.batch(statements)
+
+  resultJson.isPinned = true
+  resultJson.taskDate = newTaskDate
+  resultJson.displayOrder = movedDisplayOrder
+  resultJson.studyBlockId = movedTaskUpdated?.studyBlockId || null
+  resultJson.created = regeneratedForInsert.length
+  resultJson.preserved = pinnedTasks.length
+
+  return json(resultJson)
 }
 
 export async function handleUpdateTask(request, env, user) {
@@ -274,6 +574,15 @@ export async function handleUpdateTask(request, env, user) {
       startedAt: updatedTask.startedAt || null,
       completedAt: updatedTask.completedAt || null,
       recalculationRequired: Boolean(recalculationRequired),
+    }
+
+    if (action === 'reschedule' && recalculationRequired) {
+      return await handleRescheduleCompound({
+        env, user, planId, taskId, plan, taskRow, task, updatedTask, payload,
+        timezone, occurredAt, occurredOn,
+        currentRevision, resultingRevision, clientRequestId, fingerprint,
+        resultJson,
+      })
     }
 
     const taskFields = mapToSnakeCase({
@@ -476,6 +785,7 @@ export async function handleRecalculatePlan(request, env, user) {
       resultJson,
       recalculationMutationId,
       recalculatedAt,
+      recalculationDate,
     })
 
     if (batchResults[0]?.meta?.changes === 0) {
@@ -500,5 +810,152 @@ export async function handleRecalculatePlan(request, env, user) {
     }
     log('rotation_planner:recalculate:error', { message: e.message, stack: e.stack?.slice(0, 500), planId })
     return errorResponse('INTERNAL_ERROR', 'Failed to recalculate plan.', 500)
+  }
+}
+
+function computeOnTrackStatus(plan, feasibility, tasks, todayKey) {
+  if (!feasibility.feasible) {
+    return { status: 'impossible', reason: 'insufficient_capacity' }
+  }
+  const PRESERVED = new Set(['completed', 'partial', 'skipped'])
+  const hasOverdue = tasks.some(t =>
+    !PRESERVED.has(t.status) && t.task_date && t.task_date < todayKey
+  )
+  if (hasOverdue) {
+    return { status: 'at_risk', reason: 'overdue_work' }
+  }
+  return { status: 'on_track', reason: null }
+}
+
+export async function handleGetPlanForecast(request, env, user) {
+  try {
+    const url = new URL(request.url)
+    const pathParts = url.pathname.split('/')
+    const planId = pathParts[pathParts.length - 2]
+
+    if (!planId) return errorResponse('VALIDATION_ERROR', 'Plan ID is required.', 400)
+
+    const plan = await loadPlanById(env, planId, user.sub)
+    if (!plan) return errorResponse('PLAN_NOT_FOUND', 'Plan not found.', 404)
+
+    const [topics, allTasks, availability] = await Promise.all([
+      loadTopicsByPlan(env, planId),
+      loadTasksByPlan(env, planId),
+      loadAvailabilityByPlan(env, planId),
+    ])
+
+    const settings = typeof plan.settings_json === 'string'
+      ? JSON.parse(plan.settings_json)
+      : (plan.settings_json || {})
+
+    const timezone = settings.timezone || 'UTC'
+    const todayKey = getDateKeyForTimezone(new Date().toISOString(), timezone)
+
+    const PRESERVED = new Set(['completed', 'partial', 'skipped'])
+    const terminalTasks = allTasks.filter(t => PRESERVED.has(t.status))
+    const derivedStates = deriveActualTopicStates(topics, terminalTasks, { asOfDate: todayKey })
+
+    const remainingDates = generateDateRange(todayKey, plan.end_date)
+    const reservedMinutesByDate = buildReservedMinutesMap(terminalTasks, remainingDates)
+
+    const topicInputMap = new Map()
+    for (const topic of topics) {
+      topicInputMap.set(topic.canonical_topic_id, topic)
+    }
+
+    const planConfig = {
+      rotationId: plan.rotation_id,
+      sourceId: plan.source_id,
+      startDate: todayKey,
+      endDate: plan.end_date,
+      examDate: plan.exam_date || undefined,
+      studyStyle: plan.study_style,
+      schedulingMode: plan.scheduling_mode,
+      questionStartRule: plan.question_start_rule,
+      preferredQuestionsPerDay: plan.preferred_questions_per_day,
+      minimumQuestionsPerSession: plan.minimum_questions_per_session,
+      maximumQuestionsPerDay: plan.maximum_questions_per_day,
+      averageMinutesPerQuestion: plan.average_minutes_per_question,
+      bufferPercentage: plan.buffer_percentage,
+      maximumActiveTopics: plan.maximum_active_topics,
+      availabilityByWeekday: availability,
+      blockedDates: settings.blockedDates || [],
+      personalSourcePaceMultiplier: settings.personalSourcePaceMultiplier || 1.0,
+      examReviewWindowDays: settings.examReviewWindowDays || 0,
+      mixedReviewQuestionsPerDay: settings.mixedReviewQuestionsPerDay || 0,
+      dueReviewMinutesByDate: settings.dueReviewMinutesByDate || {},
+      topics: topics.map(t => {
+        const registryTopic = findNormalizedTopic(plan.source_id, t.normalized_topic_id?.split('::')[1])
+        const learningMinutes = registryTopic?.learningMinutes || {
+          focused: t.base_learning_minutes || 0,
+          activeExpected: t.base_learning_minutes || 0,
+          detailedNotes: t.base_learning_minutes || 0,
+        }
+        return {
+          normalizedTopicId: t.normalized_topic_id,
+          canonicalTopicId: t.canonical_topic_id,
+          sourceTopicId: t.source_topic_id || registryTopic?.sourceTopicId || '',
+          title: t.topic_title,
+          learningMinutes,
+          uworldRemainingQuestions: Math.max(0, (t.total_uworld_questions || 0) - (t.completed_uworld_questions || 0)),
+          alreadyCompletedLearningPercentage: t.learning_completed_at ? 1.0 : 0,
+          alreadyCompletedQuestionCount: t.completed_uworld_questions || 0,
+          incorrectQuestionsRemaining: t.incorrect_questions_remaining || 0,
+          prerequisiteTopicIds: [],
+          sharedTopicKey: t.shared_topic_key || registryTopic?.sharedTopicKey || null,
+        }
+      }),
+    }
+
+    const initialTopicStates = {}
+    for (const state of derivedStates) {
+      initialTopicStates[state.canonicalTopicId] = {
+        normalizedTopicId: state.normalizedTopicId,
+        canonicalTopicId: state.canonicalTopicId,
+        sourceTopicId: topicInputMap.get(state.canonicalTopicId)?.source_topic_id || null,
+        title: topicInputMap.get(state.canonicalTopicId)?.topic_title || '',
+        baseLearningMinutes: state.baseLearningMinutes,
+        personalizedLearningMinutes: state.personalizedLearningMinutes,
+        totalUworldQuestions: state.totalUworldQuestions,
+        completedUworldQuestions: state.completedUworldQuestions,
+        remainingUworldQuestions: Math.max(0, state.totalUworldQuestions - state.completedUworldQuestions),
+        learningCompletedAt: state.learningCompletedAt,
+        questionsUnlockedAt: state.questionsUnlockedAt,
+        status: state.status,
+        incorrectQuestionsRemaining: state.incorrectQuestionsRemaining,
+        displayOrder: topics.findIndex(t => t.canonical_topic_id === state.canonicalTopicId),
+        satisfiedBySharedCompletion: false,
+        isPrimarySharedUnit: true,
+      }
+    }
+
+    const dryRunResult = buildRotationSchedule(planConfig, {
+      initialTopicStates,
+      scheduleStartDate: todayKey,
+      reservedMinutesByDate,
+    })
+
+    const feasibility = dryRunResult.feasibility || {}
+
+    const dryRunTasks = dryRunResult.tasks || []
+    const scheduledDates = dryRunTasks.map(t => t.taskDate).filter(Boolean).sort()
+    const lastScheduledDate = scheduledDates.length > 0 ? scheduledDates[scheduledDates.length - 1] : null
+
+    const status = computeOnTrackStatus(plan, feasibility, allTasks, todayKey)
+
+    return json({
+      estimatedCompletionDate: feasibility.feasible ? lastScheduledDate : null,
+      status: status.status,
+      statusReason: status.reason,
+      remainingRequiredMinutes: feasibility.totalRequiredMinutes || 0,
+      availableMinutes: feasibility.availableMinutes || 0,
+      missingCapacityMinutes: feasibility.missingCapacity || 0,
+      requiredExtraMinutesPerDay: feasibility.requiredExtraMinutesPerDay || 0,
+      unscheduledTopics: feasibility.topicsLeftUnscheduled || [],
+      feasible: feasibility.feasible !== false,
+    })
+  } catch (e) {
+    log('rotation_planner:forecast:error', { message: e.message, stack: e.stack?.slice(0, 500) })
+    return errorResponse('INTERNAL_ERROR', 'Failed to compute forecast.', 500)
   }
 }

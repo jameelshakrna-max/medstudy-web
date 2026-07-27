@@ -18,6 +18,16 @@ export const TASK_TYPE_ICONS = {
   flashcard_review: 'GraduationCap',
 };
 
+export const TASK_TYPE_COLORS = {
+  learning: 'var(--blue)',
+  consolidation: 'var(--blue)',
+  uworld_questions: 'var(--emerald)',
+  incorrect_review: 'var(--amber, #ffb800)',
+  flashcard_review: 'var(--indigo)',
+  mixed_review: 'var(--amber, #ffb800)',
+  optional_book_questions: 'var(--text-secondary)',
+};
+
 const PERCENTAGE_TASK_TYPES = ['learning', 'consolidation'];
 const COUNT_TASK_TYPES = ['uworld_questions', 'incorrect_review'];
 const OPTIONAL_COUNT_TASK_TYPES = ['mixed_review', 'optional_book_questions', 'flashcard_review'];

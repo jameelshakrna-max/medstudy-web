@@ -122,7 +122,7 @@ import {
 import {
   handlePreviewRotationPlan, handleCreateRotationPlan,
   handleListRotationPlans, handleGetRotationPlan, handleDeleteRotationPlan,
-  handleUpdateTask, handleRecalculatePlan,
+  handleUpdateTask, handleRecalculatePlan, handleGetPlanForecast,
 } from './handlers/rotationPlannerPlans.js'
 
 function ensureCORS(response) {
@@ -571,6 +571,9 @@ export default {
 
       // Recalculate: POST /plans/:planId/recalculate
       if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/recalculate$/) && request.method === 'POST') return handleRecalculatePlan(request, env, user)
+
+      // Forecast: GET /plans/:planId/forecast
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/forecast$/) && request.method === 'GET') return handleGetPlanForecast(request, env, user)
 
       return json({ error: 'Not found' }, 404)
     } catch (err) {

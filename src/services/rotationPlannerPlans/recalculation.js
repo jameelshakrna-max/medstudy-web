@@ -144,8 +144,18 @@ export async function recalculatePlan(env, planId, userId, recalculationDate, op
 
   const futureTasks = tasksForReserved.filter(t => {
     const dateStr = t.task_date || t.taskDate
-    return dateStr && dateStr >= recalculationDate
+    return dateStr && dateStr >= recalculationDate && !t.is_pinned
   })
+
+  const pinnedTasks = dbTasks
+    .filter(t => t.is_pinned && t.status === 'pending')
+    .map(t => {
+      const topic = topics.find(tp => tp.id === t.plan_topic_id)
+      return {
+        ...t,
+        canonicalTopicId: topic?.canonical_topic_id || null,
+      }
+    })
 
   const remainingDates = generateDateRange(recalculationDate, planRow.end_date)
   const reservedMinutesByDate = buildReservedMinutesMap(futureTasks, remainingDates)
@@ -229,6 +239,7 @@ export async function recalculatePlan(env, planId, userId, recalculationDate, op
     initialTopicStates,
     scheduleStartDate: recalculationDate,
     reservedMinutesByDate,
+    pinnedTasks,
   })
 
   const topicMap = new Map()

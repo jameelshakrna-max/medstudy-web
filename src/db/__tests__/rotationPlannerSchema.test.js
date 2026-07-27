@@ -25,6 +25,8 @@ function loadMigrationSql() {
   return readFileSync(resolve(__dirname, '../../../schema-migration13.sql'), 'utf8')
     + '\n'
     + readFileSync(resolve(__dirname, '../../../schema-migration14.sql'), 'utf8')
+    + '\n'
+    + readFileSync(resolve(__dirname, '../../../schema-migration15.sql'), 'utf8')
 }
 
 let SQL

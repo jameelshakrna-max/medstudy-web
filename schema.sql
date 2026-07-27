@@ -1178,6 +1178,7 @@ CREATE TABLE IF NOT EXISTS rotation_planner_daily_tasks (
     )),
   unlock_condition TEXT,
   display_order INTEGER DEFAULT 0,
+  is_pinned INTEGER NOT NULL DEFAULT 0,
   metadata_json TEXT DEFAULT '{}',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))

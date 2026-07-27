@@ -204,7 +204,7 @@ export async function loadPlanFromDb(env, planId, userId) {
   ).bind(planId).all()
 
   const { results: taskRows } = await env.DB.prepare(
-    'SELECT id, plan_id, plan_topic_id, task_date, task_type, provider, estimated_minutes, actual_minutes, target_count, completed_count, mode, question_pool, status, unlock_condition, display_order, metadata_json, created_at, updated_at, completion_percentage, incorrect_count, completed_at, completed_on FROM rotation_planner_daily_tasks WHERE plan_id = ? ORDER BY task_date, display_order'
+    'SELECT id, plan_id, plan_topic_id, task_date, task_type, provider, estimated_minutes, actual_minutes, target_count, completed_count, mode, question_pool, status, unlock_condition, display_order, is_pinned, metadata_json, created_at, updated_at, completion_percentage, incorrect_count, completed_at, completed_on FROM rotation_planner_daily_tasks WHERE plan_id = ? ORDER BY task_date, display_order'
   ).bind(planId).all()
 
   return {
@@ -276,6 +276,7 @@ export async function persistRecalculationBatch(env, {
   resultJson,
   recalculationMutationId,
   recalculatedAt,
+  recalculationDate,
 }) {
   const T = PLANNER_TABLES
   const resultingRevision = expectedRevision + 1
@@ -302,10 +303,20 @@ export async function persistRecalculationBatch(env, {
   const deleteStmt = env.DB.prepare(
     `DELETE FROM ${T.dailyTasks}
      WHERE plan_id = ? AND status IN ('pending', 'locked')
+     AND is_pinned = 0
      AND EXISTS (
        SELECT 1 FROM ${T.planMutations} WHERE id = ?
      )`
   ).bind(planId, recalculationMutationId)
+
+  const unpinExpiredStmt = recalculationDate
+    ? env.DB.prepare(
+        `UPDATE ${T.dailyTasks}
+         SET is_pinned = 0
+         WHERE plan_id = ? AND is_pinned = 1 AND status = 'pending'
+         AND task_date < ?`
+      ).bind(planId, recalculationDate)
+    : null
 
   const tasksJson = JSON.stringify(regeneratedTasks.map(task => ({
     id: task.id,
@@ -327,7 +338,8 @@ export async function persistRecalculationBatch(env, {
     `INSERT INTO ${T.dailyTasks} (
        id, plan_id, plan_topic_id, task_date, task_type, provider,
        estimated_minutes, target_count, completed_count,
-       mode, question_pool, status, unlock_condition, display_order, metadata_json
+       mode, question_pool, status, unlock_condition, display_order,
+       is_pinned, metadata_json
      )
      SELECT
        json_extract(value, '$.id'), ?,
@@ -337,7 +349,8 @@ export async function persistRecalculationBatch(env, {
        0,
        json_extract(value, '$.mode'), json_extract(value, '$.questionPool'),
        json_extract(value, '$.status'), json_extract(value, '$.unlockCondition'),
-       json_extract(value, '$.displayOrder'), json_extract(value, '$.metadataJson')
+       json_extract(value, '$.displayOrder'),
+       0, json_extract(value, '$.metadataJson')
      FROM json_each(?)
      WHERE EXISTS (
        SELECT 1 FROM ${T.planMutations} WHERE id = ?
@@ -368,5 +381,8 @@ export async function persistRecalculationBatch(env, {
        )`
   ).bind(topicsJson, planId, recalculationMutationId)
 
-  return env.DB.batch([claimStmt, revisionStmt, deleteStmt, insertTasksStmt, updateTopicsStmt])
+  const batch = [claimStmt, revisionStmt]
+  if (unpinExpiredStmt) batch.push(unpinExpiredStmt)
+  batch.push(deleteStmt, insertTasksStmt, updateTopicsStmt)
+  return env.DB.batch(batch)
 }

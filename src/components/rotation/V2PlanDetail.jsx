@@ -16,6 +16,7 @@ import SkipConfirmDialog from './today/dialogs/SkipConfirmDialog'
 import RecordQuestionsDialog from './today/dialogs/RecordQuestionsDialog'
 import ScheduleView from './today/ScheduleView'
 import TopicsView from './today/TopicsView'
+import CalendarView from './CalendarView'
 import { getTodayKey, resolvePlannerTimezone, getBrowserTimezone } from './today/todayUtils'
 import styles from './V2PlanDetail.module.css'
 
@@ -123,6 +124,14 @@ export default function V2PlanDetail({ planId, onBack }) {
     await mutations.recordQuestions(dialogState.task.id, payload)
   }, [mutations, dialogState.task])
 
+  const handleReschedule = useCallback(async (taskId, newTaskDate) => {
+    try {
+      await mutations.rescheduleTask(taskId, newTaskDate)
+    } catch (err) {
+      setToast({ open: true, title: 'Failed to move task', description: err?.message || 'Please try again.', variant: 'error' })
+    }
+  }, [mutations])
+
   const handleSkipSubmit = useCallback(async () => {
     await mutations.skipTask(dialogState.task.id)
   }, [mutations, dialogState.task])
@@ -185,6 +194,7 @@ export default function V2PlanDetail({ planId, onBack }) {
       <Tabs defaultValue="today">
         <TabsList>
           <TabsTrigger value="today">Today</TabsTrigger>
+          <TabsTrigger value="calendar">Calendar</TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
           <TabsTrigger value="topics">Topics</TabsTrigger>
         </TabsList>
@@ -207,6 +217,19 @@ export default function V2PlanDetail({ planId, onBack }) {
             onRecordQuestions={handleRecordQuestions}
             onSkip={handleSkip}
             onStudyPomodoro={handleStudyPomodoro}
+          />
+        </TabsContent>
+        <TabsContent value="calendar">
+          <CalendarView
+            tasks={tasks}
+            topics={topics}
+            topicsById={topicsById}
+            plan={plan}
+            availability={data.availability}
+            sourceTitle={plan.sourceTitle}
+            todayKey={getTodayKey(new Date(), resolvedTimezone)}
+            onReschedule={handleReschedule}
+            isMutating={mutations.isPending}
           />
         </TabsContent>
         <TabsContent value="schedule">

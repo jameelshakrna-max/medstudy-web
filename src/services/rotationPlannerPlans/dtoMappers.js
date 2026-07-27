@@ -26,7 +26,7 @@ const TASK_COLUMNS = [
   'provider', 'estimated_minutes', 'actual_minutes',
   'target_count', 'completed_count', 'mode', 'question_pool',
   'status', 'unlock_condition', 'display_order',
-  'metadata_json', 'created_at', 'updated_at',
+  'is_pinned', 'metadata_json', 'created_at', 'updated_at',
   'completion_percentage', 'incorrect_count', 'completed_at', 'completed_on',
 ]
 

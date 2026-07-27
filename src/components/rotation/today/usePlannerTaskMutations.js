@@ -181,6 +181,11 @@ export default function usePlannerTaskMutations({ planId, initialRevision, getRe
     [executeTaskAction]
   )
 
+  const rescheduleTask = useCallback(
+    (taskId, newTaskDate) => executeTaskAction('reschedule', taskId, { newTaskDate }),
+    [executeTaskAction]
+  )
+
   const reset = useCallback(() => {
     taskMutation.reset()
     setRecalculationState(null)
@@ -194,6 +199,7 @@ export default function usePlannerTaskMutations({ planId, initialRevision, getRe
     skipTask,
     recordTime,
     recordQuestions,
+    rescheduleTask,
     isPending: taskMutation.isPending || recalculationMutation.isPending,
     error: taskMutation.error,
     reset,

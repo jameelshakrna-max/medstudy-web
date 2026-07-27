@@ -85,7 +85,7 @@ export const ALL_PLANNER_COLUMNS = {
     'incorrect_count', 'completed_at', 'completed_on',
     'mode', 'question_pool',
     'status', 'unlock_condition', 'display_order',
-    'metadata_json', 'created_at', 'updated_at',
+    'is_pinned', 'metadata_json', 'created_at', 'updated_at',
   ],
   taskSessions: [
     'id', 'user_id', 'task_id', 'source_id',

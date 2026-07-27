@@ -1,9 +1,9 @@
 const TERMINAL_STATUSES = new Set(['completed', 'partial', 'skipped'])
 const TERMINAL_PROGRESS_STATUSES = new Set(['completed', 'partial'])
-const VALID_ACTIONS = new Set(['start', 'complete', 'partial', 'skip', 'record_time', 'record_questions'])
+const VALID_ACTIONS = new Set(['start', 'complete', 'partial', 'skip', 'record_time', 'record_questions', 'reschedule'])
 const ALLOWED_ACTIONS = {
   locked: new Set(),
-  pending: new Set(['start', 'complete', 'partial', 'skip']),
+  pending: new Set(['start', 'complete', 'partial', 'skip', 'reschedule']),
   in_progress: new Set(['complete', 'partial', 'record_time', 'record_questions']),
   partial: new Set(),
   completed: new Set(),
@@ -166,6 +166,18 @@ export function applyTaskUpdate(task, action, payload, context) {
       break
     }
 
+    case 'reschedule': {
+      if (!payload.newTaskDate || typeof payload.newTaskDate !== 'string') {
+        throw new Error('NEW_TASK_DATE_REQUIRED')
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.newTaskDate)) {
+        throw new Error('INVALID_DATE_FORMAT')
+      }
+      newStatus = 'pending'
+      recalculationRequired = true
+      break
+    }
+
     case 'record_time': {
       if (payload.actualMinutes == null) throw new Error('ACTUAL_MINUTES_REQUIRED')
       validateNonNegative(payload.actualMinutes, 'actualMinutes')
@@ -208,6 +220,7 @@ export function applyTaskUpdate(task, action, payload, context) {
       incorrectCount: updatedFields.incorrectCount,
       completedAt: (action === 'complete' || action === 'partial' || action === 'skip') ? context.occurredAt : task.completedAt,
       completedOn: (action === 'complete' || action === 'partial' || action === 'skip') ? context.occurredOn : task.completedOn,
+      isPinned: action === 'reschedule' ? 1 : (task.isPinned ?? task.is_pinned ?? 0),
     },
     sideEffects,
     recalculationRequired,

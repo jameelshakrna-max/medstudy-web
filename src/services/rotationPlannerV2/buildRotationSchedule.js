@@ -134,6 +134,15 @@ export function buildRotationSchedule(planConfig, options = {}) {
   const allTasks = []
   let sortOrderGlobal = 0
 
+  const pinnedTasks = options.pinnedTasks || []
+  const pinnedByDate = new Map()
+  for (const pt of pinnedTasks) {
+    const date = pt.taskDate || pt.task_date
+    if (!date) continue
+    if (!pinnedByDate.has(date)) pinnedByDate.set(date, [])
+    pinnedByDate.get(date).push(pt)
+  }
+
   for (const dateStr of dates) {
     const avail = dayAvailability.get(dateStr)
     if (avail.isDayOff || avail.isBlocked) continue
@@ -169,6 +178,42 @@ export function buildRotationSchedule(planConfig, options = {}) {
 
     if (options.reservedMinutesByDate && options.reservedMinutesByDate[dateStr]) {
       remainingMinutes = Math.max(0, remainingMinutes - options.reservedMinutesByDate[dateStr])
+    }
+
+    if (pinnedByDate.has(dateStr)) {
+      for (const pt of pinnedByDate.get(dateStr)) {
+        const mins = pt.estimatedMinutes || pt.estimated_minutes || 0
+        remainingMinutes = Math.max(0, remainingMinutes - mins)
+
+        const canonicalId = pt.canonicalTopicId
+        if (!canonicalId || !topicStates[canonicalId]) continue
+
+        const taskType = pt.taskType || pt.task_type
+        if (taskType === 'learning') {
+          topicStates[canonicalId].personalizedLearningMinutes = Math.max(0,
+            topicStates[canonicalId].personalizedLearningMinutes - mins)
+          if (topicStates[canonicalId].personalizedLearningMinutes <= 0) {
+            topicStates[canonicalId].learningCompletedAt = pt.taskDate || pt.task_date
+            if (topicStates[canonicalId].totalUworldQuestions > 0) {
+              topicStates[canonicalId].questionsUnlockedAt = topicStates[canonicalId].learningCompletedAt
+              topicStates[canonicalId].status = 'questions_locked'
+            } else {
+              topicStates[canonicalId].status = 'completed'
+            }
+          } else {
+            topicStates[canonicalId].status = 'learning'
+          }
+        } else if (taskType === 'uworld_questions') {
+          const count = pt.targetCount || pt.target_count || 0
+          topicStates[canonicalId].remainingUworldQuestions = Math.max(0,
+            topicStates[canonicalId].remainingUworldQuestions - count)
+          topicStates[canonicalId].completedUworldQuestions += count
+          if (topicStates[canonicalId].remainingUworldQuestions <= 0 &&
+              topicStates[canonicalId].incorrectQuestionsRemaining <= 0) {
+            topicStates[canonicalId].status = 'completed'
+          }
+        }
+      }
     }
 
     const topicsForLearning = getTopicsNeedingLearning(orderedTopics, topicStates)
