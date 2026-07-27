@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs/Tabs'
 import Toast from '../ui/Toast/Toast'
@@ -14,9 +15,11 @@ import TaskCompletionDialog from './today/dialogs/TaskCompletionDialog'
 import PartialDialog from './today/dialogs/PartialDialog'
 import SkipConfirmDialog from './today/dialogs/SkipConfirmDialog'
 import RecordQuestionsDialog from './today/dialogs/RecordQuestionsDialog'
-import ScheduleView from './today/ScheduleView'
 import TopicsView from './today/TopicsView'
 import CalendarView from './CalendarView'
+import ProgressView from './ProgressView'
+import { apiGet } from '../../lib/api'
+import { queryKeys } from '../../lib/queryKeys'
 import { getTodayKey, resolvePlannerTimezone, getBrowserTimezone } from './today/todayUtils'
 import styles from './V2PlanDetail.module.css'
 
@@ -26,6 +29,13 @@ export default function V2PlanDetail({ planId, onBack }) {
 
   const [dialogState, setDialogState] = useState({ type: null, task: null })
   const [toast, setToast] = useState({ open: false, title: '', description: '', variant: 'default' })
+
+  const { data: forecast, isLoading: forecastLoading, error: forecastError } = useQuery({
+    queryKey: queryKeys.rotations.forecast(planId),
+    queryFn: () => apiGet(`/rotation-planner/plans/${planId}/forecast`),
+    enabled: !!planId,
+    staleTime: 60_000,
+  })
 
   const openDialog = useCallback((type, task) => {
     setDialogState({ type, task })
@@ -195,8 +205,8 @@ export default function V2PlanDetail({ planId, onBack }) {
         <TabsList>
           <TabsTrigger value="today">Today</TabsTrigger>
           <TabsTrigger value="calendar">Calendar</TabsTrigger>
-          <TabsTrigger value="schedule">Schedule</TabsTrigger>
           <TabsTrigger value="topics">Topics</TabsTrigger>
+          <TabsTrigger value="progress">Progress</TabsTrigger>
         </TabsList>
         <TabsContent value="today">
           <TodayView
@@ -232,16 +242,21 @@ export default function V2PlanDetail({ planId, onBack }) {
             isMutating={mutations.isPending}
           />
         </TabsContent>
-        <TabsContent value="schedule">
-          <ScheduleView
-            tasks={tasks}
-            topicsById={topicsById}
-            sourceTitle={plan.sourceTitle}
-            availability={data.availability}
-          />
-        </TabsContent>
         <TabsContent value="topics">
           <TopicsView topics={topics} sourceTitle={plan.sourceTitle} />
+        </TabsContent>
+        <TabsContent value="progress">
+          <ProgressView
+            plan={plan}
+            topics={topics}
+            tasks={tasks}
+            topicsById={topicsById}
+            sourcePace={data.sourcePace || null}
+            todayKey={getTodayKey(new Date(), resolvedTimezone)}
+            forecast={forecast || null}
+            forecastLoading={forecastLoading}
+            forecastError={forecastError}
+          />
         </TabsContent>
       </Tabs>
 

@@ -243,5 +243,40 @@ describe("normalizePlanResponse", () => {
       const result = normalizePlanResponse({ plan: { id: "p", version: 2 } });
       expect(result.tasks).toEqual([]);
     });
+
+    it("includes sourcePace from response", () => {
+      const response = {
+        plan: { id: "p", version: 2 },
+        tasks: [],
+        sourcePace: { paceMultiplier: 1.5, sampleCount: 12, updatedAt: "2026-07-20T10:00:00Z" },
+      };
+      const result = normalizePlanResponse(response);
+      expect(result.sourcePace).toEqual({ paceMultiplier: 1.5, sampleCount: 12, updatedAt: "2026-07-20T10:00:00Z" });
+    });
+
+    it("defaults sourcePace to null when absent", () => {
+      const result = normalizePlanResponse({ plan: { id: "p", version: 2 }, tasks: [] });
+      expect(result.sourcePace).toBeNull();
+    });
+
+    it("passes tasks through with isPinned field", () => {
+      const tasks = [
+        { id: "t1", taskType: "learning", status: "pending", isPinned: 1 },
+        { id: "t2", taskType: "uworld_questions", status: "pending", isPinned: 0 },
+      ];
+      const result = normalizePlanResponse({ plan: { id: "p", version: 2 }, tasks });
+      expect(result.tasks[0].isPinned).toBe(1);
+      expect(result.tasks[1].isPinned).toBe(0);
+    });
+
+    it("passes estimateConfidence on topic objects", () => {
+      const topics = [
+        { id: "t1", topicTitle: "Cardiology", estimateConfidence: "high" },
+        { id: "t2", topicTitle: "Neurology", estimateConfidence: null },
+      ];
+      const result = normalizePlanResponse({ plan: { id: "p", version: 2 }, tasks: [], topics });
+      expect(result.topics[0].estimateConfidence).toBe("high");
+      expect(result.topics[1].estimateConfidence).toBeNull();
+    });
   });
 });

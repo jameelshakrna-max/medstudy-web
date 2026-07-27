@@ -161,6 +161,7 @@ export const queryKeys = {
     all: ['rotations'],
     plans: () => [...queryKeys.rotations.all, 'plans'],
     plan: (id) => [...queryKeys.rotations.all, 'plan', id],
+    forecast: (planId) => [...queryKeys.rotations.all, 'forecast', planId],
     schedule: (planId) => [...queryKeys.rotations.all, 'schedule', planId],
     progress: (planId) => [...queryKeys.rotations.all, 'progress', planId],
     flashcardSummary: () => [...queryKeys.rotations.all, 'flashcardSummary'],

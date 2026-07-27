@@ -156,6 +156,61 @@ describe('Full lifecycle', () => {
   })
 })
 
+// ─── Confidence lookup via sourceTopicId ───
+describe('estimateConfidence on GET plan', () => {
+  it('returns confidence from source catalog matched by sourceTopicId', async () => {
+    const createRes = await createPlan(makeBody())
+    expect(createRes.status).toBe(201)
+    const { plan } = await createRes.json()
+
+    const getRes = await getPlan(plan.id)
+    expect(getRes.status).toBe(200)
+    const getBody = await getRes.json()
+    const topic = getBody.topics.find(t => t.sourceTopicId === 'cardiology.stable-angina-pectoris')
+    expect(topic).toBeDefined()
+    expect(topic.estimateConfidence).toBe('good')
+  })
+
+  it('uses sourceTopicId directly — does not derive from normalizedTopicId', async () => {
+    const createRes = await createPlan(makeBody())
+    expect(createRes.status).toBe(201)
+    const { plan } = await createRes.json()
+
+    const getRes = await getPlan(plan.id)
+    const { topics } = await getRes.json()
+    const topicId = topics[0].id
+
+    const originalNormalized = topics[0].normalizedTopicId
+    expect(originalNormalized).toContain('cardiology.stable-angina-pectoris')
+
+    await db.prepare("UPDATE rotation_planner_topics SET source_topic_id = 'cardiology.variant-prinzmetal-angina' WHERE id = ?").bind(topicId).run()
+
+    const getRes2 = await getPlan(plan.id)
+    const getBody = await getRes2.json()
+    const topic = getBody.topics[0]
+
+    expect(topic.normalizedTopicId).toBe(originalNormalized)
+    expect(topic.sourceTopicId).toBe('cardiology.variant-prinzmetal-angina')
+    expect(topic.estimateConfidence).toBe('medium')
+  })
+
+  it('returns null confidence for unknown sourceTopicId', async () => {
+    const createRes = await createPlan(makeBody())
+    expect(createRes.status).toBe(201)
+    const { plan } = await createRes.json()
+
+    const getRes = await getPlan(plan.id)
+    const { topics } = await getRes.json()
+    const topicId = topics[0].id
+    await db.prepare("UPDATE rotation_planner_topics SET source_topic_id = 'nonexistent.topic' WHERE id = ?").bind(topicId).run()
+
+    const getRes2 = await getPlan(plan.id)
+    const getBody = await getRes2.json()
+    const topic = getBody.topics[0]
+    expect(topic.estimateConfidence).toBeNull()
+  })
+})
+
 // ─── Cross-user isolation ───
 describe('Cross-user isolation', () => {
   it('user B cannot get user A plan', async () => {

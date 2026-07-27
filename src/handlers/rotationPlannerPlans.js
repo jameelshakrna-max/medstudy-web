@@ -171,7 +171,7 @@ export async function handleGetRotationPlan(request, env, user) {
     try {
       const { results: paceRows } = await env.DB.prepare(
         'SELECT pace_multiplier, sample_count, updated_at FROM user_source_pace WHERE user_id = ? AND source_id = ? AND activity_type = ?'
-      ).bind(user.sub, plan.plan.source_id, 'learning').all()
+      ).bind(user.sub, plan.plan.sourceId, 'learning').all()
 
       plan.sourcePace = paceRows.length > 0 ? {
         paceMultiplier: paceRows[0].pace_multiplier,
@@ -182,11 +182,11 @@ export async function handleGetRotationPlan(request, env, user) {
       plan.sourcePace = null
     }
 
-    const source = getStudySource(plan.plan.source_id)
+    const source = getStudySource(plan.plan.sourceId)
     if (source && plan.topics) {
       for (const topic of plan.topics) {
         const registryTopic = source.topics?.find(
-          t => t.topic_id === topic.normalized_topic_id?.split('::').pop()
+          t => t.topic_id === topic.sourceTopicId
         )
         topic.estimateConfidence = registryTopic?.estimate_confidence || null
       }

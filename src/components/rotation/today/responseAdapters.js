@@ -43,6 +43,7 @@ export function normalizePlanResponse(response) {
       schedule: [],
       progress: Array.isArray(response.progress) ? response.progress : [],
       availability: Array.isArray(response.availability) ? response.availability : [],
+      sourcePace: response.sourcePace || null,
     };
   }
 
