@@ -267,4 +267,18 @@ describe('getTaskDisplayModel', () => {
       expect(model.isOverdue).toBe(false);
     });
   });
+
+  describe('studyBlockId', () => {
+    it('passes through studyBlockId when present on the raw task', () => {
+      const model = getTaskDisplayModel(
+        makeTask({ studyBlockId: '550e8400-e29b-41d4-a716-446655440000' }),
+      );
+      expect(model.studyBlockId).toBe('550e8400-e29b-41d4-a716-446655440000');
+    });
+
+    it('defaults to null when studyBlockId is not present on the raw task', () => {
+      const model = getTaskDisplayModel(makeTask());
+      expect(model.studyBlockId).toBeNull();
+    });
+  });
 });

@@ -3,6 +3,7 @@ import {
   TODAY_SECTIONS,
   groupTasksBySection,
   sortTasksForSection,
+  claimActiveBlockSiblings,
   calculateSectionProgress,
   calculateDayProgress,
   classifyTodayState,
@@ -517,5 +518,97 @@ describe('groupTasksByDate', () => {
     const task = { ...baseTask, id: 't1', customField: 'value' }
     const result = groupTasksByDate([task])
     expect(result.get('2026-07-24')[0]).toEqual(task)
+  })
+})
+
+describe('claimActiveBlockSiblings', () => {
+  function makeSections(tasks) {
+    return groupTasksBySection(tasks, '2026-07-15')
+  }
+
+  it('claims pending siblings from Learn into Active when same studyBlockId has in_progress child', () => {
+    const tasks = [
+      { id: 'A', taskType: 'learning', status: 'in_progress', taskDate: '2026-07-15', estimatedMinutes: 5, studyBlockId: 'block-1', displayOrder: 0, completionPercentage: 0 },
+      { id: 'B', taskType: 'learning', status: 'pending', taskDate: '2026-07-15', estimatedMinutes: 8, studyBlockId: 'block-1', displayOrder: 1, completionPercentage: 0 },
+      { id: 'C', taskType: 'learning', status: 'pending', taskDate: '2026-07-15', estimatedMinutes: 10, studyBlockId: 'block-1', displayOrder: 2, completionPercentage: 0 },
+    ]
+    const sections = makeSections(tasks)
+    const result = claimActiveBlockSiblings(sections)
+    const active = result.find(s => s.key === 'active')
+    const learn = result.find(s => s.key === 'learn')
+
+    expect(active).toBeDefined()
+    expect(active.tasks.map(t => t.id)).toContain('A')
+    expect(active.tasks.map(t => t.id)).toContain('B')
+    expect(active.tasks.map(t => t.id)).toContain('C')
+    expect(learn).toBeUndefined()
+  })
+
+  it('does not claim siblings from different studyBlockId', () => {
+    const tasks = [
+      { id: 'A', taskType: 'learning', status: 'in_progress', taskDate: '2026-07-15', estimatedMinutes: 5, studyBlockId: 'block-1', displayOrder: 0, completionPercentage: 0 },
+      { id: 'B', taskType: 'learning', status: 'pending', taskDate: '2026-07-15', estimatedMinutes: 8, studyBlockId: 'block-2', displayOrder: 1, completionPercentage: 0 },
+    ]
+    const sections = makeSections(tasks)
+    const result = claimActiveBlockSiblings(sections)
+    const active = result.find(s => s.key === 'active')
+    const learn = result.find(s => s.key === 'learn')
+
+    expect(active.tasks.map(t => t.id)).toEqual(['A'])
+    expect(learn.tasks.map(t => t.id)).toEqual(['B'])
+  })
+
+  it('returns sections unchanged when no active section exists', () => {
+    const tasks = [
+      { id: 'B', taskType: 'learning', status: 'pending', taskDate: '2026-07-15', estimatedMinutes: 8, studyBlockId: 'block-1', displayOrder: 0, completionPercentage: 0 },
+    ]
+    const sections = makeSections(tasks)
+    const result = claimActiveBlockSiblings(sections)
+    expect(result).toEqual(sections)
+  })
+
+  it('returns sections unchanged when no active tasks have studyBlockId', () => {
+    const tasks = [
+      { id: 'A', taskType: 'learning', status: 'in_progress', taskDate: '2026-07-15', estimatedMinutes: 5, studyBlockId: null, displayOrder: 0, completionPercentage: 0 },
+    ]
+    const sections = makeSections(tasks)
+    const result = claimActiveBlockSiblings(sections)
+    expect(result).toEqual(sections)
+  })
+
+  it('sorts claimed tasks — in_progress first, then by displayOrder', () => {
+    const tasks = [
+      { id: 'A', taskType: 'learning', status: 'in_progress', taskDate: '2026-07-15', estimatedMinutes: 5, studyBlockId: 'block-1', displayOrder: 5, completionPercentage: 0 },
+      { id: 'B', taskType: 'learning', status: 'pending', taskDate: '2026-07-15', estimatedMinutes: 8, studyBlockId: 'block-1', displayOrder: 1, completionPercentage: 0 },
+      { id: 'C', taskType: 'learning', status: 'pending', taskDate: '2026-07-15', estimatedMinutes: 10, studyBlockId: 'block-1', displayOrder: 2, completionPercentage: 0 },
+    ]
+    const sections = makeSections(tasks)
+    const result = claimActiveBlockSiblings(sections)
+    const active = result.find(s => s.key === 'active')
+    expect(active.tasks.map(t => t.id)).toEqual(['A', 'B', 'C'])
+  })
+
+  it('claims overdue siblings too', () => {
+    const tasks = [
+      { id: 'A', taskType: 'learning', status: 'in_progress', taskDate: '2026-07-15', estimatedMinutes: 5, studyBlockId: 'block-1', displayOrder: 0, completionPercentage: 0 },
+      { id: 'B', taskType: 'learning', status: 'pending', taskDate: '2026-07-14', estimatedMinutes: 8, studyBlockId: 'block-1', displayOrder: 1, completionPercentage: 0 },
+    ]
+    const sections = makeSections(tasks)
+    const result = claimActiveBlockSiblings(sections)
+    const active = result.find(s => s.key === 'active')
+    const overdue = result.find(s => s.key === 'overdue')
+
+    expect(active.tasks.map(t => t.id)).toContain('B')
+    expect(overdue).toBeUndefined()
+  })
+
+  it('filters out empty sections after claiming', () => {
+    const tasks = [
+      { id: 'A', taskType: 'learning', status: 'in_progress', taskDate: '2026-07-15', estimatedMinutes: 5, studyBlockId: 'block-1', displayOrder: 0, completionPercentage: 0 },
+      { id: 'B', taskType: 'learning', status: 'pending', taskDate: '2026-07-15', estimatedMinutes: 8, studyBlockId: 'block-1', displayOrder: 1, completionPercentage: 0 },
+    ]
+    const sections = makeSections(tasks)
+    const result = claimActiveBlockSiblings(sections)
+    expect(result.find(s => s.key === 'learn')).toBeUndefined()
   })
 })

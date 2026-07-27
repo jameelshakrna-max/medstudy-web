@@ -26,6 +26,45 @@ export function groupTasksBySection(tasks, todayKey) {
     .filter((section) => section.tasks.length > 0);
 }
 
+export function claimActiveBlockSiblings(sections) {
+  const activeSection = sections.find(s => s.key === 'active');
+  if (!activeSection) return sections;
+
+  const activeBlockIds = new Set();
+  for (const task of activeSection.tasks) {
+    if (task.taskType === 'learning' && task.studyBlockId) {
+      activeBlockIds.add(task.studyBlockId);
+    }
+  }
+
+  if (activeBlockIds.size === 0) return sections;
+
+  const claimedTaskIds = new Set();
+  const claimedTasks = [];
+
+  for (const section of sections) {
+    if (section.key === 'active') continue;
+    for (const task of section.tasks) {
+      if (task.studyBlockId && activeBlockIds.has(task.studyBlockId)) {
+        claimedTasks.push(task);
+        claimedTaskIds.add(task.id);
+      }
+    }
+  }
+
+  if (claimedTasks.length === 0) return sections;
+
+  activeSection.tasks = sortTasksForSection([...activeSection.tasks, ...claimedTasks]);
+
+  return sections
+    .map(section => {
+      if (section.key === 'active') return section;
+      const filtered = section.tasks.filter(t => !claimedTaskIds.has(t.id));
+      return { ...section, tasks: filtered };
+    })
+    .filter(section => section.tasks.length > 0);
+}
+
 export function calculateSectionProgress(tasks) {
   const total = tasks.length;
   const completed = tasks.filter((t) => t.status === 'completed' || t.status === 'partial').length;
@@ -179,6 +218,7 @@ const todayGrouping = {
   TODAY_SECTIONS,
   groupTasksBySection,
   sortTasksForSection,
+  claimActiveBlockSiblings,
   calculateSectionProgress,
   calculateDayProgress,
   classifyTodayState,

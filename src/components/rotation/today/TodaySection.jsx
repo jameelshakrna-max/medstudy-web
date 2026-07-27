@@ -1,5 +1,8 @@
+import { useMemo } from 'react'
 import TaskCard from './TaskCard'
+import StudyBlock from './StudyBlock'
 import { calculateSectionProgress } from './todayGrouping'
+import { groupTasksIntoStudyBlocks } from './studyBlockGrouping'
 import styles from './TodaySection.module.css'
 
 export default function TodaySection({
@@ -20,6 +23,11 @@ export default function TodaySection({
 }) {
   const progress = calculateSectionProgress(section.tasks)
 
+  const entries = useMemo(
+    () => groupTasksIntoStudyBlocks(section.tasks, topicsById),
+    [section.tasks, topicsById]
+  )
+
   return (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
@@ -29,26 +37,46 @@ export default function TodaySection({
         </span>
       </div>
       <div className={styles.taskList}>
-        {section.tasks.map(task => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            planId={planId}
-            plan={plan}
-            todayKey={todayKey}
-            topicsById={topicsById}
-            sourceTitle={sourceTitle}
-            isMutating={isMutating}
-            onStart={onStart}
-            onComplete={onComplete}
-            onPartial={onPartial}
-            onRecordTime={onRecordTime}
-            onRecordQuestions={onRecordQuestions}
-            onSkip={onSkip}
-            onStudyPomodoro={onStudyPomodoro}
-            canStudy={task.status === 'pending' || task.status === 'in_progress'}
-          />
-        ))}
+        {entries.map(entry =>
+          entry.type === 'study_block' ? (
+            <StudyBlock
+              key={`block-${entry.studyBlockId}`}
+              block={entry}
+              planId={planId}
+              plan={plan}
+              todayKey={todayKey}
+              topicsById={topicsById}
+              sourceTitle={sourceTitle}
+              isMutating={isMutating}
+              onStart={onStart}
+              onComplete={onComplete}
+              onPartial={onPartial}
+              onRecordTime={onRecordTime}
+              onRecordQuestions={onRecordQuestions}
+              onSkip={onSkip}
+              onStudyPomodoro={onStudyPomodoro}
+            />
+          ) : (
+            <TaskCard
+              key={entry.task.id}
+              task={entry.task}
+              planId={planId}
+              plan={plan}
+              todayKey={todayKey}
+              topicsById={topicsById}
+              sourceTitle={sourceTitle}
+              isMutating={isMutating}
+              onStart={onStart}
+              onComplete={onComplete}
+              onPartial={onPartial}
+              onRecordTime={onRecordTime}
+              onRecordQuestions={onRecordQuestions}
+              onSkip={onSkip}
+              onStudyPomodoro={onStudyPomodoro}
+              canStudy={entry.task.status === 'pending' || entry.task.status === 'in_progress'}
+            />
+          )
+        )}
       </div>
     </div>
   )

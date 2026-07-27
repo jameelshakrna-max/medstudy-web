@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { getTodayKey } from './todayUtils'
-import { groupTasksBySection, calculateDayProgress, classifyTodayState, getTodayRelevantTasks } from './todayGrouping'
+import { groupTasksBySection, calculateDayProgress, classifyTodayState, getTodayRelevantTasks, claimActiveBlockSiblings } from './todayGrouping'
 import { getTaskDisplayModel } from './taskDisplayModel'
 import TodaySection from './TodaySection'
 import ProgressBar from '../../ui/ProgressBar/ProgressBar'
@@ -34,7 +34,7 @@ export default function TodayView({
   )
 
   const sections = useMemo(
-    () => groupTasksBySection(displayTasks, todayKey),
+    () => claimActiveBlockSiblings(groupTasksBySection(displayTasks, todayKey)),
     [displayTasks, todayKey]
   )
 

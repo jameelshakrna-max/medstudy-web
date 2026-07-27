@@ -57,6 +57,7 @@ export function getTaskDisplayModel(task, todayKey, topic = null) {
     taskType: task.taskType,
     status: task.status,
     displayOrder: task.displayOrder,
+    studyBlockId: task.studyBlockId ?? null,
 
     statusLabel: STATUS_LABELS[task.status] || task.status,
     typeLabel: TASK_TYPE_LABELS[task.taskType] || task.taskType,
