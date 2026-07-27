@@ -5,7 +5,7 @@ export const TODAY_SECTIONS = [
   { key: 'learn', label: 'Learn', filter: (task, todayKey) => (task.taskType === 'learning' || task.taskType === 'consolidation') && task.taskDate === todayKey && task.status !== 'completed' && task.status !== 'skipped' && task.status !== 'in_progress' },
   { key: 'uworld', label: 'UWorld', filter: (task, todayKey) => task.taskType === 'uworld_questions' && task.taskDate === todayKey && task.status !== 'completed' && task.status !== 'skipped' && task.status !== 'in_progress' },
   { key: 'incorrect_review', label: 'Incorrect Review & Consolidation', filter: (task, todayKey) => task.taskType === 'incorrect_review' && task.taskDate === todayKey && task.status !== 'completed' && task.status !== 'skipped' && task.status !== 'in_progress' },
-  { key: 'practice', label: 'Practice', filter: (task, todayKey) => task.taskType === 'optional_book_questions' && task.taskDate === todayKey && task.status !== 'completed' && task.status !== 'skipped' && task.status !== 'in_progress' },
+  { key: 'practice', label: 'Practice', filter: (task, todayKey) => (task.taskType === 'optional_book_questions' || task.taskType === 'mixed_review') && task.taskDate === todayKey && task.status !== 'completed' && task.status !== 'skipped' && task.status !== 'in_progress' },
 ];
 
 export function sortTasksForSection(tasks) {

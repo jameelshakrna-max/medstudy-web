@@ -29,6 +29,37 @@ describe('TODAY_SECTIONS', () => {
     expect(TODAY_SECTIONS).toHaveLength(7);
   });
 
+  it('practice filter matches mixed_review on today', () => {
+    const practice = TODAY_SECTIONS.find((s) => s.key === 'practice');
+    expect(practice.filter(makeTask({ taskType: 'mixed_review', taskDate: '2025-07-15', status: 'pending' }), '2025-07-15')).toBe(true);
+    expect(practice.filter(makeTask({ taskType: 'mixed_review', taskDate: '2025-07-15', status: 'completed' }), '2025-07-15')).toBe(false);
+    expect(practice.filter(makeTask({ taskType: 'mixed_review', taskDate: '2025-07-15', status: 'in_progress' }), '2025-07-15')).toBe(false);
+    expect(practice.filter(makeTask({ taskType: 'mixed_review', taskDate: '2025-07-15', status: 'skipped' }), '2025-07-15')).toBe(false);
+  });
+
+  it('mixed_review tasks appear exactly once in groupTasksBySection', () => {
+    const tasks = [
+      makeTask({ taskType: 'mixed_review', taskDate: '2025-07-15', status: 'pending' }),
+    ];
+    const sections = groupTasksBySection(tasks, '2025-07-15');
+    const totalMixedReview = sections.reduce((sum, s) => sum + s.tasks.filter(t => t.taskType === 'mixed_review').length, 0);
+    expect(totalMixedReview).toBe(1);
+  });
+
+  it('mixed_review as only remaining task does not produce ALL_DONE', () => {
+    const displayTasks = [
+      { id: '1', taskType: 'mixed_review', taskDate: '2026-07-23', status: 'pending', estimatedMinutes: 30, displayOrder: 0, completionPercentage: 0 },
+    ];
+    const sections = groupTasksBySection(displayTasks, '2026-07-23');
+    const result = classifyTodayState({
+      todayKey: '2026-07-23',
+      plan: { startDate: '2026-07-22' },
+      displayTasks,
+      sections,
+    });
+    expect(result.state).toBe('HAS_WORK');
+  });
+
   it('has unique keys', () => {
     const keys = TODAY_SECTIONS.map((s) => s.key);
     expect(new Set(keys).size).toBe(keys.length);

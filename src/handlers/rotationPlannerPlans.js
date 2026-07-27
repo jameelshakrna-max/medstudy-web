@@ -296,9 +296,8 @@ export async function handleUpdateTask(request, env, user) {
           newTopicStatus = 'uworld_in_progress'
         }
       } else if (action === 'complete') {
-        if ((task.taskType === 'learning' || task.taskType === 'consolidation') && currentStatus === 'learning') {
-          newTopicStatus = 'questions_locked'
-        }
+        // Topic status transitions for learning completion are handled by recalculation.
+        // Individual task completion should not prematurely set questions_locked.
       }
 
       if (newTopicStatus && newTopicStatus !== currentStatus) {

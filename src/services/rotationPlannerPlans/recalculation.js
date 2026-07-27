@@ -66,7 +66,7 @@ export function deriveActualTopicStates(topics, tasks, { asOfDate }) {
     const fraction = getCompletionFraction(task)
     const estimated = task.estimated_minutes || 0
 
-    if (fraction > 0) {
+    if (fraction > 0 && (task.task_type === 'learning' || task.task_type === 'consolidation')) {
       const current = topicCompletedEquivalent.get(task.plan_topic_id) || 0
       topicCompletedEquivalent.set(task.plan_topic_id, current + estimated * fraction)
 

@@ -440,6 +440,77 @@ describe('usePlannerTaskMutations', () => {
     })
   })
 
+  describe('revision synchronization', () => {
+    it('incoming newer revision updates local revision', async () => {
+      const { result, rerender } = renderMutationsHook({ initialRevision: 5 }, { wrapper })
+
+      expect(result.current.currentRevision).toBe(5)
+
+      rerender(makeHookArgs({ initialRevision: 6 }))
+      expect(result.current.currentRevision).toBe(6)
+    })
+
+    it('incoming same revision causes no change', async () => {
+      const { result, rerender } = renderMutationsHook({ initialRevision: 5 }, { wrapper })
+
+      rerender(makeHookArgs({ initialRevision: 5 }))
+      expect(result.current.currentRevision).toBe(5)
+    })
+
+    it('incoming older revision NEVER regresses local revision', async () => {
+      const { result, rerender } = renderMutationsHook({ initialRevision: 5 }, { wrapper })
+
+      apiPatch.mockResolvedValueOnce({ taskId: TASK_ID, action: 'complete', status: 'completed', revision: 6 })
+      await act(async () => {
+        await result.current.completeTask(TASK_ID, {})
+      })
+      expect(result.current.currentRevision).toBe(6)
+
+      rerender(makeHookArgs({ initialRevision: 3 }))
+      expect(result.current.currentRevision).toBe(6)
+    })
+
+    it('mutation-returned revision remains authoritative', async () => {
+      const { result, rerender } = renderMutationsHook({ initialRevision: 5 }, { wrapper })
+
+      apiPatch.mockResolvedValueOnce({ taskId: TASK_ID, action: 'complete', status: 'completed', revision: 6 })
+      await act(async () => {
+        await result.current.completeTask(TASK_ID, {})
+      })
+      expect(result.current.currentRevision).toBe(6)
+
+      apiPatch.mockResolvedValueOnce({ taskId: TASK_ID, action: 'complete', status: 'completed', revision: 7 })
+      await act(async () => {
+        await result.current.completeTask(TASK_ID, {})
+      })
+      expect(result.current.currentRevision).toBe(7)
+    })
+
+    it('recalculation uses latest revision after mutations', async () => {
+      apiPatch.mockResolvedValueOnce({
+        taskId: TASK_ID,
+        action: 'complete',
+        status: 'completed',
+        revision: 6,
+        recalculationRequired: true,
+      })
+      apiPost.mockResolvedValueOnce({ revision: 7 })
+
+      const { result } = renderMutationsHook({ initialRevision: 5 }, { wrapper })
+
+      await act(async () => {
+        await result.current.completeTask(TASK_ID, {})
+      })
+
+      await act(async () => {
+        await result.current.retryRecalculation()
+      })
+
+      const [, body] = apiPost.mock.calls[0]
+      expect(body.expectedRevision).toBe(6)
+    })
+  })
+
   describe('reset', () => {
     it('reset clears mutation state and recalculationState', async () => {
       apiPatch.mockResolvedValueOnce({

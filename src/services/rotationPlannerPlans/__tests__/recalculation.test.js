@@ -162,6 +162,47 @@ describe('deriveActualTopicStates', () => {
     const result = deriveActualTopicStates(topics, tasks, AS_OF)
     expect(result[0].questionsUnlockedAt).toBe('2026-01-05')
   })
+
+  it('completedEquivalentMinutes counts only learning/consolidation task types', () => {
+    const topics = [makeTopic({
+      personalized_learning_minutes: 60,
+      total_uworld_questions: 20,
+    })]
+    const tasks = [
+      makeTask({ task_type: 'learning', status: 'completed', estimated_minutes: 20, completion_percentage: null, completed_on: '2026-01-05' }),
+      makeTask({ task_type: 'uworld_questions', status: 'completed', estimated_minutes: 30, completed_count: 10, completed_on: '2026-01-06' }),
+    ]
+    const result = deriveActualTopicStates(topics, tasks, AS_OF)
+    expect(result[0].completedUworldQuestions).toBe(10)
+    expect(result[0].status).toBe('learning')
+    expect(result[0].learningCompletedAt).toBeNull()
+  })
+
+  it('consolidation task type contributes to completedEquivalentMinutes', () => {
+    const topics = [makeTopic({
+      personalized_learning_minutes: 45,
+      total_uworld_questions: 10,
+    })]
+    const tasks = [
+      makeTask({ task_type: 'learning', status: 'completed', estimated_minutes: 20, completed_on: '2026-01-05' }),
+      makeTask({ task_type: 'consolidation', status: 'completed', estimated_minutes: 30, completed_on: '2026-01-06' }),
+    ]
+    const result = deriveActualTopicStates(topics, tasks, AS_OF)
+    expect(result[0].status).toBe('uworld_in_progress')
+    expect(result[0].learningCompletedAt).toBe('2026-01-06')
+  })
+
+  it('partial learning still contributes to completedEquivalentMinutes via fraction', () => {
+    const topics = [makeTopic({
+      personalized_learning_minutes: 60,
+      total_uworld_questions: 0,
+    })]
+    const tasks = [
+      makeTask({ task_type: 'learning', status: 'partial', estimated_minutes: 40, completion_percentage: 50, completed_on: '2026-01-05' }),
+    ]
+    const result = deriveActualTopicStates(topics, tasks, AS_OF)
+    expect(result[0].status).toBe('learning')
+  })
 })
 
 // ─── buildRecalculationResult ───

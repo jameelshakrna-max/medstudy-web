@@ -1,10 +1,4 @@
-const TASK_TYPE_LABELS = {
-  learning: 'Learning',
-  questions: 'Questions',
-  review: 'Review',
-  assessment: 'Assessment',
-  flashcards: 'Flashcards',
-};
+import { TASK_TYPE_LABELS } from './taskActionRules'
 
 export const STATUS_LABELS = {
   locked: 'Locked',

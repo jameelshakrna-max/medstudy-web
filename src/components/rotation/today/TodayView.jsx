@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { getTodayKey } from './todayUtils'
+import { getTodayKey, getBrowserTimezone, resolvePlannerTimezone } from './todayUtils'
 import { groupTasksBySection, calculateDayProgress, classifyTodayState, getTodayRelevantTasks, claimActiveBlockSiblings } from './todayGrouping'
 import { getTaskDisplayModel } from './taskDisplayModel'
 import TodaySection from './TodaySection'
@@ -26,7 +26,10 @@ export default function TodayView({
   onSkip,
   onStudyPomodoro,
 }) {
-  const todayKey = useMemo(() => getTodayKey(new Date()), [])
+  const todayKey = useMemo(() => {
+    const tz = resolvePlannerTimezone({ browserTimezone: getBrowserTimezone() })
+    return getTodayKey(new Date(), tz)
+  }, [])
 
   const displayTasks = useMemo(
     () => tasks.map(t => getTaskDisplayModel(t, todayKey, topicsById.get(t.planTopicId) || null)),

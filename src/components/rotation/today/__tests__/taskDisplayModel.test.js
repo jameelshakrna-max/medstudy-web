@@ -151,7 +151,11 @@ describe('getTaskDisplayModel', () => {
 
   it('sets typeLabel from TASK_TYPE_LABELS', () => {
     expect(getTaskDisplayModel(makeTask({ taskType: 'learning' })).typeLabel).toBe('Learning');
-    expect(getTaskDisplayModel(makeTask({ taskType: 'questions' })).typeLabel).toBe('Questions');
+    expect(getTaskDisplayModel(makeTask({ taskType: 'uworld_questions' })).typeLabel).toBe('UWorld Questions');
+  });
+
+  it('falls back to raw taskType for unknown type', () => {
+    expect(getTaskDisplayModel(makeTask({ taskType: 'unknown_type' })).typeLabel).toBe('unknown_type');
   });
 
   it('formats timeEstimate and timeActual', () => {
@@ -265,6 +269,36 @@ describe('getTaskDisplayModel', () => {
         makeTask({ taskDate: '2025-07-10', status: 'pending' }),
       );
       expect(model.isOverdue).toBe(false);
+    });
+  });
+
+  describe('TASK_TYPE_LABELS (canonical)', () => {
+    it('maps learning to human-readable label', () => {
+      expect(getTaskDisplayModel(makeTask({ taskType: 'learning' })).typeLabel).toBe('Learning');
+    });
+
+    it('maps consolidation to human-readable label', () => {
+      expect(getTaskDisplayModel(makeTask({ taskType: 'consolidation' })).typeLabel).toBe('Consolidation');
+    });
+
+    it('maps uworld_questions to human-readable label', () => {
+      expect(getTaskDisplayModel(makeTask({ taskType: 'uworld_questions' })).typeLabel).toBe('UWorld Questions');
+    });
+
+    it('maps incorrect_review to human-readable label', () => {
+      expect(getTaskDisplayModel(makeTask({ taskType: 'incorrect_review' })).typeLabel).toBe('Incorrect Review');
+    });
+
+    it('maps mixed_review to human-readable label', () => {
+      expect(getTaskDisplayModel(makeTask({ taskType: 'mixed_review' })).typeLabel).toBe('Mixed Review');
+    });
+
+    it('maps optional_book_questions to human-readable label', () => {
+      expect(getTaskDisplayModel(makeTask({ taskType: 'optional_book_questions' })).typeLabel).toBe('Optional Book Questions');
+    });
+
+    it('maps flashcard_review to human-readable label', () => {
+      expect(getTaskDisplayModel(makeTask({ taskType: 'flashcard_review' })).typeLabel).toBe('Flashcard Review');
     });
   });
 

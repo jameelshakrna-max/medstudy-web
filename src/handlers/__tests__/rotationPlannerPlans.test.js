@@ -1614,6 +1614,79 @@ describe('R2 — Response Contract', () => {
   })
 })
 
+describe('F4 — premature questions_locked prevention', () => {
+  async function createPlanAndGetTasks(user = USER_A) {
+    const createRes = await createPlan(makeBody(), user)
+    expect(createRes.status).toBe(201)
+    const planBody = await createRes.json()
+    const planId = planBody.plan.id
+    const topicId = planBody.topics[0].id
+    const tasks = planBody.tasks
+    return { planId, topicId, tasks }
+  }
+
+  async function getTopicStatus(topicId) {
+    const row = await db.prepare('SELECT status FROM rotation_planner_topics WHERE id = ?').bind(topicId).first()
+    return row?.status
+  }
+
+  it('does not prematurely transition topic to questions_locked when one learning task completes', async () => {
+    // This test verifies that completing ONE learning task does NOT change
+    // topic status to questions_locked. Topic status transitions are the
+    // responsibility of recalculation (deriveActualTopicStates).
+
+    const { planId, topicId, tasks } = await createPlanAndGetTasks()
+
+    // Find learning tasks
+    let learningTasks = tasks.filter(t => t.taskType === 'learning')
+
+    // If the scheduler only generated 1 learning task, insert a second one
+    if (learningTasks.length < 2) {
+      const secondLearningId = crypto.randomUUID()
+      await db.prepare(
+        `INSERT INTO rotation_planner_daily_tasks (
+          id, plan_id, plan_topic_id, task_date, task_type, provider,
+          estimated_minutes, target_count, mode, question_pool,
+          status, unlock_condition, display_order
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        secondLearningId, planId, topicId, '2026-01-06', 'learning', null,
+        30, 0, null, null,
+        'pending', null, 99
+      ).run()
+      learningTasks = [...learningTasks, {
+        id: secondLearningId, taskType: 'learning', status: 'pending',
+        taskDate: '2026-01-06', estimatedMinutes: 30, targetCount: 0,
+      }]
+    }
+
+    // Ensure topic is in 'learning' status for the test scenario
+    await db.prepare(
+      "UPDATE rotation_planner_topics SET status = 'learning' WHERE id = ?"
+    ).bind(topicId).run()
+
+    const statusBefore = await getTopicStatus(topicId)
+    expect(statusBefore).toBe('learning')
+
+    // Start the first learning task (it may already be started)
+    const firstTask = learningTasks[0]
+    let rev = 0
+    await patchTask(planId, firstTask.id, { action: 'start', expectedRevision: rev })
+    rev++
+
+    // Complete the first learning task
+    const completeRes = await patchTask(planId, firstTask.id, { action: 'complete', payload: { actualMinutes: 20 }, expectedRevision: rev })
+    expect(completeRes.status).toBe(200)
+    rev++
+
+    // Key assertion: topic status must NOT be questions_locked
+    const statusAfterComplete = await getTopicStatus(topicId)
+    expect(statusAfterComplete).not.toBe('questions_locked')
+    // It should still be 'learning' since other learning tasks remain
+    expect(statusAfterComplete).toBe('learning')
+  })
+})
+
 describe('R2 — Failure Atomicity', () => {
   it('invalid topic status rolls back entire batch preserving all data', async () => {
     const createRes = await createPlan()

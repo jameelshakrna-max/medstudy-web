@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { apiPatch, apiPost, ApiError } from '../../../lib/api'
 import { queryKeys } from '../../../lib/queryKeys'
 
@@ -11,6 +11,12 @@ export default function usePlannerTaskMutations({ planId, initialRevision, getRe
   const queryClient = useQueryClient()
   const [currentRevision, setCurrentRevision] = useState(initialRevision ?? 0)
   const [recalculationState, setRecalculationState] = useState(null)
+
+  useEffect(() => {
+    if (initialRevision != null && initialRevision > currentRevision) {
+      setCurrentRevision(initialRevision)
+    }
+  }, [initialRevision])
   const [lastFailedOperation, setLastFailedOperation] = useState(null)
 
   const invalidatePlan = useCallback(() => {

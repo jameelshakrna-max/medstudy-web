@@ -74,7 +74,7 @@ export function scheduleUworldTasks({
         newRemaining <= 0 && (state.incorrectQuestionsRemaining || 0) <= 0
           ? 'completed'
           : 'uworld_in_progress',
-      questionsUnlockedAt: dayDate,
+      questionsUnlockedAt: state.questionsUnlockedAt || dayDate,
     };
   }
 

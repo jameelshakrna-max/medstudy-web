@@ -19,17 +19,12 @@
   align-items: flex-start;
   gap: var(--space-sm);
   padding: 14px 20px;
-  cursor: pointer;
   background: none;
   border: none;
   width: 100%;
   text-align: left;
   font-family: 'DM Sans', sans-serif;
   color: inherit;
-}
-
-.blockHeader:hover {
-  background: rgba(255, 255, 255, 0.02);
 }
 
 .headerContent {
