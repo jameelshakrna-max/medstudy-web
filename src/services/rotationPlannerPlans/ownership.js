@@ -1,6 +1,6 @@
 import { PLANNER_TABLES } from '../../db/rotationPlannerSchema.js'
 
-export async function getActiveFlashcardCapacityOwner(env, userId) {
+export async function getFlashcardCapacityOwner(env, userId) {
   const row = await env.DB.prepare(
     `SELECT id, revision, status, uses_flashcard_capacity
      FROM ${PLANNER_TABLES.plans}

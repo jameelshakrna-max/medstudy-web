@@ -346,13 +346,15 @@ export default function RotationPlanner() {
                               : styles.statusDraft
                       }`}
                     >
-                      {p.status === 'active'
-                        ? 'Active'
-                        : p.status === 'completed'
-                          ? 'Completed'
-                          : p.status === 'paused'
-                            ? 'Paused'
-                            : 'Draft'}
+                      {entry.version === 'v2' && p.status === 'draft'
+                        ? 'Live'
+                        : p.status === 'active'
+                          ? 'Active'
+                          : p.status === 'completed'
+                            ? 'Completed'
+                            : p.status === 'paused'
+                              ? 'Paused'
+                              : 'Draft'}
                     </span>
                   </div>
                 </div>

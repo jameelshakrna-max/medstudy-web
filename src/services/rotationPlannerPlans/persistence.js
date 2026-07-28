@@ -6,7 +6,7 @@ import {
 } from './dtoMappers.js'
 import { getStudySource } from '../../data/studySources/sourceRegistry.js'
 import { getSharedTopicDefinition } from '../../data/studySources/sharedTopicKeys.js'
-import { getActiveFlashcardCapacityOwner } from './ownership.js'
+
 
 const TASK_METADATA_FIELDS = {
   flashcard_review: ['priority', 'dueCardCount', 'unmetReviewMinutes'],
@@ -67,9 +67,117 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     }
   }
 
-  const existingOwner = await getActiveFlashcardCapacityOwner(env, userId)
-  const usesFlashcardCapacity = existingOwner ? 0 : 1
+  const mutationId = crypto.randomUUID()
 
+  const createdAt = new Date().toISOString().replace('T', ' ').slice(0, 19)
+  const parsedSettingsJson = JSON.parse(settingsJson)
+
+  // ─── Build base result JSON (deterministic, matches loadPlanFromDb shape) ───
+
+  const basePlanDto = {
+    id: planId,
+    userId,
+    rotationId: validatedInput.rotationId,
+    sourceId: validatedInput.sourceId,
+    sourceVersion,
+    startDate: validatedInput.startDate,
+    endDate: validatedInput.endDate,
+    examDate: validatedInput.examDate || null,
+    studyStyle: validatedInput.studyStyle,
+    schedulingMode: validatedInput.schedulingMode,
+    questionStartRule: validatedInput.questionStartRule,
+    preferredQuestionsPerDay: validatedInput.preferredQuestionsPerDay,
+    minimumQuestionsPerSession: validatedInput.minimumQuestionsPerSession,
+    maximumQuestionsPerDay: validatedInput.maximumQuestionsPerDay,
+    averageMinutesPerQuestion: validatedInput.averageMinutesPerQuestion,
+    bufferPercentage: validatedInput.bufferPercentage,
+    maximumActiveTopics: validatedInput.maximumActiveTopics,
+    status: 'draft',
+    usesFlashcardCapacity: 0,
+    settingsJson: parsedSettingsJson,
+    createdAt,
+    updatedAt: createdAt,
+    revision: 0,
+    lastRecalculatedAt: null,
+    sourceTitle,
+  }
+
+  const baseAvailability = validatedInput.availability.map((a, i) => ({
+    id: availabilityIds[i],
+    planId,
+    weekday: a.weekday,
+    availableMinutes: a.availableMinutes,
+    isDayOff: a.isDayOff ? 1 : 0,
+  }))
+
+  const baseTopics = resolvedTopics.map((t, i) => {
+    const state = topicStateByNormalized.get(t.normalizedTopicId)
+    return {
+      id: topicIds[i],
+      planId,
+      normalizedTopicId: t.normalizedTopicId,
+      canonicalTopicId: t.canonicalTopicId,
+      sourceTopicId: t.sourceTopicId,
+      sharedTopicKey: t.sharedTopicKey,
+      topicTitle: t.title,
+      groupId: t.groupId,
+      baseLearningMinutes: state?.baseLearningMinutes ?? 0,
+      personalizedLearningMinutes: state?.personalizedLearningMinutes ?? 0,
+      totalUworldQuestions: state?.totalUworldQuestions ?? 0,
+      completedUworldQuestions: state?.completedUworldQuestions ?? 0,
+      learningCompletedAt: state?.learningCompletedAt ?? null,
+      questionsUnlockedAt: state?.questionsUnlockedAt ?? null,
+      status: state?.status ?? 'not_started',
+      masteryScore: null,
+      displayOrder: state?.displayOrder ?? i,
+      incorrectQuestionsRemaining: 0,
+    }
+  })
+
+  const baseTasks = preview.tasks.map((task, i) => {
+    let planTopicId = null
+    if (task.normalizedTopicId) {
+      planTopicId = topicIdByNormalized.get(task.normalizedTopicId) || null
+    }
+    const filteredMeta = filterMetadata(task.taskType, task.metadata)
+    return {
+      id: taskIds[i],
+      planId,
+      planTopicId: planTopicId ?? null,
+      taskDate: task.taskDate,
+      taskType: task.taskType,
+      provider: task.provider ?? null,
+      estimatedMinutes: task.estimatedMinutes,
+      actualMinutes: null,
+      targetCount: task.targetCount ?? null,
+      completedCount: 0,
+      mode: task.mode ?? null,
+      questionPool: task.questionPool ?? null,
+      status: 'pending',
+      unlockCondition: task.unlockCondition ?? null,
+      displayOrder: task.displayOrder,
+      isPinned: 0,
+      metadataJson: filteredMeta,
+      createdAt,
+      updatedAt: createdAt,
+      completionPercentage: 0,
+      incorrectCount: 0,
+      completedAt: null,
+      completedOn: null,
+      studyBlockId: filteredMeta.studyBlockId ?? null,
+    }
+  })
+
+  const baseResultJson = {
+    plan: basePlanDto,
+    availability: baseAvailability,
+    topics: baseTopics,
+    tasks: baseTasks,
+  }
+
+  // ─── Batch statements ───
+
+  // S1: Insert new plan as draft with explicit timestamps
   const planStmt = env.DB.prepare(
     `INSERT INTO ${PLANNER_TABLES.plans} (
       id, user_id, rotation_id, source_id, source_version,
@@ -78,8 +186,9 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
       preferred_questions_per_day, minimum_questions_per_session,
       maximum_questions_per_day, average_minutes_per_question,
       buffer_percentage, maximum_active_topics,
-      status, uses_flashcard_capacity, client_request_id, request_fingerprint, settings_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      status, uses_flashcard_capacity, client_request_id, request_fingerprint, settings_json,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0, ?, ?, ?, ?, ?)`
   ).bind(
     planId, userId, validatedInput.rotationId, validatedInput.sourceId, sourceVersion,
     validatedInput.startDate, validatedInput.endDate, validatedInput.examDate || null,
@@ -87,8 +196,15 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     validatedInput.preferredQuestionsPerDay, validatedInput.minimumQuestionsPerSession,
     validatedInput.maximumQuestionsPerDay, validatedInput.averageMinutesPerQuestion,
     validatedInput.bufferPercentage, validatedInput.maximumActiveTopics,
-    'draft', usesFlashcardCapacity, clientRequestId, fingerprint, settingsJson
+    clientRequestId, fingerprint, settingsJson,
+    createdAt, createdAt
   )
+
+  // S2: Claim the idempotent creation mutation (FK to plan is now satisfied)
+  const claimStmt = env.DB.prepare(
+    `INSERT INTO ${PLANNER_TABLES.planMutations} (id, plan_id, user_id, client_request_id, request_fingerprint, expected_revision, resulting_revision, operation, result_json)
+     VALUES (?, ?, ?, ?, ?, 0, 0, 'create', '{}')`
+  ).bind(mutationId, planId, userId, clientRequestId, fingerprint)
 
   const availJson = JSON.stringify(
     validatedInput.availability.map((a, i) => ({
@@ -98,12 +214,14 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
       isDayOff: a.isDayOff ? 1 : 0,
     }))
   )
+  // S3: Insert availability
   const availStmt = env.DB.prepare(
     `INSERT INTO ${PLANNER_TABLES.availability} (id, plan_id, weekday, available_minutes, is_day_off)
      SELECT json_extract(value,'$.id'), ?, json_extract(value,'$.weekday'),
             json_extract(value,'$.availableMinutes'), json_extract(value,'$.isDayOff')
-     FROM json_each(?)`
-  ).bind(planId, availJson)
+     FROM json_each(?)
+     WHERE EXISTS (SELECT 1 FROM ${PLANNER_TABLES.planMutations} WHERE id = ?)`
+  ).bind(planId, availJson, mutationId)
 
   const topicsJson = JSON.stringify(
     resolvedTopics.map((t, i) => {
@@ -128,6 +246,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
       }
     })
   )
+  // S4: Insert topics
   const topicsStmt = env.DB.prepare(
     `INSERT INTO ${PLANNER_TABLES.topics} (
       id, plan_id, normalized_topic_id, canonical_topic_id, source_topic_id, shared_topic_key,
@@ -144,8 +263,9 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
       json_extract(value,'$.learningCompletedAt'), json_extract(value,'$.questionsUnlockedAt'),
       json_extract(value,'$.status'), json_extract(value,'$.masteryScore'),
       json_extract(value,'$.displayOrder')
-    FROM json_each(?)`
-  ).bind(planId, topicsJson)
+    FROM json_each(?)
+    WHERE EXISTS (SELECT 1 FROM ${PLANNER_TABLES.planMutations} WHERE id = ?)`
+  ).bind(planId, topicsJson, mutationId)
 
   const taskRows = preview.tasks.map((task, i) => {
     let planTopicId = null
@@ -154,27 +274,29 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     }
     return {
       id: taskIds[i],
-      planTopicId,
+      planTopicId: planTopicId ?? null,
       taskDate: task.taskDate,
       taskType: task.taskType,
-      provider: task.provider,
+      provider: task.provider ?? null,
       estimatedMinutes: task.estimatedMinutes,
-      targetCount: task.targetCount,
-      mode: task.mode,
-      questionPool: task.questionPool,
+      targetCount: task.targetCount ?? null,
+      mode: task.mode ?? null,
+      questionPool: task.questionPool ?? null,
       status: 'pending',
-      unlockCondition: task.unlockCondition,
+      unlockCondition: task.unlockCondition ?? null,
       displayOrder: task.displayOrder,
       metadataJson: JSON.stringify(filterMetadata(task.taskType, task.metadata)),
     }
   })
   const tasksJson = JSON.stringify(taskRows)
+  // S5: Insert tasks with explicit timestamps
   const tasksStmt = env.DB.prepare(
     `INSERT INTO ${PLANNER_TABLES.dailyTasks} (
       id, plan_id, plan_topic_id, task_date, task_type,
       provider, estimated_minutes, actual_minutes,
       target_count, completed_count, mode, question_pool,
-      status, unlock_condition, display_order, metadata_json
+      status, unlock_condition, display_order, metadata_json,
+      created_at, updated_at
     ) SELECT
       json_extract(value,'$.id'), ?,
       json_extract(value,'$.planTopicId'), json_extract(value,'$.taskDate'),
@@ -183,11 +305,61 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
       json_extract(value,'$.targetCount'), 0,
       json_extract(value,'$.mode'), json_extract(value,'$.questionPool'),
       json_extract(value,'$.status'), json_extract(value,'$.unlockCondition'),
-      json_extract(value,'$.displayOrder'), json_extract(value,'$.metadataJson')
-    FROM json_each(?)`
-  ).bind(planId, tasksJson)
+      json_extract(value,'$.displayOrder'), json_extract(value,'$.metadataJson'),
+      ?, ?
+    FROM json_each(?)
+    WHERE EXISTS (SELECT 1 FROM ${PLANNER_TABLES.planMutations} WHERE id = ?)`
+  ).bind(planId, createdAt, createdAt, tasksJson, mutationId)
 
-  await env.DB.batch([planStmt, availStmt, topicsStmt, tasksStmt])
+  // S6: Conditionally claim flashcard capacity ownership
+  const ownershipStmt = env.DB.prepare(
+    `UPDATE ${PLANNER_TABLES.plans}
+     SET uses_flashcard_capacity = 1
+     WHERE id = ? AND user_id = ?
+       AND status IN ('draft', 'active')
+       AND uses_flashcard_capacity = 0
+       AND NOT EXISTS (
+         SELECT 1 FROM ${PLANNER_TABLES.plans}
+         WHERE user_id = ? AND id != ?
+           AND status IN ('draft', 'active')
+           AND uses_flashcard_capacity = 1
+       )
+       AND EXISTS (
+         SELECT 1 FROM ${PLANNER_TABLES.planMutations} WHERE id = ?
+       )`
+  ).bind(planId, userId, userId, planId, mutationId)
+
+  const resultJsonPayload = JSON.stringify(baseResultJson)
+  // S7: Store authoritative creation result_json — overlays persisted plan fields
+  // so the snapshot reflects the committed row (e.g. usesFlashcardCapacity after S6).
+  const resultJsonStmt = env.DB.prepare(
+    `UPDATE ${PLANNER_TABLES.planMutations}
+     SET result_json = (
+       SELECT json_set(
+         ?,
+         '$.plan.id', p.id,
+         '$.plan.status', p.status,
+         '$.plan.revision', p.revision,
+         '$.plan.usesFlashcardCapacity', p.uses_flashcard_capacity,
+         '$.plan.createdAt', p.created_at,
+         '$.plan.updatedAt', p.updated_at
+       )
+       FROM ${PLANNER_TABLES.plans} p
+       WHERE p.id = ? AND p.user_id = ?
+     )
+     WHERE id = ? AND plan_id = ? AND user_id = ?`
+  ).bind(resultJsonPayload, planId, userId, mutationId, planId, userId)
+
+  try {
+    await env.DB.batch([planStmt, claimStmt, availStmt, topicsStmt, tasksStmt, ownershipStmt, resultJsonStmt])
+  } catch (e) {
+    if (e.message && e.message.includes('idx_rpp_flashcard_owner')) {
+      // Ownership claim failed — retry without S6. S7 stores usesFlashcardCapacity=false.
+      await env.DB.batch([planStmt, claimStmt, availStmt, topicsStmt, tasksStmt, resultJsonStmt])
+    } else {
+      throw e
+    }
+  }
 
   return { planId, topicIds, taskIds }
 }
@@ -269,16 +441,29 @@ export async function updatePlanRevisionAndRecalculatedAt(env, planId, revision)
 }
 
 export async function updatePlanStatus(env, planId, userId, newStatus) {
-  await env.DB.prepare(
-    `UPDATE ${PLANNER_TABLES.plans}
-     SET status = ?,
-         uses_flashcard_capacity = CASE
-           WHEN ? = 'active' THEN uses_flashcard_capacity
-           ELSE 0
-         END,
-         updated_at = datetime('now')
-     WHERE id = ? AND user_id = ?`
-  ).bind(newStatus, newStatus, planId, userId).run()
+  if (newStatus === 'active') {
+    await env.DB.prepare(
+      `UPDATE ${PLANNER_TABLES.plans}
+       SET status = 'active',
+           uses_flashcard_capacity = CASE
+             WHEN NOT EXISTS (
+               SELECT 1 FROM ${PLANNER_TABLES.plans}
+               WHERE user_id = ? AND id != ? AND status IN ('draft', 'active') AND uses_flashcard_capacity = 1
+             ) THEN 1
+             ELSE 0
+           END,
+           updated_at = datetime('now')
+       WHERE id = ? AND user_id = ?`
+    ).bind(userId, planId, planId, userId).run()
+  } else {
+    await env.DB.prepare(
+      `UPDATE ${PLANNER_TABLES.plans}
+       SET status = ?,
+           uses_flashcard_capacity = 0,
+           updated_at = datetime('now')
+       WHERE id = ? AND user_id = ?`
+    ).bind(newStatus, planId, userId).run()
+  }
 }
 
 export async function persistRecalculationBatch(env, {

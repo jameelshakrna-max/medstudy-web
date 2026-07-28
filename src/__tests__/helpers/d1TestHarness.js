@@ -17,6 +17,10 @@ function loadMigration16Sql() {
   return readFileSync(resolve(__dirname, '../../../schema-migration16.sql'), 'utf8')
 }
 
+function loadMigration17Sql() {
+  return readFileSync(resolve(__dirname, '../../../schema-migration17.sql'), 'utf8')
+}
+
 const FLASHCARDS_STUB = `
 CREATE TABLE IF NOT EXISTS flashcards (
   id TEXT PRIMARY KEY,
@@ -80,6 +84,8 @@ class D1PreparedStatement {
 class D1Database {
   constructor(sqlJsDb) {
     this._db = sqlJsDb
+    this._queue = Promise.resolve()
+    this._inBatch = false
   }
 
   prepare(sql) {
@@ -87,19 +93,30 @@ class D1Database {
   }
 
   async batch(statements) {
-    this._db.run('BEGIN')
-    try {
-      const results = []
-      for (const stmt of statements) {
-        const result = await stmt.run()
-        results.push(result)
-      }
-      this._db.run('COMMIT')
-      return results
-    } catch (e) {
-      this._db.run('ROLLBACK')
-      throw e
+    if (this._inBatch) {
+      throw new Error('Nested D1 batch calls are not allowed')
     }
+    const resultPromise = new Promise((resolve, reject) => {
+      this._queue = this._queue.then(async () => {
+        this._inBatch = true
+        try {
+          this._db.run('BEGIN')
+          const results = []
+          for (const stmt of statements) {
+            const result = await stmt.run()
+            results.push(result)
+          }
+          this._db.run('COMMIT')
+          resolve(results)
+        } catch (e) {
+          try { this._db.run('ROLLBACK') } catch (_) {}
+          reject(e)
+        } finally {
+          this._inBatch = false
+        }
+      }).catch(() => {})
+    })
+    return resultPromise
   }
 
   exec(sql) {
@@ -118,6 +135,7 @@ export async function createTestDb() {
   sqlJsDb.run(loadMigrationSql())
   sqlJsDb.run(FLASHCARDS_STUB)
   sqlJsDb.run(loadMigration16Sql())
+  sqlJsDb.run(loadMigration17Sql())
   return new D1Database(sqlJsDb)
 }
 

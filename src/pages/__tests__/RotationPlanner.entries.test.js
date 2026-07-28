@@ -7,6 +7,15 @@ function buildPlanEntries(v1Plans, v2Plans) {
   ]
 }
 
+function getPlanBadgeText(entry) {
+  const p = entry.plan
+  if (entry.version === 'v2' && p.status === 'draft') return 'Live'
+  if (p.status === 'active') return 'Active'
+  if (p.status === 'completed') return 'Completed'
+  if (p.status === 'paused') return 'Paused'
+  return 'Draft'
+}
+
 describe('RotationPlanner plan entries', () => {
   it('tags v1 plans with version v1', () => {
     const entries = buildPlanEntries([{ id: 'p1', name: 'Plan 1' }], [])
@@ -47,5 +56,32 @@ describe('RotationPlanner plan entries', () => {
     expect(entries[0].key).toBe('v1:shared-id')
     expect(entries[1].key).toBe('v2:shared-id')
     expect(entries[0].key).not.toBe(entries[1].key)
+  })
+})
+
+describe('RotationPlanner V2 draft badge', () => {
+  it('V2 draft plan shows "Live" badge', () => {
+    const entry = { key: 'v2:p1', version: 'v2', plan: { id: 'p1', status: 'draft' } }
+    expect(getPlanBadgeText(entry)).toBe('Live')
+  })
+
+  it('V1 draft plan shows "Draft" badge', () => {
+    const entry = { key: 'v1:p1', version: 'v1', plan: { id: 'p1', status: 'draft' } }
+    expect(getPlanBadgeText(entry)).toBe('Draft')
+  })
+
+  it('V2 active plan shows "Active" badge', () => {
+    const entry = { key: 'v2:p1', version: 'v2', plan: { id: 'p1', status: 'active' } }
+    expect(getPlanBadgeText(entry)).toBe('Active')
+  })
+
+  it('V2 completed plan shows "Completed" badge', () => {
+    const entry = { key: 'v2:p1', version: 'v2', plan: { id: 'p1', status: 'completed' } }
+    expect(getPlanBadgeText(entry)).toBe('Completed')
+  })
+
+  it('V2 paused plan shows "Paused" badge', () => {
+    const entry = { key: 'v2:p1', version: 'v2', plan: { id: 'p1', status: 'paused' } }
+    expect(getPlanBadgeText(entry)).toBe('Paused')
   })
 })

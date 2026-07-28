@@ -1075,7 +1075,7 @@ CREATE TABLE IF NOT EXISTS rotation_planner_plans (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_rpp_flashcard_owner
   ON rotation_planner_plans(user_id)
-  WHERE uses_flashcard_capacity = 1 AND status = 'active';
+  WHERE uses_flashcard_capacity = 1 AND status IN ('draft', 'active');
 CREATE UNIQUE INDEX IF NOT EXISTS idx_rpp_idempotency
   ON rotation_planner_plans(user_id, client_request_id);
 CREATE INDEX IF NOT EXISTS idx_rpp_user ON rotation_planner_plans(user_id);

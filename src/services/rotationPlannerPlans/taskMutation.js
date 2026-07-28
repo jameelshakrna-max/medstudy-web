@@ -98,14 +98,33 @@ export async function checkTaskIdempotency(env, userId, clientRequestId) {
 export async function checkPlanIdempotency(env, userId, clientRequestId) {
   if (!clientRequestId) return { status: 'no_key' }
   const row = await env.DB.prepare(
-    `SELECT request_fingerprint, result_json FROM ${T.planMutations} WHERE user_id = ? AND client_request_id = ?`
+    `SELECT plan_id, request_fingerprint, result_json FROM ${T.planMutations} WHERE user_id = ? AND client_request_id = ?`
   ).bind(userId, clientRequestId).first()
   if (!row) return { status: 'not_found' }
   return {
     status: 'found',
+    existingPlanId: row.plan_id,
     existingFingerprint: row.request_fingerprint,
     resultJson: typeof row.result_json === 'string' ? JSON.parse(row.result_json) : row.result_json,
   }
+}
+
+export async function classifyCreateBatchError(env, userId, clientRequestId, requestFingerprint) {
+  const row = await env.DB.prepare(
+    `SELECT request_fingerprint, result_json FROM ${T.planMutations} WHERE user_id = ? AND client_request_id = ?`
+  ).bind(userId, clientRequestId).first()
+
+  if (row) {
+    if (row.request_fingerprint === requestFingerprint) {
+      return {
+        type: 'replay',
+        resultJson: typeof row.result_json === 'string' ? JSON.parse(row.result_json) : row.result_json,
+      }
+    }
+    return { type: 'IDEMPOTENCY_CONFLICT' }
+  }
+
+  return { type: 'PERSISTENCE_ERROR' }
 }
 
 export async function classifyBatchError(env, userId, clientRequestId, requestFingerprint, planId, expectedRevision, tableType) {

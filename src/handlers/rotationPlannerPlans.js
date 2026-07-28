@@ -14,7 +14,7 @@ import {
   loadPlanById, loadTaskById, loadTopicById, loadPlanRevision,
   loadTopicsByPlan, loadTasksByPlan, loadAvailabilityByPlan,
   checkTaskIdempotency, checkPlanIdempotency,
-  classifyBatchError, buildTaskMutationBatch, executeTaskMutationBatch,
+  classifyCreateBatchError, classifyBatchError, buildTaskMutationBatch, executeTaskMutationBatch,
   applyTaskUpdate, calculateTaskUpdateFingerprint, calculateRecalculationFingerprint,
   recalculatePlan, deriveActualTopicStates, persistRecalculationBatch,
   TERMINAL_STATUSES, VALID_ACTIONS,
@@ -69,6 +69,7 @@ export async function handlePreviewRotationPlan(request, env, user) {
 }
 
 export async function handleCreateRotationPlan(request, env, user) {
+  let clientRequestId, requestFingerprint
   try {
     const body = await request.json()
     const validation = parseAndValidatePlanRequest(request, body, { requireIdempotencyKey: true })
@@ -87,19 +88,19 @@ export async function handleCreateRotationPlan(request, env, user) {
 
     const { preview, sourceVersion, config } = generatePlanPreview(resolvedTopics, validation.parsed)
     const scheduleFingerprint = await calculateScheduleFingerprint(user.sub, { ...validation.parsed, sourceVersion })
-    const requestFingerprint = await calculateRequestFingerprint(user.sub, { ...validation.parsed, sourceVersion })
+    requestFingerprint = await calculateRequestFingerprint(user.sub, { ...validation.parsed, sourceVersion })
+    clientRequestId = validation.parsed.clientRequestId
+
+    const idemCheck = await checkPlanIdempotency(env, user.sub, clientRequestId)
+    if (idemCheck.status === 'found') {
+      if (idemCheck.existingFingerprint === requestFingerprint) {
+        return json(idemCheck.resultJson)
+      }
+      return errorResponse('IDEMPOTENCY_CONFLICT', 'Same idempotency key with different input.', 409)
+    }
 
     if (validation.parsed.previewToken && validation.parsed.previewToken !== scheduleFingerprint) {
       return errorResponse('PREVIEW_STALE', 'previewToken does not match current input. Regenerate preview.', 409)
-    }
-
-    const idemCheck = await checkIdempotency(env, user.sub, validation.parsed.clientRequestId)
-    if (idemCheck.status === 'found') {
-      if (idemCheck.existingFingerprint === requestFingerprint) {
-        const existing = await loadPlanFromDb(env, idemCheck.existingPlanId, user.sub)
-        return json(existing)
-      }
-      return errorResponse('IDEMPOTENCY_CONFLICT', 'Same idempotency key with different input.', 409)
     }
 
     if (!preview.feasibility.feasible && !validation.parsed.acceptOverload) {
@@ -118,7 +119,7 @@ export async function handleCreateRotationPlan(request, env, user) {
 
     const { planId } = await persistPlanBatch(
       env, user.sub, validation.parsed, resolvedTopics, preview,
-      validation.parsed.clientRequestId, requestFingerprint
+      clientRequestId, requestFingerprint
     )
 
     const plan = await loadPlanFromDb(env, planId, user.sub)
@@ -130,16 +131,12 @@ export async function handleCreateRotationPlan(request, env, user) {
       cause: e.cause?.message,
       userId: user?.sub,
     })
-    if (e.message && e.message.includes('UNIQUE constraint failed')) {
+    if (clientRequestId && e.message && e.message.includes('UNIQUE constraint failed')) {
       try {
-        const body = await request.clone().json()
-        const validation = parseAndValidatePlanRequest(request, body, { requireIdempotencyKey: true })
-        if (validation.valid) {
-          const idemCheck = await checkIdempotency(env, user.sub, validation.parsed.clientRequestId)
-          if (idemCheck.status === 'found') {
-            const existing = await loadPlanFromDb(env, idemCheck.existingPlanId, user.sub)
-            return json(existing)
-          }
+        const classified = await classifyCreateBatchError(env, user.sub, clientRequestId, requestFingerprint)
+        if (classified.type === 'replay') return json(classified.resultJson)
+        if (classified.type === 'IDEMPOTENCY_CONFLICT') {
+          return errorResponse('IDEMPOTENCY_CONFLICT', 'Same idempotency key with different input.', 409)
         }
       } catch (_) {}
     }

@@ -5,7 +5,7 @@ function makeEnv() {
   return {
     SUPABASE_URL: 'https://test.supabase.co',
     SUPABASE_ANON_KEY: 'test-key',
-    DB: { prepare: () => ({ bind: () => ({ all: async () => ({ results: [] }), run: async () => ({ meta: { changes: 0 } }) }) }) },
+    DB: { prepare: () => ({ bind: () => ({ all: async () => ({ results: [] }), run: async () => ({ meta: { changes: 0 } }), first: async () => null }) }) },
     IMAGES: { get: async () => null },
   }
 }

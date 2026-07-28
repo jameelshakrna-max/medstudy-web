@@ -259,6 +259,24 @@ describe("normalizePlanResponse", () => {
       expect(result.sourcePace).toBeNull();
     });
 
+    it("passes through usesFlashcardCapacity on V2 plan", () => {
+      const response = {
+        plan: { id: "p", version: 2, usesFlashcardCapacity: 1 },
+        tasks: [],
+      };
+      const result = normalizePlanResponse(response);
+      expect(result.plan.usesFlashcardCapacity).toBe(1);
+    });
+
+    it("passes through usesFlashcardCapacity on V1 plan", () => {
+      const response = {
+        plan: { id: "p", version: 1, usesFlashcardCapacity: 0 },
+        schedule: [],
+      };
+      const result = normalizePlanResponse(response);
+      expect(result.plan.usesFlashcardCapacity).toBe(0);
+    });
+
     it("passes tasks through with isPinned field", () => {
       const tasks = [
         { id: "t1", taskType: "learning", status: "pending", isPinned: 1 },

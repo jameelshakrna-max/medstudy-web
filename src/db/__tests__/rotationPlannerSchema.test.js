@@ -33,6 +33,10 @@ function loadMigration16Sql() {
   return readFileSync(resolve(__dirname, '../../../schema-migration16.sql'), 'utf8')
 }
 
+function loadMigration17Sql() {
+  return readFileSync(resolve(__dirname, '../../../schema-migration17.sql'), 'utf8')
+}
+
 const FLASHCARDS_STUB = `
 CREATE TABLE IF NOT EXISTS flashcards (
   id TEXT PRIMARY KEY,
@@ -54,6 +58,7 @@ beforeAll(async () => {
 
   db.run(FLASHCARDS_STUB)
   db.run(loadMigration16Sql())
+  db.run(loadMigration17Sql())
 })
 
 function tableExists(name) {
@@ -960,5 +965,57 @@ describe('Migration 16 — isolated verification', () => {
     const ddl = result[0].values[0][0]
     expect(ddl).toContain('flashcards(user_id, state, next_review)')
     expect(ddl).toContain('WHERE last_review IS NOT NULL')
+  })
+})
+
+// ──────────────────────────────────────────────────────────
+// Migration 17 — flashcard owner index (draft+active)
+// ──────────────────────────────────────────────────────────
+describe('Migration 17 — flashcard owner index (Model B)', () => {
+  it('idx_rpp_flashcard_owner covers draft+active', () => {
+    const result = db.exec(
+      `SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_rpp_flashcard_owner'`
+    )
+    expect(result.length).toBe(1)
+    const ddl = result[0].values[0][0]
+    expect(ddl).toContain("status IN ('draft', 'active')")
+    expect(ddl).not.toContain("status = 'active'")
+  })
+
+  it('allows two draft owners for different users', () => {
+    const r1 = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, status, client_request_id, request_fingerprint, uses_flashcard_capacity)
+       VALUES ('m17-plan-1', 'u-m17-1', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'draft', 'req-m17-1', 'fp-m17-1', 1)`
+    )
+    expect(r1.ok).toBe(true)
+    const r2 = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, status, client_request_id, request_fingerprint, uses_flashcard_capacity)
+       VALUES ('m17-plan-2', 'u-m17-2', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'draft', 'req-m17-2', 'fp-m17-2', 1)`
+    )
+    expect(r2.ok).toBe(true)
+  })
+
+  it('still enforces at most one draft owner per user', () => {
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, status, client_request_id, request_fingerprint, uses_flashcard_capacity)
+       VALUES ('m17-owner-1', 'u-m17-owner', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'draft', 'req-m17-o1', 'fp-m17-o1', 1)`
+    )
+    const r = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, status, client_request_id, request_fingerprint, uses_flashcard_capacity)
+       VALUES ('m17-owner-2', 'u-m17-owner', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'draft', 'req-m17-o2', 'fp-m17-o2', 1)`
+    )
+    expect(r.ok).toBe(false)
+  })
+
+  it('allows draft+active owner for same user (different statuses)', () => {
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, status, client_request_id, request_fingerprint, uses_flashcard_capacity)
+       VALUES ('m17-da-1', 'u-m17-da', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'draft', 'req-m17-da1', 'fp-m17-da1', 1)`
+    )
+    const r = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, status, client_request_id, request_fingerprint, uses_flashcard_capacity)
+       VALUES ('m17-da-2', 'u-m17-da', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'active', 'req-m17-da2', 'fp-m17-da2', 1)`
+    )
+    expect(r.ok).toBe(false)
   })
 })

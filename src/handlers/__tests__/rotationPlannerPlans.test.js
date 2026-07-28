@@ -336,6 +336,85 @@ describe('Idempotent replay', () => {
   })
 })
 
+// ─── Phase 2 handler integration ───
+describe('Phase 2 — handler idempotency integration', () => {
+  it('same key + same fingerprint returns structurally equal response', async () => {
+    const idemKey = 'idem-struct-' + Date.now()
+    const res1 = await createPlan(makeBody(), USER_A, { 'Idempotency-Key': idemKey })
+    expect(res1.status).toBe(201)
+    const body1 = await res1.json()
+
+    const res2 = await createPlan(makeBody(), USER_A, { 'Idempotency-Key': idemKey })
+    expect(res2.status).toBe(200)
+    const body2 = await res2.json()
+    expect(body2).toEqual(body1)
+  })
+
+  it('replay returns stored creation response, not current plan state', async () => {
+    const idemKey = 'idem-state-' + Date.now()
+    const res1 = await createPlan(makeBody(), USER_A, { 'Idempotency-Key': idemKey })
+    const body1 = await res1.json()
+    expect(body1.plan.status).toBe('draft')
+    expect(body1.plan.usesFlashcardCapacity).toBe(1)
+
+    // Mutate the plan's current state directly (simulate activation + pause)
+    // to change uses_flashcard_capacity to 0, without deleting the plan/mutation.
+    await db.exec(`
+      UPDATE rotation_planner_plans
+      SET uses_flashcard_capacity = 0, status = 'paused'
+      WHERE id = '${body1.plan.id}'
+    `)
+
+    // Replay should return the original stored result (usesFlashcardCapacity: 1, status: draft)
+    const res2 = await createPlan(makeBody(), USER_A, { 'Idempotency-Key': idemKey })
+    expect(res2.status).toBe(200)
+    const body2 = await res2.json()
+    expect(body2.plan.id).toBe(body1.plan.id)
+    expect(body2.plan.status).toBe('draft')
+    expect(body2.plan.usesFlashcardCapacity).toBe(1)
+    expect(body2.availability).toHaveLength(7)
+    expect(body2.topics).toHaveLength(1)
+    expect(body2.tasks).toHaveLength(body1.tasks.length)
+  })
+
+  it('handler does not re-parse request body on UNIQUE error', async () => {
+    const idemKey = 'idem-noparse-' + Date.now()
+    const res1 = await createPlan(makeBody(), USER_A, { 'Idempotency-Key': idemKey })
+    expect(res1.status).toBe(201)
+
+    const res2 = await createPlan(makeBody({
+      topics: [{
+        normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.acute-coronary-syndromes-acs',
+        uworldRemainingQuestions: 10,
+        alreadyCompletedLearningPercentage: 0,
+        alreadyCompletedQuestionCount: 0,
+      }],
+    }), USER_A, { 'Idempotency-Key': idemKey })
+    expect(res2.status).toBe(409)
+    const body = await res2.json()
+    expect(body.error.code).toBe('IDEMPOTENCY_CONFLICT')
+  })
+
+  it('stored result_json is returned on replay, not loadPlanFromDb', async () => {
+    const idemKey = 'idem-json-' + Date.now()
+    const res1 = await createPlan(makeBody(), USER_A, { 'Idempotency-Key': idemKey })
+    expect(res1.status).toBe(201)
+    const body1 = await res1.json()
+
+    expect(body1.plan).toBeDefined()
+    expect(typeof body1.plan.id).toBe('string')
+    expect(body1.plan.sourceTitle).toBeDefined()
+    expect(Array.isArray(body1.availability)).toBe(true)
+    expect(Array.isArray(body1.topics)).toBe(true)
+    expect(Array.isArray(body1.tasks)).toBe(true)
+
+    const res2 = await createPlan(makeBody(), USER_A, { 'Idempotency-Key': idemKey })
+    expect(res2.status).toBe(200)
+    const body2 = await res2.json()
+    expect(body2).toEqual(body1)
+  })
+})
+
 // ─── Validation errors ───
 describe('Validation', () => {
   it('preview returns 400 for empty body', async () => {
@@ -935,8 +1014,8 @@ describe('R1 integration — persistence durability, rollback, bulk', () => {
 // ─── R2 — Recalculation Durability Contract ───
 
 describe('R2 — Idempotency Contract', () => {
-  async function countPlanMutations(planId) {
-    const row = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_plan_mutations WHERE plan_id = ?').bind(planId).first()
+  async function countRecalcMutations(planId) {
+    const row = await db.prepare("SELECT COUNT(*) as c FROM rotation_planner_plan_mutations WHERE plan_id = ? AND operation = 'recalculate'").bind(planId).first()
     return row.c
   }
 
@@ -951,7 +1030,7 @@ describe('R2 — Idempotency Contract', () => {
     const rev1 = body1.revision
     expect(rev1).toBe(1)
 
-    const mutationsAfter1 = await countPlanMutations(planId)
+    const mutationsAfter1 = await countRecalcMutations(planId)
     expect(mutationsAfter1).toBe(1)
 
     const res2 = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 0, clientRequestId: 'idem-A' })
@@ -961,7 +1040,7 @@ describe('R2 — Idempotency Contract', () => {
     expect(body2.revision).toBe(rev1)
     expect(body2).toEqual(body1)
 
-    const mutationsAfter2 = await countPlanMutations(planId)
+    const mutationsAfter2 = await countRecalcMutations(planId)
     expect(mutationsAfter2).toBe(1)
   })
 
@@ -1028,8 +1107,8 @@ describe('R2 — Stale Revision Contract', () => {
     const topicCount = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_topics WHERE plan_id = ?').bind(planId).first()
     expect(topicCount.c).toBe(topics.length)
 
-    // No new mutation rows for the stale recalculate request
-    const mutations = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_plan_mutations WHERE plan_id = ?').bind(planId).first()
+    // No new recalculation mutation rows for the stale recalculate request
+    const mutations = await db.prepare("SELECT COUNT(*) as c FROM rotation_planner_plan_mutations WHERE plan_id = ? AND operation = 'recalculate'").bind(planId).first()
     expect(mutations.c).toBe(0)
   })
 })
@@ -1062,8 +1141,8 @@ describe('R2 — In-Progress Safety', () => {
     const topicCount = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_topics WHERE plan_id = ?').bind(planId).first()
     expect(topicCount.c).toBe(plan.topics?.length || 1)
 
-    // No new mutation rows
-    const mutations = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_plan_mutations WHERE plan_id = ?').bind(planId).first()
+    // No new recalculation mutation rows
+    const mutations = await db.prepare("SELECT COUNT(*) as c FROM rotation_planner_plan_mutations WHERE plan_id = ? AND operation = 'recalculate'").bind(planId).first()
     expect(mutations.c).toBe(0)
   })
 
@@ -1585,8 +1664,8 @@ describe('R2 — Large Plan Stress', () => {
     expect(recalcRes.status).toBe(200)
     const body1 = await recalcRes.json()
 
-    // Exactly 1 mutation row
-    const mutations = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_plan_mutations WHERE plan_id = ?').bind(planId).first()
+    // Exactly 1 recalculation mutation row
+    const mutations = await db.prepare("SELECT COUNT(*) as c FROM rotation_planner_plan_mutations WHERE plan_id = ? AND operation = 'recalculate'").bind(planId).first()
     expect(mutations.c).toBe(1)
 
     // Idempotent replay returns identical stored result
@@ -1595,8 +1674,8 @@ describe('R2 — Large Plan Stress', () => {
     const body2 = await recalc2Res.json()
     expect(body2).toEqual(body1)
 
-    // Still exactly 1 mutation row
-    const mutations2 = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_plan_mutations WHERE plan_id = ?').bind(planId).first()
+    // Still exactly 1 recalculation mutation row
+    const mutations2 = await db.prepare("SELECT COUNT(*) as c FROM rotation_planner_plan_mutations WHERE plan_id = ? AND operation = 'recalculate'").bind(planId).first()
     expect(mutations2.c).toBe(1)
   })
 })
