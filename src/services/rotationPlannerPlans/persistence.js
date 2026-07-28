@@ -6,6 +6,7 @@ import {
 } from './dtoMappers.js'
 import { getStudySource } from '../../data/studySources/sourceRegistry.js'
 import { getSharedTopicDefinition } from '../../data/studySources/sharedTopicKeys.js'
+import { getActiveFlashcardCapacityOwner } from './ownership.js'
 
 const TASK_METADATA_FIELDS = {
   flashcard_review: ['priority', 'dueCardCount', 'unmetReviewMinutes'],
@@ -66,6 +67,9 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     }
   }
 
+  const existingOwner = await getActiveFlashcardCapacityOwner(env, userId)
+  const usesFlashcardCapacity = existingOwner ? 0 : 1
+
   const planStmt = env.DB.prepare(
     `INSERT INTO ${PLANNER_TABLES.plans} (
       id, user_id, rotation_id, source_id, source_version,
@@ -74,8 +78,8 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
       preferred_questions_per_day, minimum_questions_per_session,
       maximum_questions_per_day, average_minutes_per_question,
       buffer_percentage, maximum_active_topics,
-      status, client_request_id, request_fingerprint, settings_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      status, uses_flashcard_capacity, client_request_id, request_fingerprint, settings_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     planId, userId, validatedInput.rotationId, validatedInput.sourceId, sourceVersion,
     validatedInput.startDate, validatedInput.endDate, validatedInput.examDate || null,
@@ -83,7 +87,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     validatedInput.preferredQuestionsPerDay, validatedInput.minimumQuestionsPerSession,
     validatedInput.maximumQuestionsPerDay, validatedInput.averageMinutesPerQuestion,
     validatedInput.bufferPercentage, validatedInput.maximumActiveTopics,
-    'draft', clientRequestId, fingerprint, settingsJson
+    'draft', usesFlashcardCapacity, clientRequestId, fingerprint, settingsJson
   )
 
   const availJson = JSON.stringify(
@@ -262,6 +266,19 @@ export async function updatePlanRevisionAndRecalculatedAt(env, planId, revision)
   await env.DB.prepare(
     `UPDATE ${PLANNER_TABLES.plans} SET revision = ?, last_recalculated_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`
   ).bind(revision, planId).run()
+}
+
+export async function updatePlanStatus(env, planId, userId, newStatus) {
+  await env.DB.prepare(
+    `UPDATE ${PLANNER_TABLES.plans}
+     SET status = ?,
+         uses_flashcard_capacity = CASE
+           WHEN ? = 'active' THEN uses_flashcard_capacity
+           ELSE 0
+         END,
+         updated_at = datetime('now')
+     WHERE id = ? AND user_id = ?`
+  ).bind(newStatus, newStatus, planId, userId).run()
 }
 
 export async function persistRecalculationBatch(env, {
