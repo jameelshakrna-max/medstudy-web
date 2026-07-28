@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { isValidTimezone, getDateKeyInTimezone, getDateKeyForTimezone } from '../dateUtils.js'
+import {
+  isValidTimezone,
+  getDateKeyInTimezone,
+  getDateKeyForTimezone,
+  wallClockToUTC,
+  toStartOfDayUTC,
+  toEndOfDayUTC,
+} from '../dateUtils.js'
 
 describe('isValidTimezone', () => {
   it('valid timezone', () => expect(isValidTimezone('UTC')).toBe(true))
@@ -30,5 +37,124 @@ describe('getDateKeyForTimezone', () => {
   })
   it('ISO string UTC', () => {
     expect(getDateKeyForTimezone('2026-01-06T03:30:00.000Z', 'UTC')).toBe('2026-01-06')
+  })
+})
+
+describe('wallClockToUTC', () => {
+  it('UTC: midnight', () => {
+    const result = wallClockToUTC(2026, 6, 15, 0, 0, 0, 'UTC')
+    expect(result.toISOString()).toBe('2026-06-15T00:00:00.000Z')
+  })
+
+  it('UTC+3 (Africa/Cairo): midnight local = 21:00 UTC previous day', () => {
+    const result = wallClockToUTC(2026, 7, 1, 0, 0, 0, 'Africa/Cairo')
+    expect(result.toISOString()).toBe('2026-06-30T21:00:00.000Z')
+  })
+
+  it('UTC-5 (America/New_York): midnight local = 05:00 UTC same day', () => {
+    const result = wallClockToUTC(2026, 1, 15, 0, 0, 0, 'America/New_York')
+    expect(result.toISOString()).toBe('2026-01-15T05:00:00.000Z')
+  })
+
+  it('Half-hour offset (Asia/Kolkata): midnight local = 18:30 UTC previous day', () => {
+    const result = wallClockToUTC(2026, 6, 1, 0, 0, 0, 'Asia/Kolkata')
+    expect(result.toISOString()).toBe('2026-05-31T18:30:00.000Z')
+  })
+
+  it('DST spring-forward (Europe/London): 2026-03-29 02:00 BST = 01:00 UTC', () => {
+    const result = wallClockToUTC(2026, 3, 29, 2, 0, 0, 'Europe/London')
+    expect(result.toISOString()).toBe('2026-03-29T01:00:00.000Z')
+  })
+
+  it('DST fall-back (America/New_York): 2026-11-01 01:30 EST = 06:30 UTC', () => {
+    const result = wallClockToUTC(2026, 11, 1, 1, 30, 0, 'America/New_York')
+    expect(result.toISOString()).toBe('2026-11-01T06:30:00.000Z')
+  })
+
+  it('Asia/Tokyo: noon local = 03:00 UTC', () => {
+    const result = wallClockToUTC(2026, 6, 15, 12, 0, 0, 'Asia/Tokyo')
+    expect(result.toISOString()).toBe('2026-06-15T03:00:00.000Z')
+  })
+
+  it('invalid timezone throws', () => {
+    expect(() => wallClockToUTC(2026, 1, 1, 0, 0, 0, 'Invalid/Zone')).toThrow(
+      /wallClockToUTC: invalid timezone/,
+    )
+  })
+})
+
+describe('toStartOfDayUTC', () => {
+  it('UTC', () => {
+    const result = toStartOfDayUTC('2026-06-15', 'UTC')
+    expect(result.toISOString()).toBe('2026-06-15T00:00:00.000Z')
+  })
+
+  it('UTC+3 (Africa/Cairo)', () => {
+    const result = toStartOfDayUTC('2026-07-01', 'Africa/Cairo')
+    expect(result.toISOString()).toBe('2026-06-30T21:00:00.000Z')
+  })
+
+  it('UTC-5 (America/New_York)', () => {
+    const result = toStartOfDayUTC('2026-01-15', 'America/New_York')
+    expect(result.toISOString()).toBe('2026-01-15T05:00:00.000Z')
+  })
+
+  it('Half-hour offset (Asia/Kolkata)', () => {
+    const result = toStartOfDayUTC('2026-06-01', 'Asia/Kolkata')
+    expect(result.toISOString()).toBe('2026-05-31T18:30:00.000Z')
+  })
+
+  it('DST spring (Europe/London)', () => {
+    const result = toStartOfDayUTC('2026-03-29', 'Europe/London')
+    expect(result.toISOString()).toBe('2026-03-29T00:00:00.000Z')
+  })
+
+  it('DST fall (America/New_York)', () => {
+    const result = toStartOfDayUTC('2026-11-01', 'America/New_York')
+    expect(result.toISOString()).toBe('2026-11-01T04:00:00.000Z')
+  })
+
+  it('Month boundary: Aug 1 NYC', () => {
+    const result = toStartOfDayUTC('2026-08-01', 'America/New_York')
+    expect(result.toISOString()).toBe('2026-08-01T04:00:00.000Z')
+  })
+
+  it('Year boundary: Jan 1 2027 Tokyo', () => {
+    const result = toStartOfDayUTC('2027-01-01', 'Asia/Tokyo')
+    expect(result.toISOString()).toBe('2026-12-31T15:00:00.000Z')
+  })
+})
+
+describe('toEndOfDayUTC', () => {
+  it('UTC: end of day = start of next day - 1ms', () => {
+    const end = toEndOfDayUTC('2026-07-15', 'UTC')
+    const nextStart = toStartOfDayUTC('2026-07-16', 'UTC')
+    expect(end.getTime()).toBe(nextStart.getTime() - 1)
+  })
+
+  it('New York end-of-day: 2026-07-15', () => {
+    const end = toEndOfDayUTC('2026-07-15', 'America/New_York')
+    expect(end.toISOString()).toBe('2026-07-16T03:59:59.999Z')
+  })
+
+  it('End-of-day invariant across timezones', () => {
+    const timezones = ['UTC', 'America/New_York', 'Asia/Tokyo', 'Africa/Cairo']
+    for (const tz of timezones) {
+      const end = toEndOfDayUTC('2026-07-15', tz)
+      const nextStart = toStartOfDayUTC('2026-07-16', tz)
+      expect(end.getTime()).toBe(nextStart.getTime() - 1)
+    }
+  })
+
+  it('Month boundary: Jan 31 NYC', () => {
+    const end = toEndOfDayUTC('2026-01-31', 'America/New_York')
+    const nextStart = toStartOfDayUTC('2026-02-01', 'America/New_York')
+    expect(end.getTime()).toBe(nextStart.getTime() - 1)
+  })
+
+  it('Year boundary: Dec 31 2026 Tokyo', () => {
+    const end = toEndOfDayUTC('2026-12-31', 'Asia/Tokyo')
+    const nextStart = toStartOfDayUTC('2027-01-01', 'Asia/Tokyo')
+    expect(end.getTime()).toBe(nextStart.getTime() - 1)
   })
 })

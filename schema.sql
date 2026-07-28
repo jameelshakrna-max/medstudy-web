@@ -1062,6 +1062,7 @@ CREATE TABLE IF NOT EXISTS rotation_planner_plans (
   average_minutes_per_question REAL DEFAULT 1.5,
   buffer_percentage INTEGER DEFAULT 20,
   maximum_active_topics INTEGER DEFAULT 5,
+  uses_flashcard_capacity INTEGER NOT NULL DEFAULT 0,
   status TEXT DEFAULT 'draft'
     CHECK (status IN ('draft', 'active', 'paused', 'completed', 'archived')),
   client_request_id TEXT NOT NULL,
@@ -1072,6 +1073,9 @@ CREATE TABLE IF NOT EXISTS rotation_planner_plans (
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rpp_flashcard_owner
+  ON rotation_planner_plans(user_id)
+  WHERE uses_flashcard_capacity = 1 AND status = 'active';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_rpp_idempotency
   ON rotation_planner_plans(user_id, client_request_id);
 CREATE INDEX IF NOT EXISTS idx_rpp_user ON rotation_planner_plans(user_id);
@@ -1274,3 +1278,23 @@ CREATE TABLE IF NOT EXISTS user_source_pace (
   PRIMARY KEY (user_id, source_id, activity_type)
 );
 CREATE INDEX IF NOT EXISTS idx_usp_user ON user_source_pace(user_id);
+
+-- ════════════════════════════════════════════════════════════
+-- TASK 11 — flashcard deck-to-topic mappings
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS flashcard_deck_mappings (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  deck_name TEXT NOT NULL,
+  canonical_topic_id TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(user_id, deck_name)
+);
+CREATE INDEX IF NOT EXISTS idx_fdm_user ON flashcard_deck_mappings(user_id);
+CREATE INDEX IF NOT EXISTS idx_fdm_topic ON flashcard_deck_mappings(canonical_topic_id);
+
+-- Performance index for review-due query
+CREATE INDEX IF NOT EXISTS idx_flashcards_user_review
+  ON flashcards(user_id, state, next_review)
+  WHERE last_review IS NOT NULL;

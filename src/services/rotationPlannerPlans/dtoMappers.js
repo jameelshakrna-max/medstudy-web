@@ -5,7 +5,7 @@ const PLAN_SUMMARY_COLUMNS = [
   'preferred_questions_per_day', 'minimum_questions_per_session',
   'maximum_questions_per_day', 'average_minutes_per_question',
   'buffer_percentage', 'maximum_active_topics',
-  'status', 'settings_json', 'created_at', 'updated_at',
+  'status', 'uses_flashcard_capacity', 'settings_json', 'created_at', 'updated_at',
   'revision', 'last_recalculated_at',
 ]
 

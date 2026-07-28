@@ -7,6 +7,7 @@ export const PLANNER_TABLES = {
   userSourcePace: 'user_source_pace',
   taskMutations: 'rotation_planner_task_mutations',
   planMutations: 'rotation_planner_plan_mutations',
+  flashcardDeckMappings: 'flashcard_deck_mappings',
 }
 
 export const PLAN_STATUSES = ['draft', 'active', 'paused', 'completed', 'archived']
@@ -61,7 +62,7 @@ export const ALL_PLANNER_COLUMNS = {
     'preferred_questions_per_day', 'minimum_questions_per_session',
     'maximum_questions_per_day', 'average_minutes_per_question',
     'buffer_percentage', 'maximum_active_topics',
-    'status', 'client_request_id', 'request_fingerprint',
+    'status', 'uses_flashcard_capacity', 'client_request_id', 'request_fingerprint',
     'settings_json', 'revision', 'last_recalculated_at',
     'created_at', 'updated_at',
   ],
@@ -107,5 +108,9 @@ export const ALL_PLANNER_COLUMNS = {
     'id', 'plan_id', 'user_id', 'client_request_id', 'request_fingerprint',
     'expected_revision', 'resulting_revision',
     'operation', 'result_json', 'created_at',
+  ],
+  flashcardDeckMappings: [
+    'id', 'user_id', 'deck_name', 'canonical_topic_id',
+    'created_at', 'updated_at',
   ],
 }

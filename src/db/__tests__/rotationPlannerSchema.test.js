@@ -29,6 +29,20 @@ function loadMigrationSql() {
     + readFileSync(resolve(__dirname, '../../../schema-migration15.sql'), 'utf8')
 }
 
+function loadMigration16Sql() {
+  return readFileSync(resolve(__dirname, '../../../schema-migration16.sql'), 'utf8')
+}
+
+const FLASHCARDS_STUB = `
+CREATE TABLE IF NOT EXISTS flashcards (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  state TEXT NOT NULL,
+  next_review TEXT,
+  last_review TEXT
+);
+`
+
 let SQL
 let db
 
@@ -37,6 +51,9 @@ beforeAll(async () => {
   db = new SQL.Database()
   db.run('PRAGMA foreign_keys = ON')
   db.run(loadMigrationSql())
+
+  db.run(FLASHCARDS_STUB)
+  db.run(loadMigration16Sql())
 })
 
 function tableExists(name) {
@@ -71,6 +88,15 @@ function getCreateTableSql(tableName) {
 function runSafe(sql) {
   try {
     db.run(sql)
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e.message }
+  }
+}
+
+function runSafeDb(targetDb, sql) {
+  try {
+    targetDb.run(sql)
     return { ok: true }
   } catch (e) {
     return { ok: false, error: e.message }
@@ -789,5 +815,150 @@ describe('Migration 14 — unique constraints', () => {
        VALUES ('sess-uniq-2', 'u-sess', 'task-sess-uniq', 'step-up', 'mut-uniq')`
     )
     expect(r.ok).toBe(false)
+  })
+})
+
+// ──────────────────────────────────────────────────────────
+// Migration 16 — isolated verification
+// Every statement runs against a fresh DB with the required
+// pre-migration stubs. No error suppression.
+// ──────────────────────────────────────────────────────────
+describe('Migration 16 — isolated verification', () => {
+  let m16Db
+
+  beforeAll(async () => {
+    const SQL = await initSqlJs()
+    m16Db = new SQL.Database()
+    m16Db.run('PRAGMA foreign_keys = ON')
+    m16Db.run(loadMigrationSql())
+    m16Db.run(FLASHCARDS_STUB)
+    m16Db.run(loadMigration16Sql())
+  })
+
+  function m16TableExists(name) {
+    const result = m16Db.exec(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='${name}'`
+    )
+    return result.length > 0 && result[0].values.length > 0
+  }
+
+  function m16GetColumns(tableName) {
+    const result = m16Db.exec(`PRAGMA table_info('${tableName}')`)
+    if (result.length === 0) return []
+    return result[0].values.map((row) => row[1])
+  }
+
+  function m16GetIndexes(tableName) {
+    const result = m16Db.exec(
+      `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='${tableName}'`
+    )
+    if (result.length === 0) return []
+    return result[0].values.map((row) => row[0])
+  }
+
+  it('uses_flashcard_capacity column exists on rotation_planner_plans', () => {
+    const cols = m16GetColumns(PLANNER_TABLES.plans)
+    expect(cols).toContain('uses_flashcard_capacity')
+  })
+
+  it('uses_flashcard_capacity defaults to 0', () => {
+    m16Db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES ('plan-t11-default', 'u-t11', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'req-t11-d', 'fp-t11-d')`
+    )
+    const result = m16Db.exec(
+      `SELECT uses_flashcard_capacity FROM ${PLANNER_TABLES.plans} WHERE id = 'plan-t11-default'`
+    )
+    expect(result[0].values[0][0]).toBe(0)
+  })
+
+  it('idx_rpp_flashcard_owner partial unique index exists', () => {
+    const indexes = m16GetIndexes(PLANNER_TABLES.plans)
+    expect(indexes).toContain('idx_rpp_flashcard_owner')
+  })
+
+  it('enforces at most one active owner per user', () => {
+    m16Db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, status, client_request_id, request_fingerprint, uses_flashcard_capacity)
+       VALUES ('plan-owner-1', 'u-owner-iso', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'active', 'req-own-1', 'fp-own-1', 1)`
+    )
+    const r = runSafeDb(m16Db,
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, status, client_request_id, request_fingerprint, uses_flashcard_capacity)
+       VALUES ('plan-owner-2', 'u-owner-iso', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'active', 'req-own-2', 'fp-own-2', 1)`
+    )
+    expect(r.ok).toBe(false)
+  })
+
+  it('allows two owners if one is paused', () => {
+    m16Db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, status, client_request_id, request_fingerprint, uses_flashcard_capacity)
+       VALUES ('plan-owner-paused', 'u-owner2-iso', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'paused', 'req-own-p', 'fp-own-p', 1)`
+    )
+    m16Db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, status, client_request_id, request_fingerprint, uses_flashcard_capacity)
+       VALUES ('plan-owner-active', 'u-owner2-iso', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'active', 'req-own-a', 'fp-own-a', 1)`
+    )
+  })
+
+  it('allows multiple non-owner plans per user', () => {
+    m16Db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint, uses_flashcard_capacity)
+       VALUES ('plan-nonowner-1', 'u-nonowner-iso', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'req-no-1', 'fp-no-1', 0)`
+    )
+    m16Db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint, uses_flashcard_capacity)
+       VALUES ('plan-nonowner-2', 'u-nonowner-iso', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'req-no-2', 'fp-no-2', 0)`
+    )
+  })
+
+  it('flashcard_deck_mappings table exists', () => {
+    expect(m16TableExists('flashcard_deck_mappings')).toBe(true)
+  })
+
+  it('flashcard_deck_mappings has expected columns', () => {
+    const cols = m16GetColumns('flashcard_deck_mappings')
+    expect(cols).toContain('id')
+    expect(cols).toContain('user_id')
+    expect(cols).toContain('deck_name')
+    expect(cols).toContain('canonical_topic_id')
+    expect(cols).toContain('created_at')
+    expect(cols).toContain('updated_at')
+  })
+
+  it('enforces UNIQUE(user_id, deck_name) on flashcard_deck_mappings', () => {
+    m16Db.run(
+      `INSERT INTO flashcard_deck_mappings (id, user_id, deck_name, canonical_topic_id)
+       VALUES ('fdm-1', 'u-fdm-iso', 'Cardiology', 'cardio::chf')`
+    )
+    const r = runSafeDb(m16Db,
+      `INSERT INTO flashcard_deck_mappings (id, user_id, deck_name, canonical_topic_id)
+       VALUES ('fdm-2', 'u-fdm-iso', 'Cardiology', 'cardio::mi')`
+    )
+    expect(r.ok).toBe(false)
+  })
+
+  it('idx_fdm_user index exists on flashcard_deck_mappings', () => {
+    const indexes = m16GetIndexes('flashcard_deck_mappings')
+    expect(indexes).toContain('idx_fdm_user')
+  })
+
+  it('idx_fdm_topic index exists on flashcard_deck_mappings', () => {
+    const indexes = m16GetIndexes('flashcard_deck_mappings')
+    expect(indexes).toContain('idx_fdm_topic')
+  })
+
+  it('idx_flashcards_user_review index exists on flashcards', () => {
+    const indexes = m16GetIndexes('flashcards')
+    expect(indexes).toContain('idx_flashcards_user_review')
+  })
+
+  it('idx_flashcards_user_review covers (user_id, state, next_review) WHERE last_review IS NOT NULL', () => {
+    const result = m16Db.exec(
+      `SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_flashcards_user_review'`
+    )
+    expect(result.length).toBe(1)
+    const ddl = result[0].values[0][0]
+    expect(ddl).toContain('flashcards(user_id, state, next_review)')
+    expect(ddl).toContain('WHERE last_review IS NOT NULL')
   })
 })

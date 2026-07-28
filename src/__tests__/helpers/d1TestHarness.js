@@ -13,6 +13,20 @@ function loadMigrationSql() {
     + readFileSync(resolve(__dirname, '../../../schema-migration15.sql'), 'utf8')
 }
 
+function loadMigration16Sql() {
+  return readFileSync(resolve(__dirname, '../../../schema-migration16.sql'), 'utf8')
+}
+
+const FLASHCARDS_STUB = `
+CREATE TABLE IF NOT EXISTS flashcards (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  state TEXT NOT NULL,
+  next_review TEXT,
+  last_review TEXT
+);
+`
+
 class D1PreparedStatement {
   constructor(db, sql, bindings) {
     this._db = db
@@ -102,6 +116,8 @@ export async function createTestDb() {
   const sqlJsDb = new SQL.Database()
   sqlJsDb.run('PRAGMA foreign_keys = ON')
   sqlJsDb.run(loadMigrationSql())
+  sqlJsDb.run(FLASHCARDS_STUB)
+  sqlJsDb.run(loadMigration16Sql())
   return new D1Database(sqlJsDb)
 }
 

@@ -23,3 +23,10 @@ export function getMigration14Sql() {
     'utf8'
   )
 }
+
+export function getMigration16Sql() {
+  return readFileSync(
+    resolve(getDirname(), '../../schema-migration16.sql'),
+    'utf8'
+  )
+}
