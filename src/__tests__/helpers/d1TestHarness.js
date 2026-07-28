@@ -25,9 +25,11 @@ const FLASHCARDS_STUB = `
 CREATE TABLE IF NOT EXISTS flashcards (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
-  state TEXT NOT NULL,
+  deck_name TEXT NOT NULL DEFAULT '',
+  state INTEGER NOT NULL DEFAULT 0,
+  last_review TEXT,
   next_review TEXT,
-  last_review TEXT
+  created_at TEXT DEFAULT (datetime('now'))
 );
 `
 
