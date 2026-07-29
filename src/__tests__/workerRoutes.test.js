@@ -332,4 +332,43 @@ describe('Worker route dispatch — rotation planner plans', () => {
       expect(res.status).not.toBe(404)
     })
   })
+
+  describe('GET /api/flashcards/decks', () => {
+    it('returns 200 with decks array', async () => {
+      const res = await fetch('/api/flashcards/decks')
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body).toHaveProperty('decks')
+      expect(Array.isArray(body.decks)).toBe(true)
+    })
+  })
+
+  describe('GET /api/deck-mappings', () => {
+    it('returns 200 with mappings array', async () => {
+      const res = await fetch('/api/deck-mappings')
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body).toHaveProperty('mappings')
+      expect(Array.isArray(body.mappings)).toBe(true)
+    })
+  })
+
+  describe('POST /api/deck-mappings', () => {
+    it('returns 400 with missing body fields', async () => {
+      const res = await postFetch('/api/deck-mappings', {})
+      expect(res.status).toBe(400)
+    })
+  })
+
+  describe('DELETE /api/deck-mappings/:mappingId', () => {
+    it('returns 400 with missing clientRequestId', async () => {
+      const req = new Request('https://medstudy.app/api/deck-mappings/mapping-1', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'x-test-user-id': 'test-user' },
+        body: JSON.stringify({}),
+      })
+      const res = await worker.fetch(req, makeEnv(), {})
+      expect(res.status).toBe(400)
+    })
+  })
 })

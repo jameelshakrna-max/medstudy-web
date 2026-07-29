@@ -1298,3 +1298,19 @@ CREATE INDEX IF NOT EXISTS idx_fdm_topic ON flashcard_deck_mappings(canonical_to
 CREATE INDEX IF NOT EXISTS idx_flashcards_user_review
   ON flashcards(user_id, state, next_review)
   WHERE last_review IS NOT NULL;
+
+-- ════════════════════════════════════════════════════════════
+-- TASK 11 — Flashcard deck-mapping mutation idempotency
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS flashcard_deck_mapping_mutations (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  client_request_id TEXT NOT NULL,
+  request_fingerprint TEXT NOT NULL,
+  result_json TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(user_id, client_request_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fdmm_user ON flashcard_deck_mapping_mutations(user_id);
+CREATE INDEX IF NOT EXISTS idx_fdmm_created ON flashcard_deck_mapping_mutations(created_at);

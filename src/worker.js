@@ -125,6 +125,20 @@ import {
   handleUpdateTask, handleRecalculatePlan, handleGetPlanForecast,
 } from './handlers/rotationPlannerPlans.js'
 
+import {
+  listUserDecks,
+  listUserDeckMappings,
+  upsertDeckMapping,
+  deleteDeckMapping,
+  verifyPlanOwnership,
+  resolveCanonicalTopicForMapping,
+  verifyDeckExists,
+  cleanupOrphanMapping,
+  calculateMappingFingerprint,
+  checkMappingIdempotency,
+  persistMappingMutation,
+} from './services/flashcardMappings.js'
+
 function ensureCORS(response) {
   const h = response.headers
   if (!h.get('access-control-allow-origin')) {
@@ -238,6 +252,20 @@ export default {
       }
       if (path.match(/^\/api\/decks\/[^\/]+$/) && request.method === 'DELETE') {
         return handleDeleteDeck(request, env, user)
+      }
+
+      if (path === '/api/flashcards/decks' && request.method === 'GET') {
+        return handleListDecks(request, env, user)
+      }
+
+      if (path === '/api/deck-mappings' && request.method === 'GET') {
+        return handleListDeckMappings(request, env, user)
+      }
+      if (path === '/api/deck-mappings' && request.method === 'POST') {
+        return handleCreateDeckMapping(request, env, user)
+      }
+      if (path.match(/^\/api\/deck-mappings\/[^\/]+$/) && request.method === 'DELETE') {
+        return handleDeleteDeckMapping(request, env, user)
       }
 
       if (path === '/api/upload-image' && request.method === 'POST') {
@@ -649,7 +677,10 @@ async function handleUpdateFlashcard(request, env, user) {
 
 async function handleDeleteFlashcard(request, env, user) {
   const id = extractId(request.url)
+  const row = await env.DB.prepare('SELECT deck_name FROM flashcards WHERE id = ? AND user_id = ?').bind(id, user.sub).first()
+  if (!row) return json({ success: true })
   await env.DB.prepare('DELETE FROM flashcards WHERE id = ? AND user_id = ?').bind(id, user.sub).run()
+  await cleanupOrphanMapping(env, user.sub, row.deck_name)
   return json({ success: true })
 }
 
@@ -677,6 +708,7 @@ async function handleCreateDeck(request, env, user) {
 async function handleDeleteDeck(request, env, user) {
   const deckName = decodeURIComponent(extractId(request.url))
   await env.DB.prepare('DELETE FROM flashcards WHERE user_id = ? AND deck_name = ?').bind(user.sub, deckName).run()
+  await cleanupOrphanMapping(env, user.sub, deckName)
   return json({ success: true })
 }
 
@@ -722,6 +754,90 @@ async function handleSaveFsrs(request, env, user) {
     'INSERT INTO fsrs_parameters (user_id, params) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET params = ?'
   ).bind(user.sub, JSON.stringify(params), JSON.stringify(params)).run()
   return json({ success: true })
+}
+
+async function handleListDecks(request, env, user) {
+  const decks = await listUserDecks(env, user.sub)
+  return json({ decks })
+}
+
+async function handleListDeckMappings(request, env, user) {
+  const mappings = await listUserDeckMappings(env, user.sub)
+  return json({ mappings })
+}
+
+async function handleCreateDeckMapping(request, env, user) {
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid JSON body.' } }, 400)
+  }
+
+  const { planId, deckName, planTopicId, clientRequestId } = body || {}
+
+  if (!planId || typeof planId !== 'string') return json({ error: { code: 'VALIDATION_ERROR', message: 'planId is required.' } }, 400)
+  if (!planTopicId || typeof planTopicId !== 'string') return json({ error: { code: 'VALIDATION_ERROR', message: 'planTopicId is required.' } }, 400)
+  if (!deckName || typeof deckName !== 'string' || deckName.length === 0 || deckName.length > 200) return json({ error: { code: 'VALIDATION_ERROR', message: 'deckName is required (max 200 chars).' } }, 400)
+  if (!clientRequestId || typeof clientRequestId !== 'string') return json({ error: { code: 'VALIDATION_ERROR', message: 'clientRequestId is required.' } }, 400)
+
+  const fingerprint = await calculateMappingFingerprint(user.sub, planId, deckName, planTopicId)
+
+  const idemCheck = await checkMappingIdempotency(env, user.sub, clientRequestId)
+  if (idemCheck.status === 'found') {
+    if (idemCheck.existingFingerprint === fingerprint) {
+      return json(idemCheck.existingResult)
+    }
+    return json({ error: { code: 'IDEMPOTENCY_CONFLICT', message: 'Same idempotency key with different input.' } }, 409)
+  }
+
+  const ownsPlan = await verifyPlanOwnership(env, planId, user.sub)
+  if (!ownsPlan) return json({ error: { code: 'VALIDATION_ERROR', message: 'Plan not found or does not belong to user.' } }, 404)
+
+  const canonicalTopicId = await resolveCanonicalTopicForMapping(env, planId, planTopicId)
+  if (!canonicalTopicId) return json({ error: { code: 'VALIDATION_ERROR', message: 'planTopicId not found or has no canonicalTopicId.' } }, 404)
+
+  const deckExists = await verifyDeckExists(env, user.sub, deckName)
+  if (!deckExists) return json({ error: { code: 'VALIDATION_ERROR', message: 'Deck not found for this user.' } }, 404)
+
+  const mapping = await upsertDeckMapping(env, user.sub, deckName, canonicalTopicId)
+  if (!mapping) return json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to create mapping.' } }, 500)
+
+  const result = { mapping, recalculationRequired: false }
+  await persistMappingMutation(env, user.sub, clientRequestId, fingerprint, result)
+  return json(result)
+}
+
+async function handleDeleteDeckMapping(request, env, user) {
+  const mappingId = extractId(request.url)
+
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid JSON body.' } }, 400)
+  }
+
+  const { clientRequestId } = body || {}
+
+  if (!clientRequestId || typeof clientRequestId !== 'string') return json({ error: { code: 'VALIDATION_ERROR', message: 'clientRequestId is required.' } }, 400)
+
+  const deleteFingerprint = await calculateMappingFingerprint(user.sub, 'delete', mappingId, 'delete')
+
+  const idemCheck = await checkMappingIdempotency(env, user.sub, clientRequestId)
+  if (idemCheck.status === 'found') {
+    if (idemCheck.existingFingerprint === deleteFingerprint) {
+      return json(idemCheck.existingResult)
+    }
+    return json({ error: { code: 'IDEMPOTENCY_CONFLICT', message: 'Same idempotency key with different input.' } }, 409)
+  }
+
+  const deleted = await deleteDeckMapping(env, mappingId, user.sub)
+  if (!deleted) return json({ error: { code: 'NOT_FOUND', message: 'Mapping not found.' } }, 404)
+
+  const result = { deleted: true, mappingId, recalculationRequired: false }
+  await persistMappingMutation(env, user.sub, clientRequestId, deleteFingerprint, result)
+  return json(result)
 }
 
 async function handleGetCategories(request, env) {
