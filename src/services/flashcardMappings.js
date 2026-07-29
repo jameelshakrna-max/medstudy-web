@@ -35,7 +35,7 @@ export async function upsertDeckMapping(env, userId, deckName, canonicalTopicId)
        updated_at = excluded.updated_at`
   ).bind(id, userId, deckName, canonicalTopicId, now, now).run()
 
-  await signalFlashcardMappingsStaleness(env, userId).catch(() => {})
+  await signalFlashcardMappingsStaleness(env, userId, EXISTING_REVIEW_IMPACT).catch(() => {})
 
   const row = await env.DB.prepare(
     `SELECT m.id, m.deck_name, m.canonical_topic_id, m.created_at, m.updated_at,
@@ -53,7 +53,7 @@ export async function deleteDeckMapping(env, mappingId, userId) {
   const { meta } = await env.DB.prepare(
     `DELETE FROM ${T.flashcardDeckMappings} WHERE id = ? AND user_id = ?`
   ).bind(mappingId, userId).run()
-  await signalFlashcardMappingsStaleness(env, userId).catch(() => {})
+  await signalFlashcardMappingsStaleness(env, userId, EXISTING_REVIEW_IMPACT).catch(() => {})
   return meta.changes > 0
 }
 
@@ -125,10 +125,30 @@ export async function persistMappingMutation(env, userId, clientRequestId, finge
   ).bind(id, userId, clientRequestId, fingerprint, JSON.stringify(resultJson)).run()
 }
 
-export async function signalFlashcardMappingsStaleness(env, userId) {
+export const EXISTING_REVIEW_IMPACT = 'EXISTING_REVIEW_IMPACT'
+export const FORECAST_ONLY_IMPACT = 'FORECAST_ONLY_IMPACT'
+export const NO_SCHEDULING_IMPACT = 'NO_SCHEDULING_IMPACT'
+
+export async function signalFlashcardMappingsStaleness(env, userId, mutationType = EXISTING_REVIEW_IMPACT) {
   try {
+    if (mutationType === NO_SCHEDULING_IMPACT) return
+
     const owner = await getFlashcardCapacityOwner(env, userId)
     if (!owner) return
+
+    if (mutationType === FORECAST_ONLY_IMPACT) {
+      const plan = await env.DB.prepare(
+        `SELECT settings_json FROM ${T.plans} WHERE id = ? AND user_id = ?`
+      ).bind(owner.id, userId).first()
+      if (!plan) return
+      const settings = typeof plan.settings_json === 'string'
+        ? JSON.parse(plan.settings_json)
+        : (plan.settings_json || {})
+      const forecastSettings = settings.forecastSettings || {}
+      const limit = forecastSettings.maxProjectedFlashcardReviewMinutesPerDay
+      if (!(Number.isInteger(limit) && limit > 0)) return
+    }
+
     await env.DB.prepare(
       `UPDATE ${T.plans}
        SET stale_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')

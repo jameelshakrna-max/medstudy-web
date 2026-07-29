@@ -10,6 +10,7 @@ import {
   handleRecalculatePlan,
 } from '../rotationPlannerPlans.js'
 import { persistRecalculationBatch } from '../../services/rotationPlannerPlans/persistence.js'
+import { createEmptyFlashcardForecast } from '../../services/rotationPlannerPlans/forecastIntegration.js'
 
 const USER_A = { sub: 'user-a', email: 'a@test.local', role: 'authenticated' }
 const USER_B = { sub: 'user-b', email: 'b@test.local', role: 'authenticated' }
@@ -100,14 +101,26 @@ function makeBody(overrides = {}) {
 
 // ─── Preview ───
 describe('handlePreviewRotationPlan', () => {
-  it('returns 200 with preview token and tasks', async () => {
+  it('returns 200 with V2 contract shape { plan, topics, tasks, availability }', async () => {
     const res = await preview()
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body.previewToken).toBeDefined()
+    expect(Object.keys(body).sort()).toEqual(['availability', 'plan', 'tasks', 'topics'])
+    expect(body.plan).toBeDefined()
+    expect(body.topics).toBeDefined()
+    expect(Array.isArray(body.topics)).toBe(true)
     expect(body.tasks).toBeDefined()
     expect(Array.isArray(body.tasks)).toBe(true)
-    expect(body.feasibility).toBeDefined()
+    expect(body.availability).toBeDefined()
+    expect(Array.isArray(body.availability)).toBe(true)
+  })
+
+  it('plan DTO contains forecastSettings and forecast', async () => {
+    const res = await preview()
+    const body = await res.json()
+    expect(body.plan.settingsJson).toBeDefined()
+    expect(body.plan.settingsJson).toHaveProperty('forecastSettings')
+    expect(body.plan.settingsJson).toHaveProperty('forecast')
   })
 
   it('performs zero DB writes', async () => {
@@ -127,7 +140,7 @@ describe('Full lifecycle', () => {
     const previewBody = await previewRes.json()
 
     // Create
-    const createRes = await createPlan(makeBody({ previewToken: previewBody.previewToken }))
+    const createRes = await createPlan(makeBody({ previewToken: previewBody.plan.scheduleFingerprint }))
     expect(createRes.status).toBe(201)
     const createBody = await createRes.json()
     const planId = createBody.plan.id
@@ -296,7 +309,7 @@ describe('acceptOverload flow', () => {
 
     // Create with acceptOverload=true but same schedule fingerprint
     const createRes = await createPlan(makeBody({
-      previewToken: previewBody.previewToken,
+      previewToken: previewBody.plan.scheduleFingerprint,
       acceptOverload: true,
     }))
     expect(createRes.status).toBe(201)
@@ -2120,5 +2133,154 @@ describe('F9 timezone-aware completedOn', () => {
     expect(res2.status).toBe(409)
     const body2 = await res2.json()
     expect(body2.error.code).toBe('IDEMPOTENCY_CONFLICT')
+  })
+})
+
+// ─── Canonical Empty Forecast ───
+describe('canonical empty forecast', () => {
+  const EMPTY_FORECAST = createEmptyFlashcardForecast()
+
+  function assertCanonicalEmpty(forecast) {
+    expect(forecast).not.toBeNull()
+    expect(forecast).not.toBeUndefined()
+    expect(forecast).toEqual(EMPTY_FORECAST)
+  }
+
+  it('preview with forecasting disabled returns canonical empty forecast', async () => {
+    const res = await preview(makeBody({
+      flashcardSettings: { learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: null },
+    }))
+    const body = await res.json()
+    assertCanonicalEmpty(body.plan.settingsJson.forecast)
+  })
+
+  it('non-owner preview returns canonical empty forecast', async () => {
+    const res = await preview(VALID_BODY, USER_B)
+    const body = await res.json()
+    assertCanonicalEmpty(body.plan.settingsJson.forecast)
+  })
+
+  it('non-owner creation stores canonical empty forecast', async () => {
+    const res = await createPlan(makeBody(), USER_B)
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    assertCanonicalEmpty(body.plan.settingsJson.forecast)
+  })
+
+  it('non-owner recalculation stores canonical empty forecast', async () => {
+    // Create plan as USER_B
+    const createRes = await createPlan(makeBody(), USER_B)
+    expect(createRes.status).toBe(201)
+    const { plan } = await createRes.json()
+
+    // Recalculate
+    const recalcRes = await recalculate(plan.id, { recalculationDate: '2026-01-06', expectedRevision: 0 }, USER_B)
+    expect(recalcRes.status).toBe(200)
+
+    const getRes = await getPlan(plan.id, USER_B)
+    const getBody = await getRes.json()
+    assertCanonicalEmpty(getBody.plan.settingsJson.forecast)
+  })
+
+  it('owner recalculation with forecasting disabled stores canonical empty forecast', async () => {
+    // Create plan with forecasting disabled
+    const body = makeBody({
+      flashcardSettings: { learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: null },
+    })
+    const createRes = await createPlan(body)
+    expect(createRes.status).toBe(201)
+    const { plan } = await createRes.json()
+
+    // Recalculate
+    const recalcRes = await recalculate(plan.id, { recalculationDate: '2026-01-06', expectedRevision: 0 })
+    expect(recalcRes.status).toBe(200)
+
+    const getRes = await getPlan(plan.id)
+    const getBody = await getRes.json()
+    assertCanonicalEmpty(getBody.plan.settingsJson.forecast)
+  })
+})
+
+// ─── Explicit Staleness Outcomes ───
+describe('explicit staleness outcomes', () => {
+  let db
+
+  beforeEach(async () => {
+    db = await createTestDb()
+  })
+
+  async function insertOwnerPlan(planId, userId, settings = {}) {
+    const settingsJson = JSON.stringify(settings)
+    await db.prepare(
+      `INSERT INTO rotation_planner_plans (id, user_id, rotation_id, source_id, start_date, end_date, status, uses_flashcard_capacity, client_request_id, request_fingerprint, settings_json, created_at, updated_at)
+       VALUES (?, ?, 'rot-1', 'src-1', '2026-08-01', '2026-08-14', 'active', 1, 'test', 'fp', ?, datetime('now'), datetime('now'))`
+    ).bind(planId, userId, settingsJson).run()
+  }
+
+  async function assertStaleness(planId, expected) {
+    const plan = await db.prepare('SELECT stale_at FROM rotation_planner_plans WHERE id = ?').bind(planId).first()
+    if (expected) {
+      expect(plan.stale_at).toBeTruthy()
+    } else {
+      expect(plan.stale_at).toBeNull()
+    }
+  }
+
+  // Matrix tests
+  it('mapping change + forecasting disabled → true (EXISTING_REVIEW_IMPACT)', async () => {
+    await insertOwnerPlan('p1', 'u1')
+    const { EXISTING_REVIEW_IMPACT } = await import('../../services/flashcardMappings.js')
+    const { signalFlashcardMappingsStaleness } = await import('../../services/flashcardMappings.js')
+    await signalFlashcardMappingsStaleness({ DB: db }, 'u1', EXISTING_REVIEW_IMPACT)
+    await assertStaleness('p1', true)
+  })
+
+  it('review/rating + forecasting disabled → true (EXISTING_REVIEW_IMPACT)', async () => {
+    await insertOwnerPlan('p2', 'u2')
+    const { EXISTING_REVIEW_IMPACT, signalFlashcardMappingsStaleness } = await import('../../services/flashcardMappings.js')
+    await signalFlashcardMappingsStaleness({ DB: db }, 'u2', EXISTING_REVIEW_IMPACT)
+    await assertStaleness('p2', true)
+  })
+
+  it('introduced-card deletion + forecasting disabled → true (EXISTING_REVIEW_IMPACT)', async () => {
+    await insertOwnerPlan('p3', 'u3')
+    const { EXISTING_REVIEW_IMPACT, signalFlashcardMappingsStaleness } = await import('../../services/flashcardMappings.js')
+    await signalFlashcardMappingsStaleness({ DB: db }, 'u3', EXISTING_REVIEW_IMPACT)
+    await assertStaleness('p3', true)
+  })
+
+  it('new state=0 card + forecasting enabled → true (FORECAST_ONLY_IMPACT)', async () => {
+    await insertOwnerPlan('p4', 'u4', {
+      forecastSettings: { learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: 60 },
+    })
+    const { FORECAST_ONLY_IMPACT, signalFlashcardMappingsStaleness } = await import('../../services/flashcardMappings.js')
+    await signalFlashcardMappingsStaleness({ DB: db }, 'u4', FORECAST_ONLY_IMPACT)
+    await assertStaleness('p4', true)
+  })
+
+  it('new state=0 card + forecasting disabled → false (FORECAST_ONLY_IMPACT)', async () => {
+    await insertOwnerPlan('p5', 'u5')
+    const { FORECAST_ONLY_IMPACT, signalFlashcardMappingsStaleness } = await import('../../services/flashcardMappings.js')
+    await signalFlashcardMappingsStaleness({ DB: db }, 'u5', FORECAST_ONLY_IMPACT)
+    await assertStaleness('p5', false)
+  })
+
+  it('content-only edit → false (NO_SCHEDULING_IMPACT)', async () => {
+    await insertOwnerPlan('p6', 'u6', {
+      forecastSettings: { maxProjectedFlashcardReviewMinutesPerDay: 60 },
+    })
+    const { NO_SCHEDULING_IMPACT, signalFlashcardMappingsStaleness } = await import('../../services/flashcardMappings.js')
+    await signalFlashcardMappingsStaleness({ DB: db }, 'u6', NO_SCHEDULING_IMPACT)
+    await assertStaleness('p6', false)
+  })
+
+  it('no owner → false', async () => {
+    await insertOwnerPlan('p7', 'u7')
+    const { EXISTING_REVIEW_IMPACT, signalFlashcardMappingsStaleness } = await import('../../services/flashcardMappings.js')
+    // signal as u7b — no plan owned by u7b
+    const { getFlashcardCapacityOwner } = await import('../../services/rotationPlannerPlans/ownership.js')
+    expect(await getFlashcardCapacityOwner({ DB: db }, 'u7b')).toBeFalsy()
+    await signalFlashcardMappingsStaleness({ DB: db }, 'u7b', EXISTING_REVIEW_IMPACT)
+    await assertStaleness('p7', false)
   })
 })

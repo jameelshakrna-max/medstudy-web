@@ -1,6 +1,8 @@
 const VALID_STUDY_STYLES = ['focused', 'active', 'detailed_notes']
 const VALID_SCHEDULING_MODES = ['focused', 'efficient']
 const VALID_QUESTION_START_RULES = ['next_available_day', 'same_day_if_capacity']
+const VALID_LEARNING_UNLOCK_MODES = ['learning_completed', 'learning_started']
+const MAX_FLASHCARD_REVIEW_MINUTES_PER_DAY = 1440
 
 export function parseAndValidatePlanRequest(request, body, { requireIdempotencyKey = false } = {}) {
   const errors = []
@@ -152,6 +154,39 @@ export function parseAndValidatePlanRequest(request, body, { requireIdempotencyK
     }
   }
 
+  // ─── Forecast settings validation ───
+  let learningUnlockMode = 'learning_completed'
+  let maxProjectedFlashcardReviewMinutesPerDay = null
+
+  if (body.flashcardSettings !== undefined && body.flashcardSettings !== null) {
+    if (typeof body.flashcardSettings !== 'object' || Array.isArray(body.flashcardSettings)) {
+      errors.push({ code: 'VALIDATION_ERROR', message: 'flashcardSettings must be an object.', field: 'flashcardSettings' })
+    } else {
+      const fs = body.flashcardSettings
+
+      if (fs.learningUnlockMode !== undefined && fs.learningUnlockMode !== null) {
+        if (!VALID_LEARNING_UNLOCK_MODES.includes(fs.learningUnlockMode)) {
+          errors.push({ code: 'VALIDATION_ERROR', message: `learningUnlockMode must be one of: ${VALID_LEARNING_UNLOCK_MODES.join(', ')}`, field: 'flashcardSettings.learningUnlockMode' })
+        } else {
+          learningUnlockMode = fs.learningUnlockMode
+        }
+      }
+
+      if (fs.maxProjectedFlashcardReviewMinutesPerDay !== undefined) {
+        const val = fs.maxProjectedFlashcardReviewMinutesPerDay
+        if (val === null) {
+          maxProjectedFlashcardReviewMinutesPerDay = null
+        } else if (!Number.isInteger(val) || val <= 0) {
+          errors.push({ code: 'VALIDATION_ERROR', message: 'maxProjectedFlashcardReviewMinutesPerDay must be a positive integer or null.', field: 'flashcardSettings.maxProjectedFlashcardReviewMinutesPerDay' })
+        } else if (val > MAX_FLASHCARD_REVIEW_MINUTES_PER_DAY) {
+          errors.push({ code: 'VALIDATION_ERROR', message: `maxProjectedFlashcardReviewMinutesPerDay must not exceed ${MAX_FLASHCARD_REVIEW_MINUTES_PER_DAY}.`, field: 'flashcardSettings.maxProjectedFlashcardReviewMinutesPerDay' })
+        } else {
+          maxProjectedFlashcardReviewMinutesPerDay = val
+        }
+      }
+    }
+  }
+
   if (errors.length > 0) return { valid: false, errors }
 
   return {
@@ -184,6 +219,10 @@ export function parseAndValidatePlanRequest(request, body, { requireIdempotencyK
       clientRequestId,
       previewToken: body.previewToken || null,
       acceptOverload: body.acceptOverload ?? false,
+      flashcardSettings: {
+        learningUnlockMode,
+        maxProjectedFlashcardReviewMinutesPerDay,
+      },
     },
   }
 }

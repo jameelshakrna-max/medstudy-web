@@ -40,6 +40,7 @@ export async function calculateScheduleFingerprint(userId, validatedInput) {
     mixedReviewQuestionsPerDay: validatedInput.mixedReviewQuestionsPerDay ?? 0,
     dueReviewMinutesByDate: Object.entries(validatedInput.dueReviewMinutesByDate ?? {})
       .sort(([a], [b]) => a.localeCompare(b)),
+    flashcardSettings: validatedInput.flashcardSettings ?? { learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: null },
   }, null, 0)
   return sha256Hex(canonical)
 }
@@ -81,6 +82,7 @@ export async function calculateRequestFingerprint(userId, validatedInput) {
     dueReviewMinutesByDate: Object.entries(validatedInput.dueReviewMinutesByDate ?? {})
       .sort(([a], [b]) => a.localeCompare(b)),
     acceptOverload: validatedInput.acceptOverload ?? false,
+    flashcardSettings: validatedInput.flashcardSettings ?? { learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: null },
   }, null, 0)
   return sha256Hex(canonical)
 }

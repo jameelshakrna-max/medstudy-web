@@ -20,6 +20,9 @@ import {
   TERMINAL_STATUSES, VALID_ACTIONS, getFlashcardCapacityOwner,
 } from '../services/rotationPlannerPlans/index.js'
 import { computeReviewWorkloadMap } from '../services/flashcardWorkload.js'
+import { computeSafeNewCardForecast } from '../services/flashcardForecast.js'
+import { computeExistingReviewBaseline, createEmptyFlashcardForecast } from '../services/rotationPlannerPlans/forecastIntegration.js'
+import { addDays } from '../services/rotationPlannerV2/dateUtils.js'
 import { mapPlanSummaryDto, mapPlanDto, mapAvailabilityDto, mapTopicDto, mapTaskDto, mapToSnakeCase } from '../services/rotationPlannerPlans/dtoMappers.js'
 import { isValidTimezone, getDateKeyForTimezone } from '../lib/dateUtils.js'
 import { buildRotationSchedule } from '../services/rotationPlannerV2/buildRotationSchedule.js'
@@ -80,14 +83,113 @@ export async function handlePreviewRotationPlan(request, env, user) {
     const { preview, sourceVersion } = generatePlanPreview(resolvedTopics, validation.parsed)
     const fingerprint = await calculateScheduleFingerprint(user.sub, { ...validation.parsed, sourceVersion })
 
-    return json({
-      previewToken: fingerprint,
+    // ─── Forecast computation for preview (advisory only) ───
+    let flashcardForecast = createEmptyFlashcardForecast()
+    if (owner) {
+      const fs = validation.parsed.flashcardSettings || {}
+      const limit = fs.maxProjectedFlashcardReviewMinutesPerDay
+      if (Number.isInteger(limit) && limit > 0) {
+        try {
+          const timezone = validation.parsed.timezone || 'UTC'
+          const forecastHorizonEndDate = addDays(validation.parsed.endDate, 30)
+          const existingReviewCardCountByDate = await computeExistingReviewBaseline({
+            env,
+            userId: user.sub,
+            forecastHorizonEndDate,
+            effectiveStartDate: validation.parsed.startDate,
+            timezone,
+            availabilityByWeekday: validation.parsed.availability,
+            blockedDates: validation.parsed.blockedDates || [],
+          })
+          flashcardForecast = await computeSafeNewCardForecast({
+            env,
+            userId: user.sub,
+            usesFlashcardCapacity: true,
+            startDate: validation.parsed.startDate,
+            endDate: validation.parsed.endDate,
+            effectiveStartDate: validation.parsed.startDate,
+            timezone,
+            availabilityByWeekday: validation.parsed.availability,
+            blockedDates: validation.parsed.blockedDates || [],
+            planTopics: resolvedTopics.map(t => ({
+              planTopicId: t.planTopicId || t.normalizedTopicId,
+              canonicalTopicId: t.canonicalTopicId,
+              displayOrder: t.displayOrder ?? Infinity,
+              status: 'not_started',
+              learningCompletedAt: null,
+            })),
+            learningUnlockMode: fs.learningUnlockMode || 'learning_completed',
+            maxProjectedFlashcardReviewMinutesPerDay: limit,
+            existingReviewCardCountByDate,
+          })
+        } catch (_) {
+          // Best-effort for preview
+        }
+      }
+    }
+
+    const source = (() => {
+      try { return getStudySource(validation.parsed.sourceId) } catch { return null }
+    })()
+
+    const planDto = {
+      id: null,
+      userId: user.sub,
+      scheduleFingerprint: fingerprint,
+      rotationId: validation.parsed.rotationId,
+      sourceId: validation.parsed.sourceId,
+      sourceTitle: source?.title || validation.parsed.sourceId,
       sourceVersion,
+      startDate: validation.parsed.startDate,
+      endDate: validation.parsed.endDate,
+      examDate: validation.parsed.examDate || null,
+      studyStyle: validation.parsed.studyStyle,
+      schedulingMode: validation.parsed.schedulingMode,
+      questionStartRule: validation.parsed.questionStartRule,
+      preferredQuestionsPerDay: validation.parsed.preferredQuestionsPerDay,
+      minimumQuestionsPerSession: validation.parsed.minimumQuestionsPerSession,
+      maximumQuestionsPerDay: validation.parsed.maximumQuestionsPerDay,
+      averageMinutesPerQuestion: validation.parsed.averageMinutesPerQuestion,
+      bufferPercentage: validation.parsed.bufferPercentage,
+      maximumActiveTopics: validation.parsed.maximumActiveTopics,
+      status: 'preview',
+      usesFlashcardCapacity: owner ? 1 : 0,
+      settingsJson: {
+        timezone: validation.parsed.timezone || 'UTC',
+        blockedDates: validation.parsed.blockedDates || [],
+        availability: validation.parsed.availability,
+        topics: validation.parsed.topics,
+        forecastSettings: validation.parsed.flashcardSettings || {},
+        forecast: flashcardForecast,
+      },
+      createdAt: null,
+      updatedAt: null,
+      revision: 0,
+      lastRecalculatedAt: null,
+    }
+
+    return json({
+      plan: planDto,
+      topics: resolvedTopics.map(t => ({
+        normalizedTopicId: t.normalizedTopicId,
+        canonicalTopicId: t.canonicalTopicId,
+        sourceTopicId: t.sourceTopicId,
+        sourceId: t.sourceId,
+        title: t.title,
+        groupId: t.groupId,
+        learningMinutes: t.learningMinutes,
+        uworldRemainingQuestions: t.uworldRemainingQuestions,
+        alreadyCompletedLearningPercentage: t.alreadyCompletedLearningPercentage,
+        alreadyCompletedQuestionCount: t.alreadyCompletedQuestionCount,
+      })),
       tasks: preview.tasks,
-      topicStates: preview.topicStates,
-      unscheduledWork: preview.unscheduledWork,
-      feasibility: preview.feasibility,
-      deduplicationLog: preview.deduplicationLog,
+      availability: validation.parsed.availability.map((a, i) => ({
+        id: null,
+        planId: null,
+        weekday: a.weekday,
+        availableMinutes: a.availableMinutes,
+        isDayOff: a.isDayOff ?? false,
+      })),
     })
   } catch (e) {
     log('rotation_planner:preview:error', { message: e.message, stack: e.stack?.slice(0, 500), cause: e.cause?.message })
@@ -170,9 +272,50 @@ export async function handleCreateRotationPlan(request, env, user) {
       }, 422)
     }
 
+    // ─── Forecast computation for creation ───
+    let creationForecast = createEmptyFlashcardForecast()
+    if (owner) {
+      const fs = validation.parsed.flashcardSettings || {}
+      const limit = fs.maxProjectedFlashcardReviewMinutesPerDay
+      if (Number.isInteger(limit) && limit > 0) {
+        const timezone = validation.parsed.timezone || 'UTC'
+        const forecastHorizonEndDate = addDays(validation.parsed.endDate, 30)
+        const existingReviewCardCountByDate = await computeExistingReviewBaseline({
+          env,
+          userId: user.sub,
+          forecastHorizonEndDate,
+          effectiveStartDate: validation.parsed.startDate,
+          timezone,
+          availabilityByWeekday: validation.parsed.availability,
+          blockedDates: validation.parsed.blockedDates || [],
+        })
+        creationForecast = await computeSafeNewCardForecast({
+          env,
+          userId: user.sub,
+          usesFlashcardCapacity: true,
+          startDate: validation.parsed.startDate,
+          endDate: validation.parsed.endDate,
+          effectiveStartDate: validation.parsed.startDate,
+          timezone,
+          availabilityByWeekday: validation.parsed.availability,
+          blockedDates: validation.parsed.blockedDates || [],
+          planTopics: resolvedTopics.map(t => ({
+            planTopicId: t.planTopicId || t.normalizedTopicId,
+            canonicalTopicId: t.canonicalTopicId,
+            displayOrder: t.displayOrder ?? Infinity,
+            status: 'not_started',
+            learningCompletedAt: null,
+          })),
+          learningUnlockMode: fs.learningUnlockMode || 'learning_completed',
+          maxProjectedFlashcardReviewMinutesPerDay: limit,
+          existingReviewCardCountByDate,
+        })
+      }
+    }
+
     const { planId } = await persistPlanBatch(
       env, user.sub, validation.parsed, resolvedTopics, preview,
-      clientRequestId, requestFingerprint
+      clientRequestId, requestFingerprint, creationForecast
     )
 
     const plan = await loadPlanFromDb(env, planId, user.sub)
@@ -823,6 +966,49 @@ export async function handleRecalculatePlan(request, env, user) {
       feasibility: recalcResult.recalculation?.feasibility || recalcResult.recalculation?.recalculation?.feasibility || {},
     }
 
+    // ─── Forecast computation for recalculation ───
+    let forecastSnapshot = createEmptyFlashcardForecast()
+    const planSettings = typeof plan.settings_json === 'string'
+      ? JSON.parse(plan.settings_json)
+      : (plan.settings_json || {})
+    const forecastSettings = planSettings.forecastSettings || {}
+    const limit = forecastSettings.maxProjectedFlashcardReviewMinutesPerDay
+    if (plan.uses_flashcard_capacity === 1 && Number.isInteger(limit) && limit > 0) {
+        const timezone = planSettings.timezone || 'UTC'
+        const forecastHorizonEndDate = addDays(plan.end_date, 30)
+        const existingReviewCardCountByDate = await computeExistingReviewBaseline({
+          env,
+          userId: user.sub,
+          forecastHorizonEndDate,
+          effectiveStartDate: recalculationDate,
+          timezone,
+          availabilityByWeekday: availability,
+          blockedDates: planSettings.blockedDates || [],
+        })
+        const topicStatesForForecast = recalcResult.recalculation?.topicStates || recalcResult.recalculation?.recalculation?.topicStates || []
+        forecastSnapshot = await computeSafeNewCardForecast({
+          env,
+          userId: user.sub,
+          usesFlashcardCapacity: true,
+          startDate: recalculationDate,
+          endDate: plan.end_date,
+          effectiveStartDate: recalculationDate,
+          timezone,
+          availabilityByWeekday: availability,
+          blockedDates: planSettings.blockedDates || [],
+          planTopics: topicStatesForForecast.map(ts => ({
+            planTopicId: ts.planTopicId || topics.find(t => t.canonical_topic_id === ts.canonicalTopicId)?.id,
+            canonicalTopicId: ts.canonicalTopicId,
+            displayOrder: ts.displayOrder ?? Infinity,
+            status: ts.status || 'not_started',
+            learningCompletedAt: ts.learningCompletedAt || null,
+          })),
+          learningUnlockMode: forecastSettings.learningUnlockMode || 'learning_completed',
+          maxProjectedFlashcardReviewMinutesPerDay: limit,
+          existingReviewCardCountByDate,
+        })
+    }
+
     const recalculationMutationId = crypto.randomUUID()
     const batchResults = await persistRecalculationBatch(env, {
       planId,
@@ -838,6 +1024,7 @@ export async function handleRecalculatePlan(request, env, user) {
       recalculatedAt,
       recalculationDate,
       workloadSnapshot: recalcResult.workloadSnapshot,
+      forecastSnapshot,
     })
 
     if (batchResults[0]?.meta?.changes === 0) {

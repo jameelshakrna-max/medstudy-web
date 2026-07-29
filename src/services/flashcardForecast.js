@@ -190,7 +190,14 @@ export async function computeSafeNewCardForecast({
       baselineReviewCardCountByDate: {},
       acceptedCardCount: 0,
       rejectedCardCount: 0,
-      rejectionCounts: {},
+      rejectionCounts: {
+        unmappedDeck: 0,
+        topicAbsentFromPlan: 0,
+        topicLocked: 0,
+        noEligibleIntroductionDate: 0,
+        projectedLoadExceeded: 0,
+        invalidCardState: 0,
+      },
       truncated: false,
       forecastHorizonEndDate: null,
     }

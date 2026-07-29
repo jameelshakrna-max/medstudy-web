@@ -342,9 +342,9 @@ describe('persistRecalculationBatch — batch construction', () => {
     recalculatedAt: '2026-01-07T12:00:00Z',
   }
 
-  it('returns exactly 5 results from batch', async () => {
+  it('returns exactly 6 results from batch', async () => {
     const results = await persistRecalculationBatch(env, baseOpts)
-    expect(results).toHaveLength(5)
+    expect(results).toHaveLength(6)
   })
 
   it('statement 0 is INSERT (mutation claim)', async () => {
@@ -356,7 +356,7 @@ describe('persistRecalculationBatch — batch construction', () => {
 
   it('statement 1 is UPDATE (plan revision)', async () => {
     await persistRecalculationBatch(env, baseOpts)
-    expect(env.DB.prepare).toHaveBeenCalledTimes(5)
+    expect(env.DB.prepare).toHaveBeenCalledTimes(6)
   })
 
   it('statement 2 is DELETE (pending/locked tasks)', async () => {
@@ -367,7 +367,7 @@ describe('persistRecalculationBatch — batch construction', () => {
   it('statement 3 uses json_each for task insertion', async () => {
     await persistRecalculationBatch(env, baseOpts)
     const batchArg = env.DB.batch.mock.calls[0][0]
-    expect(batchArg).toHaveLength(5)
+    expect(batchArg).toHaveLength(6)
   })
 
   it('statement 4 uses json_each for topic update', async () => {
@@ -510,7 +510,7 @@ describe('persistRecalculationBatch — rollback', () => {
       recalculationMutationId: 'mut-1',
       recalculatedAt: '2026-01-07T12:00:00Z',
     })
-    expect(env.DB.prepare).toHaveBeenCalledTimes(5)
+    expect(env.DB.prepare).toHaveBeenCalledTimes(6)
     expect(env.DB.batch).toHaveBeenCalledTimes(1)
   })
 })

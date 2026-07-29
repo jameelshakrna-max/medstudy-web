@@ -7,6 +7,7 @@ import {
 import { getStudySource } from '../../data/studySources/sourceRegistry.js'
 import { getSharedTopicDefinition } from '../../data/studySources/sharedTopicKeys.js'
 import { generatePlanPreview } from './previewPipeline.js'
+import { createEmptyFlashcardForecast } from './forecastIntegration.js'
 const TASK_METADATA_FIELDS = {
   flashcard_review: ['priority', 'dueCardCount', 'unmetReviewMinutes', 'scheduledMinutes', 'deckNames'],
   mixed_review: ['topicCount', 'includedTopicIds'],
@@ -35,7 +36,7 @@ function generateIds(resolvedTopics, previewTasks) {
   return { planId, availabilityIds, topicIds, taskIds }
 }
 
-export async function persistPlanBatch(env, userId, validatedInput, resolvedTopics, preview, clientRequestId, fingerprint) {
+export async function persistPlanBatch(env, userId, validatedInput, resolvedTopics, preview, clientRequestId, fingerprint, creationForecast) {
   const source = getStudySource(validatedInput.sourceId)
   const sourceVersion = source?.version || '1.0.0'
   const sourceTitle = source?.title || validatedInput.sourceId
@@ -47,7 +48,8 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     topicIdByNormalized.set(resolvedTopics[i].normalizedTopicId, topicIds[i])
   }
 
-  const settingsJson = JSON.stringify({
+  const forecastSettings = validatedInput.flashcardSettings || {}
+  const settingsObj = {
     blockedDates: validatedInput.blockedDates,
     dueReviewMinutesByDate: validatedInput.dueReviewMinutesByDate,
     topicBreakdownByDate: validatedInput.topicBreakdownByDate,
@@ -58,7 +60,13 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     feasibleAtCreation: preview.feasibility.feasible,
     missingCapacityAtCreation: preview.feasibility.missingCapacity,
     schedulerVersion: '2.0.0',
-  })
+    forecast: creationForecast || createEmptyFlashcardForecast(),
+    forecastSettings: {
+      learningUnlockMode: forecastSettings.learningUnlockMode || 'learning_completed',
+      maxProjectedFlashcardReviewMinutesPerDay: forecastSettings.maxProjectedFlashcardReviewMinutesPerDay ?? null,
+    },
+  }
+  const settingsJson = JSON.stringify(settingsObj)
 
   const topicStateByNormalized = new Map()
   for (const state of preview.topicStates) {
@@ -385,6 +393,8 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
         topicBreakdownByDate: {},
         acceptOverload: true,
       })
+      // Ownership race lost — use empty forecast but preserve requested forecastSettings (for future ownership transfer & deterministic replay)
+      const retrySettingsObj = { ...settingsObj, forecast: createEmptyFlashcardForecast(), forecastSettings: settingsObj.forecastSettings }
       const retryTaskIds = noWorkloadPreview.tasks.map(() => crypto.randomUUID())
       const retryTaskRows = noWorkloadPreview.tasks.map((task, i) => {
         let planTopicId = null
@@ -460,7 +470,31 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
           studyBlockId: filteredMeta.studyBlockId ?? null,
         }
       })
-      const retryResultJson = { ...baseResultJson, tasks: retryBaseTasks }
+      const retrySettingsJson = JSON.stringify(retrySettingsObj)
+      const retryPlanStmt = env.DB.prepare(
+        `INSERT INTO ${PLANNER_TABLES.plans} (
+          id, user_id, rotation_id, source_id, source_version,
+          start_date, end_date, exam_date,
+          study_style, scheduling_mode, question_start_rule,
+          preferred_questions_per_day, minimum_questions_per_session,
+          maximum_questions_per_day, average_minutes_per_question,
+          buffer_percentage, maximum_active_topics,
+          status, uses_flashcard_capacity, client_request_id, request_fingerprint, settings_json,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0, ?, ?, ?, ?, ?)`
+      ).bind(
+        planId, userId, validatedInput.rotationId, validatedInput.sourceId, sourceVersion,
+        validatedInput.startDate, validatedInput.endDate, validatedInput.examDate || null,
+        validatedInput.studyStyle, validatedInput.schedulingMode, validatedInput.questionStartRule,
+        validatedInput.preferredQuestionsPerDay, validatedInput.minimumQuestionsPerSession,
+        validatedInput.maximumQuestionsPerDay, validatedInput.averageMinutesPerQuestion,
+        validatedInput.bufferPercentage, validatedInput.maximumActiveTopics,
+        clientRequestId, fingerprint, retrySettingsJson,
+        createdAt, createdAt
+      )
+
+      const retryPlanDto = { ...basePlanDto, settingsJson: retrySettingsObj }
+      const retryResultJson = { ...baseResultJson, plan: retryPlanDto, tasks: retryBaseTasks }
       const retryResultJsonPayload = JSON.stringify(retryResultJson)
       const retryResultJsonStmt = env.DB.prepare(
         `UPDATE ${PLANNER_TABLES.planMutations}
@@ -480,7 +514,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
          WHERE id = ? AND plan_id = ? AND user_id = ?`
       ).bind(retryResultJsonPayload, planId, userId, mutationId, planId, userId)
 
-      await env.DB.batch([planStmt, claimStmt, availStmt, topicsStmt, retryTasksStmt, retryResultJsonStmt])
+      await env.DB.batch([retryPlanStmt, claimStmt, availStmt, topicsStmt, retryTasksStmt, retryResultJsonStmt])
     } else {
       throw e
     }
@@ -605,6 +639,7 @@ export async function persistRecalculationBatch(env, {
   recalculatedAt,
   recalculationDate,
   workloadSnapshot,
+  forecastSnapshot,
 }) {
   const T = PLANNER_TABLES
   const resultingRevision = expectedRevision + 1
@@ -719,9 +754,18 @@ export async function persistRecalculationBatch(env, {
       ).bind(JSON.stringify(workloadSnapshot), planId, recalculationMutationId)
     : null
 
+  const updateForecastStmt = env.DB.prepare(
+    `UPDATE ${T.plans}
+     SET settings_json = json_set(settings_json, '$.forecast', json(?))
+     WHERE id = ? AND EXISTS (
+       SELECT 1 FROM ${T.planMutations} WHERE id = ?
+     )`
+  ).bind(JSON.stringify(forecastSnapshot), planId, recalculationMutationId)
+
   const batch = [claimStmt, revisionStmt]
   if (unpinExpiredStmt) batch.push(unpinExpiredStmt)
   batch.push(deleteStmt, insertTasksStmt, updateTopicsStmt)
   if (updateSettingsStmt) batch.push(updateSettingsStmt)
+  batch.push(updateForecastStmt)
   return env.DB.batch(batch)
 }

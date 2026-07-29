@@ -283,8 +283,10 @@ describe('Worker route dispatch — rotation planner plans', () => {
       })
       expect(res.status).toBe(200)
       const body = await res.json()
-      expect(body).toHaveProperty('previewToken')
+      expect(body).toHaveProperty('plan')
       expect(body).toHaveProperty('tasks')
+      expect(body).toHaveProperty('topics')
+      expect(body).toHaveProperty('availability')
     })
   })
 
