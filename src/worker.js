@@ -137,6 +137,7 @@ import {
   calculateMappingFingerprint,
   checkMappingIdempotency,
   persistMappingMutation,
+  signalFlashcardMappingsStaleness,
 } from './services/flashcardMappings.js'
 
 function ensureCORS(response) {
@@ -672,6 +673,7 @@ async function handleUpdateFlashcard(request, env, user) {
     body.next_review || null, body.last_review || null, body.image_url || null,
     id, user.sub
   ).run()
+  signalFlashcardMappingsStaleness(env, user.sub).catch(() => {})
   return json({ success: true })
 }
 
@@ -681,6 +683,7 @@ async function handleDeleteFlashcard(request, env, user) {
   if (!row) return json({ success: true })
   await env.DB.prepare('DELETE FROM flashcards WHERE id = ? AND user_id = ?').bind(id, user.sub).run()
   await cleanupOrphanMapping(env, user.sub, row.deck_name)
+  signalFlashcardMappingsStaleness(env, user.sub).catch(() => {})
   return json({ success: true })
 }
 
@@ -709,6 +712,7 @@ async function handleDeleteDeck(request, env, user) {
   const deckName = decodeURIComponent(extractId(request.url))
   await env.DB.prepare('DELETE FROM flashcards WHERE user_id = ? AND deck_name = ?').bind(user.sub, deckName).run()
   await cleanupOrphanMapping(env, user.sub, deckName)
+  signalFlashcardMappingsStaleness(env, user.sub).catch(() => {})
   return json({ success: true })
 }
 

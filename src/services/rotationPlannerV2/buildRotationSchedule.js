@@ -6,6 +6,8 @@ import { scheduleUworldTasks, scheduleIncorrectReview, scheduleMixedReview } fro
 import { applyPrerequisites } from './prerequisites.js'
 import { deduplicateSharedTopics } from './sharedTopics.js'
 import { calculatePlanFeasibility, buildUnscheduledWork } from './feasibility.js'
+import { allocateReviewMinutesByGroup } from '../flashcardWorkload.js'
+import { allocateDailyReviewCapacity, buildReviewTaskFromGroup } from './flashcardScheduling.js'
 
 function buildDayAvailabilityMap(dates, availabilityByWeekday, blockedDates) {
   const blockedSet = new Set(blockedDates)
@@ -155,7 +157,25 @@ export function buildRotationSchedule(planConfig, options = {}) {
       bufferPercentage: planConfig.bufferPercentage || 0,
     })
 
-    if (capacity.flashcardMinutes > 0) {
+    const topicGroups = planConfig.topicBreakdownByDate?.[dateStr]
+    if (topicGroups && topicGroups.length > 0) {
+      if (planConfig.dueReviewCardCountByDate) {
+        const totalDueFromGroups = topicGroups.reduce((sum, g) => sum + (g.dueCardCount || 0), 0)
+        const expectedDue = planConfig.dueReviewCardCountByDate?.[dateStr] || 0
+        if (totalDueFromGroups !== expectedDue) {
+          throw new Error(
+            `FLASHCARD_CAPACITY_INVARIANT: Date ${dateStr}: sum of topic group dueCardCount (${totalDueFromGroups}) ` +
+            `does not match dueReviewCardCountByDate (${expectedDue})`
+          )
+        }
+      }
+      const groupsWithEstimates = allocateReviewMinutesByGroup(topicGroups)
+      const allocatedGroups = allocateDailyReviewCapacity(groupsWithEstimates, capacity.flashcardMinutes)
+      for (const group of allocatedGroups) {
+        const task = buildReviewTaskFromGroup(group, dateStr, sortOrderGlobal++)
+        if (task) allTasks.push(task)
+      }
+    } else if (capacity.flashcardMinutes > 0) {
       allTasks.push({
         taskDate: dateStr,
         taskType: 'flashcard_review',
@@ -170,7 +190,7 @@ export function buildRotationSchedule(planConfig, options = {}) {
         status: 'pending',
         unlockCondition: null,
         displayOrder: sortOrderGlobal++,
-        metadata: { priority: 'required' },
+        metadata: { dueCardCount: 0, scheduledMinutes: capacity.flashcardMinutes, unmetReviewMinutes: capacity.unmetFlashcardMinutes, deckNames: [] },
       })
     }
 
@@ -283,13 +303,17 @@ export function buildRotationSchedule(planConfig, options = {}) {
   const dateCapacities = {}
   for (const dateStr of dates) {
     const avail = dayAvailability.get(dateStr)
+    const dateCapacity = (avail.isDayOff || avail.isBlocked)
+      ? { usableMinutes: 0, unmetFlashcardMinutes: 0 }
+      : calculateDailyCapacity({
+          availableMinutes: avail.availableMinutes,
+          dueFlashcardMinutes: planConfig.dueReviewMinutesByDate?.[dateStr] || 0,
+          overdueRequiredMinutes: 0,
+          bufferPercentage: planConfig.bufferPercentage || 0,
+        })
     dateCapacities[dateStr] = {
-      usableMinutes: (avail.isDayOff || avail.isBlocked) ? 0 : calculateDailyCapacity({
-        availableMinutes: avail.availableMinutes,
-        dueFlashcardMinutes: planConfig.dueReviewMinutesByDate?.[dateStr] || 0,
-        overdueRequiredMinutes: 0,
-        bufferPercentage: planConfig.bufferPercentage || 0,
-      }).usableMinutes,
+      usableMinutes: dateCapacity.usableMinutes,
+      unmetFlashcardMinutes: dateCapacity.unmetFlashcardMinutes,
       isDayOff: avail.isDayOff,
       isBlocked: avail.isBlocked,
     }

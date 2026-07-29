@@ -1070,6 +1070,7 @@ CREATE TABLE IF NOT EXISTS rotation_planner_plans (
   settings_json TEXT DEFAULT '{}',
   revision INTEGER NOT NULL DEFAULT 0,
   last_recalculated_at TEXT,
+  stale_at TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );

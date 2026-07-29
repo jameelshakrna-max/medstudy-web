@@ -25,15 +25,19 @@ export function calculatePlanFeasibility({
 
   let availableMinutes = 0;
   let studyDays = 0;
+  let flashcardUnmetMinutes = 0;
 
   for (const [dateStr, capacity] of Object.entries(dateCapacities)) {
-    if (!capacity.isBlocked && !capacity.isDayOff && capacity.usableMinutes > 0) {
-      availableMinutes += capacity.usableMinutes;
-      studyDays++;
+    if (!capacity.isBlocked && !capacity.isDayOff) {
+      if (capacity.usableMinutes > 0) {
+        availableMinutes += capacity.usableMinutes;
+        studyDays++;
+      }
     }
+    flashcardUnmetMinutes += capacity.unmetFlashcardMinutes || 0;
   }
 
-  const missingCapacity = Math.max(0, totalRequiredMinutes - availableMinutes);
+  const missingCapacity = Math.max(0, totalRequiredMinutes - availableMinutes) + flashcardUnmetMinutes;
   const requiredExtraMinutesPerDay =
     missingCapacity > 0 ? Math.ceil(missingCapacity / studyDays) : 0;
 
@@ -79,12 +83,14 @@ export function calculatePlanFeasibility({
     requiredExtraMinutesPerDay,
     topicsLeftUnscheduled,
     possibleSolutions,
+    flashcardUnmetMinutes,
   };
 }
 
 export function buildUnscheduledWork({ tasks, resolvedTopics, topicStates }) {
   const learningMinutesByTopic = {};
   const questionCountByTopic = {};
+  let unscheduledFlashcardMinutes = 0;
 
   for (const task of tasks) {
     if (task.taskType === 'learning') {
@@ -95,6 +101,8 @@ export function buildUnscheduledWork({ tasks, resolvedTopics, topicStates }) {
       questionCountByTopic[task.canonicalTopicId] =
         (questionCountByTopic[task.canonicalTopicId] || 0) +
         task.targetCount;
+    } else if (task.taskType === 'flashcard_review') {
+      unscheduledFlashcardMinutes += task.metadata?.unmetReviewMinutes || 0;
     }
   }
 
@@ -128,6 +136,8 @@ export function buildUnscheduledWork({ tasks, resolvedTopics, topicStates }) {
       });
     }
   }
+
+  unscheduledWork.unscheduledFlashcardMinutes = unscheduledFlashcardMinutes;
 
   return unscheduledWork;
 }

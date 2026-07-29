@@ -64,6 +64,7 @@ export const ALL_PLANNER_COLUMNS = {
     'buffer_percentage', 'maximum_active_topics',
     'status', 'uses_flashcard_capacity', 'client_request_id', 'request_fingerprint',
     'settings_json', 'revision', 'last_recalculated_at',
+    'stale_at',
     'created_at', 'updated_at',
   ],
   availability: [

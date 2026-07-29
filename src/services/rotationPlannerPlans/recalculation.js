@@ -4,6 +4,7 @@ import { generateDateRange } from '../rotationPlannerV2/dateUtils.js'
 import { assignStudyBlocks } from '../rotationPlannerV2/studyBlockAssignment.js'
 import { loadTasksByPlan, loadTopicsByPlan, loadAvailabilityByPlan } from './taskMutation.js'
 import { findNormalizedTopic } from '../../data/studySources/normalizedRegistry.js'
+import { computeReviewWorkloadMap } from '../flashcardWorkload.js'
 
 const T = PLANNER_TABLES
 
@@ -189,7 +190,8 @@ export async function recalculatePlan(env, planId, userId, recalculationDate, op
     personalSourcePaceMultiplier: settings.personalSourcePaceMultiplier || 1.0,
     examReviewWindowDays: settings.examReviewWindowDays || 0,
     mixedReviewQuestionsPerDay: settings.mixedReviewQuestionsPerDay || 0,
-    dueReviewMinutesByDate: settings.dueReviewMinutesByDate || {},
+    dueReviewMinutesByDate: {},
+    topicBreakdownByDate: {},
     topics: topics.map(t => {
       const registryTopic = findNormalizedTopic(planRow.source_id, t.normalized_topic_id?.split('::')[1])
       const learningMinutes = registryTopic?.learningMinutes || {
@@ -211,6 +213,38 @@ export async function recalculatePlan(env, planId, userId, recalculationDate, op
         sharedTopicKey: t.shared_topic_key || registryTopic?.sharedTopicKey || null,
       }
     }),
+  }
+
+  let workloadSnapshot = {}
+  if (planRow.uses_flashcard_capacity === 1 && recalculationDate <= planRow.end_date) {
+    const workload = await computeReviewWorkloadMap({
+      env,
+      userId,
+      startDate: recalculationDate,
+      endDate: planRow.end_date,
+      effectiveStartDate: recalculationDate,
+      timezone: settings.timezone || 'UTC',
+      availabilityByWeekday: availability,
+      blockedDates: settings.blockedDates || [],
+      planTopics: topics.map(t => ({
+        planTopicId: t.id,
+        canonicalTopicId: t.canonical_topic_id,
+        displayOrder: t.display_order ?? Infinity,
+      })),
+      mappingOverlay: null,
+    })
+    planConfig.dueReviewMinutesByDate = workload.dueReviewMinutesByDate || {}
+    planConfig.dueReviewCardCountByDate = workload.dueReviewCardCountByDate || {}
+    planConfig.topicBreakdownByDate = workload.topicBreakdownByDate || {}
+    workloadSnapshot = {
+      usesFlashcardCapacity: 1,
+      dueReviewMinutesByDate: workload.dueReviewMinutesByDate || {},
+      dueReviewCardCountByDate: workload.dueReviewCardCountByDate || {},
+      topicBreakdownByDate: workload.topicBreakdownByDate || {},
+      unscheduled: workload.unscheduled || { totalCards: 0, totalMinutes: 0, cards: [] },
+      effectiveStartDate: recalculationDate,
+      timezone: settings.timezone || 'UTC',
+    }
   }
 
   const initialTopicStates = {}
@@ -261,6 +295,7 @@ export async function recalculatePlan(env, planId, userId, recalculationDate, op
     plan: planRow,
     actualStates,
     recalculationDate,
+    workloadSnapshot,
   }
 }
 
@@ -293,5 +328,6 @@ export function buildRecalculationResult(recalculation, plan, replayed) {
       ),
     })),
     feasibility,
+    workloadSnapshot: recalculation.workloadSnapshot || null,
   }
 }

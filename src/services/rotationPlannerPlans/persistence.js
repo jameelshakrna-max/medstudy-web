@@ -6,10 +6,9 @@ import {
 } from './dtoMappers.js'
 import { getStudySource } from '../../data/studySources/sourceRegistry.js'
 import { getSharedTopicDefinition } from '../../data/studySources/sharedTopicKeys.js'
-
-
+import { generatePlanPreview } from './previewPipeline.js'
 const TASK_METADATA_FIELDS = {
-  flashcard_review: ['priority', 'dueCardCount', 'unmetReviewMinutes'],
+  flashcard_review: ['priority', 'dueCardCount', 'unmetReviewMinutes', 'scheduledMinutes', 'deckNames'],
   mixed_review: ['topicCount', 'includedTopicIds'],
   uworld_questions: ['selection'],
   learning: ['pageRange', 'studyStyle', 'studyBlockId'],
@@ -51,6 +50,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
   const settingsJson = JSON.stringify({
     blockedDates: validatedInput.blockedDates,
     dueReviewMinutesByDate: validatedInput.dueReviewMinutesByDate,
+    topicBreakdownByDate: validatedInput.topicBreakdownByDate,
     personalSourcePaceMultiplier: validatedInput.personalSourcePaceMultiplier,
     examReviewWindowDays: validatedInput.examReviewWindowDays,
     mixedReviewQuestionsPerDay: validatedInput.mixedReviewQuestionsPerDay,
@@ -71,6 +71,30 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
 
   const createdAt = new Date().toISOString().replace('T', ' ').slice(0, 19)
   const parsedSettingsJson = JSON.parse(settingsJson)
+
+  function buildTaskRows(tasks, topicIdByNormalized, planId, createdAt) {
+    return tasks.map((task, i) => {
+      let planTopicId = null
+      if (task.normalizedTopicId) {
+        planTopicId = topicIdByNormalized.get(task.normalizedTopicId) || null
+      }
+      return {
+        id: crypto.randomUUID(),
+        planTopicId: planTopicId ?? null,
+        taskDate: task.taskDate,
+        taskType: task.taskType,
+        provider: task.provider ?? null,
+        estimatedMinutes: task.estimatedMinutes,
+        targetCount: task.targetCount ?? null,
+        mode: task.mode ?? null,
+        questionPool: task.questionPool ?? null,
+        status: 'pending',
+        unlockCondition: task.unlockCondition ?? null,
+        displayOrder: task.displayOrder,
+        metadataJson: JSON.stringify(filterMetadata(task.taskType, task.metadata)),
+      }
+    })
+  }
 
   // ─── Build base result JSON (deterministic, matches loadPlanFromDb shape) ───
 
@@ -354,8 +378,109 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     await env.DB.batch([planStmt, claimStmt, availStmt, topicsStmt, tasksStmt, ownershipStmt, resultJsonStmt])
   } catch (e) {
     if (e.message && e.message.includes('idx_rpp_flashcard_owner')) {
-      // Ownership claim failed — retry without S6. S7 stores usesFlashcardCapacity=false.
-      await env.DB.batch([planStmt, claimStmt, availStmt, topicsStmt, tasksStmt, resultJsonStmt])
+      const { preview: noWorkloadPreview } = generatePlanPreview(resolvedTopics, {
+        ...validatedInput,
+        dueReviewMinutesByDate: {},
+        dueReviewCardCountByDate: {},
+        topicBreakdownByDate: {},
+        acceptOverload: true,
+      })
+      const retryTaskIds = noWorkloadPreview.tasks.map(() => crypto.randomUUID())
+      const retryTaskRows = noWorkloadPreview.tasks.map((task, i) => {
+        let planTopicId = null
+        if (task.normalizedTopicId) {
+          planTopicId = topicIdByNormalized.get(task.normalizedTopicId) || null
+        }
+        return {
+          id: retryTaskIds[i],
+          planTopicId: planTopicId ?? null,
+          taskDate: task.taskDate,
+          taskType: task.taskType,
+          provider: task.provider ?? null,
+          estimatedMinutes: task.estimatedMinutes,
+          targetCount: task.targetCount ?? null,
+          mode: task.mode ?? null,
+          questionPool: task.questionPool ?? null,
+          status: 'pending',
+          unlockCondition: task.unlockCondition ?? null,
+          displayOrder: task.displayOrder,
+          metadataJson: JSON.stringify(filterMetadata(task.taskType, task.metadata)),
+        }
+      })
+      const retryTasksJson = JSON.stringify(retryTaskRows)
+      const retryTasksStmt = env.DB.prepare(
+        `INSERT INTO ${PLANNER_TABLES.dailyTasks} (
+           id, plan_id, plan_topic_id, task_date, task_type,
+           provider, estimated_minutes, target_count, mode, question_pool,
+           status, unlock_condition, display_order, metadata_json,
+           created_at, updated_at
+         ) SELECT
+           json_extract(value,'$.id'), ?,
+           json_extract(value,'$.planTopicId'), json_extract(value,'$.taskDate'),
+           json_extract(value,'$.taskType'), json_extract(value,'$.provider'),
+           json_extract(value,'$.estimatedMinutes'), json_extract(value,'$.targetCount'),
+           json_extract(value,'$.mode'), json_extract(value,'$.questionPool'),
+           json_extract(value,'$.status'), json_extract(value,'$.unlockCondition'),
+           json_extract(value,'$.displayOrder'), json_extract(value,'$.metadataJson'),
+           ?, ?
+         FROM json_each(?)
+         WHERE EXISTS (SELECT 1 FROM ${PLANNER_TABLES.planMutations} WHERE id = ?)`
+      ).bind(planId, createdAt, createdAt, retryTasksJson, mutationId)
+
+      const retryBaseTasks = noWorkloadPreview.tasks.map((task, i) => {
+        let planTopicId = null
+        if (task.normalizedTopicId) {
+          planTopicId = topicIdByNormalized.get(task.normalizedTopicId) || null
+        }
+        const filteredMeta = filterMetadata(task.taskType, task.metadata)
+        return {
+          id: retryTaskIds[i],
+          planId,
+          planTopicId: planTopicId ?? null,
+          taskDate: task.taskDate,
+          taskType: task.taskType,
+          provider: task.provider ?? null,
+          estimatedMinutes: task.estimatedMinutes,
+          actualMinutes: null,
+          targetCount: task.targetCount ?? null,
+          completedCount: 0,
+          mode: task.mode ?? null,
+          questionPool: task.questionPool ?? null,
+          status: 'pending',
+          unlockCondition: task.unlockCondition ?? null,
+          displayOrder: task.displayOrder,
+          isPinned: 0,
+          metadataJson: filteredMeta,
+          createdAt,
+          updatedAt: createdAt,
+          completionPercentage: 0,
+          incorrectCount: 0,
+          completedAt: null,
+          completedOn: null,
+          studyBlockId: filteredMeta.studyBlockId ?? null,
+        }
+      })
+      const retryResultJson = { ...baseResultJson, tasks: retryBaseTasks }
+      const retryResultJsonPayload = JSON.stringify(retryResultJson)
+      const retryResultJsonStmt = env.DB.prepare(
+        `UPDATE ${PLANNER_TABLES.planMutations}
+         SET result_json = (
+           SELECT json_set(
+             ?,
+             '$.plan.id', p.id,
+             '$.plan.status', p.status,
+             '$.plan.revision', p.revision,
+             '$.plan.usesFlashcardCapacity', p.uses_flashcard_capacity,
+             '$.plan.createdAt', p.created_at,
+             '$.plan.updatedAt', p.updated_at
+           )
+           FROM ${PLANNER_TABLES.plans} p
+           WHERE p.id = ? AND p.user_id = ?
+         )
+         WHERE id = ? AND plan_id = ? AND user_id = ?`
+      ).bind(retryResultJsonPayload, planId, userId, mutationId, planId, userId)
+
+      await env.DB.batch([planStmt, claimStmt, availStmt, topicsStmt, retryTasksStmt, retryResultJsonStmt])
     } else {
       throw e
     }
@@ -479,6 +604,7 @@ export async function persistRecalculationBatch(env, {
   recalculationMutationId,
   recalculatedAt,
   recalculationDate,
+  workloadSnapshot,
 }) {
   const T = PLANNER_TABLES
   const resultingRevision = expectedRevision + 1
@@ -583,8 +709,19 @@ export async function persistRecalculationBatch(env, {
        )`
   ).bind(topicsJson, planId, recalculationMutationId)
 
+  const updateSettingsStmt = workloadSnapshot
+    ? env.DB.prepare(
+        `UPDATE ${T.plans}
+         SET settings_json = json_set(settings_json, '$.workloadSnapshot', ?)
+         WHERE id = ? AND EXISTS (
+           SELECT 1 FROM ${T.planMutations} WHERE id = ?
+         )`
+      ).bind(JSON.stringify(workloadSnapshot), planId, recalculationMutationId)
+    : null
+
   const batch = [claimStmt, revisionStmt]
   if (unpinExpiredStmt) batch.push(unpinExpiredStmt)
   batch.push(deleteStmt, insertTasksStmt, updateTopicsStmt)
+  if (updateSettingsStmt) batch.push(updateSettingsStmt)
   return env.DB.batch(batch)
 }

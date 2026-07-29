@@ -66,5 +66,6 @@ function buildSchedulerConfig(resolvedTopics, validatedInput, sourceVersion) {
     examReviewWindowDays: validatedInput.examReviewWindowDays || 0,
     mixedReviewQuestionsPerDay: validatedInput.mixedReviewQuestionsPerDay || 0,
     dueReviewMinutesByDate,
+    topicBreakdownByDate: validatedInput.topicBreakdownByDate || {},
   }
 }

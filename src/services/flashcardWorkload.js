@@ -104,22 +104,26 @@ export function allocateReviewMinutesByGroup(groups) {
   const allocated = new Map()
   let remaining = totalMinutes
 
-  for (const g of sorted) {
+  for (let i = 0; i < sorted.length; i++) {
+    const g = sorted[i]
     const raw = g.dueCardCount * REVIEW_MINUTES_PER_CARD
     const floor = Math.floor(raw)
-    allocated.set(g.key, floor)
+    const key = g.key ?? `_idx_${i}`
+    allocated.set(key, floor)
     remaining -= floor
   }
 
-  for (const g of sorted) {
+  for (let i = 0; i < sorted.length; i++) {
     if (remaining <= 0) break
-    allocated.set(g.key, (allocated.get(g.key) || 0) + 1)
+    const g = sorted[i]
+    const key = g.key ?? `_idx_${i}`
+    allocated.set(key, (allocated.get(key) || 0) + 1)
     remaining--
   }
 
-  return groups.map(g => ({
+  return groups.map((g, i) => ({
     ...g,
-    estimatedMinutes: allocated.get(g.key) || 0,
+    estimatedMinutes: allocated.get(g.key ?? `_idx_${i}`) || 0,
   }))
 }
 
@@ -271,6 +275,7 @@ export async function computeReviewWorkloadMap({
         canonicalTopicId: g.canonicalTopicId,
         dueCardCount: g.dueCardCount,
         deckNames: [...new Set(g.deckNames)].sort(),
+        displayOrder: g.displayOrder ?? Infinity,
       }))
 
     topicBreakdownByDate[dateStr] = sorted

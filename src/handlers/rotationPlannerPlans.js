@@ -17,8 +17,9 @@ import {
   classifyCreateBatchError, classifyBatchError, buildTaskMutationBatch, executeTaskMutationBatch,
   applyTaskUpdate, calculateTaskUpdateFingerprint, calculateRecalculationFingerprint,
   recalculatePlan, deriveActualTopicStates, persistRecalculationBatch,
-  TERMINAL_STATUSES, VALID_ACTIONS,
+  TERMINAL_STATUSES, VALID_ACTIONS, getFlashcardCapacityOwner,
 } from '../services/rotationPlannerPlans/index.js'
+import { computeReviewWorkloadMap } from '../services/flashcardWorkload.js'
 import { mapPlanSummaryDto, mapPlanDto, mapAvailabilityDto, mapTopicDto, mapTaskDto, mapToSnakeCase } from '../services/rotationPlannerPlans/dtoMappers.js'
 import { isValidTimezone, getDateKeyForTimezone } from '../lib/dateUtils.js'
 import { buildRotationSchedule } from '../services/rotationPlannerV2/buildRotationSchedule.js'
@@ -48,6 +49,32 @@ export async function handlePreviewRotationPlan(request, env, user) {
     )
     if (resolutionErrors.length > 0) {
       return errorResponse(resolutionErrors[0].code, resolutionErrors[0].message, 404)
+    }
+
+    const owner = await getFlashcardCapacityOwner(env, user.sub)
+    if (!owner) {
+      try {
+        const workload = await computeReviewWorkloadMap({
+          env,
+          userId: user.sub,
+          startDate: validation.parsed.startDate,
+          endDate: validation.parsed.endDate,
+          effectiveStartDate: validation.parsed.startDate,
+          timezone: validation.parsed.timezone || 'UTC',
+          availabilityByWeekday: validation.parsed.availability,
+          blockedDates: validation.parsed.blockedDates || [],
+          planTopics: (validation.parsed.topics || []).map(t => ({
+            planTopicId: t.sourceTopicId || t.normalizedTopicId,
+            canonicalTopicId: t.canonicalTopicId,
+            displayOrder: t.displayOrder ?? Infinity,
+          })),
+          mappingOverlay: null,
+        })
+        validation.parsed.dueReviewMinutesByDate = workload.dueReviewMinutesByDate || {}
+        validation.parsed.topicBreakdownByDate = workload.topicBreakdownByDate || {}
+      } catch (_) {
+        // Best-effort
+      }
     }
 
     const { preview, sourceVersion } = generatePlanPreview(resolvedTopics, validation.parsed)
@@ -84,6 +111,32 @@ export async function handleCreateRotationPlan(request, env, user) {
     )
     if (resolutionErrors.length > 0) {
       return errorResponse(resolutionErrors[0].code, resolutionErrors[0].message, 404)
+    }
+
+    const owner = await getFlashcardCapacityOwner(env, user.sub)
+    if (!owner) {
+      try {
+        const workload = await computeReviewWorkloadMap({
+          env,
+          userId: user.sub,
+          startDate: validation.parsed.startDate,
+          endDate: validation.parsed.endDate,
+          effectiveStartDate: validation.parsed.startDate,
+          timezone: validation.parsed.timezone || 'UTC',
+          availabilityByWeekday: validation.parsed.availability,
+          blockedDates: validation.parsed.blockedDates || [],
+          planTopics: (validation.parsed.topics || []).map(t => ({
+            planTopicId: t.sourceTopicId || t.normalizedTopicId,
+            canonicalTopicId: t.canonicalTopicId,
+            displayOrder: t.displayOrder ?? Infinity,
+          })),
+          mappingOverlay: null,
+        })
+        validation.parsed.dueReviewMinutesByDate = workload.dueReviewMinutesByDate || {}
+        validation.parsed.topicBreakdownByDate = workload.topicBreakdownByDate || {}
+      } catch (_) {
+        // Best-effort
+      }
     }
 
     const { preview, sourceVersion, config } = generatePlanPreview(resolvedTopics, validation.parsed)
@@ -333,6 +386,7 @@ async function handleRescheduleCompound({
     examReviewWindowDays: settings.examReviewWindowDays || 0,
     mixedReviewQuestionsPerDay: settings.mixedReviewQuestionsPerDay || 0,
     dueReviewMinutesByDate: settings.dueReviewMinutesByDate || {},
+    topicBreakdownByDate: settings.topicBreakdownByDate || {},
     topics: topics.map(t => {
       const registryTopic = findNormalizedTopic(plan.source_id, t.normalized_topic_id?.split('::')[1])
       const learningMinutes = registryTopic?.learningMinutes || {
@@ -783,6 +837,7 @@ export async function handleRecalculatePlan(request, env, user) {
       recalculationMutationId,
       recalculatedAt,
       recalculationDate,
+      workloadSnapshot: recalcResult.workloadSnapshot,
     })
 
     if (batchResults[0]?.meta?.changes === 0) {
@@ -881,6 +936,7 @@ export async function handleGetPlanForecast(request, env, user) {
       examReviewWindowDays: settings.examReviewWindowDays || 0,
       mixedReviewQuestionsPerDay: settings.mixedReviewQuestionsPerDay || 0,
       dueReviewMinutesByDate: settings.dueReviewMinutesByDate || {},
+      topicBreakdownByDate: settings.topicBreakdownByDate || {},
       topics: topics.map(t => {
         const registryTopic = findNormalizedTopic(plan.source_id, t.normalized_topic_id?.split('::')[1])
         const learningMinutes = registryTopic?.learningMinutes || {

@@ -1,4 +1,5 @@
 import { PLANNER_TABLES } from '../db/rotationPlannerSchema.js'
+import { getFlashcardCapacityOwner } from './rotationPlannerPlans/ownership.js'
 
 const T = PLANNER_TABLES
 
@@ -34,6 +35,8 @@ export async function upsertDeckMapping(env, userId, deckName, canonicalTopicId)
        updated_at = excluded.updated_at`
   ).bind(id, userId, deckName, canonicalTopicId, now, now).run()
 
+  await signalFlashcardMappingsStaleness(env, userId).catch(() => {})
+
   const row = await env.DB.prepare(
     `SELECT m.id, m.deck_name, m.canonical_topic_id, m.created_at, m.updated_at,
             COUNT(f.id) as card_count
@@ -50,6 +53,7 @@ export async function deleteDeckMapping(env, mappingId, userId) {
   const { meta } = await env.DB.prepare(
     `DELETE FROM ${T.flashcardDeckMappings} WHERE id = ? AND user_id = ?`
   ).bind(mappingId, userId).run()
+  await signalFlashcardMappingsStaleness(env, userId).catch(() => {})
   return meta.changes > 0
 }
 
@@ -119,6 +123,20 @@ export async function persistMappingMutation(env, userId, clientRequestId, finge
   await env.DB.prepare(
     `INSERT INTO ${MUTATION_TABLE} (id, user_id, client_request_id, request_fingerprint, result_json) VALUES (?, ?, ?, ?, ?)`
   ).bind(id, userId, clientRequestId, fingerprint, JSON.stringify(resultJson)).run()
+}
+
+export async function signalFlashcardMappingsStaleness(env, userId) {
+  try {
+    const owner = await getFlashcardCapacityOwner(env, userId)
+    if (!owner) return
+    await env.DB.prepare(
+      `UPDATE ${T.plans}
+       SET stale_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+       WHERE id = ? AND user_id = ?`
+    ).bind(owner.id, userId).run()
+  } catch (_) {
+    // Best-effort
+  }
 }
 
 export function mapDeckMappingDto(row) {
