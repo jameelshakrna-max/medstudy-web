@@ -343,23 +343,21 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     WHERE EXISTS (SELECT 1 FROM ${PLANNER_TABLES.planMutations} WHERE id = ?)`
   ).bind(planId, createdAt, createdAt, tasksJson, mutationId)
 
-  // S6: Conditionally claim flashcard capacity ownership
+  // S6: Claim flashcard capacity ownership.
+  // The partial unique index idx_rpp_flashcard_owner enforces one owner per user
+  // (user_id WHERE uses_flashcard_capacity = 1 AND status IN ('draft', 'active')).
+  // If another owner already exists the index violation rolls back the batch and
+  // triggers the non-owner retry below — no silent zero-row commits.
   const ownershipStmt = env.DB.prepare(
     `UPDATE ${PLANNER_TABLES.plans}
      SET uses_flashcard_capacity = 1
      WHERE id = ? AND user_id = ?
        AND status IN ('draft', 'active')
        AND uses_flashcard_capacity = 0
-       AND NOT EXISTS (
-         SELECT 1 FROM ${PLANNER_TABLES.plans}
-         WHERE user_id = ? AND id != ?
-           AND status IN ('draft', 'active')
-           AND uses_flashcard_capacity = 1
-       )
        AND EXISTS (
          SELECT 1 FROM ${PLANNER_TABLES.planMutations} WHERE id = ?
        )`
-  ).bind(planId, userId, userId, planId, mutationId)
+  ).bind(planId, userId, mutationId)
 
   const resultJsonPayload = JSON.stringify(baseResultJson)
   // S7: Store authoritative creation result_json — overlays persisted plan fields
@@ -383,9 +381,26 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
   ).bind(resultJsonPayload, planId, userId, mutationId, planId, userId)
 
   try {
-    await env.DB.batch([planStmt, claimStmt, availStmt, topicsStmt, tasksStmt, ownershipStmt, resultJsonStmt])
+    const batchResults = await env.DB.batch([planStmt, claimStmt, availStmt, topicsStmt, tasksStmt, ownershipStmt, resultJsonStmt])
+    // Defensive: if S6 (index 5) affected zero rows, ownership claim failed silently.
+    // This should no longer happen after removing NOT EXISTS (the unique index fires),
+    // but guard against it to prevent silent invariant violations.
+    const s6Changes = batchResults[5]?.meta?.changes
+    if (s6Changes === 0) {
+      const { results: blockers } = await env.DB.prepare(
+        `SELECT 1 FROM ${PLANNER_TABLES.plans}
+         WHERE user_id = ? AND status IN ('draft', 'active') AND uses_flashcard_capacity = 1
+         LIMIT 1`
+      ).bind(userId).all()
+      if (blockers.length > 0) {
+        throw new Error('idx_rpp_flashcard_owner: zero-row claim (existing owner blocked)')
+      }
+    }
   } catch (e) {
-    if (e.message && e.message.includes('idx_rpp_flashcard_owner')) {
+    const msg = e.message || ''
+    const isOwnerConflict = msg.includes('idx_rpp_flashcard_owner') ||
+      (msg.includes('UNIQUE constraint failed') && msg.includes('user_id') && !msg.includes('client_request_id'))
+    if (isOwnerConflict) {
       const { preview: noWorkloadPreview } = generatePlanPreview(resolvedTopics, {
         ...validatedInput,
         dueReviewMinutesByDate: {},
