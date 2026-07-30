@@ -34,6 +34,10 @@ const OPTIONAL_COUNT_TASK_TYPES = ['mixed_review', 'optional_book_questions', 'f
 
 export function getAvailableTaskActions(task) {
   const { status } = task;
+
+  // Flashcard review tasks are read-only — no generic actions
+  if (task.taskType === 'flashcard_review') return [];
+
   switch (status) {
     case 'locked':
       return [];

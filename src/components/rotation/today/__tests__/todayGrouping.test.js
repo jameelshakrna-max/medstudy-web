@@ -350,6 +350,17 @@ describe('calculateDayProgress', () => {
     const result = calculateDayProgress(tasks, '2025-07-15');
     expect(result.weightedProgress).toBe(0);
   });
+
+  it('excludes flashcard_review tasks from calculations', () => {
+    const tasks = [
+      makeTask({ taskType: 'flashcard_review', status: 'pending', estimatedMinutes: 30 }),
+      makeTask({ taskType: 'learning', status: 'completed', estimatedMinutes: 20 }),
+    ];
+    const result = calculateDayProgress(tasks, '2025-07-15');
+    expect(result.totalTasks).toBe(1);
+    expect(result.completedTasks).toBe(1);
+    expect(result.totalMinutes).toBe(20);
+  });
 });
 
 describe('default export', () => {

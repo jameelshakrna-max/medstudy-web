@@ -116,12 +116,17 @@ export async function apiPut(path, body) {
   return apiJson(res)
 }
 
-export async function apiDelete(path) {
+export async function apiDelete(path, body) {
   const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(joinApiPath(API, path), {
+  const opts = {
     method: 'DELETE',
     headers: { Authorization: 'Bearer ' + session.access_token }
-  })
+  }
+  if (body !== undefined) {
+    opts.headers['Content-Type'] = 'application/json'
+    opts.body = JSON.stringify(body)
+  }
+  const res = await fetch(joinApiPath(API, path), opts)
   return apiJson(res)
 }
 

@@ -44,6 +44,10 @@ export function buildPreviewPayload(form) {
     mixedReviewQuestionsPerDay: 0,
     dueReviewMinutesByDate: {},
     topics: form.topics,
+    flashcardSettings: form.flashcardSettings ?? {
+      learningUnlockMode: 'learning_completed',
+      maxProjectedFlashcardReviewMinutesPerDay: null,
+    },
   }
 }
 

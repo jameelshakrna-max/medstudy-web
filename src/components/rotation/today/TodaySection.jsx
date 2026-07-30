@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import TaskCard from './TaskCard'
 import StudyBlock from './StudyBlock'
+import FlashcardReviewTask from './FlashcardReviewTask'
 import { calculateSectionProgress } from './todayGrouping'
 import { groupTasksIntoStudyBlocks } from './studyBlockGrouping'
 import styles from './TodaySection.module.css'
@@ -55,6 +56,13 @@ export default function TodaySection({
               onRecordQuestions={onRecordQuestions}
               onSkip={onSkip}
               onStudyPomodoro={onStudyPomodoro}
+            />
+          ) : entry.task.taskType === 'flashcard_review' ? (
+            <FlashcardReviewTask
+              key={entry.task.id}
+              task={entry.task}
+              planTopicId={entry.task.planTopicId}
+              topicsById={topicsById}
             />
           ) : (
             <TaskCard

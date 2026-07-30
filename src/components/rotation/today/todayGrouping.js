@@ -107,7 +107,8 @@ export function classifyTodayState({ todayKey, plan, displayTasks, sections }) {
 }
 
 export function calculateDayProgress(allTasks, todayKey, taskFilter = null) {
-  const tasks = taskFilter ? allTasks.filter(taskFilter) : allTasks;
+  const tasks = (taskFilter ? allTasks.filter(taskFilter) : allTasks)
+    .filter(t => t.taskType !== 'flashcard_review');
   let completedTasks = 0;
   let activeTasks = 0;
   let overdueTasks = 0;

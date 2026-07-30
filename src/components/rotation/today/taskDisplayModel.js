@@ -79,6 +79,12 @@ export function getTaskDisplayModel(task, todayKey, topic = null) {
 
     metadataJson: task.metadataJson,
 
+    // Flashcard review fields (passed through from backend)
+    dueCardCount: task.dueCardCount ?? task.metadataJson?.dueCardCount ?? 0,
+    scheduledMinutes: task.scheduledMinutes ?? task.metadataJson?.scheduledMinutes ?? 0,
+    unmetReviewMinutes: task.unmetReviewMinutes ?? task.metadataJson?.unmetReviewMinutes ?? 0,
+    deckNames: task.deckNames ?? task.metadataJson?.deckNames ?? [],
+
     topicTitle: topic?.topicTitle || null,
     topicSection: topic?.groupId || null,
   };

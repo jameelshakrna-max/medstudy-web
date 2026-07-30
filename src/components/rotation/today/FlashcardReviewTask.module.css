@@ -1,0 +1,121 @@
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: all 0.2s;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 0;
+}
+
+.typeInfo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--indigo);
+}
+
+.typeIcon {
+  flex-shrink: 0;
+  color: var(--indigo);
+}
+
+.typeLabel {
+  color: var(--indigo);
+}
+
+.cardBody {
+  padding: 8px 14px 10px;
+}
+
+.titleRow {
+  margin-bottom: 6px;
+}
+
+.topicTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.statsRow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.stat {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.unmet {
+  color: var(--red, #ef4444);
+  font-weight: 600;
+}
+
+.deckRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.deckBadge {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--indigo);
+  color: var(--navy);
+  border-radius: var(--radius-full);
+  font-weight: 600;
+}
+
+.cardActions {
+  padding: 0 14px 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.openBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--indigo);
+  color: var(--navy);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.openBtn:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 640px) {
+  .cardBody {
+    padding: 6px 12px 8px;
+  }
+  .statsRow {
+    gap: 8px;
+  }
+  .openBtn {
+    width: 100%;
+    justify-content: center;
+  }
+}

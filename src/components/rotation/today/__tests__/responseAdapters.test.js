@@ -196,6 +196,29 @@ describe("normalizePlanResponse", () => {
       expect(result.progress).toEqual([]);
       expect(result.availability).toEqual([]);
     });
+
+    it("preserves plan fields on V1 fallback", () => {
+      const response = {
+        plan: {
+          id: "p", version: 1,
+          settingsJson: '{"forecast":{"some":"data"}}',
+          staleAt: "2026-01-01T00:00:00Z",
+          lastRecalculatedAt: "2025-12-31T00:00:00Z",
+          scheduleFingerprint: "abc123",
+          usesFlashcardCapacity: 1,
+        },
+        schedule: [
+          { id: "e1", date: "2025-07-15", activity_type: "study", sort_order: 1, status: "pending", estimated_minutes: 30, description: "Study", uworld_questions: null, uworld_mode: null },
+        ],
+      };
+      const result = normalizePlanResponse(response);
+      expect(result.version).toBe(1);
+      expect(result.plan.settingsJson).toBe('{"forecast":{"some":"data"}}');
+      expect(result.plan.staleAt).toBe("2026-01-01T00:00:00Z");
+      expect(result.plan.lastRecalculatedAt).toBe("2025-12-31T00:00:00Z");
+      expect(result.plan.scheduleFingerprint).toBe("abc123");
+      expect(result.plan.usesFlashcardCapacity).toBe(1);
+    });
   });
 
   describe("V2 plan", () => {
@@ -295,6 +318,48 @@ describe("normalizePlanResponse", () => {
       const result = normalizePlanResponse({ plan: { id: "p", version: 2 }, tasks: [], topics });
       expect(result.topics[0].estimateConfidence).toBe("high");
       expect(result.topics[1].estimateConfidence).toBeNull();
+    });
+
+    it("passes through settingsJson with forecast on V2 plan", () => {
+      const response = {
+        plan: { id: "p", version: 2, settingsJson: '{"forecast":{"some":"data"}}' },
+        tasks: [],
+      };
+      const result = normalizePlanResponse(response);
+      expect(result.plan.settingsJson).toBe('{"forecast":{"some":"data"}}');
+    });
+
+    it("passes through scheduleFingerprint on V2 plan", () => {
+      const response = {
+        plan: { id: "p", version: 2, scheduleFingerprint: "abc123" },
+        tasks: [],
+      };
+      const result = normalizePlanResponse(response);
+      expect(result.plan.scheduleFingerprint).toBe("abc123");
+    });
+
+    it("passes through staleAt on V2 plan", () => {
+      const response = {
+        plan: { id: "p", version: 2, staleAt: "2026-01-01T00:00:00Z" },
+        tasks: [],
+      };
+      const result = normalizePlanResponse(response);
+      expect(result.plan.staleAt).toBe("2026-01-01T00:00:00Z");
+    });
+
+    it("passes through lastRecalculatedAt on V2 plan", () => {
+      const response = {
+        plan: { id: "p", version: 2, lastRecalculatedAt: "2025-12-31T00:00:00Z" },
+        tasks: [],
+      };
+      const result = normalizePlanResponse(response);
+      expect(result.plan.lastRecalculatedAt).toBe("2025-12-31T00:00:00Z");
+    });
+
+    it("handles missing settingsJson gracefully on V2 plan", () => {
+      const result = normalizePlanResponse({ plan: { id: "p", version: 2 }, tasks: [] });
+      expect(result.plan).toBeDefined();
+      expect(result.plan.settingsJson).toBeUndefined();
     });
   });
 });

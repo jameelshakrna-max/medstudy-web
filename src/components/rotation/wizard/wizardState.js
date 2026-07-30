@@ -19,6 +19,10 @@ export const INITIAL_FORM = {
   questionStartRule: 'next_available_day',
   bufferPercentage: 20,
   maximumActiveTopics: 2,
+  flashcardSettings: {
+    learningUnlockMode: 'learning_completed',
+    maxProjectedFlashcardReviewMinutesPerDay: null,
+  },
 };
 
 export const PREVIEW_STEP = 10;

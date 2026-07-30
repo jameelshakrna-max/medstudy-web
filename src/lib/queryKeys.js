@@ -157,6 +157,10 @@ export const queryKeys = {
     portfolio: (userId) => [...queryKeys.research.all, 'portfolio', userId],
     leaderboard: (type, limit) => [...queryKeys.research.all, 'leaderboard', type, limit],
   },
+  deckMappings: {
+    all: ['deckMappings'],
+    list: () => [...queryKeys.deckMappings.all, 'list'],
+  },
   rotations: {
     all: ['rotations'],
     plans: () => [...queryKeys.rotations.all, 'plans'],

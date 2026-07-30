@@ -20,15 +20,16 @@ import StepReviewTopics from './wizard/StepReviewTopics'
 import StepUWorldQuestions from './wizard/StepUWorldQuestions'
 import StepQuestionConfig from './wizard/StepQuestionConfig'
 import StepSchedulingConfig from './wizard/StepSchedulingConfig'
+import StepFlashcardSettings from './wizard/StepFlashcardSettings'
 import StepPreview from './wizard/StepPreview'
 import StepConfirm from './wizard/StepConfirm'
 
 const STEP_NAMES = [
   'Rotation', 'Dates', 'Availability', 'Source', 'Study Style',
-  'Topics', 'UWorld', 'Questions', 'Scheduling', 'Preview', 'Confirm',
+  'Topics', 'UWorld', 'Questions', 'Scheduling', 'Flashcards', 'Preview', 'Confirm',
 ]
 
-const TOTAL_STEPS = 11
+const TOTAL_STEPS = 12
 
 export default function PlanCreationForm({ open, onClose, onCreated }) {
   const queryClient = useQueryClient()
@@ -166,7 +167,7 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
 
     setValidationErrors([])
 
-    // Trigger preview when advancing from Step 9 to Step 10
+    // Trigger preview when advancing from the step before preview
     if (step === PREVIEW_STEP - 1) {
       const payload = buildPreviewPayload(form)
       previewMutation.mutate(payload)
@@ -241,8 +242,9 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
           {step === 6 && <StepUWorldQuestions form={form} onFormChange={handleSchedulingChange} />}
           {step === 7 && <StepQuestionConfig form={form} onFormChange={handleSchedulingChange} />}
           {step === 8 && <StepSchedulingConfig form={form} onFormChange={handleSchedulingChange} />}
-          {step === 9 && <StepPreview preview={preview} previewLoading={previewMutation.isPending} previewError={previewMutation.error} onRetry={handleRetryPreview} />}
-          {step === 10 && <StepConfirm form={form} preview={preview} overloadAccepted={overloadAccepted} onOverloadChange={setOverloadAccepted} />}
+          {step === 9 && <StepFlashcardSettings form={form} onFormChange={handleSchedulingChange} />}
+          {step === 10 && <StepPreview preview={preview} previewLoading={previewMutation.isPending} previewError={previewMutation.error} onRetry={handleRetryPreview} />}
+          {step === 11 && <StepConfirm form={form} preview={preview} overloadAccepted={overloadAccepted} onOverloadChange={setOverloadAccepted} />}
         </div>
 
         {/* Validation errors */}

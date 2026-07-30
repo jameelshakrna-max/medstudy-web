@@ -139,6 +139,27 @@ function validateSchedulingConfigStep(form) {
   return errors
 }
 
+function validateFlashcardSettingsStep(form) {
+  const errors = []
+  const settings = form.flashcardSettings
+  if (!settings || typeof settings !== 'object') {
+    errors.push('Flashcard settings are required.')
+    return errors
+  }
+  if (!['learning_completed', 'learning_started'].includes(settings.learningUnlockMode)) {
+    errors.push('learningUnlockMode must be "learning_completed" or "learning_started".')
+  }
+  const limit = settings.maxProjectedFlashcardReviewMinutesPerDay
+  if (limit !== null && limit !== undefined) {
+    if (!Number.isInteger(limit) || limit < 1) {
+      errors.push('Review limit must be a positive integer.')
+    } else if (limit > 1440) {
+      errors.push('Review limit must be at most 1440 minutes.')
+    }
+  }
+  return errors
+}
+
 const VALIDATORS = {
   0: (form) => {
     const errors = []
@@ -159,9 +180,10 @@ const VALIDATORS = {
   5: () => [],
   6: validateTopicsStep,
   7: validateQuestionConfigStep,
-  8: validateSchedulingConfigStep,
-  9: () => [],
-  10: () => [],
+   8: validateSchedulingConfigStep,
+   9: validateFlashcardSettingsStep,
+   10: () => [],
+   11: () => [],
 }
 
 export function validateStep(step, form, topics) {

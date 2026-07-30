@@ -106,6 +106,13 @@ describe("getAvailableTaskActions", () => {
   it("returns empty for unknown status", () => {
     expect(getAvailableTaskActions({ status: "bogus", taskType: "learning" })).toEqual([]);
   });
+
+  it("returns empty for flashcard_review regardless of status", () => {
+    const statuses = ['pending', 'in_progress', 'locked', 'completed', 'skipped', 'partial']
+    for (const status of statuses) {
+      expect(getAvailableTaskActions({ status, taskType: 'flashcard_review' })).toEqual([])
+    }
+  });
 });
 
 describe("getCompletionFields", () => {

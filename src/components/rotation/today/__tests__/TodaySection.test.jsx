@@ -98,4 +98,43 @@ describe('TodaySection', () => {
     expect(screen.getByText('Stable Angina Pectoris')).toBeInTheDocument()
     expect(screen.getByText('Heart Failure')).toBeInTheDocument()
   })
+
+  it('renders FlashcardReviewTask for flashcard_review task type', () => {
+    const flashcardSection = {
+      key: 'due_reviews',
+      label: 'Due Reviews',
+      tasks: [
+        {
+          id: 'fc-1',
+          taskType: 'flashcard_review',
+          status: 'pending',
+          typeLabel: 'Flashcard Review',
+          deckNames: ['Anatomy'],
+          dueCardCount: 10,
+          scheduledMinutes: 30,
+          estimatedMinutes: 30,
+        },
+      ],
+    }
+    render(
+      <TodaySection
+        section={flashcardSection}
+        planId="plan-1"
+        plan={defaultPlan}
+        todayKey={TODAY}
+        topicsById={new Map()}
+        isMutating={false}
+        onStart={noop}
+        onComplete={noop}
+        onPartial={noop}
+        onRecordTime={noop}
+        onRecordQuestions={noop}
+        onSkip={noop}
+        onStudyPomodoro={noop}
+      />
+    )
+    expect(screen.getByText('Flashcard Review')).toBeInTheDocument()
+    expect(screen.getByText('Anatomy')).toBeInTheDocument()
+    expect(screen.getByText('10 cards due')).toBeInTheDocument()
+  })
 })

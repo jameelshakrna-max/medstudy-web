@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft } from 'lucide-react'
@@ -10,6 +10,9 @@ import usePlannerTaskMutations from './today/usePlannerTaskMutations'
 import useTaskAttachment from './today/useTaskAttachment'
 import TodayView from './today/TodayView'
 import RecalculationBanner from './today/RecalculationBanner'
+import PlannerStaleBanner from './today/PlannerStaleBanner'
+import DeckTopicMappings from './today/DeckTopicMappings'
+import FlashcardForecastRecommendations from './today/FlashcardForecastRecommendations'
 import RecordTimeDialog from './today/dialogs/RecordTimeDialog'
 import TaskCompletionDialog from './today/dialogs/TaskCompletionDialog'
 import PartialDialog from './today/dialogs/PartialDialog'
@@ -36,6 +39,17 @@ export default function V2PlanDetail({ planId, onBack }) {
     enabled: !!planId,
     staleTime: 60_000,
   })
+
+  const [recalculationRequired, setRecalculationRequired] = useState(false)
+
+  useEffect(() => {
+    if (!recalculationRequired) return
+    const plan = data?.plan
+    if (!plan) return
+    if (!plan.staleAt || (plan.lastRecalculatedAt && new Date(plan.lastRecalculatedAt) >= new Date(plan.staleAt))) {
+      setRecalculationRequired(false)
+    }
+  }, [recalculationRequired, data?.plan?.staleAt, data?.plan?.lastRecalculatedAt])
 
   const openDialog = useCallback((type, task) => {
     setDialogState({ type, task })
@@ -146,6 +160,10 @@ export default function V2PlanDetail({ planId, onBack }) {
     await mutations.skipTask(dialogState.task.id)
   }, [mutations, dialogState.task])
 
+  const handleRecalculationRequired = useCallback(() => {
+    setRecalculationRequired(true)
+  }, [])
+
   if (isLoading) return <LoadingScreen fullPage={false} message="Loading plan details..." />
 
   if (error) {
@@ -201,6 +219,13 @@ export default function V2PlanDetail({ planId, onBack }) {
         timezone={resolvedTimezone}
       />
 
+      <PlannerStaleBanner
+        planId={planId}
+        revision={plan.revision}
+        getRecalculationDate={getRecalculationDate}
+        visible={recalculationRequired}
+      />
+
       <Tabs defaultValue="today">
         <TabsList>
           <TabsTrigger value="today">Today</TabsTrigger>
@@ -227,6 +252,18 @@ export default function V2PlanDetail({ planId, onBack }) {
             onRecordQuestions={handleRecordQuestions}
             onSkip={handleSkip}
             onStudyPomodoro={handleStudyPomodoro}
+          />
+          <DeckTopicMappings
+            planId={planId}
+            topics={topics}
+            usesFlashcardCapacity={plan.usesFlashcardCapacity}
+            onRecalculationRequired={handleRecalculationRequired}
+          />
+          <FlashcardForecastRecommendations
+            forecast={forecast}
+            usesFlashcardCapacity={plan.usesFlashcardCapacity}
+            topicsById={topicsById}
+            topics={topics}
           />
         </TabsContent>
         <TabsContent value="calendar">

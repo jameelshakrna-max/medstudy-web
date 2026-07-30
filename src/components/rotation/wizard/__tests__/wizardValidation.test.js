@@ -177,7 +177,7 @@ describe('Step 8 — Scheduling Config', () => {
 })
 
 describe('canAdvanceStep', () => {
-  it('returns true for read-only steps', () => {
+  it('returns true for read-only or valid steps', () => {
     expect(canAdvanceStep(3, VALID_FORM)).toBe(true)
     expect(canAdvanceStep(5, VALID_FORM)).toBe(true)
     expect(canAdvanceStep(9, VALID_FORM)).toBe(true)
@@ -186,5 +186,47 @@ describe('canAdvanceStep', () => {
 
   it('returns false when validation fails', () => {
     expect(canAdvanceStep(0, { ...VALID_FORM, sourceId: '' })).toBe(false)
+  })
+})
+
+describe('Step 9 — Flashcard Settings', () => {
+  it('fails without flashcardSettings', () => {
+    const form = { ...VALID_FORM, flashcardSettings: null }
+    expect(validateStep(9, form).valid).toBe(false)
+  })
+
+  it('fails with invalid learningUnlockMode', () => {
+    const form = { ...VALID_FORM, flashcardSettings: { learningUnlockMode: 'invalid', maxProjectedFlashcardReviewMinutesPerDay: null } }
+    expect(validateStep(9, form).valid).toBe(false)
+  })
+
+  it('passes with learning_completed mode', () => {
+    const form = { ...VALID_FORM, flashcardSettings: { learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: null } }
+    expect(validateStep(9, form).valid).toBe(true)
+  })
+
+  it('passes with learning_started mode', () => {
+    const form = { ...VALID_FORM, flashcardSettings: { learningUnlockMode: 'learning_started', maxProjectedFlashcardReviewMinutesPerDay: null } }
+    expect(validateStep(9, form).valid).toBe(true)
+  })
+
+  it('fails with limit < 1', () => {
+    const form = { ...VALID_FORM, flashcardSettings: { learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: 0 } }
+    expect(validateStep(9, form).valid).toBe(false)
+  })
+
+  it('fails with limit > 1440', () => {
+    const form = { ...VALID_FORM, flashcardSettings: { learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: 1441 } }
+    expect(validateStep(9, form).valid).toBe(false)
+  })
+
+  it('passes with null limit (disabled)', () => {
+    const form = { ...VALID_FORM, flashcardSettings: { learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: null } }
+    expect(validateStep(9, form).valid).toBe(true)
+  })
+
+  it('passes with valid limit', () => {
+    const form = { ...VALID_FORM, flashcardSettings: { learningUnlockMode: 'learning_started', maxProjectedFlashcardReviewMinutesPerDay: 60 } }
+    expect(validateStep(9, form).valid).toBe(true)
   })
 })

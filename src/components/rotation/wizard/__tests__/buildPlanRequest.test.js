@@ -80,6 +80,7 @@ describe('buildPreviewPayload', () => {
     averageMinutesPerQuestion: 1.5,
     maximumActiveTopics: 5,
     topics: [{ normalizedTopicId: 't1', sourceTopicId: 's1', uworldRemainingQuestions: 10, alreadyCompletedLearningPercentage: 0, alreadyCompletedQuestionCount: 0, incorrectQuestionsRemaining: 0 }],
+    flashcardSettings: { learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: null },
   }
 
   it('builds correct payload', () => {
@@ -102,6 +103,11 @@ describe('buildPreviewPayload', () => {
     const payload = buildPreviewPayload({ ...form, examDate: '' })
     expect(payload.examDate).toBeNull()
   })
+
+  it('includes flashcardSettings in payload', () => {
+    const payload = buildPreviewPayload(form)
+    expect(payload.flashcardSettings).toEqual({ learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: null })
+  })
 })
 
 describe('buildCreatePayload', () => {
@@ -122,5 +128,36 @@ describe('buildCreatePayload', () => {
   it('defaults acceptOverload to false', () => {
     const payload = buildCreatePayload(form, 'token-abc')
     expect(payload.acceptOverload).toBe(false)
+  })
+})
+
+describe('buildPreviewPayload with flashcard variations', () => {
+  const baseForm = {
+    sourceId: 'step-up-medicine-6e-2024',
+    rotationId: 'cardiology',
+    startDate: '2025-01-06',
+    endDate: '2025-04-06',
+    examDate: '',
+    studyStyle: 'active',
+    schedulingMode: 'efficient',
+    questionStartRule: 'next_available_day',
+    availability: [{ weekday: 0, availableMinutes: 0, isDayOff: true }],
+    bufferPercentage: 20,
+    preferredQuestionsPerDay: 30,
+    minimumQuestionsPerSession: 10,
+    maximumQuestionsPerDay: 50,
+    averageMinutesPerQuestion: 1.5,
+    maximumActiveTopics: 5,
+    topics: [{ normalizedTopicId: 't1', sourceTopicId: 's1', uworldRemainingQuestions: 10, alreadyCompletedLearningPercentage: 0, alreadyCompletedQuestionCount: 0, incorrectQuestionsRemaining: 0 }],
+  }
+
+  it('passes disabled flashcard settings (limit null)', () => {
+    const payload = buildPreviewPayload({ ...baseForm, flashcardSettings: { learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: null } })
+    expect(payload.flashcardSettings.maxProjectedFlashcardReviewMinutesPerDay).toBeNull()
+  })
+
+  it('passes enabled flashcard settings with limit', () => {
+    const payload = buildPreviewPayload({ ...baseForm, flashcardSettings: { learningUnlockMode: 'learning_started', maxProjectedFlashcardReviewMinutesPerDay: 30 } })
+    expect(payload.flashcardSettings.maxProjectedFlashcardReviewMinutesPerDay).toBe(30)
   })
 })

@@ -34,7 +34,7 @@ vi.mock('../today/useTaskAttachment', () => ({
 
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal()
-  return { ...actual, useQuery: () => ({ data: null, isLoading: false, error: null }) }
+  return { ...actual, useQuery: () => ({ data: null, isLoading: false, error: null }), useQueryClient: () => ({ invalidateQueries: vi.fn(), getQueryData: vi.fn() }) }
 })
 
 vi.mock('../today/TodayView', () => ({
@@ -86,5 +86,15 @@ describe('V2PlanDetail top-level tabs', () => {
     const tabTriggers = screen.getAllByRole('tab')
     const labels = tabTriggers.map(t => t.textContent)
     expect(labels).not.toContain('Schedule')
+  })
+
+  it('renders DeckTopicMappings component', () => {
+    render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+    expect(screen.getByText('Deck-Topic Mappings')).toBeInTheDocument()
+  })
+
+  it('renders FlashcardForecastRecommendations component', () => {
+    render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+    expect(screen.getByText(/does not currently own flashcard capacity/i)).toBeInTheDocument()
   })
 })
