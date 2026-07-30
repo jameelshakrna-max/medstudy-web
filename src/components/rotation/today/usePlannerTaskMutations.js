@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiPatch, apiPost, ApiError } from '../../../lib/api'
 import { queryKeys } from '../../../lib/queryKeys'
 
@@ -18,6 +18,7 @@ export default function usePlannerTaskMutations({ planId, initialRevision, getRe
     }
   }, [initialRevision])
   const [lastFailedOperation, setLastFailedOperation] = useState(null)
+  const inFlightRef = useRef(false)
 
   const invalidatePlan = useCallback(() => {
     if (planId) {
@@ -118,7 +119,10 @@ export default function usePlannerTaskMutations({ planId, initialRevision, getRe
     },
     onError: (error) => {
       const code = error?.code || ''
-      if (code === 'TASK_IN_PROGRESS' && error?.details?.inProgressTaskId) {
+      if (code === 'PLAN_REVISION_CONFLICT') {
+        invalidatePlan()
+        setRecalculationState(prev => prev ? { ...prev, status: 'failed', error } : null)
+      } else if (code === 'TASK_IN_PROGRESS' && error?.details?.inProgressTaskId) {
         setRecalculationState(prev => prev ? {
           ...prev,
           status: 'blocked',
@@ -131,9 +135,15 @@ export default function usePlannerTaskMutations({ planId, initialRevision, getRe
   })
 
   const retryRecalculation = useCallback(() => {
+    if (inFlightRef.current) return
+    inFlightRef.current = true
+
     const requestId = generateClientId()
     const recalcDate = getRecalculationDate?.()
-    if (!recalcDate) return
+    if (!recalcDate) {
+      inFlightRef.current = false
+      return
+    }
 
     if (!recalculationState) {
       setRecalculationState({
@@ -148,6 +158,8 @@ export default function usePlannerTaskMutations({ planId, initialRevision, getRe
     return recalculationMutation.mutateAsync({
       recalculationDate: recalcDate,
       requestId,
+    }).finally(() => {
+      inFlightRef.current = false
     })
   }, [recalculationState, recalculationMutation, currentRevision, planId, getRecalculationDate])
 

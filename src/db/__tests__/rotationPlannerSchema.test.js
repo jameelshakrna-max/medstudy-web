@@ -45,13 +45,18 @@ function loadMigration19Sql() {
   return readFileSync(resolve(__dirname, '../../../schema-migration19.sql'), 'utf8')
 }
 
+function loadMigration20Sql() {
+  return readFileSync(resolve(__dirname, '../../../schema-migration20.sql'), 'utf8')
+}
+
 const FLASHCARDS_STUB = `
 CREATE TABLE IF NOT EXISTS flashcards (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   state TEXT NOT NULL,
   next_review TEXT,
-  last_review TEXT
+  last_review TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
 );
 `
 
@@ -69,6 +74,7 @@ beforeAll(async () => {
   db.run(loadMigration17Sql())
   db.run(loadMigration18Sql())
   db.run(loadMigration19Sql())
+  db.run(loadMigration20Sql())
 })
 
 function tableExists(name) {
@@ -1027,5 +1033,28 @@ describe('Migration 17 — flashcard owner index (Model B)', () => {
        VALUES ('m17-da-2', 'u-m17-da', 'cardiology', 'step-up', '2026-01-01', '2026-04-01', 'active', 'req-m17-da2', 'fp-m17-da2', 1)`
     )
     expect(r.ok).toBe(false)
+  })
+})
+
+// ──────────────────────────────────────────────────────────
+// Migration 20 — new-card forecast pagination index
+// ──────────────────────────────────────────────────────────
+describe('Migration 20 — new-card forecast pagination index', () => {
+  it('has idx_flashcards_user_new partial index for new-card forecast pagination', async () => {
+    const result = db.exec(
+      `SELECT name FROM sqlite_master WHERE type='index' AND name='idx_flashcards_user_new'`
+    )
+    expect(result.length).toBe(1)
+    expect(result[0].values[0][0]).toBe('idx_flashcards_user_new')
+  })
+
+  it('idx_flashcards_user_new is a partial index with correct WHERE clause', () => {
+    const result = db.exec(
+      `SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_flashcards_user_new'`
+    )
+    expect(result.length).toBe(1)
+    const ddl = result[0].values[0][0]
+    expect(ddl).toContain('flashcards(user_id, created_at, id)')
+    expect(ddl).toContain('WHERE state = 0 OR last_review IS NULL')
   })
 })

@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS deck_settings (
 CREATE INDEX IF NOT EXISTS idx_flashcards_user ON flashcards(user_id);
 CREATE INDEX IF NOT EXISTS idx_flashcards_deck ON flashcards(deck_name);
 CREATE INDEX IF NOT EXISTS idx_flashcards_user_deck ON flashcards(user_id, deck_name);
+CREATE INDEX IF NOT EXISTS idx_flashcards_user_new
+  ON flashcards(user_id, created_at, id)
+  WHERE state = 0 OR last_review IS NULL;
 
 CREATE TABLE IF NOT EXISTS categories (
   id TEXT PRIMARY KEY,

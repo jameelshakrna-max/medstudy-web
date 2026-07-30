@@ -29,6 +29,10 @@ function loadMigration19Sql() {
   return readFileSync(resolve(__dirname, '../../../schema-migration19.sql'), 'utf8')
 }
 
+function loadMigration20Sql() {
+  return readFileSync(resolve(__dirname, '../../../schema-migration20.sql'), 'utf8')
+}
+
 const FLASHCARDS_STUB = `
 CREATE TABLE IF NOT EXISTS flashcards (
   id TEXT PRIMARY KEY,
@@ -148,7 +152,8 @@ export async function createTestDb() {
   sqlJsDb.run(loadMigration17Sql())
   sqlJsDb.run(loadMigration18Sql())
   sqlJsDb.run(loadMigration19Sql())
+  sqlJsDb.run(loadMigration20Sql())
   return new D1Database(sqlJsDb)
 }
 
-export { D1Database, D1PreparedStatement }
+export { D1Database, D1PreparedStatement, loadMigration20Sql }

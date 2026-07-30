@@ -164,6 +164,10 @@ export default function V2PlanDetail({ planId, onBack }) {
     setRecalculationRequired(true)
   }, [])
 
+  const handleRecalculate = useCallback(() => {
+    mutations.retryRecalculation()
+  }, [mutations])
+
   if (isLoading) return <LoadingScreen fullPage={false} message="Loading plan details..." />
 
   if (error) {
@@ -173,6 +177,17 @@ export default function V2PlanDetail({ planId, onBack }) {
           <ChevronLeft size={18} /> Plans
         </button>
         <div className={styles.error}>Failed to load plan. Please try again.</div>
+      </div>
+    )
+  }
+
+  if (!data || !data.plan) {
+    return (
+      <div className={styles.container}>
+        <button className={styles.backButton} onClick={onBack}>
+          <ChevronLeft size={18} /> Plans
+        </button>
+        <div className={styles.error}>Plan not found.</div>
       </div>
     )
   }
@@ -212,18 +227,16 @@ export default function V2PlanDetail({ planId, onBack }) {
       </div>
 
       <RecalculationBanner
-        planId={planId}
         lastRecalculatedAt={plan.lastRecalculatedAt}
-        revision={plan.revision}
-        getRecalculationDate={getRecalculationDate}
-        timezone={resolvedTimezone}
+        recalculationState={mutations.recalculationState}
+        onRecalculate={handleRecalculate}
+        onReset={mutations.reset}
       />
 
       <PlannerStaleBanner
-        planId={planId}
-        revision={plan.revision}
-        getRecalculationDate={getRecalculationDate}
         visible={recalculationRequired}
+        isRecalculating={mutations.isPending}
+        onRecalculate={handleRecalculate}
       />
 
       <Tabs defaultValue="today">

@@ -3,6 +3,7 @@ import { REVIEW_MINUTES_PER_CARD } from '../lib/flashcardPredicates.js'
 import { isValidTimezone, getDateKeyForTimezone } from '../lib/dateUtils.js'
 import { addDays, getDayOfWeek } from './rotationPlannerV2/dateUtils.js'
 import { PLANNER_TABLES } from '../db/rotationPlannerSchema.js'
+import { selectNewCardsBounded } from './flashcardPagination.js'
 
 const MAX_SIMULATIONS_PER_CARD = 100
 const MAX_CANDIDATES = 10000
@@ -199,6 +200,7 @@ export async function computeSafeNewCardForecast({
         invalidCardState: 0,
       },
       truncated: false,
+      candidateLimitReached: false,
       forecastHorizonEndDate: null,
     }
   }
@@ -216,14 +218,6 @@ export async function computeSafeNewCardForecast({
   const allDates = generateExtendedDateRange(startDate, forecastDateRangeEnd)
   const eligibilityIndex = buildDateEligibilityIndex(allDates, availabilityMap, blockedDatesSet)
   const candidateDateRange = allDates.filter(dk => eligibilityIndex[dk])
-
-  const { results: newCards } = await env.DB.prepare(
-    `SELECT id, deck_name, state, last_review, next_review, created_at
-     FROM flashcards
-     WHERE user_id = ?
-       AND (state = 0 OR last_review IS NULL)
-     ORDER BY created_at ASC, id ASC`
-  ).bind(userId).all()
 
   const rawMappings = await (async () => {
     const { results } = await env.DB.prepare(
@@ -254,6 +248,16 @@ export async function computeSafeNewCardForecast({
     }
   }
 
+  const { selected: rawNewCards, candidateLimitReached } = await selectNewCardsBounded({
+    env,
+    userId,
+    maxCandidates: MAX_CANDIDATES,
+    deckToCanonical,
+    planTopicByCanonical,
+  })
+
+  const cardsToProcess = rawNewCards
+
   const fsrs = new FSRS()
 
   const rejectionCounts = {
@@ -273,7 +277,7 @@ export async function computeSafeNewCardForecast({
   let rejectedCardCount = 0
   let candidateProcessedCount = 0
 
-  for (const card of newCards) {
+  for (const card of cardsToProcess) {
     candidateProcessedCount++
     if (candidateProcessedCount > MAX_CANDIDATES) {
       break
@@ -401,7 +405,7 @@ export async function computeSafeNewCardForecast({
     sortedSafeNewCardsByDate[key] = cards
   }
 
-  const truncated = newCards.length > acceptedCardCount && rejectionCounts.projectedLoadExceeded > 0
+  const truncated = rejectionCounts.projectedLoadExceeded > 0
 
   return {
     safeNewCardsByDate: sortedSafeNewCardsByDate,
@@ -412,6 +416,7 @@ export async function computeSafeNewCardForecast({
     rejectedCardCount,
     rejectionCounts,
     truncated,
+    candidateLimitReached,
     forecastHorizonEndDate,
   }
 }

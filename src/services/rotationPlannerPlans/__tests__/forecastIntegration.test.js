@@ -428,6 +428,7 @@ describe('createEmptyFlashcardForecast', () => {
         invalidCardState: 0,
       },
       truncated: false,
+      candidateLimitReached: false,
       forecastHorizonEndDate: null,
     })
   })

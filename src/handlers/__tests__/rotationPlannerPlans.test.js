@@ -2201,6 +2201,48 @@ describe('canonical empty forecast', () => {
   })
 })
 
+// ─── Overflow Atomicity — Forecast computation failure ───
+describe('overflow atomicity — forecast failure', () => {
+  beforeEach(async () => {
+    db = await createTestDb()
+  })
+
+  it('creation succeeds when computeSafeNewCardForecast throws', async () => {
+    const forecastModule = await import('../../services/flashcardForecast.js')
+    vi.spyOn(forecastModule, 'computeSafeNewCardForecast').mockRejectedValue(new Error('Forecast overflow'))
+    const body = makeBody({
+      flashcardSettings: { learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: 60 },
+    })
+    const res = await createPlan(body)
+    expect(res.status).toBe(201)
+    const result = await res.json()
+    expect(result.plan.usesFlashcardCapacity).toBe(1)
+    expect(result.plan.settingsJson.forecast.safeNewCardsByDate).toEqual({})
+    expect(result.plan.settingsJson.forecast.acceptedCardCount).toBe(0)
+    vi.restoreAllMocks()
+  })
+
+  it('recalculation succeeds when computeSafeNewCardForecast throws', async () => {
+    const forecastModule = await import('../../services/flashcardForecast.js')
+    const body = makeBody({
+      flashcardSettings: { learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: 60 },
+    })
+    const createRes = await createPlan(body)
+    expect(createRes.status).toBe(201)
+    const { plan } = await createRes.json()
+
+    vi.spyOn(forecastModule, 'computeSafeNewCardForecast').mockRejectedValue(new Error('Forecast overflow'))
+    const recalcRes = await recalculate(plan.id, { recalculationDate: '2026-01-06', expectedRevision: 0 })
+    expect(recalcRes.status).toBe(200)
+
+    const getRes = await getPlan(plan.id)
+    const getBody = await getRes.json()
+    expect(getBody.plan.settingsJson.forecast.safeNewCardsByDate).toEqual({})
+    expect(getBody.plan.settingsJson.forecast.acceptedCardCount).toBe(0)
+    vi.restoreAllMocks()
+  })
+})
+
 // ─── Explicit Staleness Outcomes ───
 describe('explicit staleness outcomes', () => {
   let db

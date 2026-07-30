@@ -272,44 +272,48 @@ export async function handleCreateRotationPlan(request, env, user) {
       }, 422)
     }
 
-    // ─── Forecast computation for creation ───
+    // ─── Forecast computation for creation (best-effort) ───
     let creationForecast = createEmptyFlashcardForecast()
     if (owner) {
       const fs = validation.parsed.flashcardSettings || {}
       const limit = fs.maxProjectedFlashcardReviewMinutesPerDay
       if (Number.isInteger(limit) && limit > 0) {
-        const timezone = validation.parsed.timezone || 'UTC'
-        const forecastHorizonEndDate = addDays(validation.parsed.endDate, 30)
-        const existingReviewCardCountByDate = await computeExistingReviewBaseline({
-          env,
-          userId: user.sub,
-          forecastHorizonEndDate,
-          effectiveStartDate: validation.parsed.startDate,
-          timezone,
-          availabilityByWeekday: validation.parsed.availability,
-          blockedDates: validation.parsed.blockedDates || [],
-        })
-        creationForecast = await computeSafeNewCardForecast({
-          env,
-          userId: user.sub,
-          usesFlashcardCapacity: true,
-          startDate: validation.parsed.startDate,
-          endDate: validation.parsed.endDate,
-          effectiveStartDate: validation.parsed.startDate,
-          timezone,
-          availabilityByWeekday: validation.parsed.availability,
-          blockedDates: validation.parsed.blockedDates || [],
-          planTopics: resolvedTopics.map(t => ({
-            planTopicId: t.planTopicId || t.normalizedTopicId,
-            canonicalTopicId: t.canonicalTopicId,
-            displayOrder: t.displayOrder ?? Infinity,
-            status: 'not_started',
-            learningCompletedAt: null,
-          })),
-          learningUnlockMode: fs.learningUnlockMode || 'learning_completed',
-          maxProjectedFlashcardReviewMinutesPerDay: limit,
-          existingReviewCardCountByDate,
-        })
+        try {
+          const timezone = validation.parsed.timezone || 'UTC'
+          const forecastHorizonEndDate = addDays(validation.parsed.endDate, 30)
+          const existingReviewCardCountByDate = await computeExistingReviewBaseline({
+            env,
+            userId: user.sub,
+            forecastHorizonEndDate,
+            effectiveStartDate: validation.parsed.startDate,
+            timezone,
+            availabilityByWeekday: validation.parsed.availability,
+            blockedDates: validation.parsed.blockedDates || [],
+          })
+          creationForecast = await computeSafeNewCardForecast({
+            env,
+            userId: user.sub,
+            usesFlashcardCapacity: true,
+            startDate: validation.parsed.startDate,
+            endDate: validation.parsed.endDate,
+            effectiveStartDate: validation.parsed.startDate,
+            timezone,
+            availabilityByWeekday: validation.parsed.availability,
+            blockedDates: validation.parsed.blockedDates || [],
+            planTopics: resolvedTopics.map(t => ({
+              planTopicId: t.planTopicId || t.normalizedTopicId,
+              canonicalTopicId: t.canonicalTopicId,
+              displayOrder: t.displayOrder ?? Infinity,
+              status: 'not_started',
+              learningCompletedAt: null,
+            })),
+            learningUnlockMode: fs.learningUnlockMode || 'learning_completed',
+            maxProjectedFlashcardReviewMinutesPerDay: limit,
+            existingReviewCardCountByDate,
+          })
+        } catch (_) {
+          // Best-effort for creation
+        }
       }
     }
 
@@ -400,13 +404,11 @@ export async function handleDeleteRotationPlan(request, env, user) {
 
     if (!planId) return errorResponse('VALIDATION_ERROR', 'Plan ID is required.', 400)
 
-    const { results: existing } = await env.DB.prepare(
-      'SELECT id FROM rotation_planner_plans WHERE id = ? AND user_id = ?'
-    ).bind(planId, user.sub).all()
+    const { meta } = await env.DB.prepare(
+      'DELETE FROM rotation_planner_plans WHERE id = ? AND user_id = ?'
+    ).bind(planId, user.sub).run()
 
-    if (!existing.length) return errorResponse('PLAN_NOT_FOUND', 'Plan not found.', 404)
-
-    await env.DB.prepare('DELETE FROM rotation_planner_plans WHERE id = ?').bind(planId).run()
+    if (meta.changes === 0) return errorResponse('PLAN_NOT_FOUND', 'Plan not found.', 404)
 
     return json({ success: true })
   } catch (e) {
@@ -718,8 +720,8 @@ export async function handleUpdateTask(request, env, user) {
     const plan = await loadPlanById(env, planId, user.sub)
     if (!plan) return errorResponse('PLAN_NOT_FOUND', 'Plan not found.', 404)
 
-    const taskRow = await loadTaskById(env, taskId)
-    if (!taskRow || taskRow.plan_id !== planId) return errorResponse('TASK_NOT_FOUND', 'Task not found.', 404)
+    const taskRow = await loadTaskById(env, taskId, planId)
+    if (!taskRow) return errorResponse('TASK_NOT_FOUND', 'Task not found.', 404)
 
     const currentRevision = await loadPlanRevision(env, planId)
 
@@ -966,7 +968,7 @@ export async function handleRecalculatePlan(request, env, user) {
       feasibility: recalcResult.recalculation?.feasibility || recalcResult.recalculation?.recalculation?.feasibility || {},
     }
 
-    // ─── Forecast computation for recalculation ───
+    // ─── Forecast computation for recalculation (best-effort) ───
     let forecastSnapshot = createEmptyFlashcardForecast()
     const planSettings = typeof plan.settings_json === 'string'
       ? JSON.parse(plan.settings_json)
@@ -974,6 +976,7 @@ export async function handleRecalculatePlan(request, env, user) {
     const forecastSettings = planSettings.forecastSettings || {}
     const limit = forecastSettings.maxProjectedFlashcardReviewMinutesPerDay
     if (plan.uses_flashcard_capacity === 1 && Number.isInteger(limit) && limit > 0) {
+      try {
         const timezone = planSettings.timezone || 'UTC'
         const forecastHorizonEndDate = addDays(plan.end_date, 30)
         const existingReviewCardCountByDate = await computeExistingReviewBaseline({
@@ -1007,6 +1010,9 @@ export async function handleRecalculatePlan(request, env, user) {
           maxProjectedFlashcardReviewMinutesPerDay: limit,
           existingReviewCardCountByDate,
         })
+      } catch (_) {
+        // Best-effort for recalculation
+      }
     }
 
     const recalculationMutationId = crypto.randomUUID()

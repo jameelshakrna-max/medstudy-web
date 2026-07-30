@@ -32,7 +32,13 @@ export async function updateTopicState(env, topicId, fields) {
   ).bind(...values).run()
 }
 
-export async function loadTaskById(env, taskId) {
+export async function loadTaskById(env, taskId, planId) {
+  if (planId) {
+    const row = await env.DB.prepare(
+      `SELECT * FROM ${T.dailyTasks} WHERE id = ? AND plan_id = ?`
+    ).bind(taskId, planId).first()
+    return row || null
+  }
   const row = await env.DB.prepare(
     `SELECT * FROM ${T.dailyTasks} WHERE id = ?`
   ).bind(taskId).first()

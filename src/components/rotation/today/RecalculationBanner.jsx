@@ -1,5 +1,4 @@
 import { Banner, BannerAction } from '../../ui/Banner/Banner'
-import usePlannerTaskMutations from './usePlannerTaskMutations'
 import styles from './RecalculationBanner.module.css'
 
 const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000
@@ -10,15 +9,8 @@ function isStale(lastRecalculatedAt) {
   return diff > STALE_THRESHOLD_MS
 }
 
-export default function RecalculationBanner({ planId, lastRecalculatedAt, revision, getRecalculationDate, timezone }) {
-  const mutations = usePlannerTaskMutations({
-    planId,
-    initialRevision: revision,
-    getRecalculationDate,
-    timezone,
-  })
-
-  if (mutations.recalculationState?.status === 'pending' || mutations.recalculationState?.status === 'in_flight') {
+export default function RecalculationBanner({ lastRecalculatedAt, recalculationState, onRecalculate, onReset }) {
+  if (recalculationState?.status === 'pending' || recalculationState?.status === 'in_flight') {
     return (
       <Banner variant="info" className={styles.banner}>
         Recalculating plan...
@@ -26,20 +18,20 @@ export default function RecalculationBanner({ planId, lastRecalculatedAt, revisi
     )
   }
 
-  if (mutations.recalculationState?.status === 'failed') {
+  if (recalculationState?.status === 'failed') {
     return (
-      <Banner variant="error" onDismiss={() => mutations.reset()} className={styles.banner}>
+      <Banner variant="error" onDismiss={onReset} className={styles.banner}>
         Recalculation failed.{' '}
-        <BannerAction onClick={() => mutations.retryRecalculation()}>
+        <BannerAction onClick={onRecalculate}>
           Retry
         </BannerAction>
       </Banner>
     )
   }
 
-  if (mutations.recalculationState?.status === 'blocked') {
+  if (recalculationState?.status === 'blocked') {
     return (
-      <Banner variant="warning" onDismiss={() => mutations.reset()} className={styles.banner}>
+      <Banner variant="warning" onDismiss={onReset} className={styles.banner}>
         Recalculation blocked by an in-progress task. Complete or skip it first.
       </Banner>
     )
@@ -49,7 +41,7 @@ export default function RecalculationBanner({ planId, lastRecalculatedAt, revisi
     return (
       <Banner variant="warning" className={styles.banner}>
         Plan may be out of date.{' '}
-        <BannerAction onClick={() => mutations.retryRecalculation()}>
+        <BannerAction onClick={onRecalculate}>
           Recalculate
         </BannerAction>
       </Banner>

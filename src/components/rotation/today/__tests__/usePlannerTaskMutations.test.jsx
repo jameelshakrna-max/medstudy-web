@@ -58,7 +58,6 @@ describe('usePlannerTaskMutations', () => {
   let wrapper, invalidateSpy, queryClient
 
   beforeEach(() => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.clearAllMocks()
     const w = createWrapper()
     wrapper = w.wrapper
@@ -299,6 +298,79 @@ describe('usePlannerTaskMutations', () => {
       expect(caught).toBe(err)
       expect(caught.code).toBe('SOME_ERROR')
       expect(caught.message).toBe('Something went wrong')
+    })
+  })
+
+  describe('recalculation mutex — inFlightRef', () => {
+    it('second retryRecalculation while one is in-flight skips silently', async () => {
+      const patchResponse = {
+        taskId: TASK_ID, action: 'complete', status: 'completed',
+        revision: 1, recalculationRequired: true,
+      }
+      apiPatch.mockResolvedValueOnce(patchResponse)
+
+      let resolveRecalc
+      apiPost.mockReturnValueOnce(new Promise(r => { resolveRecalc = r }))
+
+      const { result } = renderMutationsHook({}, { wrapper })
+
+      await act(async () => {
+        await result.current.completeTask(TASK_ID, {})
+      })
+
+      let first, second
+
+      await act(() => {
+        first = result.current.retryRecalculation()
+        second = result.current.retryRecalculation()
+      })
+
+      expect(apiPost).toHaveBeenCalledTimes(1)
+      expect(second).toBeUndefined()
+
+      await act(async () => {
+        resolveRecalc({ revision: 2 })
+        await first
+      })
+
+      expect(result.current.currentRevision).toBe(2)
+      expect(result.current.recalculationState).toBeNull()
+    })
+
+    it('mutex releases after success', async () => {
+      apiPatch.mockResolvedValueOnce({
+        taskId: TASK_ID, action: 'complete', status: 'completed',
+        revision: 1, recalculationRequired: true,
+      })
+      apiPost.mockResolvedValueOnce({ revision: 2 })
+      apiPost.mockResolvedValueOnce({ revision: 3 })
+
+      const { result } = renderMutationsHook({}, { wrapper })
+      await act(async () => { await result.current.completeTask(TASK_ID, {}) })
+
+      await act(async () => { await result.current.retryRecalculation() })
+      expect(apiPost).toHaveBeenCalledTimes(1)
+
+      await act(async () => { await result.current.retryRecalculation() })
+      expect(apiPost).toHaveBeenCalledTimes(2)
+    })
+
+    it('mutex releases after failure', async () => {
+      apiPatch.mockResolvedValueOnce({
+        taskId: TASK_ID, action: 'complete', status: 'completed',
+        revision: 1, recalculationRequired: true,
+      })
+      apiPost.mockRejectedValueOnce(new Error('Network error'))
+      apiPost.mockResolvedValueOnce({ revision: 3 })
+
+      const { result } = renderMutationsHook({}, { wrapper })
+      await act(async () => { await result.current.completeTask(TASK_ID, {}) })
+
+      await act(async () => { try { await result.current.retryRecalculation() } catch {} })
+      expect(apiPost).toHaveBeenCalledTimes(1)
+
+      await act(async () => { await result.current.retryRecalculation() })
+      expect(apiPost).toHaveBeenCalledTimes(2)
     })
   })
 

@@ -1,79 +1,77 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import React from 'react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import RecalculationBanner from '../RecalculationBanner'
 
-vi.mock('../../../../lib/api', () => ({
-  apiPatch: vi.fn(),
-  apiPost: vi.fn(),
-  ApiError: class ApiError extends Error {
-    constructor({ code, message, status, details }) {
-      super(message)
-      this.code = code
-      this.status = status
-      this.details = details
-    }
-  },
+vi.mock('../../../ui/Banner/Banner', () => ({
+  Banner: ({ children, variant, className, onDismiss }) => (
+    <div data-testid="banner" data-variant={variant} className={className}>
+      {children}
+      {onDismiss && <button data-testid="dismiss-btn" onClick={onDismiss}>Dismiss</button>}
+    </div>
+  ),
+  BannerAction: ({ children, onClick }) => (
+    <button data-testid="recalculate-btn" onClick={onClick}>{children}</button>
+  ),
 }))
 
-import { apiPatch, apiPost } from '../../../../lib/api'
-
-const mockGetRecalculationDate = () => '2026-07-26'
-
-function createWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  })
-  const wrapper = ({ children }) => (
-    React.createElement(QueryClientProvider, { client: queryClient }, children)
-  )
-  return { queryClient, wrapper }
-}
+vi.mock('../RecalculationBanner.module.css', () => ({
+  default: new Proxy({}, { get: (_, key) => key }),
+}))
 
 describe('RecalculationBanner', () => {
   it('shows stale warning when lastRecalculatedAt is old', () => {
-    const { wrapper } = createWrapper()
     const oldDate = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
-    render(
-      <RecalculationBanner planId="plan-1" lastRecalculatedAt={oldDate} revision={5} getRecalculationDate={mockGetRecalculationDate} />,
-      { wrapper }
-    )
+    render(<RecalculationBanner lastRecalculatedAt={oldDate} onRecalculate={vi.fn()} />)
     expect(screen.getByText(/Plan may be out of date/)).toBeInTheDocument()
     expect(screen.getByText('Recalculate')).toBeInTheDocument()
   })
 
   it('shows stale warning when lastRecalculatedAt is null', () => {
-    const { wrapper } = createWrapper()
-    render(
-      <RecalculationBanner planId="plan-1" lastRecalculatedAt={null} revision={5} getRecalculationDate={mockGetRecalculationDate} />,
-      { wrapper }
-    )
+    render(<RecalculationBanner lastRecalculatedAt={null} onRecalculate={vi.fn()} />)
     expect(screen.getByText(/Plan may be out of date/)).toBeInTheDocument()
   })
 
   it('shows nothing when recently recalculated', () => {
-    const { wrapper } = createWrapper()
     const recentDate = new Date().toISOString()
-    const { container } = render(
-      <RecalculationBanner planId="plan-1" lastRecalculatedAt={recentDate} revision={5} getRecalculationDate={mockGetRecalculationDate} />,
-      { wrapper }
-    )
+    const { container } = render(<RecalculationBanner lastRecalculatedAt={recentDate} onRecalculate={vi.fn()} />)
     expect(container.innerHTML).toBe('')
   })
 
-  it('calls recalculate on Recalculate click', async () => {
-    apiPost.mockResolvedValue({ revision: 6 })
-    const { wrapper } = createWrapper()
+  it('calls onRecalculate on Recalculate click', () => {
+    const onRecalculate = vi.fn()
     const oldDate = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
-    render(
-      <RecalculationBanner planId="plan-1" lastRecalculatedAt={oldDate} revision={5} getRecalculationDate={mockGetRecalculationDate} />,
-      { wrapper }
-    )
+    render(<RecalculationBanner lastRecalculatedAt={oldDate} onRecalculate={onRecalculate} />)
     fireEvent.click(screen.getByText('Recalculate'))
-    await waitFor(() => {
-      expect(apiPost).toHaveBeenCalled()
-    })
+    expect(onRecalculate).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows pending state when recalculationState.status is pending', () => {
+    render(<RecalculationBanner recalculationState={{ status: 'pending' }} />)
+    expect(screen.getByText(/Recalculating plan/)).toBeInTheDocument()
+  })
+
+  it('shows in_flight state', () => {
+    render(<RecalculationBanner recalculationState={{ status: 'in_flight' }} />)
+    expect(screen.getByText(/Recalculating plan/)).toBeInTheDocument()
+  })
+
+  it('shows failed state with retry', () => {
+    const onRecalculate = vi.fn()
+    render(<RecalculationBanner recalculationState={{ status: 'failed', error: new Error('oops') }} onRecalculate={onRecalculate} />)
+    expect(screen.getByText(/Recalculation failed/)).toBeInTheDocument()
+    expect(screen.getByText('Retry')).toBeInTheDocument()
+  })
+
+  it('shows blocked state', () => {
+    render(<RecalculationBanner recalculationState={{ status: 'blocked', blockedByTaskId: 'task-1' }} />)
+    expect(screen.getByText(/blocked by an in-progress task/i)).toBeInTheDocument()
+  })
+
+  it('calls onReset on dismiss in failed state', () => {
+    const onReset = vi.fn()
+    render(<RecalculationBanner recalculationState={{ status: 'failed', error: new Error('oops') }} onReset={onReset} />)
+    fireEvent.click(screen.getByTestId('dismiss-btn'))
+    expect(onReset).toHaveBeenCalledTimes(1)
   })
 })

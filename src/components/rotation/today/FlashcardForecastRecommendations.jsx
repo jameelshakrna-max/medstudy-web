@@ -18,6 +18,7 @@ const EMPTY_FORECAST = {
     invalidCardState: 0,
   },
   truncated: false,
+  candidateLimitReached: false,
   forecastHorizonEndDate: null,
 }
 
@@ -36,6 +37,7 @@ export default function FlashcardForecastRecommendations({
   const rejectedCardCount = settingsJson.rejectedCardCount || 0
   const rejectionCounts = settingsJson.rejectionCounts || {}
   const truncated = settingsJson.truncated || false
+  const candidateLimitReached = settingsJson.candidateLimitReached || false
 
   const hasForecastEnabled = Object.keys(safeNewCardsByDate).length > 0 || acceptedCardCount > 0
 
@@ -105,8 +107,11 @@ export default function FlashcardForecastRecommendations({
         <h3 className={styles.heading}>Safe-New-Card Recommendations</h3>
         <div className={styles.infoBlock}>
           All eligible cards exceed the projected review limit.
-          {truncated && (
-            <span className={styles.truncatedWarning}> Forecast was truncated.</span>
+          {candidateLimitReached && (
+            <span className={styles.truncatedWarning}> Forecast was truncated due to data limits.</span>
+          )}
+          {truncated && !candidateLimitReached && (
+            <span className={styles.truncatedWarning}> Forecast was truncated due to capacity limits.</span>
           )}
           {loadExceeded > 0 && (
             <div className={styles.rejectedDetail}>
@@ -128,9 +133,14 @@ export default function FlashcardForecastRecommendations({
         <span className={styles.acceptedCount}>{acceptedCardCount} card{acceptedCardCount !== 1 ? 's' : ''}</span>
       </div>
 
-      {truncated && (
+      {candidateLimitReached && (
         <div className={styles.truncatedWarning}>
           <AlertTriangle size={14} /> Forecast was truncated due to data limits.
+        </div>
+      )}
+      {truncated && !candidateLimitReached && (
+        <div className={styles.truncatedWarning}>
+          <AlertTriangle size={14} /> Forecast was truncated due to daily review capacity limits.
         </div>
       )}
 

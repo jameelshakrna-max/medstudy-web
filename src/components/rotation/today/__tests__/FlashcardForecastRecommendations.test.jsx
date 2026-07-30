@@ -52,15 +52,40 @@ describe('FlashcardForecastRecommendations', () => {
     expect(screen.getByText(/All eligible cards exceed the projected review limit/i)).toBeInTheDocument()
   })
 
-  it('shows truncation warning when truncated is true', () => {
+  it('shows data-limits truncation warning when candidateLimitReached is true', () => {
     render(<FlashcardForecastRecommendations {...defaultProps} usesFlashcardCapacity={1} forecast={{
       safeNewCardsByDate: { '2025-08-01': [] },
       acceptedCardCount: 0,
       rejectedCardCount: 5,
       rejectionCounts: { projectedLoadExceeded: 5 },
       truncated: true,
+      candidateLimitReached: true,
     }} />)
-    expect(screen.getByText(/Forecast was truncated/i)).toBeInTheDocument()
+    expect(screen.getByText(/Forecast was truncated due to data limits/i)).toBeInTheDocument()
+  })
+
+  it('shows capacity-limits truncation warning when truncated is true but candidateLimitReached is false', () => {
+    render(<FlashcardForecastRecommendations {...defaultProps} usesFlashcardCapacity={1} forecast={{
+      safeNewCardsByDate: { '2025-08-01': [] },
+      acceptedCardCount: 0,
+      rejectedCardCount: 5,
+      rejectionCounts: { projectedLoadExceeded: 5 },
+      truncated: true,
+      candidateLimitReached: false,
+    }} />)
+    expect(screen.getByText(/Forecast was truncated due to capacity limits/i)).toBeInTheDocument()
+  })
+
+  it('shows truncation warning in accepted view when candidateLimitReached is true', () => {
+    render(<FlashcardForecastRecommendations {...defaultProps} usesFlashcardCapacity={1} forecast={{
+      safeNewCardsByDate: { '2025-08-01': [{ planTopicId: 'topic-1', deckName: 'Anatomy', projectedReviewDates: ['2025-08-03'] }] },
+      acceptedCardCount: 1,
+      rejectedCardCount: 0,
+      rejectionCounts: {},
+      truncated: false,
+      candidateLimitReached: true,
+    }} topicsById={new Map([['topic-1', { topicTitle: 'Cardiology' }]])} />)
+    expect(screen.getByText(/Forecast was truncated due to data limits/i)).toBeInTheDocument()
   })
 
   it('renders accepted card count when acceptedCardCount > 0', () => {

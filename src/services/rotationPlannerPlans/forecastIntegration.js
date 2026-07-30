@@ -1,5 +1,6 @@
 import { getDateKeyForTimezone, toEndOfDayUTC } from '../../lib/dateUtils.js'
 import { generateDateRange } from '../rotationPlannerV2/dateUtils.js'
+import { loadDueReviewCardsPaginated } from '../flashcardPagination.js'
 
 function buildAvailabilityMap(availabilityByWeekday) {
   if (availabilityByWeekday instanceof Map) return availabilityByWeekday
@@ -55,6 +56,7 @@ export function createEmptyFlashcardForecast() {
       invalidCardState: 0,
     },
     truncated: false,
+    candidateLimitReached: false,
     forecastHorizonEndDate: null,
   }
 }
@@ -75,16 +77,7 @@ export async function computeExistingReviewBaseline({
   const rangeEndUtc = toEndOfDayUTC(forecastHorizonEndDate, timezone || 'UTC')
   const rangeEndUtcStr = rangeEndUtc.toISOString()
 
-  const { results: cards } = await env.DB.prepare(
-    `SELECT id, deck_name, state, last_review, next_review, created_at
-     FROM flashcards
-     WHERE user_id = ?
-       AND last_review IS NOT NULL
-       AND state IN (1, 2, 3)
-       AND next_review IS NOT NULL
-       AND next_review <= ?
-     ORDER BY next_review ASC, id ASC`
-  ).bind(userId, rangeEndUtcStr).all()
+  const cards = await loadDueReviewCardsPaginated(env, userId, rangeEndUtcStr)
 
   if (!cards || cards.length === 0) {
     return {}

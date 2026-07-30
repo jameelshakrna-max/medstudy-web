@@ -1004,6 +1004,7 @@ describe('return date conservation', () => {
     expect(result.rejectionCounts.projectedLoadExceeded).toBe(1)
     expect(result.acceptedCardCount).toBe(0)
     expect(result.truncated).toBe(true)
+    expect(result.candidateLimitReached).toBe(false)
   })
 })
 
@@ -1341,13 +1342,14 @@ describe('output and determinism', () => {
     expect(result.rejectedCardCount).toBe(rejectionTotal)
   })
 
-  it('65. truncated is true only for load-limited eligible cards', async () => {
+  it('65. truncated is false when no load-limited cards exist', async () => {
     const result = await computeSafeNewCardForecast({
       ...BASE_FORECAST_ARGS, env, userId: TEST_USER,
       planTopics: makePlanTopics([{ canonicalTopicId: 'topic-cardio', status: 'completed', learningCompletedAt: '2026-07-15' }]),
       maxProjectedFlashcardReviewMinutesPerDay: 999,
     })
     expect(result.truncated).toBe(false)
+    expect(result.candidateLimitReached).toBe(false)
   })
 
   it('66. Non-owner result is empty', async () => {

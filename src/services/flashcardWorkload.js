@@ -2,6 +2,7 @@ import { REVIEW_MINUTES_PER_CARD } from '../lib/flashcardPredicates.js'
 import { isValidTimezone, getDateKeyForTimezone, toEndOfDayUTC } from '../lib/dateUtils.js'
 import { generateDateRange } from './rotationPlannerV2/dateUtils.js'
 import { PLANNER_TABLES } from '../db/rotationPlannerSchema.js'
+import { loadDueReviewCardsPaginated } from './flashcardPagination.js'
 
 function isDateEligible(dateKey, availabilityByWeekday, blockedDatesSet) {
   if (blockedDatesSet.has(dateKey)) return false
@@ -159,16 +160,7 @@ export async function computeReviewWorkloadMap({
   const rangeEndUtc = toEndOfDayUTC(endDate, timezone)
   const rangeEndUtcStr = rangeEndUtc.toISOString()
 
-  const { results: cards } = await env.DB.prepare(
-    `SELECT id, deck_name, state, last_review, next_review, created_at
-     FROM flashcards
-     WHERE user_id = ?
-       AND last_review IS NOT NULL
-       AND state IN (1, 2, 3)
-       AND next_review IS NOT NULL
-       AND next_review <= ?
-     ORDER BY next_review ASC, id ASC`
-  ).bind(userId, rangeEndUtcStr).all()
+  const cards = await loadDueReviewCardsPaginated(env, userId, rangeEndUtcStr)
 
   const dateRange = generateDateRange(startDate, endDate)
   const availabilityMap = buildAvailabilityMap(availabilityByWeekday)

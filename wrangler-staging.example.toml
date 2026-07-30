@@ -1,0 +1,57 @@
+name = "medstudy-api-staging"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "medstudy-db-staging"
+database_id = "STAGING_DATABASE_ID"    # Replace with real staging D1 database ID
+
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "card-images-staging"    # Ensure staging R2 bucket exists with this name
+
+[[durable_objects.bindings]]
+  name = "COMMUNITY_REALTIME_ROOM"
+  class_name = "CommunityRealtimeRoom"
+
+[[durable_objects.bindings]]
+  name = "DM_REALTIME_ROOM"
+  class_name = "DMRealtimeRoom"
+
+[[migrations]]
+  tag = "v1"
+  new_sqlite_classes = ["CommunityRealtimeRoom"]
+
+[[migrations]]
+  tag = "v2"
+  new_sqlite_classes = ["DMRealtimeRoom"]
+
+[vars]
+SUPABASE_URL = "https://replace-with-staging-project.invalid"
+CF_ACCOUNT_ID = "a05b2fac1d43aa509d8765c8089f499b"
+REALTIMEKIT_APP_ID = "96b410b8-1a27-477b-8fb9-eaa406775a82"
+VAPID_PUBLIC_KEY = "BL1DR63woanpTniR80ObGZ3E2XeeSdmQoU1O8HKmVML6Lh40n58v05jg6cIkfCenkS8jkMyc81zX_fV-xdc1VHI"
+
+# ════════════════════════════════════════════════════════════
+# REAL STAGING CREDENTIALS — DO NOT COMMIT
+# ════════════════════════════════════════════════════════════
+# Copy this file to wrangler-staging.toml (gitignored) and
+# supply real values for:
+#
+#   database_id     — run: wrangler d1 list
+#   SUPABASE_URL    — staging Supabase project URL
+#
+# All sensitive keys should be set via Wrangler secrets
+# (wrangler secret put) instead of in this file:
+#   SUPABASE_SERVICE_KEY
+#   UPSTASH_REDIS_REST_URL
+#   UPSTASH_REDIS_REST_TOKEN
+#   Any other API keys or tokens
+#
+# DO NOT commit wrangler-staging.toml to version control.
+# ════════════════════════════════════════════════════════════
