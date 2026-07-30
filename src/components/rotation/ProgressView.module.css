@@ -1,0 +1,327 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding: var(--space-lg);
+}
+
+.heading {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* A. Summary Cards */
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+}
+
+.metricCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-md);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.metricLabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mist);
+}
+
+.metricValue {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+
+.metricSubtext {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Sections */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.sectionTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* B. Incorrect Review */
+.metricLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.metricDot {
+  color: var(--mist);
+}
+
+/* C. Chart */
+.chartContainer {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-sm);
+}
+
+.chartTooltip {
+  background: var(--navy2, var(--card-bg));
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.chartTooltipLabel {
+  color: var(--mist);
+  margin-bottom: 4px;
+}
+
+.chartTooltipValue {
+  font-weight: 600;
+}
+
+.chartLegend {
+  display: flex;
+  gap: var(--space-md);
+  justify-content: center;
+  padding-top: var(--space-xs);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.legendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* D. Status Distribution */
+.statusBars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.statusBar {
+  display: grid;
+  grid-template-columns: 120px 1fr 32px;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.statusBarLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.statusBarTrack {
+  height: 18px;
+  background: var(--input-bg);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.statusBarFill {
+  height: 100%;
+  border-radius: var(--radius-sm);
+  min-width: 4px;
+  transition: width var(--duration-normal) var(--ease-out);
+}
+
+.statusBarCount {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* E. Forecast */
+.forecastCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+}
+
+.forecastStatus {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.forecastOnTrack {
+  background: color-mix(in srgb, var(--emerald) 12%, transparent);
+  color: var(--emerald);
+}
+
+.forecastAtRisk {
+  background: color-mix(in srgb, var(--amber, #ffb800) 12%, transparent);
+  color: var(--amber, #ffb800);
+}
+
+.forecastImpossible {
+  background: color-mix(in srgb, var(--red, #ef4444) 12%, transparent);
+  color: var(--red, #ef4444);
+}
+
+.forecastDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.forecastWarning {
+  color: var(--amber, #ffb800);
+}
+
+/* F. Attention */
+.attentionList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.attentionItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-md);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+}
+
+.attentionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.attentionReasons {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* G. Pace */
+.paceDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* H. Confidence */
+.confidenceList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.confidenceRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px var(--space-md);
+  background: var(--input-bg);
+  border-radius: var(--radius-sm);
+}
+
+.confidenceLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
+.confidenceCount {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Empty State */
+.emptyState {
+  font-size: 13px;
+  color: var(--mist);
+  padding: var(--space-sm) 0;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .container {
+    padding: var(--space-md);
+  }
+
+  .cardGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .metricValue {
+    font-size: 24px;
+  }
+
+  .statusBar {
+    grid-template-columns: 100px 1fr 28px;
+  }
+}
+
+@media (max-width: 480px) {
+  .heading {
+    font-size: 18px;
+  }
+
+  .metricCard {
+    padding: var(--space-sm);
+  }
+
+  .metricValue {
+    font-size: 22px;
+  }
+
+  .statusBar {
+    grid-template-columns: 80px 1fr 24px;
+  }
+
+  .statusBarLabel {
+    font-size: 11px;
+  }
+}

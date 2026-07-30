@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS deck_settings (
 CREATE INDEX IF NOT EXISTS idx_flashcards_user ON flashcards(user_id);
 CREATE INDEX IF NOT EXISTS idx_flashcards_deck ON flashcards(deck_name);
 CREATE INDEX IF NOT EXISTS idx_flashcards_user_deck ON flashcards(user_id, deck_name);
+CREATE INDEX IF NOT EXISTS idx_flashcards_user_new
+  ON flashcards(user_id, created_at, id)
+  WHERE state = 0 OR last_review IS NULL;
 
 CREATE TABLE IF NOT EXISTS categories (
   id TEXT PRIMARY KEY,
@@ -487,143 +490,6 @@ CREATE TABLE IF NOT EXISTS community_room_timer_participants (
 
 CREATE INDEX IF NOT EXISTS idx_room_participants_room_left ON community_room_timer_participants(room_id, left_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read);
-
--- ════════════════════════════════════════════════════════════
--- SUPABASE / POSTGRESQL SECTION
--- Run these statements in the Supabase SQL Editor (Dashboard → SQL Editor)
--- ════════════════════════════════════════════════════════════
-
--- CREATE SEQUENCE IF NOT EXISTS public.global_id_seq START 1;
-
-CREATE TABLE IF NOT EXISTS public.study_subjects (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  category TEXT DEFAULT 'other',
-  display_order INTEGER DEFAULT 0
-);
-
-INSERT INTO public.study_subjects (id, name, category, display_order) VALUES
-  ('cardiology',        'Cardiology',              'medical',    1),
-  ('respiratory',       'Respiratory',             'medical',    2),
-  ('gastroenterology',  'Gastroenterology',        'medical',    3),
-  ('nephrology',        'Nephrology',              'medical',    4),
-  ('neurology',         'Neurology',               'medical',    5),
-  ('endocrinology',     'Endocrinology',           'medical',    6),
-  ('infectious',        'Infectious Disease',      'medical',    7),
-  ('hematology',        'Hematology',              'medical',    8),
-  ('oncology',          'Oncology',                'medical',    9),
-  ('rheumatology',      'Rheumatology',            'medical',   10),
-  ('dermatology',       'Dermatology',             'medical',   11),
-  ('psychiatry',        'Psychiatry',              'medical',   12),
-  ('obgyn',             'Obstetrics & Gynecology', 'medical',   13),
-  ('pediatrics',        'Pediatrics',              'medical',   14),
-  ('emergency',         'Emergency Medicine',      'medical',   15),
-  ('mixed',             'Mixed',                   'mixed',     16),
-  ('self_assessment',   'Self Assessment',         'mixed',     17),
-  ('other',             'Other',                   'other',     18)
-ON CONFLICT (id) DO NOTHING;
-
-CREATE TABLE IF NOT EXISTS public.uworld_blocks (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  block_name TEXT NOT NULL,
-  total_questions INTEGER DEFAULT 40,
-  correct INTEGER DEFAULT 0,
-  percent_correct INTEGER DEFAULT 0,
-  grade TEXT DEFAULT '',
-  mode TEXT DEFAULT 'Tutor',
-  subject_id TEXT,
-  time_minutes INTEGER DEFAULT 0,
-  notes TEXT,
-  date_completed TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_uworld_blocks_user ON public.uworld_blocks(user_id);
-
-CREATE TABLE IF NOT EXISTS public.mrcp_syllabus (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  name TEXT NOT NULL,
-  status TEXT DEFAULT 'Not Started',
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_mrcp_syllabus_user ON public.mrcp_syllabus(user_id);
-
-CREATE TABLE IF NOT EXISTS public.mrcp_topics (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  syllabus_id TEXT NOT NULL,
-  name TEXT NOT NULL,
-  status TEXT DEFAULT 'Not Started',
-  confidence INTEGER DEFAULT 0,
-  repetitions INTEGER DEFAULT 0,
-  notes TEXT,
-  last_reviewed TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_mrcp_topics_user ON public.mrcp_topics(user_id);
-CREATE INDEX IF NOT EXISTS idx_mrcp_topics_syllabus ON public.mrcp_topics(syllabus_id);
-
-CREATE TABLE IF NOT EXISTS public.local_board_cases (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  case_name TEXT NOT NULL,
-  subject_id TEXT,
-  past_paper_year TEXT,
-  repetition_count INTEGER DEFAULT 0,
-  mastery_level TEXT DEFAULT 'Started',
-  notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_board_cases_user ON public.local_board_cases(user_id);
-
-CREATE TABLE IF NOT EXISTS public.study_activity (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  module TEXT NOT NULL,
-  action TEXT NOT NULL,
-  entity_id TEXT,
-  summary TEXT,
-  metadata JSONB DEFAULT '{}',
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_activity_user ON public.study_activity(user_id);
-CREATE INDEX IF NOT EXISTS idx_activity_user_created ON public.study_activity(user_id, created_at);
-
--- ── Goals ──────────────────────────────────────────────────
-
-CREATE TABLE IF NOT EXISTS public.goals (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  title TEXT NOT NULL,
-  goal_type TEXT NOT NULL,
-  target_value REAL NOT NULL,
-  subject_id TEXT,
-  module TEXT,
-  category TEXT DEFAULT 'long_term',
-  deadline TIMESTAMPTZ,
-  sort_order INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_goals_user ON public.goals(user_id);
-
-ALTER TABLE public.goals ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY goal_user_isolation ON public.goals
-  USING (user_id = auth.jwt() ->> 'sub')
-  WITH CHECK (user_id = auth.jwt() ->> 'sub');
-
--- After running the above, run this to refresh PostgREST schema cache:
--- NOTIFY pgrst, 'reload schema';
-
 -- ═══════════════════════════════════════════
 -- NOTIFICATIONS
 -- ═══════════════════════════════════════════
@@ -1091,3 +957,364 @@ CREATE TABLE IF NOT EXISTS scheduled_pushes (
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_sched_push_due ON scheduled_pushes(scheduled_at, attempts);
+
+-- ════════════════════════════════════════════════════════════
+-- ROTATION PLANNER — plan configuration
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS rotation_plans (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  rotation TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  exam_date TEXT,
+  study_style TEXT DEFAULT 'active',
+  uworld_mode TEXT DEFAULT 'timed',
+  planning_buffer_minutes INTEGER DEFAULT 30,
+  uworld_total_questions INTEGER DEFAULT 0,
+  preferred_questions_per_day INTEGER DEFAULT 30,
+  questions_per_day_min INTEGER DEFAULT 20,
+  questions_per_day_max INTEGER DEFAULT 40,
+  avg_minutes_per_question REAL DEFAULT 1.5,
+  scheduling_style TEXT DEFAULT 'efficient',
+  flashcard_review_enabled INTEGER DEFAULT 1,
+  flashcard_max_minutes INTEGER DEFAULT 30,
+  personal_pace_multiplier REAL DEFAULT 1.0,
+  status TEXT DEFAULT 'draft',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_rotation_plans_user ON rotation_plans(user_id);
+CREATE INDEX IF NOT EXISTS idx_rotation_plans_status ON rotation_plans(user_id, status);
+
+CREATE TABLE IF NOT EXISTS rotation_availability (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL REFERENCES rotation_plans(id) ON DELETE CASCADE,
+  day_of_week INTEGER NOT NULL,
+  available_minutes INTEGER NOT NULL DEFAULT 0,
+  is_hospital_day INTEGER DEFAULT 0,
+  is_day_off INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_rotation_availability_plan ON rotation_availability(plan_id);
+
+CREATE TABLE IF NOT EXISTS rotation_schedule (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL REFERENCES rotation_plans(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  date TEXT NOT NULL,
+  topic_id TEXT,
+  activity_type TEXT NOT NULL,
+  description TEXT,
+  estimated_minutes INTEGER,
+  actual_minutes INTEGER,
+  uworld_questions INTEGER DEFAULT 0,
+  uworld_mode TEXT,
+  status TEXT DEFAULT 'pending',
+  sort_order INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_rotation_schedule_plan ON rotation_schedule(plan_id);
+CREATE INDEX IF NOT EXISTS idx_rotation_schedule_user ON rotation_schedule(user_id);
+CREATE INDEX IF NOT EXISTS idx_rotation_schedule_date ON rotation_schedule(plan_id, date);
+
+CREATE TABLE IF NOT EXISTS rotation_topic_progress (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL REFERENCES rotation_plans(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  topic_id TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  study_status TEXT DEFAULT 'not_started',
+  study_completed_at TEXT,
+  uworld_status TEXT DEFAULT 'not_started',
+  uworld_questions_done INTEGER DEFAULT 0,
+  uworld_questions_total INTEGER DEFAULT 0,
+  uworld_completed_at TEXT,
+  confidence INTEGER DEFAULT 0,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_rotation_progress_plan ON rotation_topic_progress(plan_id);
+CREATE INDEX IF NOT EXISTS idx_rotation_progress_user ON rotation_topic_progress(user_id);
+CREATE INDEX IF NOT EXISTS idx_rotation_progress_topic ON rotation_topic_progress(plan_id, topic_id);
+
+-- ════════════════════════════════════════════════════════════
+-- ROTATION PLANNER v2 — plan configuration
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS rotation_planner_plans (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  rotation_id TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  source_version TEXT,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  exam_date TEXT,
+  study_style TEXT DEFAULT 'active'
+    CHECK (study_style IN ('focused', 'active', 'detailed_notes')),
+  scheduling_mode TEXT DEFAULT 'efficient'
+    CHECK (scheduling_mode IN ('focused', 'efficient')),
+  question_start_rule TEXT DEFAULT 'next_available_day'
+    CHECK (question_start_rule IN ('next_available_day', 'same_day_if_capacity')),
+  preferred_questions_per_day INTEGER DEFAULT 30,
+  minimum_questions_per_session INTEGER DEFAULT 10,
+  maximum_questions_per_day INTEGER DEFAULT 50,
+  average_minutes_per_question REAL DEFAULT 1.5,
+  buffer_percentage INTEGER DEFAULT 20,
+  maximum_active_topics INTEGER DEFAULT 5,
+  uses_flashcard_capacity INTEGER NOT NULL DEFAULT 0,
+  status TEXT DEFAULT 'draft'
+    CHECK (status IN ('draft', 'active', 'paused', 'completed', 'archived')),
+  client_request_id TEXT NOT NULL,
+  request_fingerprint TEXT NOT NULL,
+  settings_json TEXT DEFAULT '{}',
+  revision INTEGER NOT NULL DEFAULT 0,
+  last_recalculated_at TEXT,
+  stale_at TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rpp_flashcard_owner
+  ON rotation_planner_plans(user_id)
+  WHERE uses_flashcard_capacity = 1 AND status IN ('draft', 'active');
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rpp_idempotency
+  ON rotation_planner_plans(user_id, client_request_id);
+CREATE INDEX IF NOT EXISTS idx_rpp_user ON rotation_planner_plans(user_id);
+CREATE INDEX IF NOT EXISTS idx_rpp_status ON rotation_planner_plans(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_rpp_rotation ON rotation_planner_plans(user_id, rotation_id);
+
+-- ════════════════════════════════════════════════════════════
+-- ROTATION PLANNER v2 — per-day availability
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS rotation_planner_availability (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL
+    REFERENCES rotation_planner_plans(id) ON DELETE CASCADE,
+  weekday INTEGER NOT NULL
+    CHECK (weekday BETWEEN 0 AND 6),
+  available_minutes INTEGER NOT NULL DEFAULT 0,
+  is_day_off INTEGER DEFAULT 0
+    CHECK (is_day_off IN (0, 1)),
+  UNIQUE(plan_id, weekday)
+);
+CREATE INDEX IF NOT EXISTS idx_rpa_plan ON rotation_planner_availability(plan_id);
+
+-- ════════════════════════════════════════════════════════════
+-- ROTATION PLANNER v2 — topic progress
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS rotation_planner_topics (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL
+    REFERENCES rotation_planner_plans(id) ON DELETE CASCADE,
+  normalized_topic_id TEXT NOT NULL,
+  canonical_topic_id TEXT NOT NULL,
+  source_topic_id TEXT,
+  shared_topic_key TEXT,
+  topic_title TEXT NOT NULL,
+  group_id TEXT,
+  base_learning_minutes INTEGER DEFAULT 0,
+  personalized_learning_minutes INTEGER DEFAULT 0,
+  total_uworld_questions INTEGER DEFAULT 0,
+  completed_uworld_questions INTEGER DEFAULT 0,
+  learning_completed_at TEXT,
+  questions_unlocked_at TEXT,
+  status TEXT DEFAULT 'not_started'
+    CHECK (status IN (
+      'not_started',
+      'learning',
+      'questions_locked',
+      'uworld_in_progress',
+      'incorrect_review',
+      'maintenance',
+      'completed'
+    )),
+  incorrect_questions_remaining INTEGER NOT NULL DEFAULT 0
+    CHECK (incorrect_questions_remaining >= 0),
+  mastery_score REAL,
+  display_order INTEGER DEFAULT 0,
+  UNIQUE(plan_id, normalized_topic_id)
+);
+CREATE INDEX IF NOT EXISTS idx_rpt_plan ON rotation_planner_topics(plan_id);
+CREATE INDEX IF NOT EXISTS idx_rpt_status ON rotation_planner_topics(plan_id, status);
+CREATE INDEX IF NOT EXISTS idx_rpt_normalized ON rotation_planner_topics(plan_id, normalized_topic_id);
+CREATE INDEX IF NOT EXISTS idx_rpt_shared_key ON rotation_planner_topics(plan_id, shared_topic_key);
+
+-- ════════════════════════════════════════════════════════════
+-- ROTATION PLANNER v2 — daily tasks
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS rotation_planner_daily_tasks (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL
+    REFERENCES rotation_planner_plans(id) ON DELETE CASCADE,
+  plan_topic_id TEXT
+    REFERENCES rotation_planner_topics(id) ON DELETE SET NULL,
+  task_date TEXT NOT NULL,
+  task_type TEXT NOT NULL
+    CHECK (task_type IN (
+      'learning',
+      'consolidation',
+      'flashcard_review',
+      'uworld_questions',
+      'incorrect_review',
+      'mixed_review',
+      'optional_book_questions'
+    )),
+  provider TEXT,
+  estimated_minutes INTEGER,
+  actual_minutes INTEGER,
+  target_count INTEGER,
+  completed_count INTEGER DEFAULT 0,
+  completion_percentage REAL NOT NULL DEFAULT 0
+    CHECK (completion_percentage >= 0 AND completion_percentage <= 100),
+  incorrect_count INTEGER NOT NULL DEFAULT 0
+    CHECK (incorrect_count >= 0),
+  completed_at TEXT,
+  completed_on TEXT,
+  mode TEXT,
+  question_pool TEXT,
+  status TEXT DEFAULT 'locked'
+    CHECK (status IN (
+      'locked',
+      'pending',
+      'in_progress',
+      'partial',
+      'completed',
+      'skipped'
+    )),
+  unlock_condition TEXT,
+  display_order INTEGER DEFAULT 0,
+  is_pinned INTEGER NOT NULL DEFAULT 0,
+  metadata_json TEXT DEFAULT '{}',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_rpd_plan ON rotation_planner_daily_tasks(plan_id);
+CREATE INDEX IF NOT EXISTS idx_rpd_date ON rotation_planner_daily_tasks(plan_id, task_date);
+CREATE INDEX IF NOT EXISTS idx_rpd_status ON rotation_planner_daily_tasks(plan_id, status);
+CREATE INDEX IF NOT EXISTS idx_rpd_topic ON rotation_planner_daily_tasks(plan_topic_id);
+
+-- ════════════════════════════════════════════════════════════
+-- ROTATION PLANNER v2 — task sessions
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS rotation_planner_task_sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  task_id TEXT NOT NULL
+    REFERENCES rotation_planner_daily_tasks(id) ON DELETE CASCADE,
+  source_id TEXT NOT NULL,
+  planned_minutes INTEGER,
+  active_minutes INTEGER,
+  completion_percentage REAL DEFAULT 0,
+  interrupted INTEGER DEFAULT 0
+    CHECK (interrupted IN (0, 1)),
+  valid_for_calibration INTEGER DEFAULT 1
+    CHECK (valid_for_calibration IN (0, 1)),
+  activity_type TEXT,
+  mutation_id TEXT
+    REFERENCES rotation_planner_task_mutations(id) ON DELETE SET NULL,
+  calibration_invalid_reason TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_rpts_task ON rotation_planner_task_sessions(task_id);
+CREATE INDEX IF NOT EXISTS idx_rpts_user ON rotation_planner_task_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_rpts_source ON rotation_planner_task_sessions(source_id);
+CREATE INDEX IF NOT EXISTS idx_rpts_created ON rotation_planner_task_sessions(created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rpts_mutation ON rotation_planner_task_sessions(mutation_id);
+CREATE INDEX IF NOT EXISTS idx_rpts_pace_lookup ON rotation_planner_task_sessions(user_id, source_id, activity_type, created_at);
+
+-- ════════════════════════════════════════════════════════════
+-- ROTATION PLANNER v2 — task mutations (idempotency + replay)
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS rotation_planner_task_mutations (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL
+    REFERENCES rotation_planner_plans(id) ON DELETE CASCADE,
+  task_id TEXT
+    REFERENCES rotation_planner_daily_tasks(id) ON DELETE SET NULL,
+  user_id TEXT NOT NULL,
+  client_request_id TEXT NOT NULL,
+  request_fingerprint TEXT NOT NULL,
+  expected_revision INTEGER NOT NULL,
+  resulting_revision INTEGER NOT NULL,
+  action TEXT NOT NULL,
+  resulting_task_status TEXT NOT NULL,
+  occurred_at TEXT NOT NULL,
+  occurred_on TEXT NOT NULL,
+  result_json TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rptm_idempotency ON rotation_planner_task_mutations(user_id, client_request_id);
+CREATE INDEX IF NOT EXISTS idx_rptm_task ON rotation_planner_task_mutations(task_id);
+CREATE INDEX IF NOT EXISTS idx_rptm_plan ON rotation_planner_task_mutations(plan_id);
+
+-- ════════════════════════════════════════════════════════════
+-- ROTATION PLANNER v2 — plan mutations (recalc idempotency)
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS rotation_planner_plan_mutations (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL
+    REFERENCES rotation_planner_plans(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  client_request_id TEXT NOT NULL,
+  request_fingerprint TEXT NOT NULL,
+  expected_revision INTEGER NOT NULL,
+  resulting_revision INTEGER NOT NULL,
+  operation TEXT NOT NULL,
+  result_json TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rppm_idempotency ON rotation_planner_plan_mutations(user_id, client_request_id);
+CREATE INDEX IF NOT EXISTS idx_rppm_plan ON rotation_planner_plan_mutations(plan_id);
+
+-- ════════════════════════════════════════════════════════════
+-- ROTATION PLANNER v2 — user source pace calibration
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS user_source_pace (
+  user_id TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  activity_type TEXT NOT NULL,
+  pace_multiplier REAL DEFAULT 1.0,
+  sample_count INTEGER DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, source_id, activity_type)
+);
+CREATE INDEX IF NOT EXISTS idx_usp_user ON user_source_pace(user_id);
+
+-- ════════════════════════════════════════════════════════════
+-- TASK 11 — flashcard deck-to-topic mappings
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS flashcard_deck_mappings (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  deck_name TEXT NOT NULL,
+  canonical_topic_id TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(user_id, deck_name)
+);
+CREATE INDEX IF NOT EXISTS idx_fdm_user ON flashcard_deck_mappings(user_id);
+CREATE INDEX IF NOT EXISTS idx_fdm_topic ON flashcard_deck_mappings(canonical_topic_id);
+
+-- Performance index for review-due query
+CREATE INDEX IF NOT EXISTS idx_flashcards_user_review
+  ON flashcards(user_id, state, next_review)
+  WHERE last_review IS NOT NULL;
+
+-- ════════════════════════════════════════════════════════════
+-- TASK 11 — Flashcard deck-mapping mutation idempotency
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS flashcard_deck_mapping_mutations (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  client_request_id TEXT NOT NULL,
+  request_fingerprint TEXT NOT NULL,
+  result_json TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(user_id, client_request_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fdmm_user ON flashcard_deck_mapping_mutations(user_id);
+CREATE INDEX IF NOT EXISTS idx_fdmm_created ON flashcard_deck_mapping_mutations(created_at);

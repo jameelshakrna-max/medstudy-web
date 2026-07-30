@@ -108,12 +108,45 @@ import {
   handleGetPortfolio, handleAddPortfolioEntry, handleUpdatePortfolioEntry, handleDeletePortfolioEntry,
 } from './handlers/research.js'
 
+import {
+  handleGetPlans, handleCreatePlan, handleGetPlan, handleUpdatePlan, handleDeletePlan,
+  handleGenerateSchedule, handleUpdateEntry, handleGetProgress, handleUpdateProgress,
+  handleActivatePlan, handleFlashcardSummary,
+} from './handlers/rotations.js'
+
+import {
+  getPlannerRotations, getPlannerSources,
+  getPlannerSourceRotations, getPlannerSourceRotationTopics,
+} from './handlers/rotationPlanner.js'
+
+import {
+  handlePreviewRotationPlan, handleCreateRotationPlan,
+  handleListRotationPlans, handleGetRotationPlan, handleDeleteRotationPlan,
+  handleUpdateTask, handleRecalculatePlan, handleGetPlanForecast,
+} from './handlers/rotationPlannerPlans.js'
+
+import {
+  listUserDecks,
+  listUserDeckMappings,
+  upsertDeckMapping,
+  deleteDeckMapping,
+  verifyPlanOwnership,
+  resolveCanonicalTopicForMapping,
+  verifyDeckExists,
+  cleanupOrphanMapping,
+  calculateMappingFingerprint,
+  checkMappingIdempotency,
+  persistMappingMutation,
+  signalFlashcardMappingsStaleness,
+  EXISTING_REVIEW_IMPACT,
+} from './services/flashcardMappings.js'
+
 function ensureCORS(response) {
   const h = response.headers
   if (!h.get('access-control-allow-origin')) {
     h.set('access-control-allow-origin', '*')
-    h.set('access-control-allow-methods', 'GET, POST, PUT, DELETE, OPTIONS')
-    h.set('access-control-allow-headers', 'Content-Type, Authorization')
+    h.set('access-control-allow-methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS')
+    h.set('access-control-allow-headers', 'Content-Type, Authorization, Idempotency-Key')
   }
   return response
 }
@@ -221,6 +254,20 @@ export default {
       }
       if (path.match(/^\/api\/decks\/[^\/]+$/) && request.method === 'DELETE') {
         return handleDeleteDeck(request, env, user)
+      }
+
+      if (path === '/api/flashcards/decks' && request.method === 'GET') {
+        return handleListDecks(request, env, user)
+      }
+
+      if (path === '/api/deck-mappings' && request.method === 'GET') {
+        return handleListDeckMappings(request, env, user)
+      }
+      if (path === '/api/deck-mappings' && request.method === 'POST') {
+        return handleCreateDeckMapping(request, env, user)
+      }
+      if (path.match(/^\/api\/deck-mappings\/[^\/]+$/) && request.method === 'DELETE') {
+        return handleDeleteDeckMapping(request, env, user)
       }
 
       if (path === '/api/upload-image' && request.method === 'POST') {
@@ -522,6 +569,42 @@ export default {
       if (path === '/api/push/schedule' && request.method === 'POST') return handleSchedulePush(request, env, user)
       if (path === '/api/push/cancel' && request.method === 'POST') return handleCancelPushes(request, env, user)
 
+
+      // ── Rotation Planner ──
+      if (path === '/api/rotations/plans' && request.method === 'GET') return handleGetPlans(request, env, user)
+      if (path === '/api/rotations/plans' && request.method === 'POST') return handleCreatePlan(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+$/) && request.method === 'GET') return handleGetPlan(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+$/) && request.method === 'PUT') return handleUpdatePlan(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+$/) && request.method === 'DELETE') return handleDeletePlan(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+\/generate$/) && request.method === 'POST') return handleGenerateSchedule(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+\/activate$/) && request.method === 'POST') return handleActivatePlan(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+\/progress$/) && request.method === 'GET') return handleGetProgress(request, env, user)
+      if (path.match(/^\/api\/rotations\/schedule\/[^\/]+$/) && request.method === 'PUT') return handleUpdateEntry(request, env, user)
+      if (path.match(/^\/api\/rotations\/progress\/[^\/]+$/) && request.method === 'PUT') return handleUpdateProgress(request, env, user)
+      if (path === '/api/rotations/flashcard-summary' && request.method === 'GET') return handleFlashcardSummary(request, env, user)
+
+      // ── Rotation Planner (read-only) ──
+      if (path.match(/^\/api\/rotation-planner\/sources\/[^\/]+\/rotations\/[^\/]+\/topics$/) && request.method === 'GET') return getPlannerSourceRotationTopics(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/sources\/[^\/]+\/rotations$/) && request.method === 'GET') return getPlannerSourceRotations(request, env, user)
+      if (path === '/api/rotation-planner/sources' && request.method === 'GET') return getPlannerSources(request, env, user)
+      if (path === '/api/rotation-planner/rotations' && request.method === 'GET') return getPlannerRotations(request, env, user)
+
+      // ── Rotation Planner (plans) ──
+      if (path === '/api/rotation-planner/plans/preview' && request.method === 'POST') return handlePreviewRotationPlan(request, env, user)
+      if (path === '/api/rotation-planner/plans' && request.method === 'POST') return handleCreateRotationPlan(request, env, user)
+      if (path === '/api/rotation-planner/plans' && request.method === 'GET') return handleListRotationPlans(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'GET') return handleGetRotationPlan(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteRotationPlan(request, env, user)
+
+      // Task update: PATCH /plans/:planId/tasks/:taskId
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/tasks\/[^\/]+$/) && request.method === 'PATCH') return handleUpdateTask(request, env, user)
+
+      // Recalculate: POST /plans/:planId/recalculate
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/recalculate$/) && request.method === 'POST') return handleRecalculatePlan(request, env, user)
+
+      // Forecast: GET /plans/:planId/forecast
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/forecast$/) && request.method === 'GET') return handleGetPlanForecast(request, env, user)
+
       return json({ error: 'Not found' }, 404)
     } catch (err) {
       console.error(`[${requestId}]`, err)
@@ -591,12 +674,17 @@ async function handleUpdateFlashcard(request, env, user) {
     body.next_review || null, body.last_review || null, body.image_url || null,
     id, user.sub
   ).run()
+  signalFlashcardMappingsStaleness(env, user.sub, EXISTING_REVIEW_IMPACT).catch(() => {})
   return json({ success: true })
 }
 
 async function handleDeleteFlashcard(request, env, user) {
   const id = extractId(request.url)
+  const row = await env.DB.prepare('SELECT deck_name FROM flashcards WHERE id = ? AND user_id = ?').bind(id, user.sub).first()
+  if (!row) return json({ success: true })
   await env.DB.prepare('DELETE FROM flashcards WHERE id = ? AND user_id = ?').bind(id, user.sub).run()
+  await cleanupOrphanMapping(env, user.sub, row.deck_name)
+  signalFlashcardMappingsStaleness(env, user.sub, EXISTING_REVIEW_IMPACT).catch(() => {})
   return json({ success: true })
 }
 
@@ -624,6 +712,8 @@ async function handleCreateDeck(request, env, user) {
 async function handleDeleteDeck(request, env, user) {
   const deckName = decodeURIComponent(extractId(request.url))
   await env.DB.prepare('DELETE FROM flashcards WHERE user_id = ? AND deck_name = ?').bind(user.sub, deckName).run()
+  await cleanupOrphanMapping(env, user.sub, deckName)
+  signalFlashcardMappingsStaleness(env, user.sub, EXISTING_REVIEW_IMPACT).catch(() => {})
   return json({ success: true })
 }
 
@@ -669,6 +759,90 @@ async function handleSaveFsrs(request, env, user) {
     'INSERT INTO fsrs_parameters (user_id, params) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET params = ?'
   ).bind(user.sub, JSON.stringify(params), JSON.stringify(params)).run()
   return json({ success: true })
+}
+
+async function handleListDecks(request, env, user) {
+  const decks = await listUserDecks(env, user.sub)
+  return json({ decks })
+}
+
+async function handleListDeckMappings(request, env, user) {
+  const mappings = await listUserDeckMappings(env, user.sub)
+  return json({ mappings })
+}
+
+async function handleCreateDeckMapping(request, env, user) {
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid JSON body.' } }, 400)
+  }
+
+  const { planId, deckName, planTopicId, clientRequestId } = body || {}
+
+  if (!planId || typeof planId !== 'string') return json({ error: { code: 'VALIDATION_ERROR', message: 'planId is required.' } }, 400)
+  if (!planTopicId || typeof planTopicId !== 'string') return json({ error: { code: 'VALIDATION_ERROR', message: 'planTopicId is required.' } }, 400)
+  if (!deckName || typeof deckName !== 'string' || deckName.length === 0 || deckName.length > 200) return json({ error: { code: 'VALIDATION_ERROR', message: 'deckName is required (max 200 chars).' } }, 400)
+  if (!clientRequestId || typeof clientRequestId !== 'string') return json({ error: { code: 'VALIDATION_ERROR', message: 'clientRequestId is required.' } }, 400)
+
+  const fingerprint = await calculateMappingFingerprint(user.sub, planId, deckName, planTopicId)
+
+  const idemCheck = await checkMappingIdempotency(env, user.sub, clientRequestId)
+  if (idemCheck.status === 'found') {
+    if (idemCheck.existingFingerprint === fingerprint) {
+      return json(idemCheck.existingResult)
+    }
+    return json({ error: { code: 'IDEMPOTENCY_CONFLICT', message: 'Same idempotency key with different input.' } }, 409)
+  }
+
+  const ownsPlan = await verifyPlanOwnership(env, planId, user.sub)
+  if (!ownsPlan) return json({ error: { code: 'VALIDATION_ERROR', message: 'Plan not found or does not belong to user.' } }, 404)
+
+  const canonicalTopicId = await resolveCanonicalTopicForMapping(env, planId, planTopicId)
+  if (!canonicalTopicId) return json({ error: { code: 'VALIDATION_ERROR', message: 'planTopicId not found or has no canonicalTopicId.' } }, 404)
+
+  const deckExists = await verifyDeckExists(env, user.sub, deckName)
+  if (!deckExists) return json({ error: { code: 'VALIDATION_ERROR', message: 'Deck not found for this user.' } }, 404)
+
+  const mapping = await upsertDeckMapping(env, user.sub, deckName, canonicalTopicId)
+  if (!mapping) return json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to create mapping.' } }, 500)
+
+  const result = { mapping, recalculationRequired: false }
+  await persistMappingMutation(env, user.sub, clientRequestId, fingerprint, result)
+  return json(result)
+}
+
+async function handleDeleteDeckMapping(request, env, user) {
+  const mappingId = extractId(request.url)
+
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid JSON body.' } }, 400)
+  }
+
+  const { clientRequestId } = body || {}
+
+  if (!clientRequestId || typeof clientRequestId !== 'string') return json({ error: { code: 'VALIDATION_ERROR', message: 'clientRequestId is required.' } }, 400)
+
+  const deleteFingerprint = await calculateMappingFingerprint(user.sub, 'delete', mappingId, 'delete')
+
+  const idemCheck = await checkMappingIdempotency(env, user.sub, clientRequestId)
+  if (idemCheck.status === 'found') {
+    if (idemCheck.existingFingerprint === deleteFingerprint) {
+      return json(idemCheck.existingResult)
+    }
+    return json({ error: { code: 'IDEMPOTENCY_CONFLICT', message: 'Same idempotency key with different input.' } }, 409)
+  }
+
+  const deleted = await deleteDeckMapping(env, mappingId, user.sub)
+  if (!deleted) return json({ error: { code: 'NOT_FOUND', message: 'Mapping not found.' } }, 404)
+
+  const result = { deleted: true, mappingId, recalculationRequired: false }
+  await persistMappingMutation(env, user.sub, clientRequestId, deleteFingerprint, result)
+  return json(result)
 }
 
 async function handleGetCategories(request, env) {

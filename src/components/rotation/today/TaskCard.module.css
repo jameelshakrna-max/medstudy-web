@@ -1,0 +1,231 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--card-border);
+  transition: background var(--duration-fast) ease;
+}
+
+.card:last-child {
+  border-bottom: none;
+}
+
+.card:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.locked {
+  opacity: 0.5;
+}
+
+.completed {
+  opacity: 0.6;
+}
+
+.overdue {
+  border-left: 3px solid var(--amber, #ffb800);
+}
+
+.active {
+  background: rgba(79, 140, 255, 0.04);
+  border-left: 3px solid var(--blue);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-xs);
+}
+
+.typeInfo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.typeIcon {
+  color: var(--text-secondary);
+}
+
+.typeLabel {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+}
+
+.statusBadge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--input-bg);
+  color: var(--mist);
+}
+
+.statusActive {
+  background: rgba(79, 140, 255, 0.12);
+  color: var(--blue);
+}
+
+.statusOverdue {
+  background: rgba(255, 184, 0, 0.12);
+  color: var(--amber, #ffb800);
+}
+
+.statusTerminal {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--emerald);
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--space-sm);
+}
+
+.titleRow {
+  margin-bottom: 1px;
+}
+
+.topicTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.sourceInfo {
+  font-size: 12px;
+  color: var(--mist);
+}
+
+.progressRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.timeEstimate {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.timeActual {
+  font-size: 11px;
+  color: var(--mist);
+}
+
+.progressInline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex: 1;
+  min-width: 0;
+}
+
+.progressLabel {
+  font-size: 11px;
+  color: var(--mist);
+  white-space: nowrap;
+}
+
+.pomodoroRow {
+  margin-bottom: var(--space-sm);
+}
+
+.pomodoroBtn {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+.pomodoroBtn:hover {
+  background: rgba(79, 140, 255, 0.85);
+  color: #fff;
+}
+
+.cardActions {
+  display: flex;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.actionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.actionBtn:hover {
+  background: var(--card-border);
+  color: var(--text-primary);
+}
+
+.actionBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.actionBtn:disabled:hover {
+  background: var(--input-bg);
+  color: var(--text-secondary);
+}
+
+.playBtn {
+  background: var(--blueL);
+  border-color: rgba(79, 140, 255, 0.3);
+  color: var(--blue);
+}
+
+.playBtn:hover {
+  background: rgba(79, 140, 255, 0.2);
+}
+
+.completeBtn {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: var(--emerald);
+}
+
+.completeBtn:hover {
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.skipBtn {
+  color: var(--mist);
+}
+
+.skipBtn:hover {
+  color: var(--text-secondary);
+}
+
+@media (max-width: 640px) {
+  .card {
+    padding: 10px 12px;
+  }
+
+  .cardActions {
+    gap: 3px;
+  }
+
+  .actionBtn {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+}

@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -182,6 +183,14 @@ function maturityLabel(c) {
 export default function Anki() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
+
+  // Support ?deck=DeckName for auto-navigating to a specific deck
+  const initialDeckFromUrl = useMemo(() => {
+    const decks = searchParams.getAll('deck')
+    if (decks.length === 0) return null
+    return decks
+  }, [searchParams])
 
   const [view, setView] = useState('decks')
   const [activeDeckId, setActiveDeckId] = useState(null)
@@ -244,6 +253,17 @@ export default function Anki() {
   })
 
   const loading = decksLoading || cardsLoading
+
+  // Auto-navigate to deck from URL query params
+  useEffect(() => {
+    if (!loading && decks.length > 0 && initialDeckFromUrl && initialDeckFromUrl.length > 0) {
+      const deck = decks.find(d => initialDeckFromUrl.includes(d.name))
+      if (deck) {
+        setActiveDeckId(deck.id)
+        setView('browse')
+      }
+    }
+  }, [loading, decks, initialDeckFromUrl])
 
   /* ── mutations ──────────────────────────────────────── */
 

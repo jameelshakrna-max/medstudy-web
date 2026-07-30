@@ -1,10 +1,25 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { secondsToPlannerMinutes } from '../components/rotation/today/todayUtils'
 
 const PomodoroTimerContext = createContext(null)
 const PomodoroSettingsContext = createContext(null)
 
 const MODES = ['study', 'break', 'long']
+const PLANNER_TASK_CONTEXT_VERSION = 1
+
+function hasUnsyncedPlannerData(ctx) {
+  if (!ctx) return false
+  if (ctx.syncRequestId) return true
+  if (['pending', 'in_flight', 'network_outcome_unknown', 'revision_recovery'].includes(ctx.syncStatus)) return true
+  const synced = ctx.syncedFocusMinutes ?? 0
+  if (ctx.syncPayload) return true
+  if (ctx.syncTargetFocusMinutes != null && ctx.syncTargetFocusMinutes > synced) return true
+  if (secondsToPlannerMinutes(ctx.accumulatedFocusSeconds ?? 0) > synced) return true
+  if (ctx.syncStatus === 'terminal_error' && (ctx.syncPayload || secondsToPlannerMinutes(ctx.accumulatedFocusSeconds ?? 0) > synced)) return true
+  if (ctx.syncStatus === 'idempotency_conflict' && (ctx.syncPayload || secondsToPlannerMinutes(ctx.accumulatedFocusSeconds ?? 0) > synced)) return true
+  return false
+}
 
 // ══════════════════════════════════════════════════
 //  VAPID PUBLIC KEY — REPLACE WITH YOUR OWN KEY
@@ -309,6 +324,19 @@ export function PomodoroProvider({ children }) {
   const [completed, setCompleted] = useState(false)
   const [failed, setFailed] = useState(false)
 
+  const [plannerTaskContext, setPlannerTaskContext] = useState(null)
+  const plannerTaskContextRef = useRef(null)
+  const activeStudySecondsRef = useRef(0)
+  const completionAccumulatedRef = useRef(false)
+
+  const updatePlannerTaskContext = useCallback((updater) => {
+    setPlannerTaskContext(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      plannerTaskContextRef.current = next
+      return next
+    })
+  }, [])
+
   // ── Focus mode state ──
   const [focusMode, setFocusMode] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -332,12 +360,13 @@ export function PomodoroProvider({ children }) {
         focusMins, shortMins, longMins,
         selectedTopic, sessionPomodoros, activeStudySeconds,
         treeStatus, selectedTree, sessionTreeId, completed, failed,
+        plannerTaskContext: plannerTaskContext ? { ...plannerTaskContext, _version: PLANNER_TASK_CONTEXT_VERSION } : null,
         savedAt: Date.now(),
         ...overrides,
       }
       localStorage.setItem('pomodoro_state', JSON.stringify(state))
     } catch (_) {}
-  }, [mode, running, seconds, totalSec, focusMins, shortMins, longMins, selectedTopic, sessionPomodoros, activeStudySeconds, treeStatus, selectedTree, sessionTreeId, completed, failed])
+  }, [mode, running, seconds, totalSec, focusMins, shortMins, longMins, selectedTopic, sessionPomodoros, activeStudySeconds, treeStatus, selectedTree, sessionTreeId, completed, failed, plannerTaskContext])
 
   // ── Recover timer state on mount ──
   useEffect(() => {
@@ -376,6 +405,7 @@ export function PomodoroProvider({ children }) {
           setTreeStatus('RUNNING')
           if (saved.mode === 'study' && saved.activeStudySeconds) {
             activeStudyStartRef.current = Date.now() - saved.activeStudySeconds * 1000
+            activeStudySecondsRef.current = saved.activeStudySeconds
           }
           // Don't auto-resume — let user decide
         } else {
@@ -387,7 +417,40 @@ export function PomodoroProvider({ children }) {
         setSeconds(saved.seconds)
         setTotalSec(saved.totalSec || 25 * 60)
       }
+
+      // Planner task context recovery
+      if (saved.plannerTaskContext && typeof saved.plannerTaskContext === 'object') {
+        const p = saved.plannerTaskContext
+        if (p._version === PLANNER_TASK_CONTEXT_VERSION) {
+          const hasValidIds = typeof p.taskId === 'string' && typeof p.planId === 'string'
+          const hasValidNumbers = typeof p.baseActualMinutes === 'number'
+            && typeof p.accumulatedFocusSeconds === 'number'
+            && typeof p.syncedFocusMinutes === 'number'
+            && typeof p.lastKnownRevision === 'number'
+          const hasValidPayload = !p.syncPayload || (
+            typeof p.syncPayload === 'object'
+            && typeof p.syncPayload.action === 'string'
+            && typeof p.syncPayload.clientRequestId === 'string'
+          )
+
+          if (hasValidIds && hasValidNumbers && hasValidPayload) {
+            let recovered = { ...p, _version: PLANNER_TASK_CONTEXT_VERSION }
+            if (p.syncStatus === 'in_flight') {
+              recovered.syncStatus = 'network_outcome_unknown'
+            }
+            if (['pending', 'in_flight', 'network_outcome_unknown'].includes(recovered.syncStatus) && !recovered.syncPayload) {
+              recovered.syncRequestId = null
+              recovered.syncPayload = null
+              recovered.syncTargetFocusMinutes = null
+              recovered.syncStatus = null
+            }
+            setPlannerTaskContext(recovered)
+            plannerTaskContextRef.current = recovered
+          }
+        }
+      }
     } catch (_) {}
+
     recoveryDoneRef.current = true
     recoveryAppliedRef.current = true
   }, []) // Run once on mount
@@ -400,13 +463,19 @@ export function PomodoroProvider({ children }) {
 
   // ── Periodic save for timer values (every 5s while running) ──
   const periodicStateRef = useRef({})
-  periodicStateRef.current = { mode, running, seconds, totalSec, activeStudySeconds, focusMins, shortMins, longMins, selectedTopic, sessionPomodoros, treeStatus, selectedTree, sessionTreeId, completed, failed }
+  periodicStateRef.current = { mode, running, seconds, totalSec, activeStudySeconds, plannerTaskContext, focusMins, shortMins, longMins, selectedTopic, sessionPomodoros, treeStatus, selectedTree, sessionTreeId, completed, failed }
 
   useEffect(() => {
     if (!running) return
     const interval = setInterval(() => {
       try {
-        const state = { ...periodicStateRef.current, savedAt: Date.now() }
+        const state = {
+          ...periodicStateRef.current,
+          savedAt: Date.now(),
+          plannerTaskContext: periodicStateRef.current.plannerTaskContext
+            ? { ...periodicStateRef.current.plannerTaskContext, _version: PLANNER_TASK_CONTEXT_VERSION }
+            : null,
+        }
         localStorage.setItem('pomodoro_state', JSON.stringify(state))
       } catch (_) {}
     }, 5000)
@@ -558,6 +627,18 @@ export function PomodoroProvider({ children }) {
       cancelPushNotification()
 
       setSessionPomodoros(p => p + 1)
+
+      if (!completionAccumulatedRef.current) {
+        completionAccumulatedRef.current = true
+        const finalActiveSeconds = activeStudyStartRef.current
+          ? Math.floor((Date.now() - activeStudyStartRef.current) / 1000)
+          : activeStudySecondsRef.current || 0
+
+        updatePlannerTaskContext(prev => {
+          if (!prev?.taskId) return prev
+          return { ...prev, accumulatedFocusSeconds: (prev.accumulatedFocusSeconds || 0) + finalActiveSeconds }
+        })
+      }
     } else {
       bgChimedRef.current = false
       cancelPushNotification()
@@ -601,8 +682,10 @@ export function PomodoroProvider({ children }) {
       lastTickRef.current = remainingSec
       setSeconds(remainingSec)
       if (modeRef.current === 'study' && activeStudyStartRef.current) {
-        setActiveStudySeconds(Math.floor((now - activeStudyStartRef.current) / 1000))
-      }
+          const secs = Math.floor((now - activeStudyStartRef.current) / 1000)
+          activeStudySecondsRef.current = secs
+          setActiveStudySeconds(secs)
+        }
     }
     if (runningRef.current) { rafRef.current = requestAnimationFrame(tick) }
   }, [handleComplete])
@@ -622,6 +705,8 @@ export function PomodoroProvider({ children }) {
     }
     if (modeRef.current === 'study' && !activeStudyStartRef.current) {
       activeStudyStartRef.current = Date.now()
+      activeStudySecondsRef.current = 0
+      completionAccumulatedRef.current = false
     }
     lastTickRef.current = null
 
@@ -809,6 +894,7 @@ export function PomodoroProvider({ children }) {
     setDone(0)
     setSessionPomodoros(0)
     setActiveStudySeconds(0)
+    activeStudySecondsRef.current = 0
     setSessionStart(null)
     setSessionLog([])
     setMode('study')
@@ -818,6 +904,193 @@ export function PomodoroProvider({ children }) {
     setSeconds(dur)
     setTotalSec(dur)
   }, [focusMins])
+
+  const prepareTaskAttachment = useCallback(({ taskId, planId, taskType, actualMinutes, lastKnownRevision }) => {
+    const ctx = plannerTaskContextRef.current
+    const isRunning = runningRef.current
+
+    if (ctx?.taskId === taskId) {
+      return { allowed: false, alreadyAttached: true }
+    }
+
+    if (ctx && hasUnsyncedPlannerData(ctx)) {
+      return { allowed: false, reason: 'Finish or discard the pending sync before switching tasks.' }
+    }
+
+    if (isRunning && ctx?.taskId) {
+      return { allowed: false, reason: 'Stop the timer before switching tasks.' }
+    }
+
+    if (!isRunning && ctx?.taskId && seconds > 0 && seconds < totalSec) {
+      return { allowed: false, reason: 'Finish or reset the paused session before switching.' }
+    }
+
+    if (ctx?.taskId) {
+      return { allowed: false, reason: 'Detach the current task first.' }
+    }
+
+    return {
+      allowed: true,
+      context: {
+        _version: PLANNER_TASK_CONTEXT_VERSION,
+        taskId, planId, taskType,
+        baseActualMinutes: actualMinutes || 0,
+        accumulatedFocusSeconds: 0,
+        syncedFocusMinutes: 0,
+        lastKnownRevision: lastKnownRevision ?? 0,
+        syncRequestId: null,
+        syncPayload: null,
+        syncTargetFocusMinutes: null,
+        syncStatus: null,
+        syncErrorCode: null,
+        syncErrorMessage: null,
+        attachedAt: Date.now(),
+      }
+    }
+  }, [seconds, totalSec])
+
+  const attachTask = useCallback(({ taskId, planId, taskType, actualMinutes, lastKnownRevision }) => {
+    const check = prepareTaskAttachment({ taskId, planId, taskType, actualMinutes, lastKnownRevision })
+    if (check.alreadyAttached) return check
+    if (!check.allowed) return check
+    updatePlannerTaskContext(() => check.context)
+    return { allowed: true }
+  }, [prepareTaskAttachment, updatePlannerTaskContext])
+
+  const detachTask = useCallback(() => {
+    const ctx = plannerTaskContextRef.current
+    if (!ctx) return { allowed: true }
+    if (hasUnsyncedPlannerData(ctx)) {
+      return { allowed: false, reason: 'Cannot detach while unsynced time exists. Discard or sync first.' }
+    }
+    updatePlannerTaskContext(() => null)
+    return { allowed: true }
+  }, [updatePlannerTaskContext])
+
+  const reservePlannerSyncOperation = useCallback(() => {
+    const ctx = plannerTaskContextRef.current
+    if (!ctx?.taskId) return null
+    if (ctx.syncRequestId) return null
+
+    const targetFocusMinutes = secondsToPlannerMinutes(ctx.accumulatedFocusSeconds)
+    const newPlannerMinutes = Math.max(0, targetFocusMinutes - ctx.syncedFocusMinutes)
+    if (newPlannerMinutes <= 0) return null
+
+    const syncRequestId = crypto.randomUUID()
+    const absoluteActualMinutes = ctx.baseActualMinutes + newPlannerMinutes
+    const syncPayload = {
+      action: 'record_time',
+      payload: { actualMinutes: absoluteActualMinutes },
+      expectedRevision: ctx.lastKnownRevision,
+      clientRequestId: syncRequestId,
+    }
+
+    const operation = {
+      syncRequestId,
+      syncPayload,
+      syncTargetFocusMinutes: targetFocusMinutes,
+      syncStatus: 'pending',
+      syncErrorCode: null,
+      syncErrorMessage: null,
+    }
+
+    updatePlannerTaskContext(prev => prev ? { ...prev, ...operation } : null)
+    return operation
+  }, [updatePlannerTaskContext])
+
+  const markPlannerSyncInFlight = useCallback(() => {
+    updatePlannerTaskContext(prev =>
+      prev?.syncStatus === 'pending' ? { ...prev, syncStatus: 'in_flight' } : prev
+    )
+  }, [updatePlannerTaskContext])
+
+  const markPlannerSyncSucceeded = useCallback(({ revision }) => {
+    updatePlannerTaskContext(prev => {
+      if (!prev) return null
+      const committedActualMinutes = prev.syncPayload?.payload?.actualMinutes ?? prev.baseActualMinutes
+      return {
+        ...prev,
+        baseActualMinutes: committedActualMinutes,
+        lastKnownRevision: revision ?? prev.lastKnownRevision,
+        syncedFocusMinutes: prev.syncTargetFocusMinutes ?? prev.syncedFocusMinutes,
+        syncRequestId: null,
+        syncPayload: null,
+        syncTargetFocusMinutes: null,
+        syncStatus: null,
+        syncErrorCode: null,
+        syncErrorMessage: null,
+      }
+    })
+  }, [updatePlannerTaskContext])
+
+  const markPlannerSyncFailed = useCallback(({ code, message }) => {
+    updatePlannerTaskContext(prev => prev ? {
+      ...prev,
+      syncStatus: 'terminal_error',
+      syncErrorCode: code || 'UNKNOWN_ERROR',
+      syncErrorMessage: message || 'Sync failed.',
+    } : null)
+  }, [updatePlannerTaskContext])
+
+  const markNetworkOutcomeUnknown = useCallback(() => {
+    updatePlannerTaskContext(prev => prev?.syncStatus === 'in_flight' ? {
+      ...prev,
+      syncStatus: 'network_outcome_unknown',
+    } : prev)
+  }, [updatePlannerTaskContext])
+
+  const retryPlannerSync = useCallback(() => {
+    updatePlannerTaskContext(prev => {
+      if (prev?.syncStatus !== 'network_outcome_unknown' && prev?.syncStatus !== 'terminal_error') return prev
+      return {
+        ...prev,
+        syncStatus: 'pending',
+        syncErrorCode: null,
+        syncErrorMessage: null,
+      }
+    })
+  }, [updatePlannerTaskContext])
+
+  const rebaseAfterConflict = useCallback(({ newRevision, latestActualMinutes }) => {
+    updatePlannerTaskContext(prev => {
+      if (!prev) return null
+      return {
+        ...prev,
+        baseActualMinutes: latestActualMinutes ?? prev.baseActualMinutes,
+        lastKnownRevision: newRevision,
+        syncRequestId: null,
+        syncPayload: null,
+        syncTargetFocusMinutes: null,
+        syncStatus: null,
+        syncErrorCode: null,
+        syncErrorMessage: null,
+      }
+    })
+  }, [updatePlannerTaskContext])
+
+  const setRevisionRecoveryStatus = useCallback(() => {
+    updatePlannerTaskContext(prev => prev ? {
+      ...prev,
+      syncStatus: 'revision_recovery',
+    } : null)
+  }, [updatePlannerTaskContext])
+
+  const setIdempotencyConflictStatus = useCallback(({ message }) => {
+    updatePlannerTaskContext(prev => prev ? {
+      ...prev,
+      syncStatus: 'idempotency_conflict',
+      syncErrorCode: 'IDEMPOTENCY_CONFLICT',
+      syncErrorMessage: message || 'Duplicate operation detected.',
+    } : null)
+  }, [updatePlannerTaskContext])
+
+  const discardPendingPlannerSync = useCallback(() => {
+    updatePlannerTaskContext(() => null)
+  }, [updatePlannerTaskContext])
+
+  const discardPlannerTaskContext = useCallback(() => {
+    updatePlannerTaskContext(() => null)
+  }, [updatePlannerTaskContext])
 
   // ── Focus mode + fullscreen ──
   const toggleFocusMode = useCallback(() => {
@@ -875,6 +1148,22 @@ export function PomodoroProvider({ children }) {
     sessionPhase, sessionOutcome, isSetup, isActive,
     setModeDuration, advanceToNextMode,
     sessionTreeId, setSessionTreeId,
+    plannerTaskContext,
+    prepareTaskAttachment,
+    attachTask,
+    detachTask,
+    hasUnsyncedPlannerData,
+    reservePlannerSyncOperation,
+    markPlannerSyncInFlight,
+    markPlannerSyncSucceeded,
+    markPlannerSyncFailed,
+    markNetworkOutcomeUnknown,
+    retryPlannerSync,
+    rebaseAfterConflict,
+    setRevisionRecoveryStatus,
+    setIdempotencyConflictStatus,
+    discardPendingPlannerSync,
+    discardPlannerTaskContext,
   }), [
     mode, running, done, seconds, totalSec,
     displayRemaining, progress,
@@ -884,6 +1173,21 @@ export function PomodoroProvider({ children }) {
     sessionPhase, sessionOutcome, isSetup, isActive,
     setModeDuration, advanceToNextMode,
     sessionTreeId,
+    plannerTaskContext,
+    prepareTaskAttachment,
+    attachTask,
+    detachTask,
+    reservePlannerSyncOperation,
+    markPlannerSyncInFlight,
+    markPlannerSyncSucceeded,
+    markPlannerSyncFailed,
+    markNetworkOutcomeUnknown,
+    retryPlannerSync,
+    rebaseAfterConflict,
+    setRevisionRecoveryStatus,
+    setIdempotencyConflictStatus,
+    discardPendingPlannerSync,
+    discardPlannerTaskContext,
   ])
 
   const settingsValue = useMemo(() => ({

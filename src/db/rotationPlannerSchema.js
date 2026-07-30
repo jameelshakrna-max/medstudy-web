@@ -1,0 +1,117 @@
+export const PLANNER_TABLES = {
+  plans: 'rotation_planner_plans',
+  availability: 'rotation_planner_availability',
+  topics: 'rotation_planner_topics',
+  dailyTasks: 'rotation_planner_daily_tasks',
+  taskSessions: 'rotation_planner_task_sessions',
+  userSourcePace: 'user_source_pace',
+  taskMutations: 'rotation_planner_task_mutations',
+  planMutations: 'rotation_planner_plan_mutations',
+  flashcardDeckMappings: 'flashcard_deck_mappings',
+}
+
+export const PLAN_STATUSES = ['draft', 'active', 'paused', 'completed', 'archived']
+
+export const STUDY_STYLES = ['focused', 'active', 'detailed_notes']
+
+export const SCHEDULING_MODES = ['focused', 'efficient']
+
+export const QUESTION_START_RULES = ['next_available_day', 'same_day_if_capacity']
+
+export const TOPIC_STATUSES = [
+  'not_started',
+  'learning',
+  'questions_locked',
+  'uworld_in_progress',
+  'incorrect_review',
+  'maintenance',
+  'completed',
+]
+
+export const TASK_TYPES = [
+  'learning',
+  'consolidation',
+  'flashcard_review',
+  'uworld_questions',
+  'incorrect_review',
+  'mixed_review',
+  'optional_book_questions',
+]
+
+export const TASK_STATUSES = [
+  'locked',
+  'pending',
+  'in_progress',
+  'partial',
+  'completed',
+  'skipped',
+]
+
+export const V1_TABLES = [
+  'rotation_plans',
+  'rotation_availability',
+  'rotation_schedule',
+  'rotation_topic_progress',
+]
+
+export const ALL_PLANNER_COLUMNS = {
+  plans: [
+    'id', 'user_id', 'rotation_id', 'source_id', 'source_version',
+    'start_date', 'end_date', 'exam_date',
+    'study_style', 'scheduling_mode', 'question_start_rule',
+    'preferred_questions_per_day', 'minimum_questions_per_session',
+    'maximum_questions_per_day', 'average_minutes_per_question',
+    'buffer_percentage', 'maximum_active_topics',
+    'status', 'uses_flashcard_capacity', 'client_request_id', 'request_fingerprint',
+    'settings_json', 'revision', 'last_recalculated_at',
+    'stale_at',
+    'created_at', 'updated_at',
+  ],
+  availability: [
+    'id', 'plan_id', 'weekday', 'available_minutes', 'is_day_off',
+  ],
+  topics: [
+    'id', 'plan_id', 'normalized_topic_id', 'canonical_topic_id',
+    'source_topic_id', 'shared_topic_key',
+    'topic_title', 'group_id',
+    'base_learning_minutes', 'personalized_learning_minutes',
+    'total_uworld_questions', 'completed_uworld_questions',
+    'incorrect_questions_remaining',
+    'learning_completed_at', 'questions_unlocked_at',
+    'status', 'mastery_score', 'display_order',
+  ],
+  dailyTasks: [
+    'id', 'plan_id', 'plan_topic_id', 'task_date', 'task_type',
+    'provider', 'estimated_minutes', 'actual_minutes',
+    'target_count', 'completed_count', 'completion_percentage',
+    'incorrect_count', 'completed_at', 'completed_on',
+    'mode', 'question_pool',
+    'status', 'unlock_condition', 'display_order',
+    'is_pinned', 'metadata_json', 'created_at', 'updated_at',
+  ],
+  taskSessions: [
+    'id', 'user_id', 'task_id', 'source_id',
+    'planned_minutes', 'active_minutes', 'completion_percentage',
+    'interrupted', 'valid_for_calibration',
+    'activity_type', 'mutation_id', 'calibration_invalid_reason',
+    'created_at',
+  ],
+  userSourcePace: [
+    'user_id', 'source_id', 'activity_type',
+    'pace_multiplier', 'sample_count', 'updated_at',
+  ],
+  taskMutations: [
+    'id', 'plan_id', 'task_id', 'user_id', 'client_request_id', 'request_fingerprint',
+    'expected_revision', 'resulting_revision',
+    'action', 'resulting_task_status', 'occurred_at', 'occurred_on', 'result_json', 'created_at',
+  ],
+  planMutations: [
+    'id', 'plan_id', 'user_id', 'client_request_id', 'request_fingerprint',
+    'expected_revision', 'resulting_revision',
+    'operation', 'result_json', 'created_at',
+  ],
+  flashcardDeckMappings: [
+    'id', 'user_id', 'deck_name', 'canonical_topic_id',
+    'created_at', 'updated_at',
+  ],
+}

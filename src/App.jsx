@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { PomodoroProvider, usePomodoro } from './context/PomodoroContext'
+import PlannerPomodoroSyncBridge from './components/rotation/today/PlannerPomodoroSyncBridge'
 import { PresenceProvider } from './context/PresenceContext'
 import { NotificationProvider } from './context/NotificationContext'
 import { ProfilePanelProvider } from './context/ProfilePanelContext'
@@ -54,6 +55,7 @@ const DMInbox = lazy(() => import('./components/DMInbox'))
 const DMConversation = lazy(() => import('./components/DMConversation'))
 const ResearchHub = lazy(() => import('./pages/ResearchHub'))
 const ForestPage = lazy(() => import('./pages/ForestPage'))
+const RotationPlanner = lazy(() => import('./pages/RotationPlanner'))
 
 const PAGE_LOADING = <LoadingScreen />
 
@@ -107,6 +109,7 @@ function AppRoutes() {
           <Route path="messages" element={<DMInbox />} />
           <Route path="messages/:conversationId" element={<DMConversation />} />
           <Route path="forest" element={<ForestPage />} />
+          <Route path="rotations" element={<RotationPlanner />} />
           <Route path="research" element={<ResearchHub />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -123,6 +126,7 @@ export default function App() {
         <BrowserRouter>
           <LayerProvider>
             <PomodoroProvider>
+            <PlannerPomodoroSyncBridge />
             <PresenceProvider>
               <NotificationProvider>
                 <CommunityPanelProvider>

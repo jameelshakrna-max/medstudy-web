@@ -157,4 +157,22 @@ export const queryKeys = {
     portfolio: (userId) => [...queryKeys.research.all, 'portfolio', userId],
     leaderboard: (type, limit) => [...queryKeys.research.all, 'leaderboard', type, limit],
   },
+  deckMappings: {
+    all: ['deckMappings'],
+    list: () => [...queryKeys.deckMappings.all, 'list'],
+  },
+  rotations: {
+    all: ['rotations'],
+    plans: () => [...queryKeys.rotations.all, 'plans'],
+    plan: (id) => [...queryKeys.rotations.all, 'plan', id],
+    forecast: (planId) => [...queryKeys.rotations.all, 'forecast', planId],
+    schedule: (planId) => [...queryKeys.rotations.all, 'schedule', planId],
+    progress: (planId) => [...queryKeys.rotations.all, 'progress', planId],
+    flashcardSummary: () => [...queryKeys.rotations.all, 'flashcardSummary'],
+    sources: () => [...queryKeys.rotations.all, 'sources'],
+    sourceRotations: (sourceId) => [...queryKeys.rotations.all, 'sourceRotations', sourceId],
+    sourceTopics: (sourceId, rotationId) => [...queryKeys.rotations.all, 'sourceTopics', sourceId, rotationId],
+    legacyPlans: () => [...queryKeys.rotations.all, 'legacyPlans'],
+    legacyPlan: (id) => [...queryKeys.rotations.all, 'legacyPlan', id],
+  },
 }

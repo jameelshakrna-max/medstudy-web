@@ -1,0 +1,370 @@
+import { useMemo, useState, useCallback, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { ChevronLeft } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs/Tabs'
+import Toast from '../ui/Toast/Toast'
+import LoadingScreen from '../LoadingScreen'
+import useRotationPlanDetail from './today/useRotationPlanDetail'
+import usePlannerTaskMutations from './today/usePlannerTaskMutations'
+import useTaskAttachment from './today/useTaskAttachment'
+import TodayView from './today/TodayView'
+import RecalculationBanner from './today/RecalculationBanner'
+import PlannerStaleBanner from './today/PlannerStaleBanner'
+import DeckTopicMappings from './today/DeckTopicMappings'
+import FlashcardForecastRecommendations from './today/FlashcardForecastRecommendations'
+import RecordTimeDialog from './today/dialogs/RecordTimeDialog'
+import TaskCompletionDialog from './today/dialogs/TaskCompletionDialog'
+import PartialDialog from './today/dialogs/PartialDialog'
+import SkipConfirmDialog from './today/dialogs/SkipConfirmDialog'
+import RecordQuestionsDialog from './today/dialogs/RecordQuestionsDialog'
+import TopicsView from './today/TopicsView'
+import CalendarView from './CalendarView'
+import ProgressView from './ProgressView'
+import { apiGet } from '../../lib/api'
+import { queryKeys } from '../../lib/queryKeys'
+import { getTodayKey, resolvePlannerTimezone, getBrowserTimezone } from './today/todayUtils'
+import styles from './V2PlanDetail.module.css'
+
+export default function V2PlanDetail({ planId, onBack }) {
+  const navigate = useNavigate()
+  const { data, isLoading, error } = useRotationPlanDetail(planId)
+
+  const [dialogState, setDialogState] = useState({ type: null, task: null })
+  const [toast, setToast] = useState({ open: false, title: '', description: '', variant: 'default' })
+
+  const { data: forecast, isLoading: forecastLoading, error: forecastError } = useQuery({
+    queryKey: queryKeys.rotations.forecast(planId),
+    queryFn: () => apiGet(`/rotation-planner/plans/${planId}/forecast`),
+    enabled: !!planId,
+    staleTime: 60_000,
+  })
+
+  const [recalculationRequired, setRecalculationRequired] = useState(false)
+
+  useEffect(() => {
+    if (!recalculationRequired) return
+    const plan = data?.plan
+    if (!plan) return
+    if (!plan.staleAt || (plan.lastRecalculatedAt && new Date(plan.lastRecalculatedAt) >= new Date(plan.staleAt))) {
+      setRecalculationRequired(false)
+    }
+  }, [recalculationRequired, data?.plan?.staleAt, data?.plan?.lastRecalculatedAt])
+
+  const openDialog = useCallback((type, task) => {
+    setDialogState({ type, task })
+  }, [])
+
+  const closeDialog = useCallback(() => {
+    setDialogState({ type: null, task: null })
+  }, [])
+
+  const topicsById = useMemo(() => {
+    const topics = data?.topics || []
+    const map = new Map()
+    for (const t of topics) {
+      if (t.id) map.set(t.id, t)
+    }
+    return map
+  }, [data?.topics])
+
+  const resolvedTimezone = useMemo(
+    () => resolvePlannerTimezone({ browserTimezone: getBrowserTimezone() }),
+    []
+  )
+
+  const getRecalculationDate = useCallback(
+    () => getTodayKey(new Date(), resolvedTimezone),
+    [resolvedTimezone]
+  )
+
+  const mutations = usePlannerTaskMutations({
+    planId,
+    initialRevision: data?.plan?.revision,
+    getRecalculationDate,
+    timezone: resolvedTimezone,
+  })
+
+  const tasks = data?.tasks || []
+
+  const taskAttachment = useTaskAttachment({
+    startTask: mutations.startTask,
+    currentRevision: mutations.currentRevision,
+    onAttached: () => navigate('/pomodoro'),
+    tasks,
+    planId,
+  })
+
+  const handleStart = useCallback(async (task) => {
+    try {
+      await mutations.startTask(task.id)
+    } catch (err) {
+      setToast({ open: true, title: 'Failed to start task', description: err?.message || 'Please try again.', variant: 'error' })
+    }
+  }, [mutations])
+
+  const handleComplete = useCallback((task) => {
+    openDialog('complete', task)
+  }, [openDialog])
+
+  const handlePartial = useCallback((task) => {
+    openDialog('partial', task)
+  }, [openDialog])
+
+  const handleRecordTime = useCallback((task) => {
+    openDialog('recordTime', task)
+  }, [openDialog])
+
+  const handleRecordQuestions = useCallback((task) => {
+    openDialog('recordQuestions', task)
+  }, [openDialog])
+
+  const handleSkip = useCallback((task) => {
+    openDialog('skip', task)
+  }, [openDialog])
+
+  const handleStudyPomodoro = useCallback(async (task) => {
+    const result = await taskAttachment.handlePlay(task)
+    if (result?.alreadyAttached || result?.allowed) {
+      navigate('/pomodoro')
+    } else if (result?.reason) {
+      setToast({ open: true, title: 'Cannot start Pomodoro', description: result.reason, variant: 'error' })
+    }
+  }, [taskAttachment, navigate])
+
+  const handleCompleteSubmit = useCallback(async (payload) => {
+    await mutations.completeTask(dialogState.task.id, payload)
+  }, [mutations, dialogState.task])
+
+  const handlePartialSubmit = useCallback(async (payload) => {
+    await mutations.partialTask(dialogState.task.id, payload)
+  }, [mutations, dialogState.task])
+
+  const handleRecordTimeSubmit = useCallback(async (payload) => {
+    await mutations.recordTime(dialogState.task.id, payload.actualMinutes)
+  }, [mutations, dialogState.task])
+
+  const handleRecordQuestionsSubmit = useCallback(async (payload) => {
+    await mutations.recordQuestions(dialogState.task.id, payload)
+  }, [mutations, dialogState.task])
+
+  const handleReschedule = useCallback(async (taskId, newTaskDate) => {
+    try {
+      await mutations.rescheduleTask(taskId, newTaskDate)
+    } catch (err) {
+      setToast({ open: true, title: 'Failed to move task', description: err?.message || 'Please try again.', variant: 'error' })
+    }
+  }, [mutations])
+
+  const handleSkipSubmit = useCallback(async () => {
+    await mutations.skipTask(dialogState.task.id)
+  }, [mutations, dialogState.task])
+
+  const handleRecalculationRequired = useCallback(() => {
+    setRecalculationRequired(true)
+  }, [])
+
+  const handleRecalculate = useCallback(() => {
+    mutations.retryRecalculation()
+  }, [mutations])
+
+  if (isLoading) return <LoadingScreen fullPage={false} message="Loading plan details..." />
+
+  if (error) {
+    return (
+      <div className={styles.container}>
+        <button className={styles.backButton} onClick={onBack}>
+          <ChevronLeft size={18} /> Plans
+        </button>
+        <div className={styles.error}>Failed to load plan. Please try again.</div>
+      </div>
+    )
+  }
+
+  if (!data || !data.plan) {
+    return (
+      <div className={styles.container}>
+        <button className={styles.backButton} onClick={onBack}>
+          <ChevronLeft size={18} /> Plans
+        </button>
+        <div className={styles.error}>Plan not found.</div>
+      </div>
+    )
+  }
+
+  const { plan, topics, schedule, progress } = data
+
+  const completedTopicCount = useMemo(() => {
+    return topics.filter(t => t.status === 'completed').length
+  }, [topics])
+
+  const dateRange = useMemo(() => {
+    if (!plan.startDate || !plan.endDate) return null
+    const start = new Date(plan.startDate + 'T00:00:00')
+    const end = new Date(plan.endDate + 'T00:00:00')
+    const fmt = { month: 'short', day: 'numeric' }
+    return `${start.toLocaleDateString('en-US', fmt)} – ${end.toLocaleDateString('en-US', fmt)}`
+  }, [plan.startDate, plan.endDate])
+
+  return (
+    <div className={styles.container}>
+      <div className={styles.header}>
+        <button className={styles.backButton} onClick={onBack}>
+          <ChevronLeft size={18} /> Plans
+        </button>
+        <h1 className={styles.title}>{plan.sourceTitle || 'Rotation Plan'}</h1>
+        <div className={styles.meta}>
+          {plan.schedulingMode && <span className={styles.mode}>{plan.schedulingMode}</span>}
+        </div>
+        {(dateRange || plan.topicCount > 0) && (
+          <div className={styles.headerDetails}>
+            {dateRange && <span>{dateRange}</span>}
+            {plan.topicCount > 0 && (
+              <span>{completedTopicCount} / {plan.topicCount} topics completed</span>
+            )}
+          </div>
+        )}
+      </div>
+
+      <RecalculationBanner
+        lastRecalculatedAt={plan.lastRecalculatedAt}
+        recalculationState={mutations.recalculationState}
+        onRecalculate={handleRecalculate}
+        onReset={mutations.reset}
+      />
+
+      <PlannerStaleBanner
+        visible={recalculationRequired}
+        isRecalculating={mutations.isPending}
+        onRecalculate={handleRecalculate}
+      />
+
+      <Tabs defaultValue="today">
+        <TabsList>
+          <TabsTrigger value="today">Today</TabsTrigger>
+          <TabsTrigger value="calendar">Calendar</TabsTrigger>
+          <TabsTrigger value="topics">Topics</TabsTrigger>
+          <TabsTrigger value="progress">Progress</TabsTrigger>
+        </TabsList>
+        <TabsContent value="today">
+          <TodayView
+            planId={planId}
+            tasks={tasks}
+            topics={topics}
+            topicsById={topicsById}
+            plan={plan}
+            sourceTitle={plan.sourceTitle}
+            isMutating={mutations.isPending}
+            isOrphaned={taskAttachment.isOrphaned}
+            hasUnsyncedData={taskAttachment.hasUnsyncedData}
+            discardOrphanedPlannerContext={taskAttachment.discardOrphanedPlannerContext}
+            onStart={handleStart}
+            onComplete={handleComplete}
+            onPartial={handlePartial}
+            onRecordTime={handleRecordTime}
+            onRecordQuestions={handleRecordQuestions}
+            onSkip={handleSkip}
+            onStudyPomodoro={handleStudyPomodoro}
+          />
+          <DeckTopicMappings
+            planId={planId}
+            topics={topics}
+            usesFlashcardCapacity={plan.usesFlashcardCapacity}
+            onRecalculationRequired={handleRecalculationRequired}
+          />
+          <FlashcardForecastRecommendations
+            forecast={forecast}
+            usesFlashcardCapacity={plan.usesFlashcardCapacity}
+            topicsById={topicsById}
+            topics={topics}
+          />
+        </TabsContent>
+        <TabsContent value="calendar">
+          <CalendarView
+            tasks={tasks}
+            topics={topics}
+            topicsById={topicsById}
+            plan={plan}
+            availability={data.availability}
+            sourceTitle={plan.sourceTitle}
+            todayKey={getTodayKey(new Date(), resolvedTimezone)}
+            onReschedule={handleReschedule}
+            isMutating={mutations.isPending}
+          />
+        </TabsContent>
+        <TabsContent value="topics">
+          <TopicsView topics={topics} sourceTitle={plan.sourceTitle} />
+        </TabsContent>
+        <TabsContent value="progress">
+          <ProgressView
+            plan={plan}
+            topics={topics}
+            tasks={tasks}
+            topicsById={topicsById}
+            sourcePace={data.sourcePace || null}
+            todayKey={getTodayKey(new Date(), resolvedTimezone)}
+            forecast={forecast || null}
+            forecastLoading={forecastLoading}
+            forecastError={forecastError}
+          />
+        </TabsContent>
+      </Tabs>
+
+      {dialogState.type === 'recordTime' && (
+        <RecordTimeDialog
+          open
+          task={dialogState.task}
+          onClose={closeDialog}
+          onSubmit={handleRecordTimeSubmit}
+        />
+      )}
+
+      {dialogState.type === 'complete' && (
+        <TaskCompletionDialog
+          open
+          task={dialogState.task}
+          onClose={closeDialog}
+          onSubmit={handleCompleteSubmit}
+        />
+      )}
+
+      {dialogState.type === 'partial' && (
+        <PartialDialog
+          open
+          task={dialogState.task}
+          onClose={closeDialog}
+          onSubmit={handlePartialSubmit}
+        />
+      )}
+
+      {dialogState.type === 'skip' && (
+        <SkipConfirmDialog
+          open
+          task={dialogState.task}
+          onClose={closeDialog}
+          onSubmit={handleSkipSubmit}
+        />
+      )}
+
+      {dialogState.type === 'recordQuestions' && (
+        <RecordQuestionsDialog
+          open
+          task={dialogState.task}
+          onClose={closeDialog}
+          onSubmit={handleRecordQuestionsSubmit}
+        />
+      )}
+
+      <Toast.Provider>
+        <Toast
+          open={toast.open}
+          onOpenChange={(open) => setToast(prev => ({ ...prev, open }))}
+          title={toast.title}
+          description={toast.description}
+          variant={toast.variant}
+        />
+        <Toast.Viewport />
+      </Toast.Provider>
+    </div>
+  )
+}

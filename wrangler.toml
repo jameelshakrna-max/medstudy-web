@@ -3,9 +3,8 @@ main = "src/worker.js"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
-[[triggers]]
-  type = "cron"
-  cron = "* * * * *"
+[triggers]
+crons = ["* * * * *"]
 
 [[d1_databases]]
 binding = "DB"
