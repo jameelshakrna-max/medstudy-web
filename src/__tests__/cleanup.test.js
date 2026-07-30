@@ -2,7 +2,41 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const BASE = 'https://medstudy-api-staging.medstudy.workers.dev';
 const PRODUCTION_BASE = 'https://medstudy-api.medstudy.workers.dev';
+const APPROVED_STAGING_HOST = 'medstudy-api-staging.medstudy.workers.dev';
 const CLEANUP_MAX_PASSES = 3;
+
+function guardStagingConfig(apiUrl, supabaseUrl, supabaseKey) {
+  if (!apiUrl || typeof apiUrl !== 'string' || apiUrl.trim() === '') {
+    throw new Error('API_BASE_URL is missing. Smoke tests may only run against the approved staging API.');
+  }
+  if (!supabaseUrl || typeof supabaseUrl !== 'string' || supabaseUrl.trim() === '') {
+    throw new Error('SUPABASE_URL is missing.');
+  }
+  if (!supabaseKey || typeof supabaseKey !== 'string' || supabaseKey.trim() === '') {
+    throw new Error('SUPABASE_ANON_KEY is missing.');
+  }
+  let parsed;
+  try {
+    parsed = new URL(apiUrl);
+  } catch {
+    throw new Error('Invalid API_BASE_URL. Smoke tests may only run against the approved staging API.');
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error('API_BASE_URL protocol must be HTTPS. Smoke tests may only run against the approved staging API.');
+  }
+  if (parsed.hostname !== APPROVED_STAGING_HOST) {
+    throw new Error(`API_BASE_URL hostname "${parsed.hostname}" is not approved. Smoke tests may only run against ${APPROVED_STAGING_HOST}.`);
+  }
+  let supabaseParsed;
+  try {
+    supabaseParsed = new URL(supabaseUrl);
+  } catch {
+    throw new Error('Invalid SUPABASE_URL.');
+  }
+  if (supabaseParsed.protocol !== 'https:') {
+    throw new Error('SUPABASE_URL protocol must be HTTPS.');
+  }
+}
 
 // ===================================================================
 // HELPER: mock fetch infrastructure
@@ -472,41 +506,6 @@ describe('cleanup — integration scenario', () => {
 
 describe('cleanup — production-safety guard', () => {
 
-  const APPROVED_STAGING_HOST = 'medstudy-api-staging.medstudy.workers.dev';
-
-  function guardStagingConfig(apiUrl, supabaseUrl, supabaseKey) {
-    if (!apiUrl || typeof apiUrl !== 'string' || apiUrl.trim() === '') {
-      throw new Error('API_BASE_URL is missing. Smoke tests may only run against the approved staging API.');
-    }
-    if (!supabaseUrl || typeof supabaseUrl !== 'string' || supabaseUrl.trim() === '') {
-      throw new Error('SUPABASE_URL is missing.');
-    }
-    if (!supabaseKey || typeof supabaseKey !== 'string' || supabaseKey.trim() === '') {
-      throw new Error('SUPABASE_ANON_KEY is missing.');
-    }
-    let parsed;
-    try {
-      parsed = new URL(apiUrl);
-    } catch {
-      throw new Error('Invalid API_BASE_URL. Smoke tests may only run against the approved staging API.');
-    }
-    if (parsed.protocol !== 'https:') {
-      throw new Error('API_BASE_URL protocol must be HTTPS. Smoke tests may only run against the approved staging API.');
-    }
-    if (parsed.hostname !== APPROVED_STAGING_HOST) {
-      throw new Error(`API_BASE_URL hostname "${parsed.hostname}" is not approved. Smoke tests may only run against ${APPROVED_STAGING_HOST}.`);
-    }
-    let supabaseParsed;
-    try {
-      supabaseParsed = new URL(supabaseUrl);
-    } catch {
-      throw new Error('Invalid SUPABASE_URL.');
-    }
-    if (supabaseParsed.protocol !== 'https:') {
-      throw new Error('SUPABASE_URL protocol must be HTTPS.');
-    }
-  }
-
   const stagingUrl = 'https://medstudy-api-staging.medstudy.workers.dev';
   const validSupabaseUrl = 'https://bzppijzqqfclwtvmiqzb.supabase.co';
   const validSupabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test-key';
@@ -565,6 +564,97 @@ describe('cleanup — production-safety guard', () => {
 
   it('rejects HTTP SUPABASE_URL', () => {
     expect(() => guardStagingConfig(stagingUrl, 'http://bzppijzqqfclwtvmiqzb.supabase.co', validSupabaseKey)).toThrow(/HTTPS/);
+  });
+
+});
+
+describe('cleanup — credential-config validation', () => {
+
+  function validateRequiredEnv(env) {
+    const required = ['STAGING_TEST_USER_A_PASSWORD', 'STAGING_TEST_USER_B_PASSWORD'];
+    for (const name of required) {
+      const v = env[name];
+      if (!v || typeof v !== 'string' || v.trim() === '') {
+        throw new Error(`Missing required environment variable: ${name}`);
+      }
+    }
+  }
+
+  function requireEnv(env, name, fallback) {
+    const v = env[name];
+    if (v !== undefined && v !== '') return v;
+    if (fallback !== undefined) return fallback;
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+
+  const testEnv = {
+    STAGING_API_BASE_URL: 'https://medstudy-api-staging.medstudy.workers.dev',
+    STAGING_SUPABASE_URL: 'https://bzppijzqqfclwtvmiqzb.supabase.co',
+    STAGING_SUPABASE_ANON_KEY: 'test-anon-key',
+    STAGING_TEST_USER_A_EMAIL: 'testuser.a@medstudy-staging.test',
+    STAGING_TEST_USER_A_PASSWORD: 'valid-pw-a',
+    STAGING_TEST_USER_A_ID: 'u-a',
+    STAGING_TEST_USER_B_EMAIL: 'testuser.b@medstudy-staging.test',
+    STAGING_TEST_USER_B_PASSWORD: 'valid-pw-b',
+    STAGING_TEST_USER_B_ID: 'u-b',
+  };
+
+  it('1. missing User A password fails closed', () => {
+    const env = { ...testEnv, STAGING_TEST_USER_A_PASSWORD: '' };
+    expect(() => validateRequiredEnv(env)).toThrow(/Missing required environment variable: STAGING_TEST_USER_A_PASSWORD/);
+    expect(() => requireEnv(env, 'STAGING_TEST_USER_A_PASSWORD')).toThrow(/Missing required/);
+  });
+
+  it('2. missing User B password fails closed', () => {
+    const env = { ...testEnv, STAGING_TEST_USER_B_PASSWORD: undefined };
+    expect(() => validateRequiredEnv(env)).toThrow(/STAGING_TEST_USER_B_PASSWORD/);
+    expect(() => requireEnv(env, 'STAGING_TEST_USER_B_PASSWORD')).toThrow(/Missing required/);
+  });
+
+  it('3. missing Supabase URL fails closed', () => {
+    expect(() => requireEnv({}, 'STAGING_SUPABASE_URL')).toThrow(/STAGING_SUPABASE_URL/);
+  });
+
+  it('4. missing anon key fails closed', () => {
+    expect(() => requireEnv({}, 'STAGING_SUPABASE_ANON_KEY')).toThrow(/STAGING_SUPABASE_ANON_KEY/);
+  });
+
+  it('5. missing staging API URL fails closed', () => {
+    expect(() => requireEnv({}, 'STAGING_API_BASE_URL')).toThrow(/STAGING_API_BASE_URL/);
+  });
+
+  it('6. production host remains rejected by guard', () => {
+    expect(() => guardStagingConfig('https://medstudy-api.medstudy.workers.dev', testEnv.STAGING_SUPABASE_URL, testEnv.STAGING_SUPABASE_ANON_KEY))
+      .toThrow(/not approved/);
+  });
+
+  it('7. no fetch/auth call occurs after config rejection', () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    try {
+      validateRequiredEnv({ STAGING_TEST_USER_A_PASSWORD: '', STAGING_TEST_USER_B_PASSWORD: '' });
+    } catch { /* expected */ }
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('8. no error output contains password values', () => {
+    const env = { STAGING_TEST_USER_A_PASSWORD: '' };
+    try {
+      validateRequiredEnv(env);
+    } catch (e) {
+      const msg = e.message;
+      expect(msg).toMatch(/STAGING_TEST_USER_A_PASSWORD/);
+      expect(msg).not.toContain('valid-pw-a');
+    }
+
+    try {
+      requireEnv(env, 'STAGING_TEST_USER_A_PASSWORD');
+    } catch (e) {
+      const msg = e.message;
+      expect(msg).toMatch(/STAGING_TEST_USER_A_PASSWORD/);
+      expect(msg).not.toContain('valid-pw-a');
+    }
   });
 
 });

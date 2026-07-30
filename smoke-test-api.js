@@ -1,9 +1,17 @@
-const BASE = 'https://medstudy-api-staging.medstudy.workers.dev';
-const SUPABASE_URL = 'https://bzppijzqqfclwtvmiqzb.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6cHBpanpxcWZjbHd0dm1pcXpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0MDEyNzksImV4cCI6MjEwMDk3NzI3OX0.soC75wi7wM3EVsqqIHnZB4ryB24QZ33FRm6kvkd6V-Q';
-const PRODUCTION_BASE = 'https://medstudy-api.medstudy.workers.dev';
 const APPROVED_STAGING_HOST = 'medstudy-api-staging.medstudy.workers.dev';
+const PRODUCTION_BASE = 'https://medstudy-api.medstudy.workers.dev';
 const CLEANUP_MAX_PASSES = 3;
+
+function requireEnv(name, fallback) {
+  const v = process.env[name];
+  if (v !== undefined && v !== '') return v;
+  if (fallback !== undefined) return fallback;
+  throw new Error(`Missing required environment variable: ${name}`);
+}
+
+const BASE = requireEnv('STAGING_API_BASE_URL', 'https://medstudy-api-staging.medstudy.workers.dev');
+const SUPABASE_URL = requireEnv('STAGING_SUPABASE_URL', 'https://bzppijzqqfclwtvmiqzb.supabase.co');
+const SUPABASE_ANON_KEY = requireEnv('STAGING_SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6cHBpanpxcWZjbHd0dm1pcXpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0MDEyNzksImV4cCI6MjEwMDk3NzI3OX0.soC75wi7wM3EVsqqIHnZB4ryB24QZ33FRm6kvkd6V-Q');
 
 function guardStagingConfig(apiUrl, supabaseUrl, supabaseKey) {
   if (!apiUrl || typeof apiUrl !== 'string' || apiUrl.trim() === '') {
@@ -38,9 +46,30 @@ function guardStagingConfig(apiUrl, supabaseUrl, supabaseKey) {
   }
 }
 
+function validateRequiredEnv() {
+  const required = [
+    'STAGING_TEST_USER_A_PASSWORD',
+    'STAGING_TEST_USER_B_PASSWORD',
+  ];
+  for (const name of required) {
+    const v = process.env[name];
+    if (!v || typeof v !== 'string' || v.trim() === '') {
+      throw new Error(`Missing required environment variable: ${name}`);
+    }
+  }
+}
+
 const USERS = {
-  A: { email: 'testuser.a@medstudy-staging.test', password: 'TestUserA123!', id: '873314d5-0a26-4a1f-9651-43b74b17750b' },
-  B: { email: 'testuser.b@medstudy-staging.test', password: 'TestUserB456!', id: '63f6147f-8184-41b8-bfe9-d1ac912b0051' },
+  A: {
+    email: requireEnv('STAGING_TEST_USER_A_EMAIL', 'testuser.a@medstudy-staging.test'),
+    password: requireEnv('STAGING_TEST_USER_A_PASSWORD'),
+    id: requireEnv('STAGING_TEST_USER_A_ID', '873314d5-0a26-4a1f-9651-43b74b17750b'),
+  },
+  B: {
+    email: requireEnv('STAGING_TEST_USER_B_EMAIL', 'testuser.b@medstudy-staging.test'),
+    password: requireEnv('STAGING_TEST_USER_B_PASSWORD'),
+    id: requireEnv('STAGING_TEST_USER_B_ID', '63f6147f-8184-41b8-bfe9-d1ac912b0051'),
+  },
 };
 
 let tokens = {};
@@ -181,6 +210,7 @@ async function cleanupTestUsers() {
 // ===================================================================
 
 async function run() {
+  validateRequiredEnv();
   guardStagingConfig(BASE, SUPABASE_URL, SUPABASE_ANON_KEY);
   console.log('=== AUTHENTICATING ===');
   for (const [key, user] of Object.entries(USERS)) {
