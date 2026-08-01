@@ -40,6 +40,7 @@ function initTopicStates(topics, resolvedMinutes, initialTopicStates) {
       title: t.title,
       baseLearningMinutes: t.learningMinutes?.activeExpected || 0,
       personalizedLearningMinutes: remaining,
+      remainingLearningMinutes: null,
       totalUworldQuestions: t.uworldRemainingQuestions || 0,
       completedUworldQuestions: t.alreadyCompletedQuestionCount || 0,
       remainingUworldQuestions: t.uworldRemainingQuestions || 0,
@@ -59,6 +60,9 @@ function initTopicStates(topics, resolvedMinutes, initialTopicStates) {
       base.questionsUnlockedAt = init.questionsUnlockedAt ?? base.questionsUnlockedAt
       base.status = init.status ?? base.status
       base.incorrectQuestionsRemaining = init.incorrectQuestionsRemaining ?? base.incorrectQuestionsRemaining
+      if (init.remainingLearningMinutes != null) {
+        base.remainingLearningMinutes = init.remainingLearningMinutes
+      }
       base.personalizedLearningMinutes = init.personalizedLearningMinutes ?? base.personalizedLearningMinutes
     }
     states[t.canonicalTopicId] = base
@@ -210,18 +214,22 @@ export function buildRotationSchedule(planConfig, options = {}) {
 
         const taskType = pt.taskType || pt.task_type
         if (taskType === 'learning') {
-          topicStates[canonicalId].personalizedLearningMinutes = Math.max(0,
-            topicStates[canonicalId].personalizedLearningMinutes - mins)
-          if (topicStates[canonicalId].personalizedLearningMinutes <= 0) {
-            topicStates[canonicalId].learningCompletedAt = pt.taskDate || pt.task_date
-            if (topicStates[canonicalId].totalUworldQuestions > 0) {
-              topicStates[canonicalId].questionsUnlockedAt = topicStates[canonicalId].learningCompletedAt
-              topicStates[canonicalId].status = 'questions_locked'
+          const state = topicStates[canonicalId]
+          const currentRemaining = state.remainingLearningMinutes != null
+            ? state.remainingLearningMinutes
+            : state.personalizedLearningMinutes
+          const newLearningMinutes = Math.max(0, currentRemaining - mins)
+          state.remainingLearningMinutes = newLearningMinutes
+          if (newLearningMinutes <= 0) {
+            state.learningCompletedAt = pt.taskDate || pt.task_date
+            if (state.totalUworldQuestions > 0) {
+              state.questionsUnlockedAt = state.learningCompletedAt
+              state.status = 'questions_locked'
             } else {
-              topicStates[canonicalId].status = 'completed'
+              state.status = 'completed'
             }
           } else {
-            topicStates[canonicalId].status = 'learning'
+            state.status = 'learning'
           }
         } else if (taskType === 'uworld_questions') {
           const count = pt.targetCount || pt.target_count || 0
@@ -248,6 +256,11 @@ export function buildRotationSchedule(planConfig, options = {}) {
       })
       allTasks.push(...lr.tasks)
       remainingMinutes = lr.remainingCapacity
+      if (lr.topicStates) {
+        for (const [id, state] of Object.entries(lr.topicStates)) {
+          topicStates[id] = state
+        }
+      }
     }
 
     const topicsForQuestions = getTopicsWithCompletedLearning(orderedTopics, topicStates)
@@ -275,10 +288,16 @@ export function buildRotationSchedule(planConfig, options = {}) {
         dayDate: dateStr,
         usableMinutes: remainingMinutes,
         topicsNeedingReview: topicsForIncorrect,
+        topicStates,
         planConfig,
       })
       allTasks.push(...ir.tasks)
       remainingMinutes = ir.remainingCapacity
+      if (ir.topicStates) {
+        for (const [id, state] of Object.entries(ir.topicStates)) {
+          topicStates[id] = state
+        }
+      }
     }
 
     if (examReviewWindowDays > 0 && mixedReviewQPd > 0 && dateStr > (planConfig.examDate || '')) {

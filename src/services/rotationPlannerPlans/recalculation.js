@@ -97,6 +97,7 @@ export function deriveActualTopicStates(topics, tasks, { asOfDate }) {
   for (const [topicId, state] of stateMap) {
     const completedEquivalent = topicCompletedEquivalent.get(topicId) || 0
     const remainingLearningMinutes = Math.max(0, state.personalizedLearningMinutes - completedEquivalent)
+    state.remainingLearningMinutes = remainingLearningMinutes
     const incorrectFromUworld = topicIncorrectFromUworld.get(topicId) || 0
     const incorrectFromReview = topicIncorrectFromReview.get(topicId) || 0
     state.incorrectQuestionsRemaining = Math.max(0, incorrectFromUworld - incorrectFromReview)
@@ -256,6 +257,7 @@ export async function recalculatePlan(env, planId, userId, recalculationDate, op
       title: topicInputMap.get(state.canonicalTopicId)?.topic_title || '',
       baseLearningMinutes: state.baseLearningMinutes,
       personalizedLearningMinutes: state.personalizedLearningMinutes,
+      remainingLearningMinutes: state.remainingLearningMinutes,
       totalUworldQuestions: state.totalUworldQuestions,
       completedUworldQuestions: state.completedUworldQuestions,
       remainingUworldQuestions: Math.max(0, state.totalUworldQuestions - state.completedUworldQuestions),

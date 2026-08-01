@@ -2326,3 +2326,222 @@ describe('explicit staleness outcomes', () => {
     await assertStaleness('p7', false)
   })
 })
+
+// ─── PATCH reschedule stale revision (CAS) ───
+describe('handleUpdateTask reschedule stale revision', () => {
+  beforeEach(async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-05T12:00:00.000Z'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  async function createPlanAndGetTasks(user = USER_A) {
+    const createRes = await createPlan(makeBody(), user)
+    expect(createRes.status).toBe(201)
+    const body = await createRes.json()
+    return { planId: body.plan.id, taskId: body.tasks[0].id, tasks: body.tasks, topics: body.topics }
+  }
+
+  async function getTaskRows(planId) {
+    const { results } = await db.prepare('SELECT * FROM rotation_planner_daily_tasks WHERE plan_id = ? ORDER BY id').bind(planId).all()
+    return results
+  }
+
+  async function getTopicRows(planId) {
+    const { results } = await db.prepare('SELECT * FROM rotation_planner_topics WHERE plan_id = ? ORDER BY id').bind(planId).all()
+    return results
+  }
+
+  async function getPlanRevision(planId) {
+    const row = await db.prepare('SELECT revision FROM rotation_planner_plans WHERE id = ?').bind(planId).first()
+    return row.revision
+  }
+
+  async function countRescheduleMutations(planId) {
+    const row = await db.prepare("SELECT COUNT(*) as c FROM rotation_planner_plan_mutations WHERE plan_id = ? AND operation = 'reschedule'").bind(planId).first()
+    return row.c
+  }
+
+  function rescheduleRequest(taskId, newTaskDate, expectedRevision, clientRequestId) {
+    return { action: 'reschedule', payload: { newTaskDate }, expectedRevision, clientRequestId }
+  }
+
+  // Simulate the TOCTOU window: the handler reads revision 0 (currentRevision),
+  // then a concurrent request commits revision 0→1 in the DB BEFORE this
+  // request's batch executes — so the batch CAS (WHERE revision = 0) fails even
+  // though the pre-flight expectedRevision check passed.
+  async function simulateConcurrentRevisionBump(planId) {
+    const originalBatch = db.batch.bind(db)
+    vi.spyOn(db, 'batch').mockImplementation(async (statements) => {
+      await db.prepare('UPDATE rotation_planner_plans SET revision = revision + 1 WHERE id = ?').bind(planId).run()
+      return originalBatch(statements)
+    })
+  }
+
+  it('stale revision returns 409 PLAN_REVISION_CONFLICT, not 200', async () => {
+    const { planId, taskId } = await createPlanAndGetTasks()
+    await simulateConcurrentRevisionBump(planId)
+
+    const res = await patchTask(planId, taskId, rescheduleRequest(taskId, '2026-01-07', 0, 'stale-rev-1'))
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.error.code).toBe('PLAN_REVISION_CONFLICT')
+    expect(body.error.message).toBe('Plan has been modified since you last loaded it. Please refresh.')
+  })
+
+  it('plan revision is unchanged after the conflict', async () => {
+    const { planId, taskId } = await createPlanAndGetTasks()
+    await simulateConcurrentRevisionBump(planId)
+
+    const res = await patchTask(planId, taskId, rescheduleRequest(taskId, '2026-01-07', 0, 'stale-rev-2'))
+    expect(res.status).toBe(409)
+
+    // The concurrent request bumped 0→1; this stale request must NOT bump it again.
+    expect(await getPlanRevision(planId)).toBe(1)
+  })
+
+  it('existing tasks are unchanged field-for-field after the conflict', async () => {
+    const { planId, taskId } = await createPlanAndGetTasks()
+    const tasksBefore = await getTaskRows(planId)
+
+    await simulateConcurrentRevisionBump(planId)
+    const res = await patchTask(planId, taskId, rescheduleRequest(taskId, '2026-01-07', 0, 'stale-rev-3'))
+    expect(res.status).toBe(409)
+
+    const tasksAfter = await getTaskRows(planId)
+    expect(JSON.stringify(tasksAfter)).toBe(JSON.stringify(tasksBefore))
+  })
+
+  it('no task deletion happened', async () => {
+    const { planId, taskId } = await createPlanAndGetTasks()
+    const countBefore = (await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_daily_tasks WHERE plan_id = ?').bind(planId).first()).c
+
+    await simulateConcurrentRevisionBump(planId)
+    const res = await patchTask(planId, taskId, rescheduleRequest(taskId, '2026-01-07', 0, 'stale-rev-4'))
+    expect(res.status).toBe(409)
+
+    const countAfter = (await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_daily_tasks WHERE plan_id = ?').bind(planId).first()).c
+    expect(countAfter).toBe(countBefore)
+  })
+
+  it('no replacement insertion happened (task count identical)', async () => {
+    const { planId, taskId } = await createPlanAndGetTasks()
+    const idsBefore = new Set((await getTaskRows(planId)).map(r => r.id))
+
+    await simulateConcurrentRevisionBump(planId)
+    const res = await patchTask(planId, taskId, rescheduleRequest(taskId, '2026-01-07', 0, 'stale-rev-5'))
+    expect(res.status).toBe(409)
+
+    const rowsAfter = await getTaskRows(planId)
+    expect(rowsAfter.length).toBe(idsBefore.size)
+    for (const row of rowsAfter) {
+      expect(idsBefore.has(row.id)).toBe(true)
+    }
+  })
+
+  it('topic state is unchanged', async () => {
+    const { planId, taskId } = await createPlanAndGetTasks()
+    const topicsBefore = await getTopicRows(planId)
+
+    await simulateConcurrentRevisionBump(planId)
+    const res = await patchTask(planId, taskId, rescheduleRequest(taskId, '2026-01-07', 0, 'stale-rev-6'))
+    expect(res.status).toBe(409)
+
+    const topicsAfter = await getTopicRows(planId)
+    expect(JSON.stringify(topicsAfter)).toBe(JSON.stringify(topicsBefore))
+  })
+
+  it('no mutation row persisted for the failed attempt', async () => {
+    const { planId, taskId } = await createPlanAndGetTasks()
+    await simulateConcurrentRevisionBump(planId)
+
+    const res = await patchTask(planId, taskId, rescheduleRequest(taskId, '2026-01-07', 0, 'stale-rev-7'))
+    expect(res.status).toBe(409)
+
+    expect(await countRescheduleMutations(planId)).toBe(0)
+  })
+
+  it('correct (current) revision succeeds — task moved and pinned', async () => {
+    const { planId, taskId } = await createPlanAndGetTasks()
+
+    const res = await patchTask(planId, taskId, rescheduleRequest(taskId, '2026-01-07', 0, 'resched-ok-1'))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.taskId).toBe(taskId)
+    expect(body.revision).toBe(1)
+
+    const moved = await db.prepare('SELECT task_date, is_pinned, display_order FROM rotation_planner_daily_tasks WHERE id = ?').bind(taskId).first()
+    expect(moved.task_date).toBe('2026-01-07')
+    expect(moved.is_pinned).toBe(1)
+
+    expect(await getPlanRevision(planId)).toBe(1)
+  })
+
+  it('exact idempotent replay returns the stored result without a second mutation', async () => {
+    const { planId, taskId } = await createPlanAndGetTasks()
+    const idemKey = 'resched-replay'
+
+    const res1 = await patchTask(planId, taskId, { action: 'reschedule', payload: { newTaskDate: '2026-01-07' }, expectedRevision: 0, clientRequestId: idemKey }, USER_A, { 'Idempotency-Key': idemKey })
+    expect(res1.status).toBe(200)
+    const body1 = await res1.json()
+
+    expect(await countRescheduleMutations(planId)).toBe(1)
+    const tasksAfter1 = await getTaskRows(planId)
+
+    // Replay with the current revision (the first reschedule advanced 0→1).
+    const res2 = await patchTask(planId, taskId, { action: 'reschedule', payload: { newTaskDate: '2026-01-07' }, expectedRevision: 1, clientRequestId: idemKey }, USER_A, { 'Idempotency-Key': idemKey })
+    expect(res2.status).toBe(200)
+    const body2 = await res2.json()
+    expect(body2).toEqual(body1)
+
+    expect(await countRescheduleMutations(planId)).toBe(1)
+    const tasksAfter2 = await getTaskRows(planId)
+    expect(JSON.stringify(tasksAfter2)).toBe(JSON.stringify(tasksAfter1))
+  })
+
+  it('cross-user request is non-leaking and performs zero writes', async () => {
+    const { planId, taskId } = await createPlanAndGetTasks(USER_A)
+    const revBefore = await getPlanRevision(planId)
+    const tasksBefore = await getTaskRows(planId)
+
+    const res = await patchTask(planId, taskId, rescheduleRequest(taskId, '2026-01-07', 0, 'cross-user'), USER_B)
+    expect(res.status).toBe(404)
+    const body = await res.json()
+    expect(body.error.code).toBe('PLAN_NOT_FOUND')
+
+    expect(await getPlanRevision(planId)).toBe(revBefore)
+    expect(JSON.stringify(await getTaskRows(planId))).toBe(JSON.stringify(tasksBefore))
+    expect(await countRescheduleMutations(planId)).toBe(0)
+  })
+
+  it('injected failure rolls back every statement — no partial writes', async () => {
+    const { planId, taskId } = await createPlanAndGetTasks()
+    const revBefore = await getPlanRevision(planId)
+    const tasksBefore = await getTaskRows(planId)
+    const topicsBefore = await getTopicRows(planId)
+
+    // Force a mid-batch failure: abort any UPDATE that pins a task. The task-move
+    // statement runs AFTER the mutation insert and revision bump in the batch, so
+    // this exercises rollback of every prior statement.
+    await db.exec(`
+      CREATE TRIGGER force_reschedule_failure
+      BEFORE UPDATE ON rotation_planner_daily_tasks
+      WHEN NEW.is_pinned = 1
+      BEGIN
+        SELECT RAISE(ABORT, 'SIMULATED_CONSTRAINT_FAILURE');
+      END
+    `)
+
+    const res = await patchTask(planId, taskId, rescheduleRequest(taskId, '2026-01-07', 0, 'fail-atomic'))
+    expect(res.status).toBe(500)
+
+    expect(await getPlanRevision(planId)).toBe(revBefore)
+    expect(JSON.stringify(await getTaskRows(planId))).toBe(JSON.stringify(tasksBefore))
+    expect(JSON.stringify(await getTopicRows(planId))).toBe(JSON.stringify(topicsBefore))
+    expect(await countRescheduleMutations(planId)).toBe(0)
+  })
+})
