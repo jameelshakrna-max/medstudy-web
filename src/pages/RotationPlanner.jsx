@@ -323,14 +323,28 @@ export default function RotationPlanner() {
                 ? Math.round(((p.completedTaskCount || 0) / p.taskCount) * 100)
                 : 0
 
+            const planName = p.name || p.sourceTitle
+            const statusLabel =
+              entry.version === 'v2' && p.status === 'draft'
+                ? 'Live'
+                : p.status === 'active'
+                  ? 'Active'
+                  : p.status === 'completed'
+                    ? 'Completed'
+                    : p.status === 'paused'
+                      ? 'Paused'
+                      : 'Draft'
+
             return (
-              <div
+              <button
+                type="button"
                 key={entry.key}
                 className={styles.planCard}
                 onClick={() => setSelectedPlanId(p.id)}
+                aria-label={`${planName} plan, ${statusLabel}, ${completionPct}% complete`}
               >
                 <div className={styles.planCardTop}>
-                  <h3 className={styles.planCardName}>{p.name || p.sourceTitle}</h3>
+                  <span className={styles.planCardName}>{planName}</span>
                   <div className={styles.planCardBadges}>
                     {entry.version === 'v2' && (
                       <span className={styles.versionBadge}>v2</span>
@@ -346,15 +360,7 @@ export default function RotationPlanner() {
                               : styles.statusDraft
                       }`}
                     >
-                      {entry.version === 'v2' && p.status === 'draft'
-                        ? 'Live'
-                        : p.status === 'active'
-                          ? 'Active'
-                          : p.status === 'completed'
-                            ? 'Completed'
-                            : p.status === 'paused'
-                              ? 'Paused'
-                              : 'Draft'}
+                      {statusLabel}
                     </span>
                   </div>
                 </div>
@@ -395,7 +401,7 @@ export default function RotationPlanner() {
                     <span className={styles.planStat}>{p.topicCount} topics</span>
                   )}
                 </div>
-              </div>
+              </button>
             )
           })}
         </div>
