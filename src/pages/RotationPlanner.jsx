@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { apiGet, apiPost, apiDelete, apiPut } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
-import { CalendarRange, Plus, ChevronLeft, Play, Pause, Trash2, RotateCcw, BookOpen } from 'lucide-react'
+import { CalendarRange, Plus, ChevronLeft, Play, Pause, Trash2, RotateCcw, BookOpen, WifiOff } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
 import PlanCreationForm from '../components/rotation/PlanCreationForm'
 import ScheduleView from '../components/rotation/ScheduleView'
@@ -40,20 +40,21 @@ export default function RotationPlanner() {
   const [confirmDelete, setConfirmDelete] = useState(null)
 
   // ── Fetch V1 plans (legacy) ──
-  const { data: v1Plans = [], isLoading: v1PlansLoading } = useQuery({
+  const { data: v1Plans = [], isLoading: v1PlansLoading, error: v1PlansError, refetch: v1PlansRefetch } = useQuery({
     queryKey: queryKeys.rotations.legacyPlans(),
     enabled: !!user,
     queryFn: () => apiGet('/rotations/plans'),
   })
 
   // ── Fetch V2 plans ──
-  const { data: v2Plans = [], isLoading: v2PlansLoading } = useQuery({
+  const { data: v2Plans = [], isLoading: v2PlansLoading, error: v2PlansError, refetch: v2PlansRefetch } = useQuery({
     queryKey: queryKeys.rotations.plans(),
     enabled: !!user,
     queryFn: () => apiGet('/rotation-planner/plans'),
   })
 
   const plansLoading = v1PlansLoading || v2PlansLoading
+  const plansFetchError = v1PlansError || v2PlansError
 
   // ── Merge and tag plans with explicit version from query source ──
   const plans = useMemo(() => {
@@ -117,6 +118,11 @@ export default function RotationPlanner() {
   function handlePlanCreated() {
     setShowForm(false)
     queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plans() })
+  }
+
+  function refetchAll() {
+    v1PlansRefetch()
+    v2PlansRefetch()
   }
 
   function handleDelete() {
@@ -297,22 +303,39 @@ export default function RotationPlanner() {
       </div>
 
       {plans.length === 0 ? (
-        <div className={styles.empty}>
-          <CalendarRange />
-          <div className={styles.emptyTitle}>No rotation plans yet</div>
-          <div className={styles.emptyDesc}>
-            Create your first rotation plan to generate a personalized study schedule
-            based on your availability and learning goals.
+        plansFetchError ? (
+          <div className={styles.empty}>
+            <WifiOff />
+            <div className={styles.emptyTitle}>Couldn't load your plans</div>
+            <div className={styles.emptyDesc}>
+              We couldn't reach the server. Check your connection and try again.
+            </div>
+            <button
+              className={styles.createBtn}
+              style={{ marginTop: 16 }}
+              onClick={refetchAll}
+            >
+              Retry
+            </button>
           </div>
-          <button
-            className={styles.createBtn}
-            style={{ marginTop: 16 }}
-            onClick={() => setShowForm(true)}
-          >
-            <Plus size={16} />
-            Create Your First Plan
-          </button>
-        </div>
+        ) : (
+          <div className={styles.empty}>
+            <CalendarRange />
+            <div className={styles.emptyTitle}>No rotation plans yet</div>
+            <div className={styles.emptyDesc}>
+              Create your first rotation plan to generate a personalized study schedule
+              based on your availability and learning goals.
+            </div>
+            <button
+              className={styles.createBtn}
+              style={{ marginTop: 16 }}
+              onClick={() => setShowForm(true)}
+            >
+              <Plus size={16} />
+              Create Your First Plan
+            </button>
+          </div>
+        )
       ) : (
         <div className={styles.planGrid}>
           {plans.map((entry) => {

@@ -190,6 +190,9 @@ export async function handlePreviewRotationPlan(request, env, user) {
         availableMinutes: a.availableMinutes,
         isDayOff: a.isDayOff ?? false,
       })),
+      previewToken: fingerprint,
+      feasibility: preview.feasibility,
+      unscheduledWork: preview.unscheduledWork,
     })
   } catch (e) {
     log('rotation_planner:preview:error', { message: e.message, stack: e.stack?.slice(0, 500), cause: e.cause?.message })

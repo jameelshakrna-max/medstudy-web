@@ -1,3 +1,9 @@
+function isHtmlNavigation(request) {
+  if (request.method !== 'GET') return false
+  const accept = request.headers.get('accept') || ''
+  return accept.includes('text/html')
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url)
@@ -9,6 +15,11 @@ export default {
         body: request.body
       })
     }
-    return env.ASSETS.fetch(request)
+    const response = await env.ASSETS.fetch(request)
+    if (response.status === 404 && isHtmlNavigation(request)) {
+      const notFound = await env.ASSETS.fetch(new URL('/index.html', url))
+      return new Response(notFound.body, { status: 200, headers: notFound.headers })
+    }
+    return response
   }
 }

@@ -7,7 +7,7 @@ import path from 'node:path'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const { mockApi } = vi.hoisted(() => ({
-  mockApi: { v1Plans: [], v2Plans: [] },
+  mockApi: { v1Plans: [], v2Plans: [], failAll: false },
 }))
 
 vi.mock('../../context/AuthContext', () => ({
@@ -16,6 +16,7 @@ vi.mock('../../context/AuthContext', () => ({
 
 vi.mock('../../lib/api', () => ({
   apiGet: vi.fn((path) => {
+    if (mockApi.failAll) return Promise.reject(new Error('network down'))
     if (path === '/rotations/plans') return Promise.resolve(mockApi.v1Plans)
     if (path === '/rotation-planner/plans') return Promise.resolve(mockApi.v2Plans)
     if (path === '/rotations/flashcard-summary') return Promise.resolve({})
@@ -124,6 +125,7 @@ describe('RotationPlanner plan cards (Finding E)', () => {
   beforeEach(() => {
     mockApi.v1Plans = V1_PLANS
     mockApi.v2Plans = V2_PLANS
+    mockApi.failAll = false
     vi.clearAllMocks()
   })
 
@@ -240,5 +242,22 @@ describe('RotationPlanner plan cards (Finding E)', () => {
 
     expect(await screen.findByText('No rotation plans yet')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Create Your First Plan/i })).toBeInTheDocument()
+  })
+
+  it('shows an error state with Retry when plan queries fail, then recovers on Retry', async () => {
+    mockApi.v1Plans = []
+    mockApi.v2Plans = []
+    mockApi.failAll = true
+    renderPage()
+
+    expect(await screen.findByText(/Couldn't load your plans/i)).toBeInTheDocument()
+    expect(screen.getByText(/We couldn't reach the server/i)).toBeInTheDocument()
+    const retryBtn = screen.getByRole('button', { name: /Retry/i })
+    expect(retryBtn).toBeInTheDocument()
+
+    mockApi.failAll = false
+    fireEvent.click(retryBtn)
+
+    expect(await screen.findByText('No rotation plans yet')).toBeInTheDocument()
   })
 })

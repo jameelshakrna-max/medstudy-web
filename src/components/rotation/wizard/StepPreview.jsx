@@ -29,8 +29,9 @@ export default function StepPreview({ preview, previewLoading, previewError, onR
     )
   }
 
-  const { feasibility, tasks, unscheduledWork, topicStates, possibleSolutions } = preview
+  const { feasibility, tasks, unscheduledWork } = preview
   const feasible = feasibility?.feasible
+  const possibleSolutions = feasibility?.possibleSolutions || []
 
   const taskCounts = (tasks || []).reduce((counts, task) => {
     counts[task.taskType] = (counts[task.taskType] ?? 0) + 1

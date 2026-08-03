@@ -28,7 +28,7 @@ import styles from './V2PlanDetail.module.css'
 
 export default function V2PlanDetail({ planId, onBack }) {
   const navigate = useNavigate()
-  const { data, isLoading, error } = useRotationPlanDetail(planId)
+  const { data, isLoading, error, refetch } = useRotationPlanDetail(planId)
 
   const [dialogState, setDialogState] = useState({ type: null, task: null })
   const [toast, setToast] = useState({ open: false, title: '', description: '', variant: 'default' })
@@ -190,6 +190,7 @@ export default function V2PlanDetail({ planId, onBack }) {
           <ChevronLeft size={18} /> Plans
         </button>
         <div className={styles.error}>Failed to load plan. Please try again.</div>
+        <button type="button" className={styles.backButton} style={{ marginTop: 12 }} onClick={() => refetch()}>Retry</button>
       </div>
     )
   }

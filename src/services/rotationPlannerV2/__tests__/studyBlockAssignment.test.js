@@ -571,3 +571,66 @@ describe('assignStudyBlocks — edge cases', () => {
     expect(result[0].metadata.studyBlockId).toBeDefined()
   })
 })
+
+describe('assignStudyBlocks — large scale', () => {
+  const topicMap = makeTopicMap({
+    'step-up-medicine-6e-2024::cardiology.chest-pain': { sourceId: 'step-up-medicine-6e-2024', groupId: 'SectionA' },
+  })
+
+  function make200Tasks() {
+    return Array.from({ length: 200 }, (_, i) =>
+      makeTask({
+        normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.chest-pain',
+        estimatedMinutes: 5,
+        displayOrder: i,
+      })
+    )
+  }
+
+  function collectBlocks(result) {
+    const blocks = []
+    for (const t of result) {
+      const last = blocks[blocks.length - 1]
+      if (last && last.id === t.metadata.studyBlockId) {
+        last.minutes += t.estimatedMinutes
+        last.count++
+      } else {
+        blocks.push({ id: t.metadata.studyBlockId, minutes: t.estimatedMinutes, count: 1 })
+      }
+    }
+    return blocks
+  }
+
+  it('assigns sb block IDs to all 200 tasks with multi-task blocks within the 45-minute max', () => {
+    const result = assignStudyBlocks(make200Tasks(), topicMap)
+    expect(result).toHaveLength(200)
+    for (const t of result) {
+      expect(t.metadata.studyBlockId).toBeDefined()
+      expect(t.metadata.studyBlockId.startsWith('sb::')).toBe(true)
+    }
+    const blocks = collectBlocks(result)
+    for (const b of blocks) {
+      if (b.count > 1) {
+        expect(b.minutes).toBeLessThanOrEqual(BLOCK_MAX_MINUTES)
+      }
+    }
+  }, 30000)
+
+  it('preserves total minutes across all 200 tasks', () => {
+    const result = assignStudyBlocks(make200Tasks(), topicMap)
+    const total = result.reduce((s, t) => s + t.estimatedMinutes, 0)
+    expect(total).toBe(1000)
+  }, 30000)
+
+  it('runs in bounded wall-clock time', () => {
+    const t0 = performance.now()
+    assignStudyBlocks(make200Tasks(), topicMap)
+    expect(performance.now() - t0).toBeLessThan(1000)
+  }, 30000)
+
+  it('deterministic studyBlockId sequence across calls', () => {
+    const run1 = assignStudyBlocks(make200Tasks(), topicMap)
+    const run2 = assignStudyBlocks(make200Tasks(), topicMap)
+    expect(run2.map(t => t.metadata.studyBlockId)).toEqual(run1.map(t => t.metadata.studyBlockId))
+  }, 30000)
+})

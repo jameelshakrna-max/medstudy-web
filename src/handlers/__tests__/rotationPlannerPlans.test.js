@@ -101,11 +101,11 @@ function makeBody(overrides = {}) {
 
 // ─── Preview ───
 describe('handlePreviewRotationPlan', () => {
-  it('returns 200 with V2 contract shape { plan, topics, tasks, availability }', async () => {
+  it('returns 200 with V2 contract shape { plan, topics, tasks, availability, previewToken, feasibility, unscheduledWork }', async () => {
     const res = await preview()
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(Object.keys(body).sort()).toEqual(['availability', 'plan', 'tasks', 'topics'])
+    expect(Object.keys(body).sort()).toEqual(['availability', 'feasibility', 'plan', 'previewToken', 'tasks', 'topics', 'unscheduledWork'])
     expect(body.plan).toBeDefined()
     expect(body.topics).toBeDefined()
     expect(Array.isArray(body.topics)).toBe(true)
@@ -113,6 +113,48 @@ describe('handlePreviewRotationPlan', () => {
     expect(Array.isArray(body.tasks)).toBe(true)
     expect(body.availability).toBeDefined()
     expect(Array.isArray(body.availability)).toBe(true)
+  })
+
+  it('returns previewToken equal to plan.scheduleFingerprint', async () => {
+    const res = await preview()
+    const body = await res.json()
+    expect(typeof body.previewToken).toBe('string')
+    expect(body.previewToken.length).toBeGreaterThan(0)
+    expect(body.previewToken).toBe(body.plan.scheduleFingerprint)
+  })
+
+  it('returns feasibility object with the full contract', async () => {
+    const res = await preview()
+    const body = await res.json()
+    expect(body.feasibility).toBeDefined()
+    expect(typeof body.feasibility).toBe('object')
+    expect(typeof body.feasibility.feasible).toBe('boolean')
+    expect(typeof body.feasibility.totalRequiredMinutes).toBe('number')
+    expect(typeof body.feasibility.availableMinutes).toBe('number')
+    expect(typeof body.feasibility.missingCapacity).toBe('number')
+    expect(Array.isArray(body.feasibility.topicsLeftUnscheduled)).toBe(true)
+    expect(Array.isArray(body.feasibility.possibleSolutions)).toBe(true)
+  })
+
+  it('returns unscheduledWork array with entry contract', async () => {
+    const res = await preview()
+    const body = await res.json()
+    expect(Array.isArray(body.unscheduledWork)).toBe(true)
+    for (const entry of body.unscheduledWork) {
+      expect(entry).toHaveProperty('canonicalTopicId')
+      expect(entry).toHaveProperty('title')
+      expect(typeof entry.remainingLearningMinutes).toBe('number')
+      expect(typeof entry.remainingQuestions).toBe('number')
+    }
+  })
+
+  it('does not expose internal scheduler fields', async () => {
+    const res = await preview()
+    const body = await res.json()
+    expect(body).not.toHaveProperty('topicStates')
+    expect(body).not.toHaveProperty('deduplicationLog')
+    expect(body).not.toHaveProperty('config')
+    expect(body).not.toHaveProperty('sourceVersion')
   })
 
   it('plan DTO contains forecastSettings and forecast', async () => {

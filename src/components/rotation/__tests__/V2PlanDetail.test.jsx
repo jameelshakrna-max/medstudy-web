@@ -10,6 +10,7 @@ const { mockUseRotationPlanDetail, mockUseQuery, mockUsePlannerTaskMutations } =
     data: { plan: { id: 'p1', revision: 1 }, topics: [], tasks: [], availability: [], sourcePace: null },
     isLoading: false,
     error: null,
+    refetch: vi.fn(),
   }))
   const mockMutationsFn = vi.fn(() => ({
     isPending: false,
@@ -154,6 +155,7 @@ describe('V2PlanDetail', () => {
       data: { plan: { id: 'p1', revision: 1 }, topics: [], tasks: [], availability: [], sourcePace: null },
       isLoading: false,
       error: null,
+      refetch: vi.fn(),
     })
     mockUseQuery.mockReturnValue({ data: null, isLoading: false, error: null })
     mockUsePlannerTaskMutations.mockReturnValue({
@@ -188,6 +190,16 @@ describe('V2PlanDetail', () => {
       mockUseRotationPlanDetail.mockReturnValue({ data: null, isLoading: false, error: new Error('test error') })
       render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
       expect(screen.getByText(/Failed to load plan/i)).toBeInTheDocument()
+    })
+
+    it('calls refetch when Retry button is clicked in error state', async () => {
+      const refetchMock = vi.fn()
+      mockUseRotationPlanDetail.mockReturnValue({ data: null, isLoading: false, error: new Error('boom'), refetch: refetchMock })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByText(/Failed to load plan/i)).toBeInTheDocument()
+      const user = userEvent.setup()
+      await user.click(screen.getByRole('button', { name: /Retry/i }))
+      expect(refetchMock).toHaveBeenCalled()
     })
 
     it('shows plan-not-found when data is null', () => {

@@ -820,3 +820,90 @@ describe('buildRotationSchedule — learn-before-UWorld unlock modes', () => {
     expect(state.status).toBe('questions_locked')
   })
 })
+
+describe('buildRotationSchedule — large scale', () => {
+  function addWeek(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number)
+    const dt = new Date(Date.UTC(y, m - 1, d + 7))
+    return dt.toISOString().slice(0, 10)
+  }
+
+  function makeLargeScaleConfig() {
+    const topics50 = Array.from({ length: 50 }, (_, i) =>
+      makeTopic({
+        canonicalTopicId: 'topic-' + i,
+        sourceTopicId: 'topic-' + i,
+        title: 'Topic ' + i,
+        learningMinutes: { focused: 30, activeLow: 40, activeExpected: 60, activeHigh: 80, detailedNotes: 70 },
+        uworldRemainingQuestions: 40,
+        prerequisiteTopicIds: [],
+      })
+    )
+
+    const dueReviewMinutesByDate = {}
+    const dueReviewCardCountByDate = {}
+    const topicBreakdownByDate = {}
+
+    const dates = []
+    let date = '2026-01-05'
+    while (date <= '2026-12-31' && dates.length < 52) {
+      dates.push(date)
+      date = addWeek(date)
+    }
+
+    for (const d of dates) {
+      dueReviewCardCountByDate[d] = 40
+      dueReviewMinutesByDate[d] = 40 * 1.5
+      topicBreakdownByDate[d] = Array.from({ length: 5 }, (_, j) => ({
+        normalizedTopicId: 'step-up-medicine-6e-2024::topic-' + j,
+        groupId: 'G' + j,
+        dueCardCount: 8,
+        deckNames: [],
+      }))
+    }
+
+    return makePlanConfig({
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      maximumActiveTopics: 10,
+      topics: topics50,
+      dueReviewMinutesByDate,
+      dueReviewCardCountByDate,
+      topicBreakdownByDate,
+    })
+  }
+
+  it('365 days x 50 topics is feasible with tasks produced', () => {
+    const result = buildRotationSchedule(makeLargeScaleConfig())
+    expect(result.feasibility.feasible).toBe(true)
+    expect(result.tasks.length).toBeGreaterThan(0)
+  }, 30000)
+
+  it('deterministic at scale across runs', () => {
+    const config = makeLargeScaleConfig()
+    const run1 = buildRotationSchedule(structuredClone(config))
+    const run2 = buildRotationSchedule(structuredClone(config))
+    expect(run2.tasks).toEqual(run1.tasks)
+    expect(run2.topicStates).toEqual(run1.topicStates)
+  }, 30000)
+
+  it('every scheduled day respects the 240-minute weekday budget', () => {
+    const result = buildRotationSchedule(makeLargeScaleConfig())
+    const tasksByDay = {}
+    for (const task of result.tasks) {
+      if (!tasksByDay[task.taskDate]) tasksByDay[task.taskDate] = []
+      tasksByDay[task.taskDate].push(task)
+    }
+    for (const [date, tasks] of Object.entries(tasksByDay)) {
+      const sum = tasks.reduce((s, t) => s + t.estimatedMinutes, 0)
+      expect(sum).toBeLessThanOrEqual(240)
+    }
+  }, 30000)
+
+  it('builds the schedule in bounded wall-clock time', () => {
+    const t0 = performance.now()
+    buildRotationSchedule(makeLargeScaleConfig())
+    const elapsed = performance.now() - t0
+    expect(elapsed).toBeLessThan(5000)
+  }, 30000)
+})
