@@ -489,7 +489,6 @@ CREATE TABLE IF NOT EXISTS community_room_timer_participants (
 );
 
 CREATE INDEX IF NOT EXISTS idx_room_participants_room_left ON community_room_timer_participants(room_id, left_at);
-CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read);
 -- ═══════════════════════════════════════════
 -- NOTIFICATIONS
 -- ═══════════════════════════════════════════
@@ -509,6 +508,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   group_key TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_category ON notifications(user_id, category, read);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_priority ON notifications(user_id, priority, read);
