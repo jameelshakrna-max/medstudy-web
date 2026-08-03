@@ -214,31 +214,38 @@ Result: **4 passed** (23.6s). Iteration log:
 
 ## 6. Full Playwright suite results (final)
 
-Command: `$env:STAGING_PREVIEW_URL='https://staging.medstudy-web.pages.dev'; npx playwright test --config=e2e/real-pages.config.ts --workers=1 --reporter=list`
+Command: `$env:RUN_STAGING_E2E='1'; $env:STAGING_PREVIEW_URL='https://staging.medstudy-web.pages.dev'; npx playwright test --project=staging-integration --workers=1 --reporter=list`
 
-Result: **8 passed / 1 failed / 3 skipped** (1.4m). Workers forced to 1 because the
+Result: **12 passed / 1 failed / 3 did not run** (1.7m). Workers forced to 1 because the
 default multi-worker run makes the finding-g P1 clean-profile spec flaky on chunk timing
-(documented below).
+(documented below). The 3 "did not run" are workflow-staging E2E 5-7: the file runs in
+`serial` mode and E2E-4 (§7-1) fails before them, blocking the chain. E2E 5/6 pass in
+isolated runs; E2E 7 runs once `STAGING_TEST_USER_B_ID` is set (present in the gitignored
+`.env.staging.local`).
 
 | Spec | Test | Result |
 |---|---|---|
-| finding-g-real-pages | P1 clean profile: all 20 lazy chunks 200 + JS MIME | ✅ passed (23.2s) |
-| finding-g-real-pages | P1 public routes: 4 chunks 200 + JS MIME | ✅ passed |
-| finding-g-real-pages | P3 stale chunk → ErrorFallback + console error | ✅ passed |
-| finding-g-real-pages | P3 contrast: 200 HTML chunk → module MIME error | ✅ passed |
-| finding-g-real-pages | P2 SW-controlled: chunks 200 + JS MIME; stale → 404 | ✅ passed |
+| rotation-planning-staging | wizard preview→create (Defect 1) | ✅ passed |
+| rotation-planning-staging | persisted UWorld partition (Defect 2) | ✅ passed |
+| rotation-planning-staging | learning→recalc unlock (Defect 2) | ✅ passed |
+| rotation-planning-staging | cleanup deletes the plan | ✅ passed |
+| finding-g-staging | P1 clean profile: all 20 lazy chunks 200 + JS MIME | ✅ passed (23.2s) |
+| finding-g-staging | P1 public routes: 4 chunks 200 + JS MIME | ✅ passed |
+| finding-g-staging | P3 stale chunk → ErrorFallback + console error | ✅ passed |
+| finding-g-staging | P3 contrast: 200 HTML chunk → module MIME error | ✅ passed |
+| finding-g-staging | P2 SW-controlled: chunks 200 + JS MIME; stale → 404 | ✅ passed |
 | workflow-staging | E2E 1 Auth sign-in/out | ✅ passed |
 | workflow-staging | E2E 2 Home dashboard | ✅ passed |
 | workflow-staging | E2E 3 Anki FSRS review persist | ✅ passed |
-| workflow-staging | E2E 4 UWorld log block + grade | ❌ FAILED (staging env, out of scope, see §7) |
-| workflow-staging | E2E 5 Pomodoro | ✅ passed |
-| workflow-staging | E2E 6 Resources | ✅ passed |
-| workflow-staging | E2E 7 Messaging | ⏭️ skipped (STAGING_TEST_USER_B_ID unset) |
+| workflow-staging | E2E 4 UWorld log block + grade | ❌ FAILED (staging Supabase RLS limitation, see §7-1) |
+| workflow-staging | E2E 5 Pomodoro | did not run (serial-blocked by E2E-4; passes isolated) |
+| workflow-staging | E2E 6 Resources | did not run (serial-blocked by E2E-4; passes isolated) |
+| workflow-staging | E2E 7 Messaging | did not run (serial-blocked by E2E-4; requires STAGING_TEST_USER_B_ID) |
 
 ### Multi-worker P1 flake (verified, not a product regression)
 
-- `finding-g-real-pages.spec.ts` P1 clean profile fails in a default (multi-worker)
-  `real-pages.config.ts` run: `waitForResponse` 20 s timeout while navigating the
+- `finding-g-staging.spec.ts` P1 clean profile fails in a default (multi-worker)
+  `staging-integration` run: `waitForResponse` 20 s timeout while navigating the
   20-route inventory, but **passes reliably with `--workers=1`** and also passes when the
   finding-g file runs alone (5/5, 57.7s). Evidence from a failing multi-worker run shows the
   P1 loop reached `/communities/nonexistent-comm-xyz` (CommunityDetail loaded sw=False) and
@@ -247,16 +254,29 @@ default multi-worker run makes the finding-g P1 clean-profile spec flaky on chun
   SW-controlled proof, passes in the same run). No code change needed; documented so the
   suite is run with `--workers=1`.
 
-### Local (non-staging) suite
+### Local (non-staging) suite — test-command contract
 
-`playwright.config.ts` (localhost:3000, e2e/ dir) cannot authenticate locally: the login
-flow (`e2e/helpers.ts:11` waits for `/dashboard`) receives "Invalid login credentials" for
-the default `test@medstudy.app`/`testpassword123` fallback (`e2e/helpers.ts:3-4`) against
-the configured Supabase. All 29 local-suite failures in the earlier full run failed at that
-same login step (snapshot shows the login page rendering normally). This is an
-environmental/credential-provisioning gap (no documented local test account), **not** a Task
-12 regression — the Task 12 diff contains no changes to the auth flow, `helpers.ts`, or any
-local-suite spec.
+`playwright.config.ts` (localhost:3000, e2e/ dir) now runs only the deterministic local
+suite by default. Staging specs are collected exclusively by the opt-in
+`staging-integration` project, which is defined **only** when `RUN_STAGING_E2E=1` and
+requires `STAGING_PREVIEW_URL` to be a `.medstudy-web.pages.dev` preview URL (never
+production).
+
+- Default command: `npx playwright test` → **0 failed**; only explicitly documented
+  environment-gated skips.
+- Local authenticated specs (`community`, `notifications`, `pomodoro`, `profile`,
+  `rotation`, `overlay-layering`) require a **provisioned local account** via
+  `TEST_EMAIL`/`TEST_PASSWORD`; `e2e/helpers.ts` no longer hardcodes any credentials.
+  Without them the tests skip before execution with an explicit documented reason.
+  There is no documented local test account, so the default run is:
+  **6 passed / 28 skipped / 0 failed** (auth.spec 2, lazy-chunk-fallback 3, rotation auth
+  redirect 1 pass; the 28 auth-dependent tests skip — overlay-layering 14, rotation 8,
+  community 2, profile 2, notifications 1, pomodoro 1).
+- Staging suite: `RUN_STAGING_E2E=1 npx playwright test --project=staging-integration
+  --workers=1` (result in §6 above). The `staging-integration` run is opt-in by design;
+  it reports the existing known UWorld E2E-4 staging limitation (§7-1) until that staging
+  Supabase issue is resolved. `RUN_STAGING_E2E` unset → the project does not exist and the
+  staging specs are never collected.
 
 ## 7. Known limitations (Task 12 scope; no further changes planned)
 
@@ -266,7 +286,12 @@ local-suite spec.
    block never appears; consistent across multiple isolated runs). No Task 12 file touches
    the UWorld feature or `uworld_blocks`; the failure is a pre-existing staging
    Supabase/RLS or schema provisioning issue out of Task 12 scope. Fix requires a staging
-   Supabase change, not app code.
+   Supabase change, not app code. E2E-4 lives only in the opt-in `staging-integration`
+   project, so the default `npx playwright test` is unaffected. **Follow-up issue (not Task
+   12):** provision RLS/insert policy for `uworld_blocks` on the staging Supabase project,
+   then re-run `RUN_STAGING_E2E=1 npx playwright test --project=staging-integration
+   --workers=1` and expect E2E-4 to pass (assertions are unchanged and must not be
+   weakened).
 2. **Lazy chunks are excluded from the PWA precache** — `vite.config.js` `globIgnores`
    added `_worker.js` (and the auto-generated `CommunityDetail-*`/`TrackingHub-*` were
    excluded earlier). This keeps the manifest valid and avoids double-precaching, at the
@@ -295,5 +320,5 @@ local-suite spec.
 | Worker validation | `npx wrangler deploy --dry-run` — clean (bindings: D1 medstudy-db, R2 card-images, 2 DOs, crons, vars) |
 | Schema | `schema.sql` **unchanged** by Task 12 (no diff); local D1 state present; staging D1 remote schema applied |
 | Staging E2E (rotation planner) | `rotation-planning-staging.spec.ts` — **4/4 passed** (§5) |
-| Staging E2E (full real-pages) | **8 passed / 1 failed (UWorld, §7-1) / 3 skipped** with `--workers=1` (§6) |
-| Local suite | blocked by absent local test credentials — environmental (§6) |
+| Staging E2E (full staging-integration) | **12 passed / 1 failed (UWorld E2E-4, §7-1) / 3 serial-blocked** with `--workers=1` (§6) |
+| Default E2E | `npx playwright test` — **0 failed**; 28 auth-dependent tests skip (env-gated, no local test account; §6) |

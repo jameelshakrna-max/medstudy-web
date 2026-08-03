@@ -164,7 +164,7 @@ function saveEvidence() {
   try {
     const dir = process.env.TEMP_EVIDENCE_DIR || join(process.cwd(), 'test-results')
     mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, 'finding-g-real-pages-evidence.json'), JSON.stringify(EVIDENCE, null, 2))
+    writeFileSync(join(dir, 'finding-g-staging-evidence.json'), JSON.stringify(EVIDENCE, null, 2))
   } catch {
     // evidence is best-effort
   }

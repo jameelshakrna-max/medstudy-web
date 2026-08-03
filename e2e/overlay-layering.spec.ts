@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { login } from './helpers'
+import { login, skipIfNoLocalAuth } from './helpers'
 
 test.describe('Overlay Layering System', () => {
   test.beforeEach(async ({ page }) => {
@@ -236,6 +236,7 @@ test.describe('Overlay Layering System', () => {
   })
 
   test('TopBar user menu uses Dropdown component', async ({ page }) => {
+    skipIfNoLocalAuth()
     // Login
     const email = `test-layers-${Date.now()}@example.com`
     await page.goto('/signup')
