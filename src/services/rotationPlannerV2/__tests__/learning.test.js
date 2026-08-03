@@ -196,3 +196,234 @@ describe('scheduleLearningTasks — capacity invariant', () => {
     expect(totalMinutes).toBeLessThanOrEqual(usableMinutes)
   })
 })
+
+describe('scheduleLearningTasks — remainingLearningMinutes restoration', () => {
+  it('schedules only the residual when remainingLearningMinutes is below personalizedLearningMinutes', () => {
+    const topic = makeTopic()
+    const state = makeState({ personalizedLearningMinutes: 60, remainingLearningMinutes: 30 })
+    const topicStates = { [state.canonicalTopicId]: state }
+    const result = scheduleLearningTasks({
+      dayDate: '2026-08-03',
+      usableMinutes: 120,
+      activeTopics: [topic],
+      topicStates,
+      schedulingMode: 'efficient',
+      maximumActiveTopics: 5,
+    })
+    expect(result.tasks).toHaveLength(1)
+    expect(result.tasks[0].estimatedMinutes).toBe(30)
+    expect(result.remainingCapacity).toBe(90)
+    expect(result.topicStates[state.canonicalTopicId].status).toBe('questions_locked')
+    expect(result.topicStates[state.canonicalTopicId].learningCompletedAt).toBe('2026-08-03')
+  })
+
+  it('remainingLearningMinutes of 0 schedules nothing even when status is learning', () => {
+    const topic = makeTopic()
+    const state = makeState({ personalizedLearningMinutes: 60, remainingLearningMinutes: 0, status: 'learning' })
+    const topicStates = { [state.canonicalTopicId]: state }
+    const result = scheduleLearningTasks({
+      dayDate: '2026-08-03',
+      usableMinutes: 120,
+      activeTopics: [topic],
+      topicStates,
+      schedulingMode: 'focused',
+      maximumActiveTopics: 5,
+    })
+    expect(result.tasks).toHaveLength(0)
+    expect(result.remainingCapacity).toBe(120)
+  })
+
+  it('absent remainingLearningMinutes falls back to personalizedLearningMinutes', () => {
+    const topic = makeTopic()
+    const state = makeState()
+    const topicStates = { [state.canonicalTopicId]: state }
+    const result = scheduleLearningTasks({
+      dayDate: '2026-08-03',
+      usableMinutes: 120,
+      activeTopics: [topic],
+      topicStates,
+      schedulingMode: 'efficient',
+      maximumActiveTopics: 5,
+    })
+    expect(result.tasks).toHaveLength(1)
+    expect(result.tasks[0].estimatedMinutes).toBe(50)
+  })
+})
+
+describe('scheduleLearningTasks — cross-day persistent remainingLearningMinutes state model', () => {
+  it('persists remaining across calls: 50 min at 30/day → [30, 20], no third task', () => {
+    const topic = makeTopic()
+    const state = makeState({ personalizedLearningMinutes: 50, remainingLearningMinutes: 50 })
+    let topicStates = { [state.canonicalTopicId]: state }
+    const allocations = []
+    for (const day of ['2026-08-03', '2026-08-04', '2026-08-05']) {
+      const r = scheduleLearningTasks({
+        dayDate: day,
+        usableMinutes: 30,
+        activeTopics: [topic],
+        topicStates,
+        schedulingMode: 'efficient',
+        maximumActiveTopics: 5,
+      })
+      allocations.push(r.tasks.reduce((s, t) => s + t.estimatedMinutes, 0))
+      topicStates = r.topicStates
+    }
+    expect(allocations).toEqual([30, 20, 0])
+    const finalState = topicStates[state.canonicalTopicId]
+    expect(finalState.remainingLearningMinutes).toBe(0)
+    expect(finalState.status).toBe('questions_locked')
+    expect(finalState.learningCompletedAt).toBe('2026-08-04')
+    expect(finalState.personalizedLearningMinutes).toBe(50)
+  })
+
+  it('exact fit: 60 min at 30/day → [30, 30], total 60', () => {
+    const topic = makeTopic()
+    const state = makeState({ personalizedLearningMinutes: 60, remainingLearningMinutes: 60 })
+    let topicStates = { [state.canonicalTopicId]: state }
+    const allocations = []
+    for (const day of ['2026-08-03', '2026-08-04', '2026-08-05']) {
+      const r = scheduleLearningTasks({
+        dayDate: day,
+        usableMinutes: 30,
+        activeTopics: [topic],
+        topicStates,
+        schedulingMode: 'efficient',
+        maximumActiveTopics: 5,
+      })
+      allocations.push(r.tasks.reduce((s, t) => s + t.estimatedMinutes, 0))
+      topicStates = r.topicStates
+    }
+    expect(allocations).toEqual([30, 30, 0])
+    const finalState = topicStates[state.canonicalTopicId]
+    expect(finalState.remainingLearningMinutes).toBe(0)
+    expect(finalState.status).toBe('questions_locked')
+    expect(finalState.personalizedLearningMinutes).toBe(60)
+  })
+
+  it('less than one day: 20 min at 30/day → single task of 20', () => {
+    const topic = makeTopic()
+    const state = makeState({ personalizedLearningMinutes: 20, remainingLearningMinutes: 20 })
+    const topicStates = { [state.canonicalTopicId]: state }
+    const r = scheduleLearningTasks({
+      dayDate: '2026-08-03',
+      usableMinutes: 30,
+      activeTopics: [topic],
+      topicStates,
+      schedulingMode: 'efficient',
+      maximumActiveTopics: 5,
+    })
+    expect(r.tasks).toHaveLength(1)
+    expect(r.tasks[0].estimatedMinutes).toBe(20)
+    expect(r.remainingCapacity).toBe(10)
+    expect(r.topicStates[state.canonicalTopicId].remainingLearningMinutes).toBe(0)
+    expect(r.topicStates[state.canonicalTopicId].status).toBe('questions_locked')
+  })
+
+  it('absent remainingLearningMinutes initializes from personalizedLearningMinutes and persists the residual', () => {
+    const topic = makeTopic()
+    const state = makeState()
+    const topicStates = { [state.canonicalTopicId]: state }
+    const r = scheduleLearningTasks({
+      dayDate: '2026-08-03',
+      usableMinutes: 30,
+      activeTopics: [topic],
+      topicStates,
+      schedulingMode: 'efficient',
+      maximumActiveTopics: 5,
+    })
+    expect(r.tasks).toHaveLength(1)
+    expect(r.tasks[0].estimatedMinutes).toBe(30)
+    expect(r.topicStates[state.canonicalTopicId].remainingLearningMinutes).toBe(20)
+    expect(r.topicStates[state.canonicalTopicId].personalizedLearningMinutes).toBe(50)
+    expect(r.topicStates[state.canonicalTopicId].status).toBe('learning')
+  })
+
+  it('multiple topics keep independent remaining state with no overwrite or leakage', () => {
+    const topicA = makeTopic({ canonicalTopicId: 'a', sourceTopicId: 'a', title: 'A' })
+    const topicB = makeTopic({ canonicalTopicId: 'b', sourceTopicId: 'b', title: 'B' })
+    const stateA = makeState({ canonicalTopicId: 'a', sourceTopicId: 'a', title: 'A', personalizedLearningMinutes: 50, remainingLearningMinutes: 50 })
+    const stateB = makeState({ canonicalTopicId: 'b', sourceTopicId: 'b', title: 'B', personalizedLearningMinutes: 20, remainingLearningMinutes: 20 })
+    const r = scheduleLearningTasks({
+      dayDate: '2026-08-03',
+      usableMinutes: 60,
+      activeTopics: [topicA, topicB],
+      topicStates: { a: stateA, b: stateB },
+      schedulingMode: 'efficient',
+      maximumActiveTopics: 5,
+    })
+    expect(r.tasks).toHaveLength(2)
+    expect(r.tasks[0].estimatedMinutes).toBe(50)
+    expect(r.tasks[1].estimatedMinutes).toBe(10)
+    expect(r.topicStates.a.remainingLearningMinutes).toBe(0)
+    expect(r.topicStates.b.remainingLearningMinutes).toBe(10)
+    expect(r.topicStates.a.status).toBe('questions_locked')
+    expect(r.topicStates.b.status).toBe('learning')
+  })
+
+  it('day-capacity sharing: two topics share days without exceeding capacity; each remaining correct after', () => {
+    const topicA = makeTopic({ canonicalTopicId: 'a', sourceTopicId: 'a', title: 'A' })
+    const topicB = makeTopic({ canonicalTopicId: 'b', sourceTopicId: 'b', title: 'B' })
+    const stateA = makeState({ canonicalTopicId: 'a', sourceTopicId: 'a', title: 'A', personalizedLearningMinutes: 50, remainingLearningMinutes: 50 })
+    const stateB = makeState({ canonicalTopicId: 'b', sourceTopicId: 'b', title: 'B', personalizedLearningMinutes: 50, remainingLearningMinutes: 50 })
+    let topicStates = { a: stateA, b: stateB }
+    const allocations = []
+    for (const day of ['2026-08-03', '2026-08-04']) {
+      const r = scheduleLearningTasks({
+        dayDate: day,
+        usableMinutes: 30,
+        activeTopics: [topicA, topicB],
+        topicStates,
+        schedulingMode: 'efficient',
+        maximumActiveTopics: 5,
+      })
+      allocations.push(r.tasks.reduce((s, t) => s + t.estimatedMinutes, 0))
+      expect(allocations[allocations.length - 1]).toBeLessThanOrEqual(30)
+      topicStates = r.topicStates
+    }
+    expect(allocations).toEqual([30, 30])
+    expect(topicStates.a.remainingLearningMinutes).toBe(0)
+    expect(topicStates.b.remainingLearningMinutes).toBe(40)
+    expect(topicStates.a.status).toBe('questions_locked')
+    expect(topicStates.b.status).toBe('learning')
+  })
+
+  it('remainingLearningMinutes never drops below zero', () => {
+    const topic = makeTopic()
+    const state = makeState({ personalizedLearningMinutes: 50, remainingLearningMinutes: 10 })
+    const r = scheduleLearningTasks({
+      dayDate: '2026-08-03',
+      usableMinutes: 30,
+      activeTopics: [topic],
+      topicStates: { [state.canonicalTopicId]: state },
+      schedulingMode: 'efficient',
+      maximumActiveTopics: 5,
+    })
+    expect(r.tasks).toHaveLength(1)
+    expect(r.tasks[0].estimatedMinutes).toBe(10)
+    expect(r.topicStates[state.canonicalTopicId].remainingLearningMinutes).toBe(0)
+    expect(r.remainingCapacity).toBe(20)
+  })
+
+  it('deterministic: repeated identical input produces identical allocations and ordering', () => {
+    const run = () => {
+      const topic = makeTopic()
+      const state = makeState({ personalizedLearningMinutes: 50, remainingLearningMinutes: 50 })
+      let topicStates = { [state.canonicalTopicId]: state }
+      const out = []
+      for (const day of ['2026-08-03', '2026-08-04', '2026-08-05']) {
+        const r = scheduleLearningTasks({
+          dayDate: day,
+          usableMinutes: 30,
+          activeTopics: [topic],
+          topicStates,
+          schedulingMode: 'efficient',
+          maximumActiveTopics: 5,
+        })
+        out.push(r.tasks.map((t) => ({ date: t.taskDate, minutes: t.estimatedMinutes, displayOrder: t.displayOrder })))
+        topicStates = r.topicStates
+      }
+      return out
+    }
+    expect(run()).toEqual(run())
+  })
+})

@@ -10,6 +10,7 @@ const { mockUseRotationPlanDetail, mockUseQuery, mockUsePlannerTaskMutations } =
     data: { plan: { id: 'p1', revision: 1 }, topics: [], tasks: [], availability: [], sourcePace: null },
     isLoading: false,
     error: null,
+    refetch: vi.fn(),
   }))
   const mockMutationsFn = vi.fn(() => ({
     isPending: false,
@@ -154,6 +155,7 @@ describe('V2PlanDetail', () => {
       data: { plan: { id: 'p1', revision: 1 }, topics: [], tasks: [], availability: [], sourcePace: null },
       isLoading: false,
       error: null,
+      refetch: vi.fn(),
     })
     mockUseQuery.mockReturnValue({ data: null, isLoading: false, error: null })
     mockUsePlannerTaskMutations.mockReturnValue({
@@ -188,6 +190,16 @@ describe('V2PlanDetail', () => {
       mockUseRotationPlanDetail.mockReturnValue({ data: null, isLoading: false, error: new Error('test error') })
       render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
       expect(screen.getByText(/Failed to load plan/i)).toBeInTheDocument()
+    })
+
+    it('calls refetch when Retry button is clicked in error state', async () => {
+      const refetchMock = vi.fn()
+      mockUseRotationPlanDetail.mockReturnValue({ data: null, isLoading: false, error: new Error('boom'), refetch: refetchMock })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByText(/Failed to load plan/i)).toBeInTheDocument()
+      const user = userEvent.setup()
+      await user.click(screen.getByRole('button', { name: /Retry/i }))
+      expect(refetchMock).toHaveBeenCalled()
     })
 
     it('shows plan-not-found when data is null', () => {
@@ -323,6 +335,78 @@ describe('V2PlanDetail', () => {
       render(<V2PlanDetail planId="p1" onBack={onBack} />)
       await user.click(screen.getByRole('button', { name: /plans/i }))
       expect(onBack).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('hook-count transition regression', () => {
+    const loadedData = {
+      plan: {
+        id: 'p1',
+        revision: 1,
+        sourceTitle: 'Cardiology',
+        startDate: '2026-08-01',
+        endDate: '2026-08-28',
+        topicCount: 2,
+        schedulingMode: 'self-paced',
+      },
+      topics: [
+        { id: 't1', status: 'completed' },
+        { id: 't2', status: 'pending' },
+      ],
+      tasks: [],
+      availability: [],
+      sourcePace: null,
+    }
+
+    it('does not crash when transitioning from loading to loaded on the same instance', () => {
+      mockUseRotationPlanDetail.mockReturnValue({ data: null, isLoading: true, error: null })
+      const { rerender } = render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByText(/Loading plan details/i)).toBeInTheDocument()
+
+      mockUseRotationPlanDetail.mockReturnValue({ data: loadedData, isLoading: false, error: null })
+
+      expect(() => rerender(<V2PlanDetail planId="p1" onBack={vi.fn()} />)).not.toThrow()
+      expect(screen.getByRole('heading', { name: 'Cardiology' })).toBeInTheDocument()
+      expect(screen.getByText('1 / 2 topics completed')).toBeInTheDocument()
+    })
+
+    it('does not crash when transitioning from loading to error on the same instance', () => {
+      mockUseRotationPlanDetail.mockReturnValue({ data: null, isLoading: true, error: null })
+      const { rerender } = render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByText(/Loading plan details/i)).toBeInTheDocument()
+
+      mockUseRotationPlanDetail.mockReturnValue({ data: null, isLoading: false, error: new Error('test error') })
+
+      expect(() => rerender(<V2PlanDetail planId="p1" onBack={vi.fn()} />)).not.toThrow()
+      expect(screen.getByText(/Failed to load plan/i)).toBeInTheDocument()
+    })
+
+    it('does not crash when transitioning from loading to not-found on the same instance', () => {
+      mockUseRotationPlanDetail.mockReturnValue({ data: null, isLoading: true, error: null })
+      const { rerender } = render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByText(/Loading plan details/i)).toBeInTheDocument()
+
+      mockUseRotationPlanDetail.mockReturnValue({ data: { plan: null, topics: [] }, isLoading: false, error: null })
+
+      expect(() => rerender(<V2PlanDetail planId="p1" onBack={vi.fn()} />)).not.toThrow()
+      expect(screen.getByText(/Plan not found/i)).toBeInTheDocument()
+    })
+
+    it('does not render mutation controls during loading, error, or not-found states', () => {
+      mockUseRotationPlanDetail.mockReturnValue({ data: null, isLoading: true, error: null })
+      const { rerender } = render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.queryByTestId('btn-start')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('dialog-complete')).not.toBeInTheDocument()
+
+      mockUseRotationPlanDetail.mockReturnValue({ data: null, isLoading: false, error: new Error('test error') })
+      rerender(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.queryByTestId('btn-start')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('dialog-complete')).not.toBeInTheDocument()
+
+      mockUseRotationPlanDetail.mockReturnValue({ data: { plan: null, topics: [] }, isLoading: false, error: null })
+      rerender(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.queryByTestId('btn-start')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('dialog-complete')).not.toBeInTheDocument()
     })
   })
 

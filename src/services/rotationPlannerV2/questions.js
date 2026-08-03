@@ -89,23 +89,29 @@ export function scheduleIncorrectReview({
   dayDate,
   usableMinutes,
   topicsNeedingReview,
+  topicStates,
   planConfig,
 }) {
   if (!topicsNeedingReview || topicsNeedingReview.length === 0) {
-    return { tasks: [], remainingCapacity: usableMinutes };
+    return { tasks: [], remainingCapacity: usableMinutes, topicStates: {} };
   }
 
   const tasks = [];
   let remainingMinutes = usableMinutes;
   let sortOrder = 1;
+  const updatedStates = {};
 
   for (const topic of topicsNeedingReview) {
-    if (topic.incorrectQuestionsRemaining <= 0) continue;
+    const state = topicStates[topic.canonicalTopicId];
+    if (!state) continue;
+
+    const remainingIncorrect = state.incorrectQuestionsRemaining || 0;
+    if (remainingIncorrect <= 0) continue;
     if (remainingMinutes <= 0) break;
 
     const { questionsToday, minutesConsumed } = calculateQuestionCapacity({
       usableMinutes: remainingMinutes,
-      questionsRemaining: topic.incorrectQuestionsRemaining,
+      questionsRemaining: remainingIncorrect,
       preferredQuestionsPerDay: planConfig.preferredQuestionsPerDay,
       minimumQuestionsPerSession: planConfig.minimumQuestionsPerSession,
       maximumQuestionsPerDay: planConfig.maximumQuestionsPerDay,
@@ -132,11 +138,22 @@ export function scheduleIncorrectReview({
     });
 
     remainingMinutes -= minutesConsumed;
+
+    const newRemaining = remainingIncorrect - questionsToday;
+    updatedStates[topic.canonicalTopicId] = {
+      ...state,
+      incorrectQuestionsRemaining: Math.max(0, newRemaining),
+      status:
+        newRemaining <= 0 && (state.remainingUworldQuestions || 0) <= 0
+          ? 'completed'
+          : state.status,
+    };
   }
 
   return {
     tasks,
     remainingCapacity: Math.max(0, remainingMinutes),
+    topicStates: updatedStates,
   };
 }
 

@@ -5,7 +5,9 @@ import TodayView from '../TodayView'
 
 vi.mock('../../../../lib/api', () => ({ apiGet: vi.fn() }))
 
-const TODAY = new Date().toISOString().slice(0, 10)
+import { getTodayKey, getBrowserTimezone } from '../todayUtils'
+
+const TODAY = getTodayKey(new Date(), getBrowserTimezone())
 
 const makeTask = (overrides = {}) => ({
   id: 'task-1',

@@ -287,6 +287,8 @@ describe('Worker route dispatch — rotation planner plans', () => {
       expect(body).toHaveProperty('tasks')
       expect(body).toHaveProperty('topics')
       expect(body).toHaveProperty('availability')
+      expect(body.previewToken).toBeTypeOf('string')
+      expect(body.feasibility).toBeDefined()
     })
   })
 

@@ -190,6 +190,9 @@ export async function handlePreviewRotationPlan(request, env, user) {
         availableMinutes: a.availableMinutes,
         isDayOff: a.isDayOff ?? false,
       })),
+      previewToken: fingerprint,
+      feasibility: preview.feasibility,
+      unscheduledWork: preview.unscheduledWork,
     })
   } catch (e) {
     log('rotation_planner:preview:error', { message: e.message, stack: e.stack?.slice(0, 500), cause: e.cause?.message })
@@ -627,6 +630,15 @@ async function handleRescheduleCompound({
     status: ts.status,
   })).filter(t => t.id))
 
+  // Enrich the result BEFORE persisting so the stored mutation result_json is the
+  // exact response shape — an idempotent replay must return an identical body.
+  resultJson.isPinned = true
+  resultJson.taskDate = newTaskDate
+  resultJson.displayOrder = movedDisplayOrder
+  resultJson.studyBlockId = movedTaskUpdated?.studyBlockId || null
+  resultJson.created = regeneratedForInsert.length
+  resultJson.preserved = pinnedTasks.length
+
   const statements = []
 
   statements.push(env.DB.prepare(
@@ -642,16 +654,26 @@ async function handleRescheduleCompound({
   ))
 
   statements.push(env.DB.prepare(
-    `UPDATE ${T.plans} SET revision = revision + 1, updated_at = datetime('now') WHERE id = ? AND user_id = ?`
-  ).bind(planId, user.sub))
+    `UPDATE ${T.plans} SET revision = revision + 1, updated_at = datetime('now')
+     WHERE id = ? AND user_id = ? AND EXISTS (
+       SELECT 1 FROM ${T.planMutations} WHERE id = ?
+     )`
+  ).bind(planId, user.sub, mutationId))
 
   statements.push(env.DB.prepare(
-    `UPDATE ${T.dailyTasks} SET task_date = ?, is_pinned = 1, display_order = ?, metadata_json = ?, updated_at = datetime('now') WHERE id = ?`
-  ).bind(newTaskDate, movedDisplayOrder, JSON.stringify({ ...movedMetadata, studyBlockId: movedTaskUpdated?.studyBlockId || null }), taskId))
+    `UPDATE ${T.dailyTasks} SET task_date = ?, is_pinned = 1, display_order = ?, metadata_json = ?, updated_at = datetime('now')
+     WHERE id = ? AND EXISTS (
+       SELECT 1 FROM ${T.planMutations} WHERE id = ?
+     )`
+  ).bind(newTaskDate, movedDisplayOrder, JSON.stringify({ ...movedMetadata, studyBlockId: movedTaskUpdated?.studyBlockId || null }), taskId, mutationId))
 
   statements.push(env.DB.prepare(
-    `DELETE FROM ${T.dailyTasks} WHERE plan_id = ? AND status IN ('pending', 'locked') AND is_pinned = 0`
-  ).bind(planId))
+    `DELETE FROM ${T.dailyTasks}
+     WHERE plan_id = ? AND status IN ('pending', 'locked') AND is_pinned = 0
+       AND EXISTS (
+         SELECT 1 FROM ${T.planMutations} WHERE id = ?
+       )`
+  ).bind(planId, mutationId))
 
   statements.push(env.DB.prepare(
     `INSERT INTO ${T.dailyTasks} (id, plan_id, plan_topic_id, task_date, task_type, provider, estimated_minutes, target_count, completed_count, mode, question_pool, status, unlock_condition, display_order, is_pinned, metadata_json)
@@ -677,20 +699,20 @@ async function handleRescheduleCompound({
     ).bind(topicsJson, planId, mutationId))
   }
 
-  await env.DB.batch(statements)
+  const batchResults = await env.DB.batch(statements)
 
-  resultJson.isPinned = true
-  resultJson.taskDate = newTaskDate
-  resultJson.displayOrder = movedDisplayOrder
-  resultJson.studyBlockId = movedTaskUpdated?.studyBlockId || null
-  resultJson.created = regeneratedForInsert.length
-  resultJson.preserved = pinnedTasks.length
+  // The planMutations INSERT (statement 0) is the authoritative revision CAS.
+  // Zero affected rows means the revision advanced between the pre-flight check
+  // and this batch — perform zero writes and report the conflict.
+  if (batchResults[0]?.meta?.changes === 0) {
+    return errorResponse('PLAN_REVISION_CONFLICT', 'Plan has been modified since you last loaded it. Please refresh.', 409)
+  }
 
   return json(resultJson)
 }
 
 export async function handleUpdateTask(request, env, user) {
-  let planId, taskId, clientRequestId, expectedRevision, fingerprint, recalculationRequired
+  let planId, taskId, clientRequestId, expectedRevision, fingerprint, recalculationRequired, action
   try {
     const url = new URL(request.url)
     const pathParts = url.pathname.split('/')
@@ -700,7 +722,8 @@ export async function handleUpdateTask(request, env, user) {
     if (!planId || !taskId) return errorResponse('VALIDATION_ERROR', 'Plan ID and Task ID are required.', 400)
 
     const body = await request.json()
-    const { action, payload = {}, clientRequestId: bodyClientId, expectedRevision: bodyRev, timezone: bodyTimezone } = body
+    const { action: bodyAction, payload = {}, clientRequestId: bodyClientId, expectedRevision: bodyRev, timezone: bodyTimezone } = body
+    action = bodyAction
     clientRequestId = request.headers.get('Idempotency-Key') || bodyClientId || null
     expectedRevision = bodyRev
 
@@ -841,9 +864,15 @@ export async function handleUpdateTask(request, env, user) {
     if (clientRequestId && e.message && e.message.includes('UNIQUE constraint failed')) {
       try {
         const classified = await classifyBatchError(
-          env, user.sub, clientRequestId, fingerprint, planId, expectedRevision, 'task'
+          env, user.sub, clientRequestId, fingerprint, planId, expectedRevision,
+          action === 'reschedule' ? 'plan' : 'task'
         )
-        if (classified.type === 'replay') return json(classified.resultJson)
+        if (classified.type === 'replay') {
+          const storedResult = typeof classified.resultJson === 'string'
+            ? JSON.parse(classified.resultJson)
+            : classified.resultJson
+          return json(storedResult)
+        }
         if (classified.type === 'IDEMPOTENCY_CONFLICT') {
           return errorResponse('IDEMPOTENCY_CONFLICT', 'Same idempotency key with different input.', 409)
         }

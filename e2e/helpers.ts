@@ -1,9 +1,21 @@
-import { type Page, expect } from '@playwright/test'
+import { type Page, expect, test } from '@playwright/test'
 
-const TEST_EMAIL = process.env.TEST_EMAIL || 'test@medstudy.app'
-const TEST_PASSWORD = process.env.TEST_PASSWORD || 'testpassword123'
+// No hardcoded credentials. Local authenticated E2E requires a provisioned local
+// account passed via TEST_EMAIL/TEST_PASSWORD; without it the tests skip with an
+// explicit documented reason (see skipIfNoLocalAuth).
+export const TEST_EMAIL = process.env.TEST_EMAIL || ''
+export const TEST_PASSWORD = process.env.TEST_PASSWORD || ''
+export const hasLocalAuth = TEST_EMAIL !== '' && TEST_PASSWORD !== ''
+
+export function skipIfNoLocalAuth(): void {
+  test.skip(
+    !hasLocalAuth,
+    'TEST_EMAIL/TEST_PASSWORD not set; local authenticated E2E requires a provisioned local account'
+  )
+}
 
 export async function login(page: Page, email = TEST_EMAIL, password = TEST_PASSWORD) {
+  skipIfNoLocalAuth()
   await page.goto('/login')
   await page.fill('input[type="email"], input[name="email"], input[placeholder*="email" i]', email)
   await page.fill('input[type="password"], input[name="password"], input[placeholder*="password" i]', password)

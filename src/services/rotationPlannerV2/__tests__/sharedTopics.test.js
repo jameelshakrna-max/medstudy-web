@@ -63,6 +63,22 @@ describe('deduplicateSharedTopics', () => {
     expect(processedTopics).toHaveLength(3)
   })
 
+  it('deduplicates the same Surgery topic across UWorld and Amboss sources', () => {
+    const uworld = makeTopic('uworld::surgery.breast', 'surgery.breast', 0)
+    const amboss = makeTopic('amboss::surgery.breast', 'surgery.breast', 0)
+    const { processedTopics } = deduplicateSharedTopics([uworld, amboss])
+
+    expect(processedTopics).toHaveLength(2)
+    const uworldResult = processedTopics.find((t) => t.sourceTopicId === 'uworld::surgery.breast')
+    const ambossResult = processedTopics.find((t) => t.sourceTopicId === 'amboss::surgery.breast')
+
+    expect(uworldResult.satisfiedBySharedCompletion || ambossResult.satisfiedBySharedCompletion).toBe(true)
+    const primaryCount = processedTopics.filter((t) => t.isPrimarySharedUnit === true)
+    expect(primaryCount).toHaveLength(1)
+    const scheduled = processedTopics.filter((t) => t.isPrimarySharedUnit === true)
+    expect(scheduled[0].title).toBe('Topic amboss::surgery.breast')
+  })
+
   it('emits deduplication log with expected fields', () => {
     const topicA = makeTopic('a', 'key-1', 0)
     const topicB = makeTopic('b', 'key-1', 0)

@@ -329,3 +329,581 @@ describe('buildRotationSchedule — integration', () => {
     expect(result.feasibility.feasible).toBe(false)
   })
 })
+
+describe('buildRotationSchedule — incorrect review state tracking', () => {
+  function makeIncorrectConfig(overrides = {}) {
+    return makePlanConfig({
+      startDate: '2026-08-03',
+      endDate: '2026-08-07',
+      preferredQuestionsPerDay: 10,
+      minimumQuestionsPerSession: 5,
+      maximumQuestionsPerDay: 50,
+      averageMinutesPerQuestion: 1.5,
+      topics: [
+        makeTopic({
+          uworldRemainingQuestions: 0,
+          incorrectQuestionsRemaining: 40,
+          alreadyCompletedLearningPercentage: 1.0,
+        }),
+      ],
+      ...overrides,
+    })
+  }
+
+  function incorrectTasks(result) {
+    return result.tasks
+      .filter((t) => t.taskType === 'incorrect_review')
+      .sort((a, b) => (a.taskDate < b.taskDate ? -1 : 1))
+  }
+
+  function stateFor(result, canonicalTopicId) {
+    return result.topicStates.find((s) => s.canonicalTopicId === canonicalTopicId)
+  }
+
+  it('total incorrect review targetCount equals the original remaining count', () => {
+    const result = buildRotationSchedule(makeIncorrectConfig())
+    const tasks = incorrectTasks(result)
+    const total = tasks.reduce((s, t) => s + t.targetCount, 0)
+    expect(total).toBe(40)
+  })
+
+  it('daily incorrect review allocations respect remaining and capacity', () => {
+    const result = buildRotationSchedule(makeIncorrectConfig())
+    const counts = incorrectTasks(result).map((t) => t.targetCount)
+    expect(counts).toEqual([10, 10, 10, 10])
+    for (const task of incorrectTasks(result)) {
+      expect(task.targetCount).toBeGreaterThan(0)
+      expect(task.targetCount).toBeLessThanOrEqual(10)
+    }
+  })
+
+  it('final topic state has incorrectQuestionsRemaining at zero', () => {
+    const result = buildRotationSchedule(makeIncorrectConfig())
+    const state = stateFor(result, 'cardiology.hypertension')
+    expect(state.incorrectQuestionsRemaining).toBe(0)
+  })
+
+  it('produces no incorrect review task after remaining reaches zero', () => {
+    const result = buildRotationSchedule(makeIncorrectConfig())
+    const tasks = incorrectTasks(result)
+    const counts = tasks.map((t) => t.targetCount)
+    const total = counts.reduce((s, c) => s + c, 0)
+    expect(total).toBe(40)
+    expect(counts).toEqual([10, 10, 10, 10])
+    const lastDayTasks = tasks.filter((t) => t.taskDate === '2026-08-07')
+    expect(lastDayTasks.length).toBe(0)
+  })
+
+  it('exact-fit capacity schedules once with the correct count', () => {
+    const result = buildRotationSchedule(
+      makeIncorrectConfig({
+        startDate: '2026-08-03',
+        endDate: '2026-08-03',
+        topics: [
+          makeTopic({
+            uworldRemainingQuestions: 0,
+            incorrectQuestionsRemaining: 10,
+            alreadyCompletedLearningPercentage: 1.0,
+          }),
+        ],
+      })
+    )
+    const tasks = incorrectTasks(result)
+    expect(tasks).toHaveLength(1)
+    expect(tasks[0].targetCount).toBe(10)
+  })
+
+  it('zero remaining produces no incorrect review task', () => {
+    const result = buildRotationSchedule(
+      makeIncorrectConfig({
+        topics: [
+          makeTopic({
+            uworldRemainingQuestions: 0,
+            incorrectQuestionsRemaining: 0,
+            alreadyCompletedLearningPercentage: 1.0,
+          }),
+        ],
+      })
+    )
+    expect(incorrectTasks(result)).toHaveLength(0)
+  })
+
+  it('multiple topics keep independent remaining state', () => {
+    const result = buildRotationSchedule(
+      makeIncorrectConfig({
+        topics: [
+          makeTopic({
+            canonicalTopicId: 'topic-a',
+            sourceTopicId: 'topic-a',
+            title: 'A',
+            uworldRemainingQuestions: 0,
+            incorrectQuestionsRemaining: 15,
+            alreadyCompletedLearningPercentage: 1.0,
+          }),
+          makeTopic({
+            canonicalTopicId: 'topic-b',
+            sourceTopicId: 'topic-b',
+            title: 'B',
+            uworldRemainingQuestions: 0,
+            incorrectQuestionsRemaining: 5,
+            alreadyCompletedLearningPercentage: 1.0,
+          }),
+        ],
+      })
+    )
+    const tasks = incorrectTasks(result)
+    const totalA = tasks.filter((t) => t.canonicalTopicId === 'topic-a').reduce((s, t) => s + t.targetCount, 0)
+    const totalB = tasks.filter((t) => t.canonicalTopicId === 'topic-b').reduce((s, t) => s + t.targetCount, 0)
+    expect(totalA).toBe(15)
+    expect(totalB).toBe(5)
+    expect(stateFor(result, 'topic-a').incorrectQuestionsRemaining).toBe(0)
+    expect(stateFor(result, 'topic-b').incorrectQuestionsRemaining).toBe(0)
+  })
+
+  it('repeated runs produce identical incorrect review task arrays', () => {
+    const config = makeIncorrectConfig()
+    const r1 = buildRotationSchedule(config)
+    const r2 = buildRotationSchedule(config)
+    const t1 = incorrectTasks(r1)
+    const t2 = incorrectTasks(r2)
+    expect(t1.length).toBe(t2.length)
+    for (let i = 0; i < t1.length; i++) {
+      expect(t1[i]).toEqual(t2[i])
+    }
+  })
+
+  it('state restoration schedules only the residual incorrect review count', () => {
+    const result = buildRotationSchedule(makeIncorrectConfig(), {
+      initialTopicStates: {
+        'cardiology.hypertension': {
+          canonicalTopicId: 'cardiology.hypertension',
+          remainingUworldQuestions: 0,
+          incorrectQuestionsRemaining: 15,
+        },
+      },
+    })
+    const tasks = incorrectTasks(result)
+    const total = tasks.reduce((s, t) => s + t.targetCount, 0)
+    expect(total).toBe(15)
+    expect(stateFor(result, 'cardiology.hypertension').incorrectQuestionsRemaining).toBe(0)
+  })
+})
+
+describe('buildRotationSchedule — learning remainder restoration', () => {
+  it('initialTopicStates.remainingLearningMinutes schedules only the residual', () => {
+    const result = buildRotationSchedule(makePlanConfig(), {
+      initialTopicStates: {
+        'cardiology.hypertension': {
+          canonicalTopicId: 'cardiology.hypertension',
+          personalizedLearningMinutes: 60,
+          remainingLearningMinutes: 30,
+          remainingUworldQuestions: 0,
+          status: 'learning',
+        },
+      },
+    })
+    const learning = result.tasks.filter((t) => t.taskType === 'learning')
+    const total = learning.reduce((s, t) => s + t.estimatedMinutes, 0)
+    expect(total).toBe(30)
+    expect(learning).toHaveLength(1)
+    expect(learning[0].estimatedMinutes).toBe(30)
+  })
+
+  it('initialTopicStates.remainingLearningMinutes of 0 schedules no learning', () => {
+    const result = buildRotationSchedule(makePlanConfig(), {
+      initialTopicStates: {
+        'cardiology.hypertension': {
+          canonicalTopicId: 'cardiology.hypertension',
+          personalizedLearningMinutes: 60,
+          remainingLearningMinutes: 0,
+          remainingUworldQuestions: 0,
+          status: 'completed',
+        },
+      },
+    })
+    const learning = result.tasks.filter((t) => t.taskType === 'learning')
+    expect(learning).toHaveLength(0)
+  })
+
+  it('absent remainingLearningMinutes falls back to personalizedLearningMinutes', () => {
+    const result = buildRotationSchedule(makePlanConfig(), {
+      initialTopicStates: {
+        'cardiology.hypertension': {
+          canonicalTopicId: 'cardiology.hypertension',
+          personalizedLearningMinutes: 50,
+          remainingUworldQuestions: 0,
+          status: 'not_started',
+        },
+      },
+    })
+    const learning = result.tasks.filter((t) => t.taskType === 'learning')
+    const total = learning.reduce((s, t) => s + t.estimatedMinutes, 0)
+    expect(total).toBe(50)
+  })
+})
+
+describe('buildRotationSchedule — cross-day learning over-scheduling regression', () => {
+  function makeCapacityConfig(overrides = {}) {
+    return makePlanConfig({
+      startDate: '2026-08-03',
+      endDate: '2026-08-07',
+      availabilityByWeekday: [
+        { weekday: 0, availableMinutes: 30, isDayOff: false },
+        { weekday: 1, availableMinutes: 30, isDayOff: false },
+        { weekday: 2, availableMinutes: 30, isDayOff: false },
+        { weekday: 3, availableMinutes: 30, isDayOff: false },
+        { weekday: 4, availableMinutes: 30, isDayOff: false },
+        { weekday: 5, availableMinutes: 30, isDayOff: false },
+        { weekday: 6, availableMinutes: 30, isDayOff: false },
+      ],
+      topics: [makeTopic({ uworldRemainingQuestions: 0 })],
+      ...overrides,
+    })
+  }
+
+  function learningTasks(result) {
+    return result.tasks
+      .filter((t) => t.taskType === 'learning')
+      .sort((a, b) => (a.taskDate < b.taskDate ? -1 : 1))
+  }
+
+  function stateFor(result, canonicalTopicId) {
+    return result.topicStates.find((s) => s.canonicalTopicId === canonicalTopicId)
+  }
+
+  it('50 min at 30/day → allocations [30, 20], total 50, no third task', () => {
+    const result = buildRotationSchedule(makeCapacityConfig())
+    const tasks = learningTasks(result)
+    const allocations = tasks.map((t) => t.estimatedMinutes)
+    expect(allocations).toEqual([30, 20])
+    const total = tasks.reduce((s, t) => s + t.estimatedMinutes, 0)
+    expect(total).toBe(50)
+    expect(tasks).toHaveLength(2)
+    const state = stateFor(result, 'cardiology.hypertension')
+    expect(state.remainingLearningMinutes).toBe(0)
+    expect(state.status).toBe('questions_locked')
+    expect(state.learningCompletedAt).toBe('2026-08-04')
+    expect(state.personalizedLearningMinutes).toBe(50)
+  })
+
+  it('exact fit: 60 min at 30/day → [30, 30], total 60', () => {
+    const config = makeCapacityConfig({
+      topics: [makeTopic({
+        uworldRemainingQuestions: 0,
+        learningMinutes: { focused: 30, activeLow: 40, activeExpected: 60, activeHigh: 60, detailedNotes: 70 },
+      })],
+    })
+    const result = buildRotationSchedule(config)
+    const tasks = learningTasks(result)
+    expect(tasks.map((t) => t.estimatedMinutes)).toEqual([30, 30])
+    const total = tasks.reduce((s, t) => s + t.estimatedMinutes, 0)
+    expect(total).toBe(60)
+    const state = stateFor(result, 'cardiology.hypertension')
+    expect(state.remainingLearningMinutes).toBe(0)
+    expect(state.status).toBe('questions_locked')
+    expect(state.learningCompletedAt).toBe('2026-08-04')
+  })
+
+  it('less than one day: 20 min at 30/day → single task of 20', () => {
+    const config = makeCapacityConfig({
+      topics: [makeTopic({
+        uworldRemainingQuestions: 0,
+        learningMinutes: { focused: 30, activeLow: 40, activeExpected: 20, activeHigh: 60, detailedNotes: 70 },
+      })],
+    })
+    const result = buildRotationSchedule(config)
+    const tasks = learningTasks(result)
+    expect(tasks).toHaveLength(1)
+    expect(tasks[0].estimatedMinutes).toBe(20)
+    expect(tasks[0].taskDate).toBe('2026-08-03')
+    const state = stateFor(result, 'cardiology.hypertension')
+    expect(state.remainingLearningMinutes).toBe(0)
+    expect(state.status).toBe('questions_locked')
+    expect(state.learningCompletedAt).toBe('2026-08-03')
+  })
+
+  it('zero remaining produces no learning task and keeps the immutable baseline', () => {
+    const result = buildRotationSchedule(makeCapacityConfig(), {
+      initialTopicStates: {
+        'cardiology.hypertension': {
+          canonicalTopicId: 'cardiology.hypertension',
+          personalizedLearningMinutes: 50,
+          remainingLearningMinutes: 0,
+          remainingUworldQuestions: 0,
+          status: 'learning',
+        },
+      },
+    })
+    expect(learningTasks(result)).toHaveLength(0)
+    const state = stateFor(result, 'cardiology.hypertension')
+    expect(state.personalizedLearningMinutes).toBe(50)
+    expect(state.remainingLearningMinutes).toBe(0)
+  })
+
+  it('partial-learning recalculation: immutable baseline 60, remaining 30, only 30 scheduled', () => {
+    const result = buildRotationSchedule(makeCapacityConfig(), {
+      initialTopicStates: {
+        'cardiology.hypertension': {
+          canonicalTopicId: 'cardiology.hypertension',
+          personalizedLearningMinutes: 60,
+          remainingLearningMinutes: 30,
+          remainingUworldQuestions: 0,
+          status: 'learning',
+        },
+      },
+    })
+    const tasks = learningTasks(result)
+    const total = tasks.reduce((s, t) => s + t.estimatedMinutes, 0)
+    expect(total).toBe(30)
+    expect(tasks).toHaveLength(1)
+    expect(tasks[0].estimatedMinutes).toBe(30)
+    const state = stateFor(result, 'cardiology.hypertension')
+    expect(state.personalizedLearningMinutes).toBe(60)
+    expect(state.remainingLearningMinutes).toBe(0)
+    expect(state.status).toBe('questions_locked')
+  })
+
+  it('multiple topics keep independent remaining state across days', () => {
+    const config = makeCapacityConfig({
+      topics: [
+        makeTopic({ canonicalTopicId: 'topic-a', sourceTopicId: 'topic-a', title: 'A', uworldRemainingQuestions: 0 }),
+        makeTopic({ canonicalTopicId: 'topic-b', sourceTopicId: 'topic-b', title: 'B', uworldRemainingQuestions: 0 }),
+      ],
+    })
+    const result = buildRotationSchedule(config)
+    const aTotal = learningTasks(result).filter((t) => t.canonicalTopicId === 'topic-a').reduce((s, t) => s + t.estimatedMinutes, 0)
+    const bTotal = learningTasks(result).filter((t) => t.canonicalTopicId === 'topic-b').reduce((s, t) => s + t.estimatedMinutes, 0)
+    expect(aTotal).toBe(50)
+    expect(bTotal).toBe(50)
+    expect(stateFor(result, 'topic-a').remainingLearningMinutes).toBe(0)
+    expect(stateFor(result, 'topic-b').remainingLearningMinutes).toBe(0)
+    expect(stateFor(result, 'topic-a').status).toBe('questions_locked')
+    expect(stateFor(result, 'topic-b').status).toBe('questions_locked')
+  })
+
+  it('blocked dates produce no learning allocation; remaining preserved for next eligible date', () => {
+    const result = buildRotationSchedule(makeCapacityConfig({ blockedDates: ['2026-08-04', '2026-08-05'] }))
+    const tasks = learningTasks(result)
+    expect(tasks.map((t) => t.estimatedMinutes)).toEqual([30, 20])
+    expect(tasks[0].taskDate).toBe('2026-08-03')
+    expect(tasks[1].taskDate).toBe('2026-08-06')
+    const state = stateFor(result, 'cardiology.hypertension')
+    expect(state.remainingLearningMinutes).toBe(0)
+    expect(state.status).toBe('questions_locked')
+  })
+
+  it('deterministic: repeated identical input produces identical learning allocations', () => {
+    const t1 = learningTasks(buildRotationSchedule(makeCapacityConfig())).map((t) => [t.taskDate, t.estimatedMinutes])
+    const t2 = learningTasks(buildRotationSchedule(makeCapacityConfig())).map((t) => [t.taskDate, t.estimatedMinutes])
+    expect(t1).toEqual(t2)
+    expect(t1).toEqual([['2026-08-03', 30], ['2026-08-04', 20]])
+  })
+
+  it('shared canonical topic schedules the workload once, not once per source alias', () => {
+    const config = makeCapacityConfig({
+      topics: [
+        makeTopic({ canonicalTopicId: 'shared.topic', sourceTopicId: 'src1.shared', normalizedTopicId: 'src::src1.shared', uworldRemainingQuestions: 0 }),
+        makeTopic({ canonicalTopicId: 'shared.topic', sourceTopicId: 'src2.shared', normalizedTopicId: 'src::src2.shared', uworldRemainingQuestions: 0 }),
+      ],
+    })
+    const result = buildRotationSchedule(config)
+    const tasks = learningTasks(result)
+    const total = tasks.reduce((s, t) => s + t.estimatedMinutes, 0)
+    expect(total).toBe(50)
+    expect(tasks.map((t) => t.estimatedMinutes)).toEqual([30, 20])
+    const state = stateFor(result, 'shared.topic')
+    expect(state.remainingLearningMinutes).toBe(0)
+  })
+
+  it('pinned learning tasks decrement remainingLearningMinutes without touching the baseline', () => {
+    const result = buildRotationSchedule(makeCapacityConfig(), {
+      pinnedTasks: [{
+        taskDate: '2026-08-03',
+        taskType: 'learning',
+        canonicalTopicId: 'cardiology.hypertension',
+        estimatedMinutes: 10,
+      }],
+    })
+    const tasks = learningTasks(result)
+    expect(tasks.map((t) => t.estimatedMinutes)).toEqual([20, 20])
+    const total = tasks.reduce((s, t) => s + t.estimatedMinutes, 0)
+    expect(total).toBe(40)
+    const state = stateFor(result, 'cardiology.hypertension')
+    expect(state.personalizedLearningMinutes).toBe(50)
+    expect(state.remainingLearningMinutes).toBe(0)
+    expect(state.status).toBe('questions_locked')
+    expect(state.learningCompletedAt).toBe('2026-08-04')
+  })
+})
+
+describe('buildRotationSchedule — learn-before-UWorld unlock modes', () => {
+  function makeCapacityConfig(overrides = {}) {
+    return {
+      rotationId: 'cardiology',
+      sourceId: 'step-up-medicine-6e-2024',
+      startDate: '2026-08-03',
+      endDate: '2026-08-07',
+      examDate: null,
+      studyStyle: 'active',
+      schedulingMode: 'efficient',
+      questionStartRule: 'next_available_day',
+      maximumActiveTopics: 5,
+      availabilityByWeekday: [
+        { weekday: 0, availableMinutes: 30, isDayOff: false },
+        { weekday: 1, availableMinutes: 30, isDayOff: false },
+        { weekday: 2, availableMinutes: 30, isDayOff: false },
+        { weekday: 3, availableMinutes: 30, isDayOff: false },
+        { weekday: 4, availableMinutes: 30, isDayOff: false },
+        { weekday: 5, availableMinutes: 30, isDayOff: false },
+        { weekday: 6, availableMinutes: 30, isDayOff: false },
+      ],
+      blockedDates: [],
+      bufferPercentage: 0,
+      preferredQuestionsPerDay: 30,
+      minimumQuestionsPerSession: 10,
+      maximumQuestionsPerDay: 50,
+      averageMinutesPerQuestion: 1.5,
+      topics: [makeTopic({ uworldRemainingQuestions: 20 })],
+      dueReviewMinutesByDate: {},
+      personalSourcePaceMultiplier: 1.0,
+      examReviewWindowDays: 0,
+      mixedReviewQuestionsPerDay: 0,
+      ...overrides,
+    }
+  }
+
+  function learningTasks(result) {
+    return result.tasks
+      .filter((t) => t.taskType === 'learning')
+      .sort((a, b) => (a.taskDate < b.taskDate ? -1 : 1))
+  }
+
+  function stateFor(result, canonicalTopicId) {
+    return result.topicStates.find((s) => s.canonicalTopicId === canonicalTopicId)
+  }
+
+  it('learning_completed: UWorld stays locked while remaining > 0, unlocks only after it reaches 0', () => {
+    const result = buildRotationSchedule(makeCapacityConfig())
+    const learning = learningTasks(result)
+    expect(learning.map((t) => t.estimatedMinutes)).toEqual([30, 20])
+    const uworldDates = result.tasks.filter((t) => t.taskType === 'uworld_questions').map((t) => t.taskDate)
+    expect(uworldDates.length).toBeGreaterThan(0)
+    for (const d of uworldDates) {
+      expect(d > '2026-08-04').toBe(true)
+    }
+    const state = stateFor(result, 'cardiology.hypertension')
+    expect(state.remainingLearningMinutes).toBe(0)
+    expect(state.learningCompletedAt).toBe('2026-08-04')
+    expect(state.questionsUnlockedAt >= '2026-08-04').toBe(true)
+    expect(state.status).toBe('completed')
+  })
+
+  it('learning_started: partial topic keeps scheduling learning and is never over-scheduled', () => {
+    const result = buildRotationSchedule(makeCapacityConfig(), {
+      initialTopicStates: {
+        'cardiology.hypertension': {
+          canonicalTopicId: 'cardiology.hypertension',
+          personalizedLearningMinutes: 60,
+          remainingLearningMinutes: 50,
+          remainingUworldQuestions: 0,
+          status: 'learning',
+        },
+      },
+    })
+    const learning = learningTasks(result)
+    expect(learning.map((t) => t.estimatedMinutes)).toEqual([30, 20])
+    const total = learning.reduce((s, t) => s + t.estimatedMinutes, 0)
+    expect(total).toBe(50)
+    const state = stateFor(result, 'cardiology.hypertension')
+    expect(state.personalizedLearningMinutes).toBe(60)
+    expect(state.remainingLearningMinutes).toBe(0)
+    expect(state.status).toBe('questions_locked')
+  })
+})
+
+describe('buildRotationSchedule — large scale', () => {
+  function addWeek(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number)
+    const dt = new Date(Date.UTC(y, m - 1, d + 7))
+    return dt.toISOString().slice(0, 10)
+  }
+
+  function makeLargeScaleConfig() {
+    const topics50 = Array.from({ length: 50 }, (_, i) =>
+      makeTopic({
+        canonicalTopicId: 'topic-' + i,
+        sourceTopicId: 'topic-' + i,
+        title: 'Topic ' + i,
+        learningMinutes: { focused: 30, activeLow: 40, activeExpected: 60, activeHigh: 80, detailedNotes: 70 },
+        uworldRemainingQuestions: 40,
+        prerequisiteTopicIds: [],
+      })
+    )
+
+    const dueReviewMinutesByDate = {}
+    const dueReviewCardCountByDate = {}
+    const topicBreakdownByDate = {}
+
+    const dates = []
+    let date = '2026-01-05'
+    while (date <= '2026-12-31' && dates.length < 52) {
+      dates.push(date)
+      date = addWeek(date)
+    }
+
+    for (const d of dates) {
+      dueReviewCardCountByDate[d] = 40
+      dueReviewMinutesByDate[d] = 40 * 1.5
+      topicBreakdownByDate[d] = Array.from({ length: 5 }, (_, j) => ({
+        normalizedTopicId: 'step-up-medicine-6e-2024::topic-' + j,
+        groupId: 'G' + j,
+        dueCardCount: 8,
+        deckNames: [],
+      }))
+    }
+
+    return makePlanConfig({
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      maximumActiveTopics: 10,
+      topics: topics50,
+      dueReviewMinutesByDate,
+      dueReviewCardCountByDate,
+      topicBreakdownByDate,
+    })
+  }
+
+  it('365 days x 50 topics is feasible with tasks produced', () => {
+    const result = buildRotationSchedule(makeLargeScaleConfig())
+    expect(result.feasibility.feasible).toBe(true)
+    expect(result.tasks.length).toBeGreaterThan(0)
+  }, 30000)
+
+  it('deterministic at scale across runs', () => {
+    const config = makeLargeScaleConfig()
+    const run1 = buildRotationSchedule(structuredClone(config))
+    const run2 = buildRotationSchedule(structuredClone(config))
+    expect(run2.tasks).toEqual(run1.tasks)
+    expect(run2.topicStates).toEqual(run1.topicStates)
+  }, 30000)
+
+  it('every scheduled day respects the 240-minute weekday budget', () => {
+    const result = buildRotationSchedule(makeLargeScaleConfig())
+    const tasksByDay = {}
+    for (const task of result.tasks) {
+      if (!tasksByDay[task.taskDate]) tasksByDay[task.taskDate] = []
+      tasksByDay[task.taskDate].push(task)
+    }
+    for (const [date, tasks] of Object.entries(tasksByDay)) {
+      const sum = tasks.reduce((s, t) => s + t.estimatedMinutes, 0)
+      expect(sum).toBeLessThanOrEqual(240)
+    }
+  }, 30000)
+
+  it('builds the schedule in bounded wall-clock time', () => {
+    const t0 = performance.now()
+    buildRotationSchedule(makeLargeScaleConfig())
+    const elapsed = performance.now() - t0
+    expect(elapsed).toBeLessThan(5000)
+  }, 30000)
+})

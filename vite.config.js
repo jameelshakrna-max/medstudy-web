@@ -11,7 +11,7 @@ export default defineConfig({
       workbox: {
         globDirectory: 'dist',
         globPatterns: ['**/*.{js,css,html,svg,png,ico,wasm}'],
-        globIgnores: ['**/CommunityDetail-*.js', '**/TrackingHub-*.js'],
+        globIgnores: ['**/CommunityDetail-*.js', '**/TrackingHub-*.js', '_worker.js'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         skipWaiting: false,
         clientsClaim: true,

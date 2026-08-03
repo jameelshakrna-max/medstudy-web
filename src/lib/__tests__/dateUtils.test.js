@@ -138,7 +138,7 @@ describe('toEndOfDayUTC', () => {
   })
 
   it('End-of-day invariant across timezones', () => {
-    const timezones = ['UTC', 'America/New_York', 'Asia/Tokyo', 'Africa/Cairo']
+    const timezones = ['UTC', 'America/New_York', 'Asia/Tokyo', 'Africa/Cairo', 'Asia/Gaza']
     for (const tz of timezones) {
       const end = toEndOfDayUTC('2026-07-15', tz)
       const nextStart = toStartOfDayUTC('2026-07-16', tz)
@@ -156,5 +156,60 @@ describe('toEndOfDayUTC', () => {
     const end = toEndOfDayUTC('2026-12-31', 'Asia/Tokyo')
     const nextStart = toStartOfDayUTC('2027-01-01', 'Asia/Tokyo')
     expect(end.getTime()).toBe(nextStart.getTime() - 1)
+  })
+})
+
+describe('Asia/Gaza (UTC+2/+3 with DST)', () => {
+  it('summer: start of day = 21:00 UTC previous day', () => {
+    expect(toStartOfDayUTC('2026-06-15', 'Asia/Gaza').toISOString()).toBe(
+      '2026-06-14T21:00:00.000Z',
+    )
+  })
+
+  it('winter: start of day = 22:00 UTC previous day', () => {
+    expect(toStartOfDayUTC('2026-01-15', 'Asia/Gaza').toISOString()).toBe(
+      '2026-01-14T22:00:00.000Z',
+    )
+  })
+
+  it('year boundary: Jan 1 2027 start = Dec 31 22:00 UTC', () => {
+    expect(toStartOfDayUTC('2027-01-01', 'Asia/Gaza').toISOString()).toBe(
+      '2026-12-31T22:00:00.000Z',
+    )
+  })
+
+  it('spring-forward: Mar 29 2026 flips +2 → +3', () => {
+    expect(toStartOfDayUTC('2026-03-28', 'Asia/Gaza').toISOString()).toBe(
+      '2026-03-27T22:00:00.000Z',
+    )
+    expect(toStartOfDayUTC('2026-03-29', 'Asia/Gaza').toISOString()).toBe(
+      '2026-03-28T21:00:00.000Z',
+    )
+  })
+
+  it('fall-back: Oct 25 2026 flips +3 → +2', () => {
+    expect(toStartOfDayUTC('2026-10-24', 'Asia/Gaza').toISOString()).toBe(
+      '2026-10-23T21:00:00.000Z',
+    )
+    expect(toStartOfDayUTC('2026-10-25', 'Asia/Gaza').toISOString()).toBe(
+      '2026-10-24T22:00:00.000Z',
+    )
+  })
+
+  it('round-trip key stability on DST days, month end, and year end', () => {
+    for (const key of [
+      '2026-03-28',
+      '2026-03-29',
+      '2026-10-24',
+      '2026-10-25',
+      '2026-06-15',
+      '2026-12-31',
+      '2027-01-01',
+    ]) {
+      const startUtc = toStartOfDayUTC(key, 'Asia/Gaza')
+      expect(getDateKeyForTimezone(startUtc.toISOString(), 'Asia/Gaza')).toBe(key)
+      const endUtc = toEndOfDayUTC(key, 'Asia/Gaza')
+      expect(getDateKeyForTimezone(endUtc.toISOString(), 'Asia/Gaza')).toBe(key)
+    }
   })
 })

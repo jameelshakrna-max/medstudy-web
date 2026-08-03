@@ -48,7 +48,10 @@ export function scheduleLearningTasks({
 
     for (const topic of learningTopics) {
       const state = states[topic.canonicalTopicId];
-      const topicRemaining = state.personalizedLearningMinutes - (state._consumedLearning || 0);
+      if (state.remainingLearningMinutes == null) {
+        state.remainingLearningMinutes = state.personalizedLearningMinutes;
+      }
+      const topicRemaining = state.remainingLearningMinutes;
 
       if (topicRemaining <= 0) continue;
 
@@ -70,8 +73,7 @@ export function scheduleLearningTasks({
       }
 
       remainingCapacity -= minutesToAssign;
-      const consumed = (states[currentTopic.canonicalTopicId]._consumedLearning || 0) + minutesToAssign;
-      states[currentTopic.canonicalTopicId]._consumedLearning = consumed;
+      state.remainingLearningMinutes = topicRemaining - minutesToAssign;
 
       tasks.push({
         taskDate: dayDate,
@@ -90,9 +92,9 @@ export function scheduleLearningTasks({
         metadata: {},
       });
 
-      if (consumed >= states[currentTopic.canonicalTopicId].personalizedLearningMinutes) {
-        states[currentTopic.canonicalTopicId].status = 'questions_locked';
-        states[currentTopic.canonicalTopicId].learningCompletedAt = dayDate;
+      if (state.remainingLearningMinutes <= 0) {
+        state.status = 'questions_locked';
+        state.learningCompletedAt = dayDate;
         currentTopic = null;
       }
     }
@@ -100,7 +102,10 @@ export function scheduleLearningTasks({
     // efficient mode
     for (const topic of learningTopics) {
       const state = states[topic.canonicalTopicId];
-      const topicRemaining = state.personalizedLearningMinutes - (state._consumedLearning || 0);
+      if (state.remainingLearningMinutes == null) {
+        state.remainingLearningMinutes = state.personalizedLearningMinutes;
+      }
+      const topicRemaining = state.remainingLearningMinutes;
 
       if (topicRemaining <= 0) continue;
 
@@ -114,8 +119,7 @@ export function scheduleLearningTasks({
       if (minutesToAssign <= 0) break;
 
       remainingCapacity -= minutesToAssign;
-      const consumed = (states[topic.canonicalTopicId]._consumedLearning || 0) + minutesToAssign;
-      states[topic.canonicalTopicId]._consumedLearning = consumed;
+      state.remainingLearningMinutes = topicRemaining - minutesToAssign;
 
       tasks.push({
         taskDate: dayDate,
@@ -134,16 +138,11 @@ export function scheduleLearningTasks({
         metadata: {},
       });
 
-      if (consumed >= states[topic.canonicalTopicId].personalizedLearningMinutes) {
-        states[topic.canonicalTopicId].status = 'questions_locked';
-        states[topic.canonicalTopicId].learningCompletedAt = dayDate;
+      if (state.remainingLearningMinutes <= 0) {
+        state.status = 'questions_locked';
+        state.learningCompletedAt = dayDate;
       }
     }
-  }
-
-  // Clean up internal tracking field
-  for (const key of Object.keys(states)) {
-    delete states[key]._consumedLearning;
   }
 
   return { tasks, remainingCapacity, topicStates: states };

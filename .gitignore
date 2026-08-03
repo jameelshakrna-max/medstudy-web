@@ -12,3 +12,5 @@ check-turso.js
 check-turso.cjs
 medstudy-web/
 wrangler-staging.toml
+test-results/
+playwright-report/

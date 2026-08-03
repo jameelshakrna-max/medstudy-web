@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scheduleUworldTasks } from '../questions.js'
+import { scheduleUworldTasks, scheduleIncorrectReview } from '../questions.js'
 
 function makeTopic(overrides = {}) {
   return {
@@ -91,5 +91,139 @@ describe('scheduleUworldTasks', () => {
     })
 
     expect(day1.topicStates[topic.canonicalTopicId].questionsUnlockedAt).toBe('2026-01-08')
+  })
+})
+
+const INCORRECT_PLAN_CONFIG = {
+  preferredQuestionsPerDay: 10,
+  minimumQuestionsPerSession: 5,
+  maximumQuestionsPerDay: 50,
+  averageMinutesPerQuestion: 1.5,
+}
+
+describe('scheduleIncorrectReview', () => {
+  it('decrements incorrectQuestionsRemaining and returns updated topicStates', () => {
+    const topic = makeTopic()
+    const topicStates = {
+      [topic.canonicalTopicId]: makeState({ incorrectQuestionsRemaining: 25 }),
+    }
+
+    const result = scheduleIncorrectReview({
+      dayDate: '2026-01-10',
+      usableMinutes: 120,
+      topicsNeedingReview: [topic],
+      topicStates,
+      planConfig: INCORRECT_PLAN_CONFIG,
+    })
+
+    expect(result.tasks).toHaveLength(1)
+    expect(result.tasks[0].taskType).toBe('incorrect_review')
+    expect(result.tasks[0].canonicalTopicId).toBe('cardiology.hypertension')
+    expect(result.tasks[0].targetCount).toBe(10)
+    expect(result.tasks[0].displayOrder).toBe(1)
+    expect(result.remainingCapacity).toBe(105)
+    expect(result.topicStates[topic.canonicalTopicId].incorrectQuestionsRemaining).toBe(15)
+  })
+
+  it('schedules exactly the remaining count on the last day and never goes negative', () => {
+    const topic = makeTopic()
+    const topicStates = {
+      [topic.canonicalTopicId]: makeState({ incorrectQuestionsRemaining: 10 }),
+    }
+
+    const result = scheduleIncorrectReview({
+      dayDate: '2026-01-10',
+      usableMinutes: 120,
+      topicsNeedingReview: [topic],
+      topicStates,
+      planConfig: INCORRECT_PLAN_CONFIG,
+    })
+
+    expect(result.tasks).toHaveLength(1)
+    expect(result.tasks[0].targetCount).toBe(10)
+    expect(result.topicStates[topic.canonicalTopicId].incorrectQuestionsRemaining).toBe(0)
+  })
+
+  it('schedules a partial remainder without exceeding remaining', () => {
+    const topic = makeTopic()
+    const topicStates = {
+      [topic.canonicalTopicId]: makeState({ incorrectQuestionsRemaining: 3 }),
+    }
+
+    const result = scheduleIncorrectReview({
+      dayDate: '2026-01-10',
+      usableMinutes: 120,
+      topicsNeedingReview: [topic],
+      topicStates,
+      planConfig: INCORRECT_PLAN_CONFIG,
+    })
+
+    expect(result.tasks).toHaveLength(1)
+    expect(result.tasks[0].targetCount).toBe(3)
+    expect(result.topicStates[topic.canonicalTopicId].incorrectQuestionsRemaining).toBe(0)
+  })
+
+  it('produces no task and no decrement when remaining is zero', () => {
+    const topic = makeTopic()
+    const topicStates = {
+      [topic.canonicalTopicId]: makeState({ incorrectQuestionsRemaining: 0 }),
+    }
+
+    const result = scheduleIncorrectReview({
+      dayDate: '2026-01-10',
+      usableMinutes: 120,
+      topicsNeedingReview: [topic],
+      topicStates,
+      planConfig: INCORRECT_PLAN_CONFIG,
+    })
+
+    expect(result.tasks).toHaveLength(0)
+    expect(result.remainingCapacity).toBe(120)
+    expect(result.topicStates[topic.canonicalTopicId]).toBeUndefined()
+  })
+
+  it('keeps separate topic states independent', () => {
+    const topicA = makeTopic({ canonicalTopicId: 'cardiology.hypertension' })
+    const topicB = makeTopic({ canonicalTopicId: 'cardiology.acs' })
+    const topicStates = {
+      'cardiology.hypertension': makeState({ canonicalTopicId: 'cardiology.hypertension', incorrectQuestionsRemaining: 25 }),
+      'cardiology.acs': makeState({ canonicalTopicId: 'cardiology.acs', incorrectQuestionsRemaining: 5 }),
+    }
+
+    const result = scheduleIncorrectReview({
+      dayDate: '2026-01-10',
+      usableMinutes: 120,
+      topicsNeedingReview: [topicA, topicB],
+      topicStates,
+      planConfig: INCORRECT_PLAN_CONFIG,
+    })
+
+    expect(result.tasks).toHaveLength(2)
+    expect(result.tasks[0].canonicalTopicId).toBe('cardiology.hypertension')
+    expect(result.tasks[0].targetCount).toBe(10)
+    expect(result.tasks[1].canonicalTopicId).toBe('cardiology.acs')
+    expect(result.tasks[1].targetCount).toBe(5)
+    expect(result.topicStates['cardiology.hypertension'].incorrectQuestionsRemaining).toBe(15)
+    expect(result.topicStates['cardiology.acs'].incorrectQuestionsRemaining).toBe(0)
+  })
+
+  it('respects daily capacity limits', () => {
+    const topic = makeTopic()
+    const topicStates = {
+      [topic.canonicalTopicId]: makeState({ incorrectQuestionsRemaining: 100 }),
+    }
+
+    const result = scheduleIncorrectReview({
+      dayDate: '2026-01-10',
+      usableMinutes: 15,
+      topicsNeedingReview: [topic],
+      topicStates,
+      planConfig: INCORRECT_PLAN_CONFIG,
+    })
+
+    expect(result.tasks).toHaveLength(1)
+    expect(result.tasks[0].targetCount).toBe(10)
+    expect(result.remainingCapacity).toBe(0)
+    expect(result.topicStates[topic.canonicalTopicId].incorrectQuestionsRemaining).toBe(90)
   })
 })

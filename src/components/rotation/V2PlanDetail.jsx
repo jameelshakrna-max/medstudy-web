@@ -28,7 +28,7 @@ import styles from './V2PlanDetail.module.css'
 
 export default function V2PlanDetail({ planId, onBack }) {
   const navigate = useNavigate()
-  const { data, isLoading, error } = useRotationPlanDetail(planId)
+  const { data, isLoading, error, refetch } = useRotationPlanDetail(planId)
 
   const [dialogState, setDialogState] = useState({ type: null, task: null })
   const [toast, setToast] = useState({ open: false, title: '', description: '', variant: 'default' })
@@ -86,6 +86,19 @@ export default function V2PlanDetail({ planId, onBack }) {
   })
 
   const tasks = data?.tasks || []
+
+  const completedTopicCount = useMemo(() => {
+    return (data?.topics || []).filter(t => t.status === 'completed').length
+  }, [data?.topics])
+
+  const dateRange = useMemo(() => {
+    const plan = data?.plan
+    if (!plan?.startDate || !plan?.endDate) return null
+    const start = new Date(plan.startDate + 'T00:00:00')
+    const end = new Date(plan.endDate + 'T00:00:00')
+    const fmt = { month: 'short', day: 'numeric' }
+    return `${start.toLocaleDateString('en-US', fmt)} – ${end.toLocaleDateString('en-US', fmt)}`
+  }, [data?.plan?.startDate, data?.plan?.endDate])
 
   const taskAttachment = useTaskAttachment({
     startTask: mutations.startTask,
@@ -177,6 +190,7 @@ export default function V2PlanDetail({ planId, onBack }) {
           <ChevronLeft size={18} /> Plans
         </button>
         <div className={styles.error}>Failed to load plan. Please try again.</div>
+        <button type="button" className={styles.backButton} style={{ marginTop: 12 }} onClick={() => refetch()}>Retry</button>
       </div>
     )
   }
@@ -193,18 +207,6 @@ export default function V2PlanDetail({ planId, onBack }) {
   }
 
   const { plan, topics, schedule, progress } = data
-
-  const completedTopicCount = useMemo(() => {
-    return topics.filter(t => t.status === 'completed').length
-  }, [topics])
-
-  const dateRange = useMemo(() => {
-    if (!plan.startDate || !plan.endDate) return null
-    const start = new Date(plan.startDate + 'T00:00:00')
-    const end = new Date(plan.endDate + 'T00:00:00')
-    const fmt = { month: 'short', day: 'numeric' }
-    return `${start.toLocaleDateString('en-US', fmt)} – ${end.toLocaleDateString('en-US', fmt)}`
-  }, [plan.startDate, plan.endDate])
 
   return (
     <div className={styles.container}>

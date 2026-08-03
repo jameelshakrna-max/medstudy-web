@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import * as Dialog from '@radix-ui/react-dialog'
 import { LayerProvider } from '../../../context/LayerContext'
@@ -126,11 +126,10 @@ describe('CalendarView', () => {
   })
 
   it('switching back from week returns month', () => {
-    const { unmount } = renderCalendar()
+    renderCalendar()
     fireEvent.click(screen.getByRole('tab', { name: 'Week' }))
     expect(screen.getByTestId('schedule-view')).toBeInTheDocument()
-    unmount()
-    renderCalendar()
+    fireEvent.click(screen.getByRole('tab', { name: 'Month' }))
     expect(screen.queryByTestId('schedule-view')).not.toBeInTheDocument()
     expect(screen.getByRole('grid', { name: /July 2026/i })).toBeInTheDocument()
   })
@@ -205,6 +204,196 @@ describe('CalendarView', () => {
     expect(screen.queryByText(/normalizedTopicId/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/planTopicId/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/amboss::/)).not.toBeInTheDocument()
+  })
+
+  describe('ARIA tabs pattern', () => {
+    it('exposes tablist, tabs, and tabpanel roles', () => {
+      renderCalendar()
+      expect(screen.getByRole('tablist', { name: 'Calendar view mode' })).toBeInTheDocument()
+      expect(screen.getAllByRole('tab')).toHaveLength(2)
+      expect(screen.getByRole('tabpanel')).toBeInTheDocument()
+    })
+
+    it('every tab has aria-controls', () => {
+      renderCalendar()
+      const tabs = screen.getAllByRole('tab')
+      expect(tabs).toHaveLength(2)
+      for (const tab of tabs) {
+        expect(tab).toHaveAttribute('aria-controls')
+      }
+    })
+
+    it('panel aria-labelledby points to the active tab id', () => {
+      renderCalendar()
+      const activeTab = screen.getByRole('tab', { name: 'Month' })
+      const panel = screen.getByRole('tabpanel')
+      expect(panel).toHaveAttribute('aria-labelledby', activeTab.id)
+    })
+
+    it('only the selected tab has tabIndex 0', () => {
+      renderCalendar()
+      const tabs = screen.getAllByRole('tab')
+      const selected = tabs.filter((t) => t.getAttribute('aria-selected') === 'true')
+      expect(selected).toHaveLength(1)
+      expect(selected[0]).toHaveAttribute('tabindex', '0')
+      for (const tab of tabs.filter((t) => t !== selected[0])) {
+        expect(tab).toHaveAttribute('tabindex', '-1')
+      }
+    })
+
+    it('arrow right selects and focuses the next tab', () => {
+      renderCalendar()
+      const monthTab = screen.getByRole('tab', { name: 'Month' })
+      fireEvent.keyDown(monthTab, { key: 'ArrowRight' })
+      const weekTab = screen.getByRole('tab', { name: 'Week' })
+      expect(weekTab).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByTestId('schedule-view')).toBeInTheDocument()
+      expect(document.activeElement).toBe(weekTab)
+    })
+
+    it('arrow left selects and focuses the previous tab', () => {
+      renderCalendar()
+      fireEvent.click(screen.getByRole('tab', { name: 'Week' }))
+      const weekTab = screen.getByRole('tab', { name: 'Week' })
+      fireEvent.keyDown(weekTab, { key: 'ArrowLeft' })
+      const monthTab = screen.getByRole('tab', { name: 'Month' })
+      expect(monthTab).toHaveAttribute('aria-selected', 'true')
+      expect(screen.queryByTestId('schedule-view')).not.toBeInTheDocument()
+      expect(document.activeElement).toBe(monthTab)
+    })
+
+    it('arrow right on the last tab wraps to the first tab', () => {
+      renderCalendar()
+      fireEvent.click(screen.getByRole('tab', { name: 'Week' }))
+      const weekTab = screen.getByRole('tab', { name: 'Week' })
+      fireEvent.keyDown(weekTab, { key: 'ArrowRight' })
+      const monthTab = screen.getByRole('tab', { name: 'Month' })
+      expect(monthTab).toHaveAttribute('aria-selected', 'true')
+      expect(screen.queryByTestId('schedule-view')).not.toBeInTheDocument()
+      expect(document.activeElement).toBe(monthTab)
+    })
+
+    it('home selects and focuses the first tab', () => {
+      renderCalendar()
+      fireEvent.click(screen.getByRole('tab', { name: 'Week' }))
+      fireEvent.keyDown(screen.getByRole('tab', { name: 'Week' }), { key: 'Home' })
+      const monthTab = screen.getByRole('tab', { name: 'Month' })
+      expect(monthTab).toHaveAttribute('aria-selected', 'true')
+      expect(document.activeElement).toBe(monthTab)
+    })
+
+    it('end selects and focuses the last tab', () => {
+      renderCalendar()
+      fireEvent.keyDown(screen.getByRole('tab', { name: 'Month' }), { key: 'End' })
+      const weekTab = screen.getByRole('tab', { name: 'Week' })
+      expect(weekTab).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByTestId('schedule-view')).toBeInTheDocument()
+      expect(document.activeElement).toBe(weekTab)
+    })
+
+    it('mouse click still selects a tab', () => {
+      renderCalendar()
+      fireEvent.click(screen.getByRole('tab', { name: 'Week' }))
+      expect(screen.getByRole('tab', { name: 'Week' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByTestId('schedule-view')).toBeInTheDocument()
+    })
+
+    it('calendar content remains intact with the tabpanel', () => {
+      renderCalendar()
+      const panel = screen.getByRole('tabpanel')
+      expect(panel).toContainElement(screen.getByRole('grid', { name: /July 2026/i }))
+      expect(screen.getByRole('button', { name: /July 27/i })).toBeInTheDocument()
+      fireEvent.click(screen.getByLabelText('Next month'))
+      expect(screen.getByText('August 2026')).toBeInTheDocument()
+    })
+
+    it('no duplicate DOM ids across two CalendarView instances', () => {
+      renderWithProviders(
+        <div>
+          <div data-testid="cal-1"><CalendarView {...defaultCalendarProps()} /></div>
+          <div data-testid="cal-2"><CalendarView {...defaultCalendarProps()} /></div>
+        </div>
+      )
+
+      const first = screen.getByTestId('cal-1')
+      const second = screen.getByTestId('cal-2')
+      const firstIds = [...first.querySelectorAll('[id]')].map((el) => el.id)
+      const secondIds = [...second.querySelectorAll('[id]')].map((el) => el.id)
+      const allIds = [...firstIds, ...secondIds]
+      expect(allIds.length).toBeGreaterThan(0)
+      expect(new Set(allIds).size).toBe(allIds.length)
+    })
+
+    it('only the active panel is visible', () => {
+      renderCalendar()
+      const monthPanel = screen.getByRole('tabpanel')
+      expect(monthPanel).toContainElement(screen.getByRole('grid', { name: /July 2026/i }))
+      expect(screen.queryByTestId('schedule-view')).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Week' }))
+      const weekPanel = screen.getByRole('tabpanel')
+      expect(weekPanel).toContainElement(screen.getByTestId('schedule-view'))
+      expect(screen.queryByRole('grid', { name: /July 2026/i })).not.toBeInTheDocument()
+    })
+
+    it('inactive panel is absent, not hidden with CSS', () => {
+      renderCalendar()
+      const weekTab = screen.getByRole('tab', { name: 'Week' })
+      expect(screen.getAllByRole('tabpanel')).toHaveLength(1)
+      expect(document.getElementById(weekTab.getAttribute('aria-controls'))).toBeNull()
+
+      fireEvent.click(weekTab)
+      const monthTab = screen.getByRole('tab', { name: 'Month' })
+      expect(screen.getAllByRole('tabpanel')).toHaveLength(1)
+      expect(document.getElementById(monthTab.getAttribute('aria-controls'))).toBeNull()
+    })
+
+    it('inactive panel controls are not tabbable', () => {
+      renderCalendar()
+      const monthPanel = screen.getByRole('tabpanel')
+      const dayCell = within(monthPanel).getByRole('button', { name: /July 27/i })
+      dayCell.focus()
+      expect(document.activeElement).toBe(dayCell)
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Week' }))
+      expect(screen.queryByRole('grid')).toBeNull()
+      const weekPanel = screen.getByRole('tabpanel')
+      expect(within(weekPanel).queryByRole('button', { name: /July 27/i })).not.toBeInTheDocument()
+      expect(within(weekPanel).queryAllByRole('button')).toHaveLength(0)
+    })
+
+    it('switching tabs exposes the newly selected panel', () => {
+      renderCalendar()
+      const monthTab = screen.getByRole('tab', { name: 'Month' })
+      const weekTab = screen.getByRole('tab', { name: 'Week' })
+
+      expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', monthTab.id)
+      expect(screen.getByRole('grid', { name: /July 2026/i })).toBeInTheDocument()
+
+      fireEvent.click(weekTab)
+      expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', weekTab.id)
+      expect(screen.getByTestId('schedule-view')).toBeInTheDocument()
+      expect(screen.queryByRole('grid', { name: /July 2026/i })).not.toBeInTheDocument()
+
+      fireEvent.click(monthTab)
+      expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', monthTab.id)
+      expect(screen.getByRole('grid', { name: /July 2026/i })).toBeInTheDocument()
+      expect(screen.queryByTestId('schedule-view')).not.toBeInTheDocument()
+    })
+
+    it('aria-controls and aria-labelledby reference existing IDs', () => {
+      renderCalendar()
+      const monthTab = screen.getByRole('tab', { name: 'Month' })
+      const monthPanel = screen.getByRole('tabpanel')
+      expect(document.getElementById(monthTab.getAttribute('aria-controls'))).toBe(monthPanel)
+      expect(document.getElementById(monthPanel.getAttribute('aria-labelledby'))).toBe(monthTab)
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Week' }))
+      const weekTab = screen.getByRole('tab', { name: 'Week' })
+      const weekPanel = screen.getByRole('tabpanel')
+      expect(document.getElementById(weekTab.getAttribute('aria-controls'))).toBe(weekPanel)
+      expect(document.getElementById(weekPanel.getAttribute('aria-labelledby'))).toBe(weekTab)
+    })
   })
 })
 

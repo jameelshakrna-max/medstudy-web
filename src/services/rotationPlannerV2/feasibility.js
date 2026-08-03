@@ -118,10 +118,12 @@ export function buildUnscheduledWork({ tasks, resolvedTopics, topicStates }) {
     const scheduledQuestions =
       questionCountByTopic[topic.canonicalTopicId] || 0;
 
-    const remainingLearningMinutes = Math.max(
-      0,
-      state.personalizedLearningMinutes - scheduledLearningMinutes
-    );
+    const remainingLearningMinutes = state.remainingLearningMinutes != null
+      ? state.remainingLearningMinutes
+      : Math.max(
+          0,
+          state.personalizedLearningMinutes - scheduledLearningMinutes
+        );
     const remainingQuestions = Math.max(
       0,
       state.remainingUworldQuestions - scheduledQuestions

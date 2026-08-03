@@ -1,1 +1,3 @@
-/* /index.html 200
+# SPA fallback is handled by _worker.js (HTML navigation only).
+# Missing non-HTML assets (e.g. JS chunks, sw.js) return a real 404 so
+# "Failed to fetch dynamically imported module" failures are diagnosable.
