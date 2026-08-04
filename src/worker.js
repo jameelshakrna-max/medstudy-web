@@ -192,9 +192,14 @@ export default {
       const verifyAuth = createAuth(env)
 
       let user = null
-      const testUserId = request.headers.get('x-test-user-id') || url.searchParams.get('__test')
+      const syntheticAuthEnabled = env.ENVIRONMENT === 'test'
+      const testUserId = syntheticAuthEnabled
+        ? (request.headers.get('x-test-user-id') || url.searchParams.get('__test'))
+        : null
       if (testUserId) {
         user = { sub: testUserId, email: testUserId + '@test.local', role: 'authenticated' }
+      } else if (request.headers.has('x-test-user-id') || url.searchParams.has('__test')) {
+        return ensureCORS(json({ error: 'Not found' }, 404))
       } else {
         const auth = request.headers.get('Authorization')
         const token = (auth?.startsWith('Bearer ') ? auth.replace('Bearer ', '') : null) || url.searchParams.get('token')
