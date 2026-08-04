@@ -6,7 +6,7 @@ const PLAN_SUMMARY_COLUMNS = [
   'maximum_questions_per_day', 'average_minutes_per_question',
   'buffer_percentage', 'maximum_active_topics',
   'status', 'uses_flashcard_capacity', 'settings_json', 'created_at', 'updated_at',
-  'revision', 'last_recalculated_at',
+  'revision', 'last_recalculated_at', 'stale_at',
 ]
 
 const PLAN_NESTED_COLUMNS = [...PLAN_SUMMARY_COLUMNS]
