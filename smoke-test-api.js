@@ -520,7 +520,7 @@ function testSuite8() {
     });
     const decks = await decksRes.json();
     if (!Array.isArray(decks)) throw new Error('Expected array of decks');
-    console.log(`    Decks for A: ${decks.map(d => d.deck_name).join(', ')}`);
+    console.log(`    Decks for A: ${decks.map(d => d.name).join(', ')}`);
 
     const dueRes = await fetch(`${BASE}/api/flashcards/due-count`, {
       headers: { Authorization: `Bearer ${tokens.A}` },

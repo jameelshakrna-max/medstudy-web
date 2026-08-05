@@ -270,7 +270,8 @@ export default function Anki() {
   const createDeckMutation = useMutation({
     mutationFn: async (name) => {
       const r = await apiPost('/decks', { deck_name: name })
-      if (r.error) throw new Error(r.error)
+      if (r && r.error) throw new Error(r.error)
+      if (!r || typeof r !== 'object' || r.success !== true) throw new Error('Unexpected server response')
       return r
     },
     onSuccess: () => queryClient.invalidateQueries(queryKeys.flashcards.decks()),
@@ -347,7 +348,8 @@ export default function Anki() {
     try {
       await createDeckMutation.mutateAsync(deckName.trim())
       setDeckName('')
-    } catch (e) { alert(e.message) }
+      setToast({ msg: 'Deck created.', type: 'success' })
+    } catch (e) { setToast({ msg: e.message || 'Failed to create deck', type: 'error' }) }
     setSavingDeck(false)
   }
 
@@ -1216,7 +1218,7 @@ export default function Anki() {
       <Toast
         open={!!toast}
         onOpenChange={(open) => { if (!open) setToast(null) }}
-        variant={toast?.type === 'error' ? 'error' : 'default'}
+        variant={toast?.type === 'error' ? 'error' : toast?.type === 'success' ? 'success' : 'default'}
         title={toast?.msg}
       />
     </div>

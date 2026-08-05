@@ -20,7 +20,7 @@ vi.mock('../../components/LoadingScreen', () => ({
 }))
 
 vi.mock('../../components/ui/Toast/Toast', () => {
-  const Toast = () => null
+  const Toast = ({ title }) => (title ? <div data-testid="toast">{title}</div> : null)
   Toast.Provider = ({ children }) => <>{children}</>
   Toast.Viewport = () => null
   return { default: Toast }
@@ -177,7 +177,6 @@ describe('Anki create deck', () => {
       }
       return jsonResponse([])
     })
-    window.alert = vi.fn()
     renderAnki()
 
     const input = await screen.findByPlaceholderText('New deck name...')
@@ -185,7 +184,7 @@ describe('Anki create deck', () => {
     fireEvent.click(screen.getByRole('button', { name: '+ Deck' }))
 
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalledWith('Deck name required (max 100 chars)')
+      expect(screen.getByTestId('toast').textContent).toBe('Deck name required (max 100 chars)')
     })
     expect(screen.getByPlaceholderText('New deck name...').value).toBe('new')
   })

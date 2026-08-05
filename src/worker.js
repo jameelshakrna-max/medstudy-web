@@ -703,20 +703,30 @@ async function handleDueCount(request, env, user) {
 
 async function handleGetDecks(request, env, user) {
   const { results } = await env.DB.prepare(
-    'SELECT deck_name, COUNT(*) as card_count FROM flashcards WHERE user_id = ? GROUP BY deck_name ORDER BY deck_name'
-  ).bind(user.sub).all()
-  return json(results)
+    `SELECT deck_name, SUM(cnt) AS card_count FROM (
+       SELECT deck_name, COUNT(*) AS cnt FROM flashcards WHERE user_id = ? GROUP BY deck_name
+       UNION ALL
+       SELECT deck_name, 0 AS cnt FROM deck_settings WHERE user_id = ?
+     ) GROUP BY deck_name ORDER BY deck_name`
+  ).bind(user.sub, user.sub).all()
+  return json(results.map(r => ({ id: r.deck_name, name: r.deck_name, card_count: Number(r.card_count) || 0 })))
 }
 
 async function handleCreateDeck(request, env, user) {
   const { deck_name } = await request.json()
   if (!deck_name || typeof deck_name !== 'string' || !deck_name.trim() || deck_name.trim().length > 100) return json({ error: 'Deck name required (max 100 chars)' }, 400)
-  return json({ success: true, deck_name: deck_name.trim() })
+  const name = deck_name.trim()
+  const now = new Date().toISOString()
+  await env.DB.prepare(
+    'INSERT OR IGNORE INTO deck_settings (user_id, deck_name, settings, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+  ).bind(user.sub, name, '{}', now, now).run()
+  return json({ success: true, deck_name: name })
 }
 
 async function handleDeleteDeck(request, env, user) {
   const deckName = decodeURIComponent(extractId(request.url))
   await env.DB.prepare('DELETE FROM flashcards WHERE user_id = ? AND deck_name = ?').bind(user.sub, deckName).run()
+  await env.DB.prepare('DELETE FROM deck_settings WHERE user_id = ? AND deck_name = ?').bind(user.sub, deckName).run()
   await cleanupOrphanMapping(env, user.sub, deckName)
   signalFlashcardMappingsStaleness(env, user.sub, EXISTING_REVIEW_IMPACT).catch(() => {})
   return json({ success: true })

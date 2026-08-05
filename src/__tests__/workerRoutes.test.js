@@ -410,7 +410,7 @@ describe('Worker route dispatch — rotation planner plans', () => {
       expect(res.status).toBe(401)
     })
 
-    it('duplicate submissions both succeed without creating rows', async () => {
+    it('duplicate submissions both succeed and deck list stays an array', async () => {
       const first = await postFetch('/api/decks', { deck_name: 'Anatomy' })
       const second = await postFetch('/api/decks', { deck_name: 'Anatomy' })
       expect(first.status).toBe(200)
