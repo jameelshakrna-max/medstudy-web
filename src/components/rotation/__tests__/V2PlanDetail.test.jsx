@@ -86,11 +86,14 @@ vi.mock('../ProgressView', () => ({
 }))
 
 vi.mock('../today/RecalculationBanner', () => ({
-  default: () => null,
-}))
-
-vi.mock('../today/PlannerStaleBanner', () => ({
-  default: ({ visible }) => visible ? <div data-testid="stale-banner" /> : null,
+  default: ({ visible, recalculationState }) => {
+    if (recalculationState?.status === 'pending' || recalculationState?.status === 'in_flight') {
+      return <div data-testid="recalc-pending" />
+    }
+    if (recalculationState?.status === 'failed') return <div data-testid="recalc-failed" />
+    if (recalculationState?.status === 'blocked') return <div data-testid="recalc-blocked" />
+    return visible ? <div data-testid="stale-banner" /> : null
+  },
 }))
 
 vi.mock('../today/DeckTopicMappings', () => ({
@@ -104,6 +107,10 @@ vi.mock('../today/DeckTopicMappings', () => ({
 
 vi.mock('../today/FlashcardForecastRecommendations', () => ({
   default: () => <div data-testid="forecast-recs" />,
+}))
+
+vi.mock('../RotationHelpDialog', () => ({
+  default: ({ open }) => (open ? <div data-testid="rotation-help-dialog" /> : null),
 }))
 
 vi.mock('../../ui/Toast/Toast', () => {
@@ -326,6 +333,35 @@ describe('V2PlanDetail', () => {
       await user.click(screen.getByTestId('btn-recalc-required'))
       expect(screen.getByTestId('stale-banner')).toBeInTheDocument()
     })
+
+    it('renders exactly one banner when both visible and recalculationState are set', async () => {
+      const user = userEvent.setup()
+      mockUseRotationPlanDetail.mockReturnValue({
+        data: { plan: { id: 'p1', revision: 1, staleAt: '2099-01-01' }, topics: [], tasks: [], availability: [], sourcePace: null },
+        isLoading: false,
+        error: null,
+      })
+      mockUsePlannerTaskMutations.mockReturnValue({
+        isPending: false,
+        currentRevision: 1,
+        startTask: vi.fn(),
+        completeTask: vi.fn(),
+        partialTask: vi.fn(),
+        recordTime: vi.fn(),
+        recordQuestions: vi.fn(),
+        rescheduleTask: vi.fn(),
+        skipTask: vi.fn(),
+        retryRecalculation: vi.fn(),
+        reset: vi.fn(),
+        error: null,
+        recalculationState: { status: 'pending' },
+      })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByTestId('btn-recalc-required'))
+      expect(screen.getByTestId('recalc-pending')).toBeInTheDocument()
+      expect(screen.queryByTestId('stale-banner')).not.toBeInTheDocument()
+      expect(screen.getAllByTestId('recalc-pending')).toHaveLength(1)
+    })
   })
 
   describe('back button', () => {
@@ -335,6 +371,20 @@ describe('V2PlanDetail', () => {
       render(<V2PlanDetail planId="p1" onBack={onBack} />)
       await user.click(screen.getByRole('button', { name: /plans/i }))
       expect(onBack).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('help dialog', () => {
+    it('opens RotationHelpDialog from the header help button', async () => {
+      const user = userEvent.setup()
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: 'How your rotation plan works' }))
+      expect(screen.getByTestId('rotation-help-dialog')).toBeInTheDocument()
+    })
+
+    it('does not open RotationHelpDialog before the help button is clicked', () => {
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.queryByTestId('rotation-help-dialog')).not.toBeInTheDocument()
     })
   })
 

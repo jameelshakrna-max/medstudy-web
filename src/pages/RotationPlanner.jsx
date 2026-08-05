@@ -4,8 +4,9 @@ import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiGet, apiPost, apiDelete, apiPut } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
-import { CalendarRange, Plus, ChevronLeft, Play, Pause, Trash2, RotateCcw, BookOpen, WifiOff } from 'lucide-react'
+import { CalendarRange, Plus, ChevronLeft, Play, Pause, Trash2, RotateCcw, BookOpen, WifiOff, CircleHelp } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
+import RotationHelpDialog from '../components/rotation/RotationHelpDialog'
 import PlanCreationForm from '../components/rotation/PlanCreationForm'
 import ScheduleView from '../components/rotation/ScheduleView'
 import TopicProgressCard from '../components/rotation/TopicProgressCard'
@@ -39,6 +40,7 @@ export default function RotationPlanner() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [showForm, setShowForm] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const selectedPlanId = searchParams.get('plan') || null
 
@@ -365,10 +367,20 @@ export default function RotationPlanner() {
                 : 'Plan your clinical rotations and study schedule'}
             </p>
           </div>
-          <button className={styles.createBtn} onClick={() => setShowForm(true)}>
-            <Plus size={16} />
-            New Plan
-          </button>
+          <div className={styles.headerActions}>
+            <button
+              type="button"
+              className={styles.helpBtn}
+              aria-label="How your rotation plan works"
+              onClick={() => setHelpOpen(true)}
+            >
+              <CircleHelp size={18} />
+            </button>
+            <button className={styles.createBtn} onClick={() => setShowForm(true)}>
+              <Plus size={16} />
+              New Plan
+            </button>
+          </div>
         </div>
       </div>
 
@@ -489,6 +501,8 @@ export default function RotationPlanner() {
         onClose={() => setShowForm(false)}
         onCreated={handlePlanCreated}
       />
+
+      <RotationHelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   )
 }

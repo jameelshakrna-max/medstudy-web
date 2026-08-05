@@ -64,6 +64,10 @@ vi.mock('../../components/rotation/V2PlanDetail', () => ({
   default: () => <div data-testid="v2-plan-detail" />,
 }))
 
+vi.mock('../../components/rotation/RotationHelpDialog', () => ({
+  default: ({ open }) => (open ? <div data-testid="rotation-help-dialog" /> : null),
+}))
+
 vi.mock('../../components/ui/Modal/Modal', () => {
   const MockModal = ({ children, open }) => (open ? <div data-testid="mock-modal">{children}</div> : null)
   MockModal.Title = ({ children }) => <div>{children}</div>

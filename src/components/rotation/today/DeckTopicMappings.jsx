@@ -105,7 +105,7 @@ export default function DeckTopicMappings({ planId, topics, usesFlashcardCapacit
 
   if (!isOwner) {
     return (
-      <div className={styles.container}>
+      <div id="deck-topic-mappings" className={styles.container}>
         <h3 className={styles.heading}>Deck-Topic Mappings</h3>
         <div className={styles.nonOwner}>
           Another rotation currently uses flashcard capacity. Mapping controls are not available.
@@ -116,7 +116,7 @@ export default function DeckTopicMappings({ planId, topics, usesFlashcardCapacit
 
   if (!planId) {
     return (
-      <div className={styles.container}>
+      <div id="deck-topic-mappings" className={styles.container}>
         <h3 className={styles.heading}>Deck-Topic Mappings</h3>
         <div className={styles.nonOwner}>
           Create the plan first to manage deck mappings.
@@ -126,7 +126,7 @@ export default function DeckTopicMappings({ planId, topics, usesFlashcardCapacit
   }
 
   return (
-    <div className={styles.container}>
+    <div id="deck-topic-mappings" className={styles.container}>
       <h3 className={styles.heading}>Deck-Topic Mappings</h3>
       <p className={styles.hint}>Map flashcard decks to planner topics. Each deck maps to one topic.</p>
 

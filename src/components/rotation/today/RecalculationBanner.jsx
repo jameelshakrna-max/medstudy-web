@@ -1,15 +1,7 @@
 import { Banner, BannerAction } from '../../ui/Banner/Banner'
 import styles from './RecalculationBanner.module.css'
 
-const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000
-
-function isStale(lastRecalculatedAt) {
-  if (!lastRecalculatedAt) return true
-  const diff = Date.now() - new Date(lastRecalculatedAt).getTime()
-  return diff > STALE_THRESHOLD_MS
-}
-
-export default function RecalculationBanner({ lastRecalculatedAt, recalculationState, onRecalculate, onReset }) {
+export default function RecalculationBanner({ staleAt, lastRecalculatedAt, visible, recalculationState, onRecalculate, onReset }) {
   if (recalculationState?.status === 'pending' || recalculationState?.status === 'in_flight') {
     return (
       <Banner variant="info" className={styles.banner}>
@@ -37,12 +29,16 @@ export default function RecalculationBanner({ lastRecalculatedAt, recalculationS
     )
   }
 
-  if (isStale(lastRecalculatedAt)) {
+  const isStale = visible !== undefined
+    ? visible
+    : staleAt && (!lastRecalculatedAt || new Date(staleAt) > new Date(lastRecalculatedAt))
+
+  if (isStale) {
     return (
       <Banner variant="warning" className={styles.banner}>
-        Plan may be out of date.{' '}
+        Your completed or changed work needs to be redistributed across the remaining schedule.{' '}
         <BannerAction onClick={onRecalculate}>
-          Recalculate
+          Recalculate Plan
         </BannerAction>
       </Banner>
     )

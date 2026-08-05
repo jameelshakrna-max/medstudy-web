@@ -1,7 +1,7 @@
 import { useMemo, useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, CircleHelp } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs/Tabs'
 import Toast from '../ui/Toast/Toast'
 import LoadingScreen from '../LoadingScreen'
@@ -9,10 +9,11 @@ import useRotationPlanDetail from './today/useRotationPlanDetail'
 import usePlannerTaskMutations from './today/usePlannerTaskMutations'
 import useTaskAttachment from './today/useTaskAttachment'
 import TodayView from './today/TodayView'
+import AnkiStatus from './today/AnkiStatus'
 import RecalculationBanner from './today/RecalculationBanner'
-import PlannerStaleBanner from './today/PlannerStaleBanner'
 import DeckTopicMappings from './today/DeckTopicMappings'
 import FlashcardForecastRecommendations from './today/FlashcardForecastRecommendations'
+import RotationHelpDialog from './RotationHelpDialog'
 import RecordTimeDialog from './today/dialogs/RecordTimeDialog'
 import TaskCompletionDialog from './today/dialogs/TaskCompletionDialog'
 import PartialDialog from './today/dialogs/PartialDialog'
@@ -32,6 +33,7 @@ export default function V2PlanDetail({ planId, onBack }) {
 
   const [dialogState, setDialogState] = useState({ type: null, task: null })
   const [toast, setToast] = useState({ open: false, title: '', description: '', variant: 'default' })
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const { data: forecast, isLoading: forecastLoading, error: forecastError } = useQuery({
     queryKey: queryKeys.rotations.forecast(planId),
@@ -214,6 +216,14 @@ export default function V2PlanDetail({ planId, onBack }) {
         <button className={styles.backButton} onClick={onBack}>
           <ChevronLeft size={18} /> Plans
         </button>
+        <button
+          type="button"
+          className={styles.helpBtn}
+          aria-label="How your rotation plan works"
+          onClick={() => setHelpOpen(true)}
+        >
+          <CircleHelp size={18} />
+        </button>
         <h1 className={styles.title}>{plan.sourceTitle || 'Rotation Plan'}</h1>
         <div className={styles.meta}>
           {plan.schedulingMode && <span className={styles.mode}>{plan.schedulingMode}</span>}
@@ -229,16 +239,12 @@ export default function V2PlanDetail({ planId, onBack }) {
       </div>
 
       <RecalculationBanner
+        staleAt={plan.staleAt}
         lastRecalculatedAt={plan.lastRecalculatedAt}
+        visible={recalculationRequired}
         recalculationState={mutations.recalculationState}
         onRecalculate={handleRecalculate}
         onReset={mutations.reset}
-      />
-
-      <PlannerStaleBanner
-        visible={recalculationRequired}
-        isRecalculating={mutations.isPending}
-        onRecalculate={handleRecalculate}
       />
 
       <Tabs defaultValue="today">
@@ -267,6 +273,12 @@ export default function V2PlanDetail({ planId, onBack }) {
             onRecordQuestions={handleRecordQuestions}
             onSkip={handleSkip}
             onStudyPomodoro={handleStudyPomodoro}
+          />
+          <AnkiStatus
+            plan={plan}
+            topics={topics}
+            tasks={tasks}
+            todayKey={getTodayKey(new Date(), resolvedTimezone)}
           />
           <DeckTopicMappings
             planId={planId}
@@ -356,6 +368,8 @@ export default function V2PlanDetail({ planId, onBack }) {
           onSubmit={handleRecordQuestionsSubmit}
         />
       )}
+
+      <RotationHelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
 
       <Toast.Provider>
         <Toast

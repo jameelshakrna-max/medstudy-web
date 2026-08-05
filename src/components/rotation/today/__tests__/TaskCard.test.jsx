@@ -55,7 +55,7 @@ const defaultCallbacks = () => ({
   onStudyPomodoro: vi.fn(),
 })
 
-function renderCard(task = baseTask, callbacks = {}) {
+function renderCard(task = baseTask, callbacks = {}, extra = {}) {
   const cbs = { ...defaultCallbacks(), ...callbacks }
   return {
     ...render(
@@ -64,9 +64,10 @@ function renderCard(task = baseTask, callbacks = {}) {
         planId="plan-1"
         plan={defaultPlan}
         todayKey="2026-07-23"
+        topicsById={extra.topicsById || new Map()}
         sourceTitle="Step-Up to Medicine"
         isMutating={false}
-        canStudy={task.status === 'pending' || task.status === 'in_progress'}
+        canStudy={extra.canStudy ?? (task.status === 'pending' || task.status === 'in_progress')}
         {...cbs}
       />
     ),
@@ -143,15 +144,15 @@ describe('TaskCard', () => {
     expect(cbs.onStudyPomodoro).toHaveBeenCalledWith(baseTask)
   })
 
-  it('Done calls onComplete', () => {
+  it('Complete calls onComplete', () => {
     const { cbs } = renderCard(uworldTask)
-    fireEvent.click(screen.getByText('Done'))
+    fireEvent.click(screen.getByText('Complete'))
     expect(cbs.onComplete).toHaveBeenCalledWith(uworldTask)
   })
 
-  it('Partial calls onPartial', () => {
+  it('Record Progress calls onPartial', () => {
     const { cbs } = renderCard(uworldTask)
-    fireEvent.click(screen.getByText('Partial'))
+    fireEvent.click(screen.getByText('Record Progress'))
     expect(cbs.onPartial).toHaveBeenCalledWith(uworldTask)
   })
 
@@ -253,7 +254,7 @@ describe('TaskCard', () => {
 
   it('buttons emit correct task object', () => {
     const { cbs } = renderCard(uworldTask)
-    fireEvent.click(screen.getByText('Done'))
+    fireEvent.click(screen.getByText('Complete'))
     expect(cbs.onComplete).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'task-1', taskType: 'uworld_questions' })
     )
@@ -268,5 +269,117 @@ describe('TaskCard', () => {
     const consolidationTask = { ...baseTask, taskType: 'consolidation', status: 'in_progress', isActive: true, statusLabel: 'In Progress' }
     renderCard(consolidationTask)
     expect(screen.queryByText('Log Questions')).not.toBeInTheDocument()
+  })
+
+  describe('uworld copy and lock state', () => {
+    const pendingUworldTask = {
+      ...baseTask,
+      taskType: 'uworld_questions',
+      status: 'pending',
+      isActive: false,
+      statusLabel: 'Pending',
+    }
+
+    it('renders the UWorld hint for unlocked uworld tasks', () => {
+      renderCard(pendingUworldTask)
+      expect(screen.getByText('Complete these questions in UWorld, then record your progress in MedStudy.')).toBeInTheDocument()
+    })
+
+    it('does not render the UWorld hint for locked uworld tasks', () => {
+      const lockedTask = { ...pendingUworldTask, unlockCondition: 'learning_completed:topic-1' }
+      renderCard(lockedTask, {}, { canStudy: false })
+      expect(screen.queryByText('Complete these questions in UWorld, then record your progress in MedStudy.')).not.toBeInTheDocument()
+    })
+
+    it('renders count stats line for uworld tasks with a target', () => {
+      renderCard({ ...uworldTask, targetCount: 10, completedCount: 2 })
+      expect(screen.getByText('2 of 10 questions \u00b7 8 remaining')).toBeInTheDocument()
+    })
+
+    it('renders count stats line for incorrect_review tasks with a target', () => {
+      renderCard({ ...uworldTask, taskType: 'incorrect_review', targetCount: 5, completedCount: 5 })
+      expect(screen.getByText('5 of 5 questions \u00b7 0 remaining')).toBeInTheDocument()
+    })
+
+    it('does not render count stats when targetCount is absent', () => {
+      renderCard(uworldTask)
+      expect(screen.queryByText(/remaining/)).not.toBeInTheDocument()
+    })
+
+    it('shows Start, Record Progress, and Complete for pending uworld tasks', () => {
+      renderCard(pendingUworldTask)
+      expect(screen.getByText(/Start/)).toBeInTheDocument()
+      expect(screen.getByText('Record Progress')).toBeInTheDocument()
+      expect(screen.getByText('Complete')).toBeInTheDocument()
+      expect(screen.queryByText('Done')).not.toBeInTheDocument()
+      expect(screen.queryByText('Partial')).not.toBeInTheDocument()
+    })
+
+    it('keeps Done/Partial labels for non-question task types', () => {
+      renderCard(baseTask)
+      expect(screen.getByText('Done')).toBeInTheDocument()
+      expect(screen.getByText('Partial')).toBeInTheDocument()
+      expect(screen.queryByText('Complete')).not.toBeInTheDocument()
+      expect(screen.queryByText('Record Progress')).not.toBeInTheDocument()
+    })
+
+    it('Record Progress calls onPartial and Complete calls onComplete', () => {
+      const { cbs } = renderCard(pendingUworldTask)
+      fireEvent.click(screen.getByText('Record Progress'))
+      expect(cbs.onPartial).toHaveBeenCalledWith(pendingUworldTask)
+      fireEvent.click(screen.getByText('Complete'))
+      expect(cbs.onComplete).toHaveBeenCalledWith(pendingUworldTask)
+    })
+
+    it('locked uworld renders lock badge, lock message, and no action buttons', () => {
+      const topics = new Map([
+        ['topic-1', { id: 'topic-1', canonicalTopicId: 'topic-1', topicTitle: 'Heart Failure', status: 'not_started' }],
+      ])
+      const lockedTask = { ...uworldTask, unlockCondition: 'learning_completed:topic-1' }
+      const { container } = renderCard(lockedTask, {}, { topicsById: topics, canStudy: false })
+
+      expect(screen.getByText('Locked')).toBeInTheDocument()
+      expect(screen.getByText('Complete learning for Heart Failure to unlock these questions.')).toBeInTheDocument()
+      expect(screen.queryByText('Start')).not.toBeInTheDocument()
+      expect(screen.queryByText('Record Progress')).not.toBeInTheDocument()
+      expect(screen.queryByText('Complete')).not.toBeInTheDocument()
+      expect(screen.queryByText('Log Questions')).not.toBeInTheDocument()
+      expect(container.firstChild).toHaveAttribute('aria-disabled', 'true')
+    })
+
+    it('locked uworld with missing prerequisite topic shows fallback message without leaking ids', () => {
+      const lockedTask = { ...uworldTask, unlockCondition: 'uworld_completed:missing-topic' }
+      const { container } = renderCard(lockedTask, {}, { canStudy: false })
+
+      expect(screen.getByText("Complete this task's prerequisite first.")).toBeInTheDocument()
+      expect(screen.queryByText('missing-topic')).not.toBeInTheDocument()
+      expect(screen.queryByText('Start')).not.toBeInTheDocument()
+      expect(container.firstChild).toHaveAttribute('aria-disabled', 'true')
+    })
+
+    it('regression: status locked with no unlockCondition stays locked with no actions', () => {
+      const lockedTask = { ...baseTask, status: 'locked', isLocked: true, statusLabel: 'Locked' }
+      const { container } = renderCard(lockedTask, {}, { canStudy: false })
+
+      expect(screen.getByText('Locked')).toBeInTheDocument()
+      expect(screen.queryByText('Start')).not.toBeInTheDocument()
+      expect(screen.queryByText('Done')).not.toBeInTheDocument()
+      expect(container.firstChild).toHaveAttribute('aria-disabled', 'true')
+    })
+
+    it('renders lock badge even when task already isLocked via status', () => {
+      const topics = new Map([
+        ['topic-1', { id: 'topic-1', canonicalTopicId: 'topic-1', topicTitle: 'Heart Failure', status: 'not_started' }],
+      ])
+      const lockedTask = {
+        ...uworldTask,
+        status: 'locked',
+        isLocked: true,
+        statusLabel: 'Locked',
+        unlockCondition: 'learning_completed:topic-1',
+      }
+      renderCard(lockedTask, {}, { topicsById: topics, canStudy: false })
+      expect(screen.getByText('Complete learning for Heart Failure to unlock these questions.')).toBeInTheDocument()
+    })
   })
 })
