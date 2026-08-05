@@ -116,7 +116,6 @@ export {
   toCamelCase,
   mapRow,
   safeParseJson,
-  resolveDisplayName,
   mapPlanSummaryDto,
   mapPlanDto,
   mapAvailabilityDto,
