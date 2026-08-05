@@ -109,7 +109,7 @@ export default function ActiveRotationSection() {
   const config = STATUS_CONFIG[currentPlan.status]
   const rotation = getRotationById(currentPlan.rotationId)
   const rotationLabel = rotation?.displayLabel || currentPlan.rotationId
-  const planTitle = currentPlan.sourceTitle || rotation?.displayLabel || 'Rotation Plan'
+  const planTitle = currentPlan.displayName || currentPlan.sourceTitle || rotation?.displayLabel || 'Rotation Plan'
   const startShort = formatShortDate(currentPlan.startDate)
   const endShort = formatShortDate(currentPlan.endDate)
   const dateRange = startShort && endShort ? `${startShort} – ${endShort}` : null

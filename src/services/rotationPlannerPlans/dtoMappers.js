@@ -7,6 +7,7 @@ const PLAN_SUMMARY_COLUMNS = [
   'buffer_percentage', 'maximum_active_topics',
   'status', 'uses_flashcard_capacity', 'settings_json', 'created_at', 'updated_at',
   'revision', 'last_recalculated_at', 'stale_at',
+  'display_name',
 ]
 
 const PLAN_NESTED_COLUMNS = [...PLAN_SUMMARY_COLUMNS]
@@ -48,10 +49,21 @@ function safeParseJson(str, fallback = null) {
   try { return JSON.parse(str) } catch { return fallback }
 }
 
-function mapPlanSummaryDto(row, sourceTitle, counts = {}) {
+// User-facing title for a plan. Never falls back to a technical sourceId or
+// rotationId slug — null display_name resolves to sourceTitle, then to the
+// human-readable rotation label, then to a generic fallback.
+export function resolveDisplayName({ displayName, sourceTitle, rotationDisplayLabel }) {
+  if (typeof displayName === 'string' && displayName.trim() !== '') return displayName.trim()
+  if (typeof sourceTitle === 'string' && sourceTitle.trim() !== '') return sourceTitle.trim()
+  if (typeof rotationDisplayLabel === 'string' && rotationDisplayLabel.trim() !== '') return rotationDisplayLabel.trim()
+  return 'Rotation Plan'
+}
+
+function mapPlanSummaryDto(row, sourceTitle, counts = {}, rotationDisplayLabel = null) {
   const columns = PLAN_SUMMARY_COLUMNS
   const dto = mapRow(row, columns)
   dto.sourceTitle = sourceTitle || null
+  dto.displayName = resolveDisplayName({ displayName: dto.displayName, sourceTitle, rotationDisplayLabel })
   dto.settingsJson = safeParseJson(dto.settingsJson, {})
   dto.topicCount = counts.topicCount ?? 0
   dto.completedTopicCount = counts.completedTopicCount ?? 0
@@ -60,8 +72,10 @@ function mapPlanSummaryDto(row, sourceTitle, counts = {}) {
   return dto
 }
 
-function mapPlanDto(row) {
+function mapPlanDto(row, sourceTitle = null, rotationDisplayLabel = null) {
   const dto = mapRow(row, PLAN_NESTED_COLUMNS)
+  dto.sourceTitle = sourceTitle || null
+  dto.displayName = resolveDisplayName({ displayName: dto.displayName, sourceTitle, rotationDisplayLabel })
   dto.settingsJson = safeParseJson(dto.settingsJson, {})
   return dto
 }
@@ -102,6 +116,7 @@ export {
   toCamelCase,
   mapRow,
   safeParseJson,
+  resolveDisplayName,
   mapPlanSummaryDto,
   mapPlanDto,
   mapAvailabilityDto,

@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import V2PlanDetail from '../V2PlanDetail'
 
-const { mockUseRotationPlanDetail, mockUseQuery, mockUsePlannerTaskMutations } = vi.hoisted(() => {
+const { mockUseRotationPlanDetail, mockUseQuery, mockUsePlannerTaskMutations, mockUseMutation } = vi.hoisted(() => {
   const mockUseQueryFn = vi.fn(() => ({ data: null, isLoading: false, error: null }))
   const mockRotationPlanDetailFn = vi.fn(() => ({
     data: { plan: { id: 'p1', revision: 1 }, topics: [], tasks: [], availability: [], sourcePace: null },
@@ -27,7 +27,8 @@ const { mockUseRotationPlanDetail, mockUseQuery, mockUsePlannerTaskMutations } =
     error: null,
     recalculationState: null,
   }))
-  return { mockUseRotationPlanDetail: mockRotationPlanDetailFn, mockUseQuery: mockUseQueryFn, mockUsePlannerTaskMutations: mockMutationsFn }
+  const mockUseMutationFn = vi.fn(() => ({ mutate: vi.fn(), isPending: false }))
+  return { mockUseRotationPlanDetail: mockRotationPlanDetailFn, mockUseQuery: mockUseQueryFn, mockUsePlannerTaskMutations: mockMutationsFn, mockUseMutation: mockUseMutationFn }
 })
 
 vi.mock('react-router-dom', () => ({
@@ -57,7 +58,29 @@ vi.mock('../today/useTaskAttachment', () => ({
 
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal()
-  return { ...actual, useQuery: mockUseQuery, useQueryClient: () => ({ invalidateQueries: vi.fn(), getQueryData: vi.fn() }) }
+  return {
+    ...actual,
+    useQuery: mockUseQuery,
+    useMutation: mockUseMutation,
+    useQueryClient: () => ({ invalidateQueries: vi.fn(), getQueryData: vi.fn() }),
+  }
+})
+
+vi.mock('../../ui/Dropdown/Dropdown', () => {
+  const DropdownMock = ({ children }) => <div data-testid="plan-actions-dropdown">{children}</div>
+  DropdownMock.Trigger = ({ children }) => <div>{children}</div>
+  DropdownMock.Content = ({ children }) => <div>{children}</div>
+  DropdownMock.Item = ({ children, onSelect }) => <button type="button" onClick={onSelect}>{children}</button>
+  return { default: DropdownMock }
+})
+
+vi.mock('../../ui/Modal/Modal', () => {
+  const ModalMock = ({ open, children }) => open ? <div data-testid="modal">{children}</div> : null
+  ModalMock.Title = ({ children }) => <h2>{children}</h2>
+  ModalMock.Description = ({ children }) => <p>{children}</p>
+  ModalMock.Close = () => null
+  ModalMock.Footer = ({ children }) => <div>{children}</div>
+  return { default: ModalMock }
 })
 
 vi.mock('../today/TodayView', () => ({
@@ -165,6 +188,7 @@ describe('V2PlanDetail', () => {
       refetch: vi.fn(),
     })
     mockUseQuery.mockReturnValue({ data: null, isLoading: false, error: null })
+    mockUseMutation.mockReturnValue({ mutate: vi.fn(), isPending: false })
     mockUsePlannerTaskMutations.mockReturnValue({
       isPending: false,
       currentRevision: 1,
@@ -479,6 +503,78 @@ describe('V2PlanDetail', () => {
       })
       render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
       expect(screen.getByTestId('tabs')).toBeInTheDocument()
+    })
+  })
+
+  describe('rename plan', () => {
+    it('opens the rename modal prefilled with the current displayName', async () => {
+      const user = userEvent.setup()
+      mockUseRotationPlanDetail.mockReturnValue({
+        data: { plan: { id: 'p1', revision: 1, displayName: 'Cardio — Jan' }, topics: [], tasks: [], availability: [], sourcePace: null },
+        isLoading: false,
+        error: null,
+      })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: 'Plan actions' }))
+      await user.click(screen.getByRole('button', { name: /Rename Plan/i }))
+      expect(screen.getByTestId('modal')).toBeInTheDocument()
+      expect(screen.getByLabelText('Plan name')).toHaveValue('Cardio — Jan')
+    })
+
+    it('submits rename with displayName, expectedRevision, and clientRequestId', async () => {
+      const user = userEvent.setup()
+      const mutate = vi.fn()
+      mockUseMutation.mockReturnValue({ mutate, isPending: false })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: 'Plan actions' }))
+      await user.click(screen.getByRole('button', { name: /Rename Plan/i }))
+      await user.clear(screen.getByLabelText('Plan name'))
+      await user.type(screen.getByLabelText('Plan name'), 'New Cardio Name')
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+      expect(mutate).toHaveBeenCalledTimes(1)
+      const args = mutate.mock.calls[0][0]
+      expect(args.displayName).toBe('New Cardio Name')
+      expect(args.expectedRevision).toBe(1)
+      expect(typeof args.clientRequestId).toBe('string')
+    })
+
+    it('disables Save while the rename is pending', async () => {
+      const user = userEvent.setup()
+      mockUseMutation.mockReturnValue({ mutate: vi.fn(), isPending: true })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: 'Plan actions' }))
+      await user.click(screen.getByRole('button', { name: /Rename Plan/i }))
+      expect(screen.getByRole('button', { name: /Saving/ })).toBeDisabled()
+    })
+
+    it('shows error message when rename fails', async () => {
+      const user = userEvent.setup()
+      mockUseMutation.mockImplementation(({ onError }) => ({
+        mutate: () => onError(new Error('Rename failed')),
+        isPending: false,
+      }))
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: 'Plan actions' }))
+      await user.click(screen.getByRole('button', { name: /Rename Plan/i }))
+      await user.type(screen.getByLabelText('Plan name'), 'New Cardio Name')
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+      expect(screen.getByText('Rename failed')).toBeInTheDocument()
+    })
+
+    it('closes the modal and shows a success toast when rename succeeds', async () => {
+      const user = userEvent.setup()
+      mockUseMutation.mockImplementation(({ onSuccess }) => ({
+        mutate: () => onSuccess({ ok: true }),
+        isPending: false,
+      }))
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: 'Plan actions' }))
+      await user.click(screen.getByRole('button', { name: /Rename Plan/i }))
+      await user.type(screen.getByLabelText('Plan name'), 'New Cardio Name')
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+      expect(screen.queryByTestId('modal')).not.toBeInTheDocument()
+      expect(screen.getByTestId('toast')).toBeInTheDocument()
+      expect(screen.getByTestId('toast-title')).toHaveTextContent('Plan renamed')
     })
   })
 })

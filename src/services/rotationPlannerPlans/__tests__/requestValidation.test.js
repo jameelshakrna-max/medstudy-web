@@ -13,6 +13,7 @@ function makeRequest(overrides = {}) {
 const VALID_BODY = {
   sourceId: 'step-up-medicine-6e-2024',
   rotationId: 'cardiology',
+  displayName: 'Cardiology — January 2026',
   startDate: '2026-01-05',
   endDate: '2026-01-11',
   studyStyle: 'active',
@@ -154,5 +155,41 @@ describe('parseAndValidatePlanRequest', () => {
     const result = parseAndValidatePlanRequest(req, body, {})
     expect(result.valid).toBe(false)
     expect(result.errors.some(e => e.field === 'topics[0].alreadyCompletedLearningPercentage')).toBe(true)
+  })
+
+  it('accepts a displayName and trims it', () => {
+    const req = makeRequest()
+    const result = parseAndValidatePlanRequest(req, { ...VALID_BODY, displayName: '  Cardio   ' }, {})
+    expect(result.valid).toBe(true)
+    expect(result.parsed.displayName).toBe('Cardio')
+  })
+
+  it('returns error when displayName is missing', () => {
+    const req = makeRequest()
+    const { displayName, ...rest } = VALID_BODY
+    const result = parseAndValidatePlanRequest(req, rest, {})
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.field === 'displayName')).toBe(true)
+  })
+
+  it('returns error when displayName is empty after trim', () => {
+    const req = makeRequest()
+    const result = parseAndValidatePlanRequest(req, { ...VALID_BODY, displayName: '   ' }, {})
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.field === 'displayName')).toBe(true)
+  })
+
+  it('returns error when displayName exceeds 100 characters', () => {
+    const req = makeRequest()
+    const result = parseAndValidatePlanRequest(req, { ...VALID_BODY, displayName: 'x'.repeat(101) }, {})
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.field === 'displayName')).toBe(true)
+  })
+
+  it('returns error when displayName contains control characters', () => {
+    const req = makeRequest()
+    const result = parseAndValidatePlanRequest(req, { ...VALID_BODY, displayName: 'Cardio\n2026' }, {})
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.field === 'displayName')).toBe(true)
   })
 })

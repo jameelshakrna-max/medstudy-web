@@ -6,6 +6,7 @@ import {
   handleListRotationPlans,
   handleGetRotationPlan,
   handleDeleteRotationPlan,
+  handleRenameRotationPlan,
   handleUpdateTask,
   handleRecalculatePlan,
 } from '../rotationPlannerPlans.js'
@@ -17,6 +18,7 @@ const USER_B = { sub: 'user-b', email: 'b@test.local', role: 'authenticated' }
 const NO_USER = null
 
 const VALID_BODY = {
+  displayName: 'Cardiology — January 2026',
   sourceId: 'step-up-medicine-6e-2024',
   rotationId: 'cardiology',
   startDate: '2026-01-05',
@@ -76,6 +78,11 @@ async function getPlan(planId, user = USER_A) {
 async function deletePlan(planId, user = USER_A) {
   const req = makeRequest(`/api/rotation-planner/plans/${planId}`, { method: 'DELETE' })
   return handleDeleteRotationPlan(req, { DB: db }, user)
+}
+
+async function renamePlan(planId, body, user = USER_A) {
+  const req = makeRequest(`/api/rotation-planner/plans/${planId}`, { method: 'PATCH', body })
+  return handleRenameRotationPlan(req, { DB: db }, user)
 }
 
 async function patchTask(planId, taskId, body, user = USER_A, extraHeaders = {}) {
@@ -2846,5 +2853,253 @@ describe('handleUpdateTask reschedule stale revision', () => {
     expect(JSON.stringify(await getTaskRows(planId))).toBe(JSON.stringify(tasksBefore))
     expect(JSON.stringify(await getTopicRows(planId))).toBe(JSON.stringify(topicsBefore))
     expect(await countRescheduleMutations(planId)).toBe(0)
+  })
+})
+
+// ══════════════════════════════════════════════════════════
+// Phase 1 — Plan name, rename, Tracking Hub (backend tests)
+// ══════════════════════════════════════════════════════════
+
+// 1. Display name is required for new plans.
+// 2. Whitespace is trimmed.
+// 3. Maximum length is enforced.
+// 7. Name appears in list and detail.
+// 10. Existing null-name plans receive a readable fallback.
+// 11. No technical slug appears when a readable fallback exists.
+describe('Phase 1 — displayName on create', () => {
+  it('returns 400 when displayName is missing', async () => {
+    const body = { ...VALID_BODY }
+    delete body.displayName
+    const res = await createPlan(body)
+    expect(res.status).toBe(400)
+    const parsed = await res.json()
+    expect(parsed.error.code).toBe('VALIDATION_ERROR')
+    expect(parsed.error.message).toContain('displayName')
+  })
+
+  it('returns 400 when displayName is empty after trimming', async () => {
+    const res = await createPlan(makeBody({ displayName: '   ' }))
+    expect(res.status).toBe(400)
+    const parsed = await res.json()
+    expect(parsed.error.message).toContain('displayName')
+  })
+
+  it('trims whitespace from displayName on create', async () => {
+    const res = await createPlan(makeBody({ displayName: '  Cardiology — January 2026  ' }))
+    expect(res.status).toBe(201)
+    const { plan } = await res.json()
+    expect(plan.displayName).toBe('Cardiology — January 2026')
+  })
+
+  it('returns 400 when displayName exceeds 100 characters', async () => {
+    const res = await createPlan(makeBody({ displayName: 'x'.repeat(101) }))
+    expect(res.status).toBe(400)
+    const parsed = await res.json()
+    expect(parsed.error.message).toContain('displayName')
+  })
+
+  it('surfaces displayName in create, list, and detail responses', async () => {
+    const res = await createPlan(makeBody({ displayName: 'My Cardiology Block' }))
+    expect(res.status).toBe(201)
+    const { plan } = await res.json()
+    expect(plan.displayName).toBe('My Cardiology Block')
+
+    const listRes = await listPlans()
+    const list = await listRes.json()
+    const summary = list.find(p => p.id === plan.id)
+    expect(summary.displayName).toBe('My Cardiology Block')
+
+    const getRes = await getPlan(plan.id)
+    const getBody = await getRes.json()
+    expect(getBody.plan.displayName).toBe('My Cardiology Block')
+  })
+
+  it('resolves a readable fallback for legacy null-name plans', async () => {
+    const res = await createPlan(makeBody())
+    expect(res.status).toBe(201)
+    const { plan } = await res.json()
+    await db.prepare('UPDATE rotation_planner_plans SET display_name = NULL WHERE id = ?').bind(plan.id).run()
+
+    const getRes = await getPlan(plan.id)
+    const getBody = await getRes.json()
+    expect(getBody.plan.displayName).toBe('Step-Up to Medicine')
+
+    const listRes = await listPlans()
+    const list = await listRes.json()
+    const summary = list.find(p => p.id === plan.id)
+    expect(summary.displayName).toBe('Step-Up to Medicine')
+  })
+
+  it('never surfaces a technical slug when a readable fallback exists', async () => {
+    const res = await createPlan(makeBody())
+    const { plan } = await res.json()
+    await db.prepare('UPDATE rotation_planner_plans SET display_name = NULL WHERE id = ?').bind(plan.id).run()
+
+    const getRes = await getPlan(plan.id)
+    const getBody = await getRes.json()
+    expect(getBody.plan.displayName).not.toBe('step-up-medicine-6e-2024')
+    expect(getBody.plan.displayName).not.toBe('cardiology')
+    expect(getBody.plan.displayName).toBe('Step-Up to Medicine')
+  })
+})
+
+// 12. Rename succeeds.
+// 13. Rename increments revision exactly once.
+// 14. Rename conflict returns 409 REVISION_CONFLICT.
+// 15. Exact rename replay is idempotent.
+// 16. Rename does not trigger recalculation.
+// 17. Rename does not modify tasks, topics, or availability.
+describe('Phase 1 — rename', () => {
+  it('renames a plan successfully', async () => {
+    const res = await createPlan(makeBody())
+    expect(res.status).toBe(201)
+    const { plan } = await res.json()
+
+    const renameRes = await renamePlan(plan.id, {
+      displayName: 'Cardio Block 2',
+      expectedRevision: plan.revision,
+      clientRequestId: 'rename-ok-1',
+    })
+    expect(renameRes.status).toBe(200)
+    const body = await renameRes.json()
+    expect(body.plan.displayName).toBe('Cardio Block 2')
+  })
+
+  it('increments revision exactly once', async () => {
+    const res = await createPlan(makeBody())
+    const { plan } = await res.json()
+
+    const renameRes = await renamePlan(plan.id, {
+      displayName: 'Renamed Once',
+      expectedRevision: plan.revision,
+      clientRequestId: 'rename-rev-1',
+    })
+    expect(renameRes.status).toBe(200)
+    const body = await renameRes.json()
+    expect(body.plan.revision).toBe(plan.revision + 1)
+
+    const row = await db.prepare('SELECT revision FROM rotation_planner_plans WHERE id = ?').bind(plan.id).first()
+    expect(row.revision).toBe(plan.revision + 1)
+  })
+
+  it('returns 409 REVISION_CONFLICT when expectedRevision is stale', async () => {
+    const res = await createPlan(makeBody())
+    const { plan } = await res.json()
+
+    const renameRes = await renamePlan(plan.id, {
+      displayName: 'Stale Rename',
+      expectedRevision: 999,
+      clientRequestId: 'rename-stale-1',
+    })
+    expect(renameRes.status).toBe(409)
+    const body = await renameRes.json()
+    expect(body.error.code).toBe('REVISION_CONFLICT')
+
+    const row = await db.prepare('SELECT revision, display_name FROM rotation_planner_plans WHERE id = ?').bind(plan.id).first()
+    expect(row.revision).toBe(plan.revision)
+    expect(row.display_name).toBe('Cardiology — January 2026')
+  })
+
+  it('replays an exact rename idempotently without a second revision bump', async () => {
+    const res = await createPlan(makeBody())
+    const { plan } = await res.json()
+    const key = 'rename-replay-1'
+
+    const body1Res = await renamePlan(plan.id, {
+      displayName: 'Replay Name',
+      expectedRevision: plan.revision,
+      clientRequestId: key,
+    })
+    expect(body1Res.status).toBe(200)
+    const body1 = await body1Res.json()
+    expect(body1.plan.revision).toBe(plan.revision + 1)
+
+    const body2Res = await renamePlan(plan.id, {
+      displayName: 'Replay Name',
+      expectedRevision: plan.revision,
+      clientRequestId: key,
+    })
+    expect(body2Res.status).toBe(200)
+    const body2 = await body2Res.json()
+    expect(body2).toEqual(body1)
+
+    const row = await db.prepare('SELECT revision FROM rotation_planner_plans WHERE id = ?').bind(plan.id).first()
+    expect(row.revision).toBe(plan.revision + 1)
+  })
+
+  it('does not trigger recalculation', async () => {
+    const res = await createPlan(makeBody())
+    const { plan } = await res.json()
+
+    const before = await db.prepare('SELECT last_recalculated_at FROM rotation_planner_plans WHERE id = ?').bind(plan.id).first()
+
+    const renameRes = await renamePlan(plan.id, {
+      displayName: 'No Recalc',
+      expectedRevision: plan.revision,
+      clientRequestId: 'rename-norecalc-1',
+    })
+    expect(renameRes.status).toBe(200)
+
+    const after = await db.prepare('SELECT last_recalculated_at FROM rotation_planner_plans WHERE id = ?').bind(plan.id).first()
+    expect(after.last_recalculated_at).toBe(before.last_recalculated_at)
+
+    const recalcMutations = await db.prepare("SELECT COUNT(*) as c FROM rotation_planner_plan_mutations WHERE plan_id = ? AND operation = 'recalculate'").bind(plan.id).first()
+    expect(recalcMutations.c).toBe(0)
+  })
+
+  it('does not modify tasks, topics, or availability', async () => {
+    const res = await createPlan(makeBody())
+    const { plan } = await res.json()
+
+    async function snapshotRows() {
+      const tasks = await db.prepare('SELECT id, task_date, task_type, status, estimated_minutes, display_order FROM rotation_planner_daily_tasks WHERE plan_id = ? ORDER BY id').bind(plan.id).all()
+      const topics = await db.prepare('SELECT id, normalized_topic_id, status, display_order FROM rotation_planner_topics WHERE plan_id = ? ORDER BY id').bind(plan.id).all()
+      const avail = await db.prepare('SELECT weekday, available_minutes, is_day_off FROM rotation_planner_availability WHERE plan_id = ? ORDER BY weekday').bind(plan.id).all()
+      return JSON.stringify({ tasks: tasks.results, topics: topics.results, avail: avail.results })
+    }
+    const beforeSnapshot = await snapshotRows()
+
+    const renameRes = await renamePlan(plan.id, {
+      displayName: 'Renamed But Unchanged',
+      expectedRevision: plan.revision,
+      clientRequestId: 'rename-nomutate-1',
+    })
+    expect(renameRes.status).toBe(200)
+
+    expect(await snapshotRows()).toBe(beforeSnapshot)
+  })
+
+  it('returns 400 for a rename with an invalid displayName', async () => {
+    const res = await createPlan(makeBody())
+    const { plan } = await res.json()
+
+    const missingRes = await renamePlan(plan.id, {
+      displayName: '   ',
+      expectedRevision: plan.revision,
+      clientRequestId: 'rename-bad-1',
+    })
+    expect(missingRes.status).toBe(400)
+
+    const longRes = await renamePlan(plan.id, {
+      displayName: 'x'.repeat(101),
+      expectedRevision: plan.revision,
+      clientRequestId: 'rename-bad-2',
+    })
+    expect(longRes.status).toBe(400)
+  })
+
+  it('returns 404 when the plan belongs to another user', async () => {
+    const res = await createPlan(makeBody(), USER_A)
+    const { plan } = await res.json()
+
+    const renameRes = await renamePlan(plan.id, {
+      displayName: 'Intruder',
+      expectedRevision: 0,
+      clientRequestId: 'rename-cross-1',
+    }, USER_B)
+    expect(renameRes.status).toBe(404)
+
+    const row = await db.prepare('SELECT display_name FROM rotation_planner_plans WHERE id = ?').bind(plan.id).first()
+    expect(row.display_name).toBe('Cardiology — January 2026')
   })
 })

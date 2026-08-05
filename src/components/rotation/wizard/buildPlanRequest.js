@@ -23,6 +23,7 @@ export function normalizeTopicsResponse(data) {
 
 export function buildPreviewPayload(form) {
   return {
+    displayName: form.planName?.trim() || null,
     sourceId: form.sourceId,
     rotationId: form.rotationId,
     startDate: form.startDate,

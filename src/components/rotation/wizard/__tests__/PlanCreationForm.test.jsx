@@ -10,9 +10,13 @@ const {
   createMutate,
   pending,
   MOCK_PREVIEW_RESPONSE,
+  previewShouldFail,
+  previewPayloads,
 } = vi.hoisted(() => {
   const holders = { preview: null, create: null }
   const pending = { preview: false, create: false }
+  const previewShouldFail = { value: false }
+  const previewPayloads = []
   const MOCK_PREVIEW_RESPONSE = {
     plan: {
       id: null,
@@ -33,11 +37,16 @@ const {
     },
     unscheduledWork: [],
   }
-  const previewMutate = vi.fn(() => {
-    if (holders.preview?.onSuccess) holders.preview.onSuccess(MOCK_PREVIEW_RESPONSE)
+  const previewMutate = vi.fn((payload) => {
+    previewPayloads.push(payload)
+    if (previewShouldFail.value) {
+      holders.preview?.onError?.(new Error('Preview failed'))
+    } else {
+      holders.preview?.onSuccess?.(MOCK_PREVIEW_RESPONSE)
+    }
   })
   const createMutate = vi.fn()
-  return { holders, previewMutate, createMutate, pending, MOCK_PREVIEW_RESPONSE }
+  return { holders, previewMutate, createMutate, pending, MOCK_PREVIEW_RESPONSE, previewShouldFail, previewPayloads }
 })
 
 vi.mock('@tanstack/react-query', () => ({
@@ -67,6 +76,15 @@ vi.mock('../../../../components/ui/Modal/Modal', () => {
 
 vi.mock('../StepSelectRotation', () => ({ default: () => null }))
 vi.mock('../StepSelectDates', () => ({ default: () => null }))
+vi.mock('../StepPlanName', () => ({
+  default: ({ form, onFormChange }) => (
+    <input
+      aria-label="Plan name"
+      value={form.planName ?? ''}
+      onChange={(e) => onFormChange({ planName: e.target.value })}
+    />
+  ),
+}))
 vi.mock('../StepAvailability', () => ({ default: () => null }))
 vi.mock('../StepSourceSummary', () => ({ default: () => null }))
 vi.mock('../StepStudyStyle', () => ({ default: () => null }))
@@ -86,11 +104,11 @@ vi.mock('../../../../pages/Page.module.css', () => ({ default: {} }))
 
 import PlanCreationForm from '../../PlanCreationForm'
 
-function seedDraft() {
+function seedDraft({ step = 10 } = {}) {
   localStorage.setItem('rotationWizardDraft', JSON.stringify({
     schemaVersion: 1,
     savedAt: Date.now(),
-    step: 9,
+    step,
     form: {
       ...INITIAL_FORM,
       sourceId: 'step-up-medicine-6e-2024',
@@ -113,6 +131,12 @@ async function reachCreateStep(user) {
   await user.click(screen.getByRole('button', { name: /Next/i }))
 }
 
+async function clickNext(user, times) {
+  for (let i = 0; i < times; i++) {
+    await user.click(screen.getByRole('button', { name: /Next/i }))
+  }
+}
+
 describe('PlanCreationForm', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -122,6 +146,8 @@ describe('PlanCreationForm', () => {
     pending.preview = false
     pending.create = false
     MOCK_PREVIEW_RESPONSE.feasibility.feasible = true
+    previewShouldFail.value = false
+    previewPayloads.length = 0
     vi.clearAllMocks()
   })
 
@@ -172,5 +198,41 @@ describe('PlanCreationForm', () => {
     render(<PlanCreationForm open onClose={vi.fn()} onCreated={vi.fn()} />)
     await reachCreateStep(user)
     expect(screen.getByRole('button', { name: /Creating/ })).toBeDisabled()
+  })
+
+  it('keeps the typed plan name when a preview fails, and reuses it on retry', async () => {
+    localStorage.clear()
+    seedDraft({ step: 2 })
+    const user = userEvent.setup()
+    render(<PlanCreationForm open onClose={vi.fn()} onCreated={vi.fn()} />)
+
+    await user.type(screen.getByRole('textbox', { name: /Plan name/i }), 'My Custom Name')
+    await clickNext(user, 8)
+    expect(screen.getByRole('button', { name: /Next/i })).toBeInTheDocument()
+
+    previewShouldFail.value = true
+    await user.click(screen.getByRole('button', { name: /Next/i }))
+    expect(screen.getByText('Preview failed')).toBeInTheDocument()
+
+    previewShouldFail.value = false
+    await user.click(screen.getByRole('button', { name: /Next/i }))
+    expect(previewPayloads).toHaveLength(2)
+    expect(previewPayloads[0].displayName).toBe('My Custom Name')
+    expect(previewPayloads[1].displayName).toBe('My Custom Name')
+  })
+
+  it('persists the plan name through preview into the create request', async () => {
+    localStorage.clear()
+    seedDraft({ step: 2 })
+    const user = userEvent.setup()
+    render(<PlanCreationForm open onClose={vi.fn()} onCreated={vi.fn()} />)
+
+    await user.type(screen.getByRole('textbox', { name: /Plan name/i }), 'My Custom Name')
+    await clickNext(user, 8)
+    await user.click(screen.getByRole('button', { name: /Next/i }))
+    await user.click(screen.getByRole('button', { name: /Next/i }))
+    await user.click(screen.getByRole('button', { name: /Create Plan/i }))
+    expect(createMutate).toHaveBeenCalledTimes(1)
+    expect(createMutate.mock.calls[0][0].payload.displayName).toBe('My Custom Name')
   })
 })

@@ -11,6 +11,7 @@ function makeValidatedInput(overrides = {}) {
   return {
     sourceId: VALID_SOURCE_ID,
     rotationId: VALID_ROTATION_ID,
+    displayName: 'Cardiology — January 2026',
     startDate: '2026-01-05',
     endDate: '2026-01-11',
     examDate: null,

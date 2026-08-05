@@ -1,4 +1,5 @@
 export const INITIAL_FORM = {
+  planName: '',
   sourceId: '',
   rotationId: '',
   startDate: '',
@@ -25,7 +26,7 @@ export const INITIAL_FORM = {
   },
 };
 
-export const PREVIEW_STEP = 10;
+export const PREVIEW_STEP = 11;
 
 export const DRAFT_KEY = 'rotationWizardDraft';
 
@@ -79,4 +80,16 @@ export function onTopicsLoaded(form, apiTopics) {
   });
 
   return { ...form, topics };
+}
+
+export function buildDefaultPlanName(form, rotations) {
+  const rotation = rotations.find((r) => r.id === form.rotationId);
+  const label = rotation?.displayLabel;
+  if (!label || !form.startDate) return '';
+
+  const date = new Date(`${form.startDate}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const monthYear = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  return `${label} — ${monthYear}`;
 }

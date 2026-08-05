@@ -3,6 +3,29 @@ const VALID_SCHEDULING_MODES = ['focused', 'efficient']
 const VALID_QUESTION_START_RULES = ['next_available_day', 'same_day_if_capacity']
 const VALID_LEARNING_UNLOCK_MODES = ['learning_completed', 'learning_started']
 const MAX_FLASHCARD_REVIEW_MINUTES_PER_DAY = 1440
+const MAX_DISPLAY_NAME_LENGTH = 100
+
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001F\u007F]/
+
+export function validateDisplayName(value) {
+  const errors = []
+  if (typeof value !== 'string') {
+    return { valid: false, errors: [{ code: 'VALIDATION_ERROR', message: 'displayName is required.', field: 'displayName' }] }
+  }
+  const trimmed = value.trim()
+  if (trimmed === '') {
+    errors.push({ code: 'VALIDATION_ERROR', message: 'displayName is required.', field: 'displayName' })
+    return { valid: false, errors }
+  }
+  if (trimmed.length > MAX_DISPLAY_NAME_LENGTH) {
+    errors.push({ code: 'VALIDATION_ERROR', message: `displayName must be at most ${MAX_DISPLAY_NAME_LENGTH} characters.`, field: 'displayName' })
+  }
+  if (CONTROL_CHARACTER_PATTERN.test(trimmed)) {
+    errors.push({ code: 'VALIDATION_ERROR', message: 'displayName cannot contain control characters.', field: 'displayName' })
+  }
+  if (errors.length > 0) return { valid: false, errors }
+  return { valid: true, value: trimmed }
+}
 
 export function parseAndValidatePlanRequest(request, body, { requireIdempotencyKey = false } = {}) {
   const errors = []
@@ -35,6 +58,11 @@ export function parseAndValidatePlanRequest(request, body, { requireIdempotencyK
     if (!validSources.includes(body.sourceId)) {
       errors.push({ code: 'SOURCE_NOT_FOUND', message: `Unknown source: ${body.sourceId}`, field: 'sourceId' })
     }
+  }
+
+  const displayNameCheck = validateDisplayName(body.displayName)
+  if (!displayNameCheck.valid) {
+    errors.push(...displayNameCheck.errors)
   }
 
   if (body.studyStyle && !VALID_STUDY_STYLES.includes(body.studyStyle)) {
@@ -192,6 +220,7 @@ export function parseAndValidatePlanRequest(request, body, { requireIdempotencyK
   return {
     valid: true,
     parsed: {
+      displayName: displayNameCheck.value,
       sourceId: body.sourceId,
       rotationId: body.rotationId,
       startDate: body.startDate,
@@ -230,3 +259,5 @@ export function parseAndValidatePlanRequest(request, body, { requireIdempotencyK
 function isValidDateString(s) {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
 }
+
+export { validateDisplayName }

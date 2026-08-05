@@ -48,6 +48,7 @@ export async function calculateScheduleFingerprint(userId, validatedInput) {
 export async function calculateRequestFingerprint(userId, validatedInput) {
   const canonical = JSON.stringify({
     userId,
+    displayName: validatedInput.displayName,
     sourceId: validatedInput.sourceId,
     sourceVersion: validatedInput.sourceVersion,
     rotationId: validatedInput.rotationId,
@@ -116,6 +117,16 @@ export async function calculateRecalculationFingerprint(userId, planId, recalcul
     userId,
     planId,
     recalculationDate,
+    expectedRevision,
+  }, null, 0)
+  return sha256Hex(canonical)
+}
+
+export async function calculateRenameFingerprint(userId, planId, displayName, expectedRevision) {
+  const canonical = JSON.stringify({
+    userId,
+    planId,
+    displayName,
     expectedRevision,
   }, null, 0)
   return sha256Hex(canonical)

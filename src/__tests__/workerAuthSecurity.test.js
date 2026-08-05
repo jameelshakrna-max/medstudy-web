@@ -31,6 +31,7 @@ function req(path, { method = 'GET', headers = {}, body } = {}) {
 }
 
 const VALID_BODY = {
+  displayName: 'Cardiology — January 2026',
   sourceId: 'step-up-medicine-6e-2024',
   rotationId: 'cardiology',
   startDate: '2026-01-05',

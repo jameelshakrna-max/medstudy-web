@@ -14,6 +14,7 @@ const USER_A = { sub: 'user-a', email: 'a@test.local', role: 'authenticated' }
 const VALID_BODY = {
   sourceId: 'step-up-medicine-6e-2024',
   rotationId: 'cardiology',
+  displayName: 'Cardiology — January 2026',
   startDate: '2026-01-05',
   endDate: '2026-01-11',
   studyStyle: 'active',

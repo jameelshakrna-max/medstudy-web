@@ -1,10 +1,12 @@
 import { useMemo, useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, CircleHelp } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { ChevronLeft, CircleHelp, MoreHorizontal, Pencil } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs/Tabs'
 import Toast from '../ui/Toast/Toast'
 import LoadingScreen from '../LoadingScreen'
+import Dropdown from '../ui/Dropdown/Dropdown'
+import Modal from '../ui/Modal/Modal'
 import useRotationPlanDetail from './today/useRotationPlanDetail'
 import usePlannerTaskMutations from './today/usePlannerTaskMutations'
 import useTaskAttachment from './today/useTaskAttachment'
@@ -22,18 +24,56 @@ import RecordQuestionsDialog from './today/dialogs/RecordQuestionsDialog'
 import TopicsView from './today/TopicsView'
 import CalendarView from './CalendarView'
 import ProgressView from './ProgressView'
-import { apiGet } from '../../lib/api'
+import { apiGet, apiPatch } from '../../lib/api'
 import { queryKeys } from '../../lib/queryKeys'
 import { getTodayKey, resolvePlannerTimezone, getBrowserTimezone } from './today/todayUtils'
 import styles from './V2PlanDetail.module.css'
 
 export default function V2PlanDetail({ planId, onBack }) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { data, isLoading, error, refetch } = useRotationPlanDetail(planId)
 
   const [dialogState, setDialogState] = useState({ type: null, task: null })
   const [toast, setToast] = useState({ open: false, title: '', description: '', variant: 'default' })
   const [helpOpen, setHelpOpen] = useState(false)
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  const [renameError, setRenameError] = useState(null)
+
+  const renameMutation = useMutation({
+    mutationFn: ({ displayName, expectedRevision, clientRequestId }) =>
+      apiPatch(`/rotation-planner/plans/${planId}`, { displayName, expectedRevision, clientRequestId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plans() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plan(planId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.goals.list() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all })
+      setRenameOpen(false)
+      setRenameValue('')
+      setRenameError(null)
+      setToast({ open: true, title: 'Plan renamed', description: 'Your plan was updated.', variant: 'default' })
+    },
+    onError: (err) => {
+      setRenameError(err?.message || 'Failed to rename plan. Please try again.')
+    },
+  })
+
+  const openRename = useCallback(() => {
+    setRenameValue(data?.plan?.displayName || '')
+    setRenameError(null)
+    setRenameOpen(true)
+  }, [data?.plan?.displayName])
+
+  const submitRename = useCallback(() => {
+    if (renameMutation.isPending) return
+    const clientRequestId = crypto.randomUUID()
+    renameMutation.mutate({
+      displayName: renameValue,
+      expectedRevision: data?.plan?.revision,
+      clientRequestId,
+    })
+  }, [renameMutation, renameValue, data?.plan?.revision])
 
   const { data: forecast, isLoading: forecastLoading, error: forecastError } = useQuery({
     queryKey: queryKeys.rotations.forecast(planId),
@@ -224,7 +264,24 @@ export default function V2PlanDetail({ planId, onBack }) {
         >
           <CircleHelp size={18} />
         </button>
-        <h1 className={styles.title}>{plan.sourceTitle || 'Rotation Plan'}</h1>
+        <Dropdown>
+          <Dropdown.Trigger asChild>
+            <button
+              type="button"
+              className={styles.helpBtn}
+              aria-label="Plan actions"
+            >
+              <MoreHorizontal size={18} />
+            </button>
+          </Dropdown.Trigger>
+          <Dropdown.Content>
+            <Dropdown.Item onSelect={openRename}>
+              <Pencil size={14} />
+              Rename Plan
+            </Dropdown.Item>
+          </Dropdown.Content>
+        </Dropdown>
+        <h1 className={styles.title}>{plan.displayName || plan.sourceTitle || 'Rotation Plan'}</h1>
         <div className={styles.meta}>
           {plan.schedulingMode && <span className={styles.mode}>{plan.schedulingMode}</span>}
         </div>
@@ -370,6 +427,50 @@ export default function V2PlanDetail({ planId, onBack }) {
       )}
 
       <RotationHelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      <Modal open={renameOpen} onOpenChange={(open) => !open && setRenameOpen(false)}>
+        <Modal.Title>Rename Plan</Modal.Title>
+        <Modal.Description>Choose a name for this rotation plan.</Modal.Description>
+        <div style={{ margin: '16px 0' }}>
+          <input
+            type="text"
+            value={renameValue}
+            onChange={(e) => { setRenameValue(e.target.value); setRenameError(null) }}
+            maxLength={100}
+            autoFocus
+            aria-label="Plan name"
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--card-border)',
+              background: 'var(--input-bg)',
+              color: 'var(--text-primary)',
+              fontSize: 14,
+            }}
+          />
+          {renameError && (
+            <p style={{ color: 'var(--red)', fontSize: 13, marginTop: 8 }}>{renameError}</p>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            className={styles.backButton}
+            onClick={() => setRenameOpen(false)}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className={styles.renameBtn}
+            onClick={submitRename}
+            disabled={renameMutation.isPending || !renameValue.trim()}
+          >
+            {renameMutation.isPending ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </Modal>
 
       <Toast.Provider>
         <Toast
