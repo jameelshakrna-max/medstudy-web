@@ -269,7 +269,7 @@ export default function Anki() {
 
   const createDeckMutation = useMutation({
     mutationFn: async (name) => {
-      const r = await apiPost('/decks', { name })
+      const r = await apiPost('/decks', { deck_name: name })
       if (r.error) throw new Error(r.error)
       return r
     },

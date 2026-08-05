@@ -348,6 +348,80 @@ describe('Worker route dispatch — rotation planner plans', () => {
     })
   })
 
+  describe('POST /api/decks', () => {
+    it('creates a deck from deck_name', async () => {
+      const res = await postFetch('/api/decks', { deck_name: 'Anatomy' })
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.success).toBe(true)
+      expect(body.deck_name).toBe('Anatomy')
+    })
+
+    it('trims surrounding whitespace from deck_name', async () => {
+      const res = await postFetch('/api/decks', { deck_name: '  Anatomy  ' })
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.deck_name).toBe('Anatomy')
+    })
+
+    it('rejects a missing deck_name', async () => {
+      const res = await postFetch('/api/decks', {})
+      expect(res.status).toBe(400)
+    })
+
+    it('rejects an empty deck_name', async () => {
+      const res = await postFetch('/api/decks', { deck_name: '' })
+      expect(res.status).toBe(400)
+    })
+
+    it('rejects a whitespace-only deck_name', async () => {
+      const res = await postFetch('/api/decks', { deck_name: '   ' })
+      expect(res.status).toBe(400)
+    })
+
+    it('rejects a non-string deck_name', async () => {
+      const res = await postFetch('/api/decks', { deck_name: 42 })
+      expect(res.status).toBe(400)
+    })
+
+    it('rejects a deck_name longer than 100 characters', async () => {
+      const res = await postFetch('/api/decks', { deck_name: 'x'.repeat(101) })
+      expect(res.status).toBe(400)
+    })
+
+    it('allows a deck_name of exactly 100 characters', async () => {
+      const res = await postFetch('/api/decks', { deck_name: 'x'.repeat(100) })
+      expect(res.status).toBe(200)
+    })
+
+    it('returns the validation message in the error body', async () => {
+      const res = await postFetch('/api/decks', {})
+      const body = await res.json()
+      expect(body.error).toMatch(/Deck name required/)
+    })
+
+    it('requires authentication', async () => {
+      const req = new Request('https://medstudy.app/api/decks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deck_name: 'Anatomy' }),
+      })
+      const res = await worker.fetch(req, makeEnv(), {})
+      expect(res.status).toBe(401)
+    })
+
+    it('duplicate submissions both succeed without creating rows', async () => {
+      const first = await postFetch('/api/decks', { deck_name: 'Anatomy' })
+      const second = await postFetch('/api/decks', { deck_name: 'Anatomy' })
+      expect(first.status).toBe(200)
+      expect(second.status).toBe(200)
+      const decks = await fetch('/api/decks')
+      expect(decks.status).toBe(200)
+      const body = await decks.json()
+      expect(Array.isArray(body)).toBe(true)
+    })
+  })
+
   describe('GET /api/deck-mappings', () => {
     it('returns 200 with mappings array', async () => {
       const res = await fetch('/api/deck-mappings')

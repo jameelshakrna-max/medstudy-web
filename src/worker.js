@@ -710,7 +710,7 @@ async function handleGetDecks(request, env, user) {
 
 async function handleCreateDeck(request, env, user) {
   const { deck_name } = await request.json()
-  if (!deck_name || typeof deck_name !== 'string' || deck_name.trim().length > 100) return json({ error: 'Deck name required (max 100 chars)' }, 400)
+  if (!deck_name || typeof deck_name !== 'string' || !deck_name.trim() || deck_name.trim().length > 100) return json({ error: 'Deck name required (max 100 chars)' }, 400)
   return json({ success: true, deck_name: deck_name.trim() })
 }
 
