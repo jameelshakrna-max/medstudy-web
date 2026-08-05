@@ -116,4 +116,14 @@ describe('RotationSummary', () => {
     expect(paths).toContain('/rotation-planner/plans')
     expect(paths.some(path => path === '/rotations/plans')).toBe(false)
   })
+
+  it('shows the planned name in the Tracking Hub view with no delete controls', async () => {
+    mockApi.plans = [PLAN]
+    renderSummary()
+
+    expect(await screen.findByText('Cardiology — January 2026')).toBeInTheDocument()
+    expect(screen.queryByText('cardiology')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /delete plan/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/permanently removes/i)).not.toBeInTheDocument()
+  })
 })

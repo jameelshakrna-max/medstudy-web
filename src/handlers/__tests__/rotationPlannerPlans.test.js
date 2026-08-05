@@ -218,6 +218,81 @@ describe('Full lifecycle', () => {
   })
 })
 
+// ─── Delete plan ───
+describe('Delete plan', () => {
+  async function createPlanWithChildren() {
+    const createRes = await createPlan()
+    expect(createRes.status).toBe(201)
+    const { plan } = await createRes.json()
+    const topics = await db.prepare('SELECT id FROM rotation_planner_topics WHERE plan_id = ?').bind(plan.id).all()
+    const tasks = await db.prepare('SELECT id FROM rotation_planner_daily_tasks WHERE plan_id = ?').bind(plan.id).all()
+    const avail = await db.prepare('SELECT id FROM rotation_planner_availability WHERE plan_id = ?').bind(plan.id).all()
+    return { plan, topics: topics.results, tasks: tasks.results, avail: avail.results }
+  }
+
+  it('cascades to topics, tasks, availability, and mutation rows', async () => {
+    const { plan, topics, tasks, avail } = await createPlanWithChildren()
+    expect(topics.length).toBeGreaterThan(0)
+    expect(tasks.length).toBeGreaterThan(0)
+    expect(avail.length).toBeGreaterThan(0)
+
+    const delRes = await deletePlan(plan.id)
+    expect(delRes.status).toBe(200)
+
+    const planRow = await db.prepare('SELECT id FROM rotation_planner_plans WHERE id = ?').bind(plan.id).first()
+    expect(planRow).toBeNull()
+
+    const topicRow = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_topics WHERE plan_id = ?').bind(plan.id).first()
+    expect(topicRow.c).toBe(0)
+    const taskRow = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_daily_tasks WHERE plan_id = ?').bind(plan.id).first()
+    expect(taskRow.c).toBe(0)
+    const availRow = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_availability WHERE plan_id = ?').bind(plan.id).first()
+    expect(availRow.c).toBe(0)
+    const mutations = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_plan_mutations WHERE plan_id = ?').bind(plan.id).first()
+    expect(mutations.c).toBe(0)
+  })
+
+  it('rejects later operations on a deleted plan with 404 (refresh required)', async () => {
+    const createRes = await createPlan()
+    const { plan } = await createRes.json()
+
+    const delRes = await deletePlan(plan.id)
+    expect(delRes.status).toBe(200)
+
+    const getRes = await getPlan(plan.id)
+    expect(getRes.status).toBe(404)
+
+    const renameRes = await renamePlan(plan.id, {
+      displayName: 'Still here?',
+      expectedRevision: 1,
+      clientRequestId: 'idem-post-delete-rename',
+    })
+    expect(renameRes.status).toBe(404)
+
+    const recalcRes = await recalculate(plan.id, { recalculationDate: '2026-01-06', expectedRevision: 1 })
+    expect(recalcRes.status).toBe(404)
+
+    const listRes = await listPlans()
+    const listBody = await listRes.json()
+    expect(listBody.some(p => p.id === plan.id)).toBe(false)
+  })
+
+  it('delete does not touch another user data (non-leak)', async () => {
+    const resA = await createPlan(makeBody(), USER_A)
+    const { plan } = await resA.json()
+    const resB = await createPlan(makeBody(), USER_B)
+    const { plan: planB } = await resB.json()
+
+    const delRes = await deletePlan(planB.id, USER_A)
+    expect(delRes.status).toBe(404)
+
+    const planARow = await db.prepare('SELECT id FROM rotation_planner_plans WHERE id = ?').bind(plan.id).first()
+    expect(planARow).not.toBeNull()
+    const planBRow = await db.prepare('SELECT id FROM rotation_planner_plans WHERE id = ?').bind(planB.id).first()
+    expect(planBRow).not.toBeNull()
+  })
+})
+
 // ─── Confidence lookup via sourceTopicId ───
 describe('estimateConfidence on GET plan', () => {
   it('returns confidence from source catalog matched by sourceTopicId', async () => {

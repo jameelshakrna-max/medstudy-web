@@ -1,7 +1,7 @@
 import { useMemo, useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, CircleHelp, MoreHorizontal, Pencil } from 'lucide-react'
+import { ChevronLeft, CircleHelp, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs/Tabs'
 import Toast from '../ui/Toast/Toast'
 import LoadingScreen from '../LoadingScreen'
@@ -24,7 +24,7 @@ import RecordQuestionsDialog from './today/dialogs/RecordQuestionsDialog'
 import TopicsView from './today/TopicsView'
 import CalendarView from './CalendarView'
 import ProgressView from './ProgressView'
-import { apiGet, apiPatch } from '../../lib/api'
+import { apiGet, apiPatch, apiDelete } from '../../lib/api'
 import { queryKeys } from '../../lib/queryKeys'
 import { getTodayKey, resolvePlannerTimezone, getBrowserTimezone } from './today/todayUtils'
 import styles from './V2PlanDetail.module.css'
@@ -74,6 +74,35 @@ export default function V2PlanDetail({ planId, onBack }) {
       clientRequestId,
     })
   }, [renameMutation, renameValue, data?.plan?.revision])
+
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
+
+  const deleteMutation = useMutation({
+    mutationFn: () => apiDelete(`/rotation-planner/plans/${planId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plans() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.goals.list() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all })
+      setDeleteOpen(false)
+      setDeleteError(null)
+      setToast({ open: true, title: 'Plan deleted', description: 'Your rotation plan was removed.', variant: 'default' })
+      onBack()
+    },
+    onError: (err) => {
+      setDeleteError(err?.message || 'Failed to delete plan. Please try again.')
+    },
+  })
+
+  const openDelete = useCallback(() => {
+    setDeleteError(null)
+    setDeleteOpen(true)
+  }, [])
+
+  const submitDelete = useCallback(() => {
+    if (deleteMutation.isPending) return
+    deleteMutation.mutate()
+  }, [deleteMutation])
 
   const { data: forecast, isLoading: forecastLoading, error: forecastError } = useQuery({
     queryKey: queryKeys.rotations.forecast(planId),
@@ -279,6 +308,10 @@ export default function V2PlanDetail({ planId, onBack }) {
               <Pencil size={14} />
               Rename Plan
             </Dropdown.Item>
+            <Dropdown.Item onSelect={openDelete} className={styles.dangerItem}>
+              <Trash2 size={14} />
+              Delete Plan
+            </Dropdown.Item>
           </Dropdown.Content>
         </Dropdown>
         <h1 className={styles.title}>{plan.displayName || plan.sourceTitle || 'Rotation Plan'}</h1>
@@ -468,6 +501,34 @@ export default function V2PlanDetail({ planId, onBack }) {
             disabled={renameMutation.isPending || !renameValue.trim()}
           >
             {renameMutation.isPending ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </Modal>
+
+      <Modal open={deleteOpen} onOpenChange={(open) => !open && setDeleteOpen(false)}>
+        <Modal.Title>Delete Plan</Modal.Title>
+        <Modal.Description>
+          Delete <strong>{plan.displayName || plan.sourceTitle || 'Rotation Plan'}</strong>? This
+          permanently removes the plan, its schedule, topics, and progress. This action cannot be undone.
+        </Modal.Description>
+        {deleteError && (
+          <p style={{ color: 'var(--red)', fontSize: 13, marginTop: 8 }}>{deleteError}</p>
+        )}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+          <button
+            type="button"
+            className={styles.backButton}
+            onClick={() => setDeleteOpen(false)}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className={styles.dangerBtn}
+            onClick={submitDelete}
+            disabled={deleteMutation.isPending}
+          >
+            {deleteMutation.isPending ? 'Deleting...' : 'Delete Plan'}
           </button>
         </div>
       </Modal>
