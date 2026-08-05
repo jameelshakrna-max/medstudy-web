@@ -10,6 +10,7 @@ import GoalCard from '../components/GoalCard'
 import GoalForm from '../components/GoalForm'
 import GoalTemplates from '../components/GoalTemplates'
 import GoalCelebration from '../components/GoalCelebration'
+import ActiveRotationSection from '../components/goals/ActiveRotationSection'
 import { generate } from '../services/PerformanceEngine'
 import { getGoalCategoryLabel } from '../services/goalProgress'
 import styles from './Goals.module.css'
@@ -159,6 +160,8 @@ export default function Goals() {
           {activeGoals.length} active · {completedGoals.length} completed · {expiredGoals.length} expired
         </p>
       </div>
+
+      <ActiveRotationSection />
 
       {!showForm && !editingGoal && goals.length > 0 && (
         <GoalTemplates onSelect={handleTemplateSelect} />

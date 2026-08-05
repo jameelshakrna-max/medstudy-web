@@ -1,7 +1,8 @@
 import { useMemo, useCallback } from 'react'
-import { Play, Check, SkipForward, Brain, BookOpen, FileQuestion, RotateCcw, Layers, Bookmark, GraduationCap, Timer } from 'lucide-react'
+import { Play, Check, SkipForward, Brain, BookOpen, FileQuestion, RotateCcw, Layers, Bookmark, GraduationCap, Timer, Lock } from 'lucide-react'
 import { getAvailableTaskActions, TASK_TYPE_ICONS } from './taskActionRules'
 import ProgressBar from '../../ui/ProgressBar/ProgressBar'
+import getTaskLockState from './getTaskLockState'
 import styles from './TaskCard.module.css'
 
 const ICON_MAP = {
@@ -34,10 +35,15 @@ export default function TaskCard({
   const actions = useMemo(() => getAvailableTaskActions(task), [task])
   const TypeIcon = ICON_MAP[TASK_TYPE_ICONS[task.taskType]] || BookOpen
 
-  const isLocked = task.isLocked
+  const lock = getTaskLockState(task, topicsById)
+  const isLocked = task.isLocked || lock.isLocked
   const isActive = task.isActive
   const isOverdue = task.isOverdue
   const isTerminal = task.isTerminal
+
+  const isQuestionTask = task.taskType === 'uworld_questions' || task.taskType === 'incorrect_review'
+  const remaining = Math.max(0, task.targetCount - (task.completedCount || 0))
+  const showCountStats = isQuestionTask && task.targetCount > 0 && !isTerminal
 
   const displayName = task.topicTitle || task.typeLabel
   const sectionName = task.topicSection || null
@@ -62,9 +68,9 @@ export default function TaskCard({
             isOverdue ? styles.statusOverdue :
             isTerminal ? styles.statusTerminal :
             ''
-          }`}
+          } ${isLocked ? styles.lockBadge : ''}`}
         >
-          {task.statusLabel}
+          {isLocked ? <><Lock size={11} /> Locked</> : task.statusLabel}
         </span>
       </div>
 
@@ -84,6 +90,21 @@ export default function TaskCard({
             <span className={styles.progressLabel}>{task.progressLabel}</span>
           </div>
         </div>
+        {isLocked && (
+          <div className={styles.lockMessage}>
+            {lock.message || 'Complete this task\'s prerequisite first.'}
+          </div>
+        )}
+        {!isLocked && !isTerminal && task.taskType === 'uworld_questions' && (
+          <div className={styles.uworldHint}>
+            Complete these questions in UWorld, then record your progress in MedStudy.
+          </div>
+        )}
+        {showCountStats && (
+          <div className={styles.countStats}>
+            {`${task.completedCount} of ${task.targetCount} questions \u00b7 ${remaining} remaining`}
+          </div>
+        )}
       </div>
 
       {canStudy && (
@@ -98,62 +119,64 @@ export default function TaskCard({
         </div>
       )}
 
-      <div className={styles.cardActions}>
-        {actions.includes('start') && (
-          <button
-            className={`${styles.actionBtn} ${styles.playBtn}`}
-            onClick={() => onStart(task)}
-            disabled={isMutating}
-          >
-            {isMutating ? 'Starting...' : <><Play size={12} /> Start</>}
-          </button>
-        )}
-        {actions.includes('complete') && (
-          <button
-            className={`${styles.actionBtn} ${styles.completeBtn}`}
-            onClick={() => onComplete(task)}
-            disabled={isMutating}
-          >
-            <Check size={12} /> Done
-          </button>
-        )}
-        {actions.includes('partial') && (
-          <button
-            className={styles.actionBtn}
-            onClick={() => onPartial(task)}
-            disabled={isMutating}
-          >
-            Partial
-          </button>
-        )}
-        {actions.includes('skip') && (
-          <button
-            className={`${styles.actionBtn} ${styles.skipBtn}`}
-            onClick={() => onSkip(task)}
-            disabled={isMutating}
-          >
-            <SkipForward size={12} /> Skip
-          </button>
-        )}
-        {actions.includes('record_time') && (
-          <button
-            className={styles.actionBtn}
-            onClick={() => onRecordTime(task)}
-            disabled={isMutating}
-          >
-            Log Time
-          </button>
-        )}
-        {actions.includes('record_questions') && (
-          <button
-            className={styles.actionBtn}
-            onClick={() => onRecordQuestions(task)}
-            disabled={isMutating}
-          >
-            Log Questions
-          </button>
-        )}
-      </div>
+      {!isLocked && (
+        <div className={styles.cardActions}>
+          {actions.includes('start') && (
+            <button
+              className={`${styles.actionBtn} ${styles.playBtn}`}
+              onClick={() => onStart(task)}
+              disabled={isMutating}
+            >
+              {isMutating ? 'Starting...' : <><Play size={12} /> Start</>}
+            </button>
+          )}
+          {actions.includes('complete') && (
+            <button
+              className={`${styles.actionBtn} ${styles.completeBtn}`}
+              onClick={() => onComplete(task)}
+              disabled={isMutating}
+            >
+              <Check size={12} /> {isQuestionTask ? 'Complete' : 'Done'}
+            </button>
+          )}
+          {actions.includes('partial') && (
+            <button
+              className={styles.actionBtn}
+              onClick={() => onPartial(task)}
+              disabled={isMutating}
+            >
+              {isQuestionTask ? 'Record Progress' : 'Partial'}
+            </button>
+          )}
+          {actions.includes('skip') && (
+            <button
+              className={`${styles.actionBtn} ${styles.skipBtn}`}
+              onClick={() => onSkip(task)}
+              disabled={isMutating}
+            >
+              <SkipForward size={12} /> Skip
+            </button>
+          )}
+          {actions.includes('record_time') && (
+            <button
+              className={styles.actionBtn}
+              onClick={() => onRecordTime(task)}
+              disabled={isMutating}
+            >
+              Log Time
+            </button>
+          )}
+          {actions.includes('record_questions') && (
+            <button
+              className={styles.actionBtn}
+              onClick={() => onRecordQuestions(task)}
+              disabled={isMutating}
+            >
+              Log Questions
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

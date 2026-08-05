@@ -283,6 +283,40 @@ describe('usePlannerTaskMutations', () => {
       expect(invalidateSpy).not.toHaveBeenCalled()
     })
 
+    it('invalidates plan query and rejects on TASK_LOCKED', async () => {
+      const err = new ApiError({ code: 'TASK_LOCKED', message: 'Task is locked', status: 409 })
+      apiPatch.mockRejectedValueOnce(err)
+
+      const { result } = renderMutationsHook({}, { wrapper })
+
+      let caught
+      await act(async () => {
+        try { await result.current.startTask(TASK_ID) } catch (e) { caught = e }
+      })
+
+      expect(caught).toBe(err)
+      expect(caught.code).toBe('TASK_LOCKED')
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: expect.arrayContaining(['rotations', 'plan', PLAN_ID]) })
+      )
+    })
+
+    it('does not set recalculationState on TASK_LOCKED and surfaces the error', async () => {
+      apiPatch.mockRejectedValueOnce(
+        new ApiError({ code: 'TASK_LOCKED', message: 'Task is locked', status: 409 })
+      )
+
+      const { result } = renderMutationsHook({}, { wrapper })
+
+      await act(async () => {
+        try { await result.current.startTask(TASK_ID) } catch {}
+      })
+
+      expect(result.current.recalculationState).toBeNull()
+      expect(result.current.error).not.toBeNull()
+      expect(result.current.error.code).toBe('TASK_LOCKED')
+    })
+
     it('propagates errors to the caller', async () => {
       const err = new ApiError({ code: 'SOME_ERROR', message: 'Something went wrong', status: 500 })
       apiPatch.mockRejectedValueOnce(err)

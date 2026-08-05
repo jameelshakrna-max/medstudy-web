@@ -1,0 +1,75 @@
+.status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-lg);
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.icon {
+  flex-shrink: 0;
+  color: var(--indigo);
+}
+
+.text {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.deckNames {
+  font-size: 12px;
+  color: var(--mist);
+}
+
+.mapBtn {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 4px 12px;
+  background: var(--blueL);
+  border: 1px solid rgba(79, 140, 255, 0.3);
+  border-radius: var(--radius-sm);
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all var(--duration-fast);
+}
+
+.mapBtn:hover {
+  background: rgba(79, 140, 255, 0.2);
+}
+
+.openLink {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  background: var(--indigo);
+  border-radius: var(--radius-sm);
+  color: var(--navy);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  font-family: 'DM Sans', sans-serif;
+  transition: all var(--duration-fast);
+}
+
+.openLink:hover {
+  opacity: 0.85;
+}
+
+@media (max-width: 640px) {
+  .mapBtn,
+  .openLink {
+    margin-left: 0;
+  }
+}

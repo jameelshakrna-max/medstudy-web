@@ -131,6 +131,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     updatedAt: createdAt,
     revision: 0,
     lastRecalculatedAt: null,
+    staleAt: null,
     sourceTitle,
   }
 
@@ -540,7 +541,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
 
 export async function loadPlanFromDb(env, planId, userId) {
   const { results: planRows } = await env.DB.prepare(
-    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, uses_flashcard_capacity, settings_json, created_at, updated_at, revision, last_recalculated_at FROM rotation_planner_plans WHERE id = ? AND user_id = ?'
+    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, uses_flashcard_capacity, settings_json, created_at, updated_at, revision, last_recalculated_at, stale_at FROM rotation_planner_plans WHERE id = ? AND user_id = ?'
   ).bind(planId, userId).all()
 
   if (!planRows.length) return null
@@ -572,7 +573,7 @@ export async function loadPlanFromDb(env, planId, userId) {
 
 export async function loadPlanSummaries(env, userId) {
   const { results: planRows } = await env.DB.prepare(
-    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, uses_flashcard_capacity, settings_json, created_at, updated_at, revision, last_recalculated_at FROM rotation_planner_plans WHERE user_id = ? ORDER BY created_at DESC'
+    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, uses_flashcard_capacity, settings_json, created_at, updated_at, revision, last_recalculated_at, stale_at FROM rotation_planner_plans WHERE user_id = ? ORDER BY created_at DESC'
   ).bind(userId).all()
 
   const summaries = []

@@ -67,7 +67,7 @@ export default function usePlannerTaskMutations({ planId, initialRevision, getRe
     onError: (error, { operationId, taskId, action }) => {
       const code = error?.code || ''
 
-      if (code === 'PLAN_REVISION_CONFLICT') {
+      if (code === 'PLAN_REVISION_CONFLICT' || code === 'TASK_LOCKED') {
         invalidatePlan()
       }
 

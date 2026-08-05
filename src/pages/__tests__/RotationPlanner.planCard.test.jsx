@@ -2,6 +2,7 @@
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -61,6 +62,10 @@ vi.mock('../../components/rotation/V2PlanDetail', () => ({
   default: () => <div data-testid="v2-plan-detail" />,
 }))
 
+vi.mock('../../components/rotation/RotationHelpDialog', () => ({
+  default: ({ open }) => (open ? <div data-testid="rotation-help-dialog" /> : null),
+}))
+
 vi.mock('../../components/ui/Modal/Modal', () => {
   const MockModal = ({ children }) => <div data-testid="mock-modal">{children}</div>
   MockModal.Title = ({ children }) => <div>{children}</div>
@@ -112,7 +117,9 @@ function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <RotationPlanner />
+      <MemoryRouter>
+        <RotationPlanner />
+      </MemoryRouter>
     </QueryClientProvider>
   )
 }
@@ -242,6 +249,13 @@ describe('RotationPlanner plan cards (Finding E)', () => {
 
     expect(await screen.findByText('No rotation plans yet')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Create Your First Plan/i })).toBeInTheDocument()
+  })
+
+  it('opens RotationHelpDialog from the header help button', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'How your rotation plan works' }))
+    expect(screen.getByTestId('rotation-help-dialog')).toBeInTheDocument()
   })
 
   it('shows an error state with Retry when plan queries fail, then recovers on Retry', async () => {

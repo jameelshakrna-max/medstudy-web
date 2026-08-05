@@ -1,10 +1,12 @@
 import { useState, useMemo, lazy, Suspense } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiGet, apiPost, apiDelete, apiPut } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
-import { CalendarRange, Plus, ChevronLeft, Play, Pause, Trash2, RotateCcw, BookOpen, WifiOff } from 'lucide-react'
+import { CalendarRange, Plus, ChevronLeft, Play, Pause, Trash2, RotateCcw, BookOpen, WifiOff, CircleHelp } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
+import RotationHelpDialog from '../components/rotation/RotationHelpDialog'
 import PlanCreationForm from '../components/rotation/PlanCreationForm'
 import ScheduleView from '../components/rotation/ScheduleView'
 import TopicProgressCard from '../components/rotation/TopicProgressCard'
@@ -35,9 +37,12 @@ function formatMinutes(mins) {
 export default function RotationPlanner() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [showForm, setShowForm] = useState(false)
-  const [selectedPlanId, setSelectedPlanId] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [helpOpen, setHelpOpen] = useState(false)
+
+  const selectedPlanId = searchParams.get('plan') || null
 
   // ── Fetch V1 plans (legacy) ──
   const { data: v1Plans = [], isLoading: v1PlansLoading, error: v1PlansError, refetch: v1PlansRefetch } = useQuery({
@@ -68,6 +73,22 @@ export default function RotationPlanner() {
   const selectedEntry = plans.find(e => e.plan.id === selectedPlanId)
   const selectedVersion = selectedEntry?.version ?? 'v1'
 
+  function openPlan(id) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('plan', id)
+      return next
+    })
+  }
+
+  function closePlan() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('plan')
+      return next
+    })
+  }
+
   // ── Fetch single plan details (V1 only — V2 has its own hook) ──
   const { data: planDetail, isLoading: detailLoading } = useQuery({
     queryKey: queryKeys.rotations.plan(selectedPlanId),
@@ -87,7 +108,7 @@ export default function RotationPlanner() {
     mutationFn: (id) => apiDelete(`/rotations/plans/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plans() })
-      setSelectedPlanId(null)
+      closePlan()
       setConfirmDelete(null)
     },
   })
@@ -138,6 +159,57 @@ export default function RotationPlanner() {
 
   if (plansLoading) return <LoadingScreen fullPage={false} message="Loading rotation plans..." />
 
+  // ── List fetch error (list never loaded) ──
+  if (plansFetchError) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.header}>
+          <div className={styles.headerRow}>
+            <div>
+              <h1 className={styles.title}>Rotation Planner</h1>
+              <p className={styles.sub}>Plan your clinical rotations and study schedule</p>
+            </div>
+          </div>
+        </div>
+        <div className={styles.empty}>
+          <WifiOff />
+          <div className={styles.emptyTitle}>Couldn't load your plans</div>
+          <div className={styles.emptyDesc}>
+            We couldn't reach the server. Check your connection and try again.
+          </div>
+          <button
+            className={styles.createBtn}
+            style={{ marginTop: 16 }}
+            onClick={refetchAll}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Deep-linked plan not found in the loaded list ──
+  if (selectedPlanId && !selectedEntry) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.empty}>
+          <div className={styles.emptyTitle}>Plan not found</div>
+          <div className={styles.emptyDesc}>
+            This plan doesn't exist or you don't have access to it.
+          </div>
+          <button
+            className={styles.createBtn}
+            style={{ marginTop: 16 }}
+            onClick={closePlan}
+          >
+            Back to plans
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // ── Detail View ──
   if (selectedPlanId) {
     if (detailLoading) return <LoadingScreen fullPage={false} message="Loading plan details..." />
@@ -149,7 +221,7 @@ export default function RotationPlanner() {
           <Suspense fallback={<LoadingScreen fullPage={false} message="Loading plan details..." />}>
             <V2PlanDetail
               planId={selectedPlanId}
-              onBack={() => setSelectedPlanId(null)}
+              onBack={closePlan}
             />
           </Suspense>
         </div>
@@ -163,7 +235,7 @@ export default function RotationPlanner() {
         <div className={styles.detailView}>
           <div className={styles.detailHeader}>
             <div className={styles.detailHeaderLeft}>
-              <button className={styles.backBtn} onClick={() => setSelectedPlanId(null)}>
+              <button className={styles.backBtn} onClick={closePlan}>
                 <ChevronLeft size={16} />
                 Back
               </button>
@@ -295,47 +367,40 @@ export default function RotationPlanner() {
                 : 'Plan your clinical rotations and study schedule'}
             </p>
           </div>
-          <button className={styles.createBtn} onClick={() => setShowForm(true)}>
-            <Plus size={16} />
-            New Plan
-          </button>
+          <div className={styles.headerActions}>
+            <button
+              type="button"
+              className={styles.helpBtn}
+              aria-label="How your rotation plan works"
+              onClick={() => setHelpOpen(true)}
+            >
+              <CircleHelp size={18} />
+            </button>
+            <button className={styles.createBtn} onClick={() => setShowForm(true)}>
+              <Plus size={16} />
+              New Plan
+            </button>
+          </div>
         </div>
       </div>
 
       {plans.length === 0 ? (
-        plansFetchError ? (
-          <div className={styles.empty}>
-            <WifiOff />
-            <div className={styles.emptyTitle}>Couldn't load your plans</div>
-            <div className={styles.emptyDesc}>
-              We couldn't reach the server. Check your connection and try again.
-            </div>
-            <button
-              className={styles.createBtn}
-              style={{ marginTop: 16 }}
-              onClick={refetchAll}
-            >
-              Retry
-            </button>
+        <div className={styles.empty}>
+          <CalendarRange />
+          <div className={styles.emptyTitle}>No rotation plans yet</div>
+          <div className={styles.emptyDesc}>
+            Create your first rotation plan to generate a personalized study schedule
+            based on your availability and learning goals.
           </div>
-        ) : (
-          <div className={styles.empty}>
-            <CalendarRange />
-            <div className={styles.emptyTitle}>No rotation plans yet</div>
-            <div className={styles.emptyDesc}>
-              Create your first rotation plan to generate a personalized study schedule
-              based on your availability and learning goals.
-            </div>
-            <button
-              className={styles.createBtn}
-              style={{ marginTop: 16 }}
-              onClick={() => setShowForm(true)}
-            >
-              <Plus size={16} />
-              Create Your First Plan
-            </button>
-          </div>
-        )
+          <button
+            className={styles.createBtn}
+            style={{ marginTop: 16 }}
+            onClick={() => setShowForm(true)}
+          >
+            <Plus size={16} />
+            Create Your First Plan
+          </button>
+        </div>
       ) : (
         <div className={styles.planGrid}>
           {plans.map((entry) => {
@@ -363,7 +428,7 @@ export default function RotationPlanner() {
                 type="button"
                 key={entry.key}
                 className={styles.planCard}
-                onClick={() => setSelectedPlanId(p.id)}
+                onClick={() => openPlan(p.id)}
                 aria-label={`${planName} plan, ${statusLabel}, ${completionPct}% complete`}
               >
                 <div className={styles.planCardTop}>
@@ -436,6 +501,8 @@ export default function RotationPlanner() {
         onClose={() => setShowForm(false)}
         onCreated={handlePlanCreated}
       />
+
+      <RotationHelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   )
 }

@@ -15,7 +15,16 @@ export default function PartialDialog({ open, task, onClose, onSubmit }) {
   const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
 
+  const remaining = Math.max(0, (task?.targetCount || 0) - (task?.completedCount || 0))
+  const willFinish = !isPercentage && task?.targetCount > 0 && parseInt(completedCount, 10) === remaining
+  const countVal = parseInt(completedCount, 10)
+  const pctVal = parseInt(percentage, 10)
+  const showCountRecap = !isPercentage && countVal > 0
+  const showPctRecap = isPercentage && pctVal > 0
+
   const handleSubmit = useCallback(async () => {
+    if (submitting) return
+
     const payload = {}
 
     if (isPercentage) {
@@ -27,8 +36,12 @@ export default function PartialDialog({ open, task, onClose, onSubmit }) {
       payload.completedPercentage = pct
     } else {
       const cc = parseInt(completedCount, 10)
-      if (isNaN(cc) || cc < 0) {
-        setError('Completed count is required.')
+      if (isNaN(cc) || cc < 1) {
+        setError('Enter at least 1 completed question.')
+        return
+      }
+      if (task?.targetCount > 0 && cc > remaining) {
+        setError('Cannot exceed the remaining questions for this task.')
         return
       }
       payload.completedCount = cc
@@ -57,7 +70,7 @@ export default function PartialDialog({ open, task, onClose, onSubmit }) {
     } finally {
       setSubmitting(false)
     }
-  }, [isPercentage, needsIncorrect, percentage, completedCount, incorrectCount, minutes, onSubmit, onClose])
+  }, [submitting, isPercentage, needsIncorrect, remaining, task?.targetCount, percentage, completedCount, incorrectCount, minutes, onSubmit, onClose])
 
   return (
     <ActionDialog
@@ -72,7 +85,7 @@ export default function PartialDialog({ open, task, onClose, onSubmit }) {
             onClick={handleSubmit}
             disabled={submitting}
           >
-            {submitting ? 'Saving...' : 'Save Partial'}
+            {submitting ? 'Saving...' : (willFinish ? 'Complete' : 'Save Partial')}
           </button>
         </>
       }
@@ -106,7 +119,7 @@ export default function PartialDialog({ open, task, onClose, onSubmit }) {
                 value={completedCount}
                 onChange={(e) => { setCompletedCount(e.target.value); setError(null) }}
                 placeholder="Required"
-                min="0"
+                min="1"
                 disabled={submitting}
               />
             </label>
@@ -143,6 +156,23 @@ export default function PartialDialog({ open, task, onClose, onSubmit }) {
             disabled={submitting}
           />
         </label>
+      </div>
+
+      <div className={styles.recap}>
+        {showCountRecap && (
+          <>
+            <p>Recording: {countVal} of {task?.targetCount} questions</p>
+            <p>Remaining after this: {Math.max(0, (task?.targetCount || 0) - countVal)} questions</p>
+          </>
+        )}
+        {showPctRecap && (
+          <>
+            <p>Recording: {pctVal}%</p>
+            <p>Remaining after this: {Math.max(0, 100 - pctVal)}%</p>
+          </>
+        )}
+        <p>Your completed progress will remain in history.</p>
+        <p>The remaining questions will be rescheduled after recalculation.</p>
       </div>
 
       {error && <div className={styles.fieldError}>{error}</div>}

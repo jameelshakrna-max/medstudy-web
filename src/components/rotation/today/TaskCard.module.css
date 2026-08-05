@@ -80,6 +80,32 @@
   color: var(--emerald);
 }
 
+.lockBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(255, 184, 0, 0.12);
+  color: var(--amber, #ffb800);
+}
+
+.lockMessage {
+  font-size: 12px;
+  color: var(--mist);
+  margin-top: var(--space-xs);
+}
+
+.uworldHint {
+  font-size: 12px;
+  color: var(--mist);
+  margin-top: var(--space-xs);
+}
+
+.countStats {
+  font-size: 12px;
+  color: var(--mist);
+  margin-top: var(--space-xs);
+}
+
 .cardBody {
   display: flex;
   flex-direction: column;

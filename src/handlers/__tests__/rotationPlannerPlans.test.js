@@ -1202,16 +1202,25 @@ describe('R2 — In-Progress Safety', () => {
   })
 
   it('B — multiple in_progress tasks block recalculation', async () => {
-    const createRes = await createPlan()
+    // Use two topics so two learning tasks are startable from pending.
+    // (A single-topic plan only offers one ungated task; uworld_questions is
+    // locked until its learning prerequisite is satisfied.)
+    const twoTopicBody = makeBody({
+      topics: [
+        { normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.stable-angina-pectoris', uworldRemainingQuestions: 20, alreadyCompletedLearningPercentage: 0, alreadyCompletedQuestionCount: 0 },
+        { normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.acute-coronary-syndromes-acs', uworldRemainingQuestions: 10, alreadyCompletedLearningPercentage: 0, alreadyCompletedQuestionCount: 0 },
+      ],
+    })
+    const createRes = await createPlan(twoTopicBody)
     const { plan, tasks } = await createRes.json()
     const planId = plan.id
-    const pendingTasks = tasks.filter(t => t.status === 'pending')
-    expect(pendingTasks.length).toBeGreaterThanOrEqual(2)
+    const learningTasks = tasks.filter(t => t.taskType === 'learning')
+    expect(learningTasks.length).toBeGreaterThanOrEqual(2)
 
-    const start1 = await patchTask(planId, pendingTasks[0].id, { action: 'start', expectedRevision: 0 })
+    const start1 = await patchTask(planId, learningTasks[0].id, { action: 'start', expectedRevision: 0 })
     expect(start1.status).toBe(200)
 
-    const start2 = await patchTask(planId, pendingTasks[1].id, { action: 'start', expectedRevision: 1 })
+    const start2 = await patchTask(planId, learningTasks[1].id, { action: 'start', expectedRevision: 1 })
     expect(start2.status).toBe(200)
 
     const res = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: 2 })
@@ -1239,17 +1248,44 @@ describe('R2 — Empty / No-Remaining-Work Recalculation', () => {
     const { plan, tasks } = await createRes.json()
     const planId = plan.id
 
-    // Complete all tasks directly from pending
+    // Gated tasks (uworld_questions, incorrect_review) are locked until their
+    // prerequisite is satisfied, so they cannot be completed directly from pending.
+    const gatedTypes = new Set(['uworld_questions', 'incorrect_review'])
+
+    // Complete all ungated tasks directly from pending
     let rev = 0
-    for (const task of tasks) {
+    for (const task of tasks.filter(t => !gatedTypes.has(t.taskType))) {
       const res = await patchTask(planId, task.id, { action: 'complete', payload: payloadForTask(task), expectedRevision: rev })
       expect(res.status).toBe(200)
       rev++
     }
 
+    // Recalculate → learning completes, UWorld unlocks; then keep completing
+    // newly unlocked tasks and recalculating until nothing remains.
+    let recalcRes = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: rev })
+    expect(recalcRes.status).toBe(200)
+    rev = (await recalcRes.json()).revision
+
+    for (;;) {
+      const getRes = await getPlan(planId)
+      const getBody = await getRes.json()
+      const pending = getBody.tasks.filter(t => t.status === 'pending' && gatedTypes.has(t.taskType))
+      if (pending.length === 0) break
+      for (const task of pending) {
+        const res = await patchTask(planId, task.id, { action: 'complete', payload: payloadForTask(task), expectedRevision: rev })
+        expect(res.status).toBe(200)
+        rev++
+      }
+      recalcRes = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: rev })
+      expect(recalcRes.status).toBe(200)
+      rev = (await recalcRes.json()).revision
+    }
+
     // All tasks are completed
+    const allTasksCount = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_daily_tasks WHERE plan_id = ?').bind(planId).first()
     const completedCount = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_daily_tasks WHERE plan_id = ? AND status = ?').bind(planId, 'completed').first()
-    expect(completedCount.c).toBe(tasks.length)
+    expect(allTasksCount.c).toBeGreaterThanOrEqual(tasks.length)
+    expect(completedCount.c).toBe(allTasksCount.c)
 
     // Recalculate — DELETE only targets pending/locked; completed rows preserved
     const res = await recalculate(planId, { recalculationDate: '2026-01-06', expectedRevision: rev })
@@ -1257,11 +1293,11 @@ describe('R2 — Empty / No-Remaining-Work Recalculation', () => {
     const body = await res.json()
 
     expect(body.revision).toBe(rev + 1)
-    expect(body.tasks.preserved).toBe(tasks.length)
+    expect(body.tasks.preserved).toBe(completedCount.c)
 
     // Completed rows still in DB
     const completedAfter = await db.prepare('SELECT COUNT(*) as c FROM rotation_planner_daily_tasks WHERE plan_id = ? AND status = ?').bind(planId, 'completed').first()
-    expect(completedAfter.c).toBe(tasks.length)
+    expect(completedAfter.c).toBe(completedCount.c)
   })
 })
 
@@ -1619,6 +1655,231 @@ describe('R2 — Topic Milestone Stability', () => {
     const topicRow2 = await db.prepare('SELECT learning_completed_at, questions_unlocked_at FROM rotation_planner_topics WHERE plan_id = ?').bind(planId).first()
     expect(topicRow2.learning_completed_at).toBe(learningCompletedAt1)
     expect(topicRow2.questions_unlocked_at).toBe(questionsUnlockedAt1)
+  })
+})
+
+describe('R2 — Unlock Enforcement (task locking)', () => {
+  function payloadForTask(task, overrides = {}) {
+    const payload = { actualMinutes: overrides.actualMinutes ?? 15 }
+    if (task.taskType === 'uworld_questions') {
+      payload.completedCount = overrides.completedCount ?? task.targetCount ?? 10
+      payload.incorrectCount = overrides.incorrectCount ?? 2
+    } else if (task.taskType === 'incorrect_review') {
+      payload.completedCount = overrides.completedCount ?? task.targetCount ?? 5
+    }
+    return payload
+  }
+
+  async function findGatedTask(planId, taskType = 'uworld_questions') {
+    const getRes = await getPlan(planId)
+    expect(getRes.status).toBe(200)
+    const body = await getRes.json()
+    const task = body.tasks.find(t => t.taskType === taskType && t.unlockCondition)
+    expect(task, `expected a gated ${taskType} task`).toBeDefined()
+    return task
+  }
+
+  it('rejects every mutating action on a locked uworld task with TASK_LOCKED', async () => {
+    const createRes = await createPlan()
+    const { plan } = await createRes.json()
+    const task = await findGatedTask(plan.id)
+
+    const attempts = [
+      { action: 'start', payload: {} },
+      { action: 'complete', payload: payloadForTask(task) },
+      { action: 'partial', payload: { completedPercentage: 50, actualMinutes: 10 } },
+      { action: 'record_questions', payload: payloadForTask(task) },
+      { action: 'skip', payload: {} },
+      { action: 'reschedule', payload: { newDate: '2026-01-08' } },
+    ]
+
+    for (const { action, payload } of attempts) {
+      const res = await patchTask(plan.id, task.id, { action, payload, expectedRevision: 0 })
+      expect(res.status).toBe(409)
+      const body = await res.json()
+      expect(body.error.code).toBe('TASK_LOCKED')
+    }
+
+    const row = await db.prepare('SELECT * FROM rotation_planner_daily_tasks WHERE id = ?').bind(task.id).first()
+    expect(row.status).toBe('pending')
+    expect(row.completed_count).toBe(0)
+    expect(row.completed_at).toBeNull()
+    const planRow = await db.prepare('SELECT revision FROM rotation_planner_plans WHERE id = ?').bind(plan.id).first()
+    expect(planRow.revision).toBe(0)
+  })
+
+  it('records no idempotency/mutation row and no recalculation for rejected attempts', async () => {
+    const createRes = await createPlan()
+    const { plan } = await createRes.json()
+    const task = await findGatedTask(plan.id)
+
+    const clientRequestId = 'locked-attempt-' + Date.now() + '-' + Math.random().toString(36).slice(2)
+    const res = await patchTask(
+      plan.id, task.id,
+      { action: 'complete', payload: payloadForTask(task), expectedRevision: 0 },
+      USER_A,
+      { 'Idempotency-Key': clientRequestId },
+    )
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.error.code).toBe('TASK_LOCKED')
+
+    const mutationRow = await db.prepare('SELECT * FROM rotation_planner_task_mutations WHERE user_id = ? AND client_request_id = ?').bind(USER_A.sub, clientRequestId).first()
+    expect(mutationRow).toBeNull()
+
+    const planRow = await db.prepare('SELECT revision FROM rotation_planner_plans WHERE id = ?').bind(plan.id).first()
+    expect(planRow.revision).toBe(0)
+
+    const row = await db.prepare('SELECT * FROM rotation_planner_daily_tasks WHERE id = ?').bind(task.id).first()
+    expect(row.status).toBe('pending')
+    expect(row.completed_count).toBe(0)
+  })
+
+  it('allows mutations on ungated tasks while a uworld task is locked', async () => {
+    const createRes = await createPlan()
+    const { plan, tasks } = await createRes.json()
+    const learning = tasks.find(t => t.taskType === 'learning')
+    expect(learning).toBeDefined()
+
+    const res = await patchTask(plan.id, learning.id, { action: 'complete', payload: { actualMinutes: 15 }, expectedRevision: 0 })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.status).toBe('completed')
+    expect(body.revision).toBe(1)
+  })
+
+  it('governs the lock by persisted topic state, not the task status', async () => {
+    const createRes = await createPlan()
+    const { plan, tasks } = await createRes.json()
+    const task = await findGatedTask(plan.id)
+
+    // The uworld task stays pending, but completing the topic's actual learning
+    // work satisfies the prerequisite and unlocks it — decided from persisted
+    // task state, not the uworld task's own status.
+    const learningTasks = tasks.filter(t => t.taskType === 'learning')
+    expect(learningTasks.length).toBeGreaterThan(0)
+    let rev = 0
+    for (const learning of learningTasks) {
+      const res = await patchTask(plan.id, learning.id, { action: 'complete', payload: { actualMinutes: 15 }, expectedRevision: rev })
+      expect(res.status).toBe(200)
+      rev++
+    }
+
+    const uworldRow = await db.prepare('SELECT * FROM rotation_planner_daily_tasks WHERE id = ?').bind(task.id).first()
+    expect(uworldRow.status).toBe('pending')
+
+    const res = await patchTask(plan.id, task.id, { action: 'complete', payload: payloadForTask(task), expectedRevision: rev })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.status).toBe('completed')
+    expect(body.revision).toBe(rev + 1)
+  })
+
+  it('rejects mutations on a locked incorrect_review task until the uworld prerequisite is satisfied', async () => {
+    const createRes = await createPlan()
+    const { plan } = await createRes.json()
+
+    let rev = 0
+    const initialBody = await (await getPlan(plan.id)).json()
+    const learningTasks = initialBody.tasks.filter(t => t.taskType === 'learning')
+    for (const task of learningTasks) {
+      const res = await patchTask(plan.id, task.id, { action: 'complete', payload: { actualMinutes: 15 }, expectedRevision: rev })
+      expect(res.status).toBe(200)
+      rev++
+    }
+    expect(rev).toBeGreaterThan(0)
+
+    let recalcRes = await recalculate(plan.id, { recalculationDate: '2026-01-06', expectedRevision: rev })
+    expect(recalcRes.status).toBe(200)
+    rev = (await recalcRes.json()).revision
+
+    const afterRecalc = await (await getPlan(plan.id)).json()
+    const uworldTasks = afterRecalc.tasks.filter(t => t.taskType === 'uworld_questions')
+    expect(uworldTasks.length).toBeGreaterThanOrEqual(1)
+
+    for (const task of uworldTasks) {
+      const res = await patchTask(plan.id, task.id, {
+        action: 'complete',
+        payload: { actualMinutes: 15, completedCount: task.targetCount || 10, incorrectCount: 2 },
+        expectedRevision: rev,
+      })
+      expect(res.status).toBe(200)
+      rev++
+    }
+
+    recalcRes = await recalculate(plan.id, { recalculationDate: '2026-01-06', expectedRevision: rev })
+    expect(recalcRes.status).toBe(200)
+    rev = (await recalcRes.json()).revision
+
+    const final = await (await getPlan(plan.id)).json()
+    const incorrectTasks = final.tasks.filter(t => t.taskType === 'incorrect_review' && t.unlockCondition)
+    expect(incorrectTasks.length).toBeGreaterThanOrEqual(1)
+
+    for (const task of incorrectTasks) {
+      const res = await patchTask(plan.id, task.id, {
+        action: 'complete',
+        payload: { actualMinutes: 15, completedCount: task.targetCount || 5 },
+        expectedRevision: rev,
+      })
+      expect(res.status).toBe(200)
+      rev++
+    }
+  })
+})
+
+describe('R2 — Plan staleAt exposure', () => {
+  it('returns staleAt on the plan detail response', async () => {
+    const createRes = await createPlan()
+    const { plan } = await createRes.json()
+    const res = await getPlan(plan.id)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.plan).toHaveProperty('staleAt')
+    expect(body.plan.staleAt).toBeNull()
+  })
+
+  it('returns staleAt on the plan list response', async () => {
+    const createRes = await createPlan()
+    const { plan } = await createRes.json()
+    const res = await listPlans()
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(Array.isArray(body)).toBe(true)
+    const found = body.find(p => p.id === plan.id)
+    expect(found).toBeDefined()
+    expect(found).toHaveProperty('staleAt')
+    expect(found.staleAt).toBeNull()
+  })
+
+  it('reflects a persisted stale_at value across a fresh reload (reload persistence)', async () => {
+    const createRes = await createPlan()
+    const { plan } = await createRes.json()
+    await db.prepare("UPDATE rotation_planner_plans SET stale_at = '2026-01-07T12:00:00.000Z' WHERE id = ?").bind(plan.id).run()
+
+    const res = await getPlan(plan.id)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.plan.staleAt).toBe('2026-01-07T12:00:00.000Z')
+
+    const listRes = await listPlans()
+    const listBody = await listRes.json()
+    const found = listBody.find(p => p.id === plan.id)
+    expect(found.staleAt).toBe('2026-01-07T12:00:00.000Z')
+  })
+
+  it('keeps existing plan fields backward compatible', async () => {
+    const createRes = await createPlan()
+    const { plan } = await createRes.json()
+    const res = await getPlan(plan.id)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.plan).toMatchObject({
+      id: plan.id,
+      sourceTitle: expect.any(String),
+      status: 'draft',
+      revision: 0,
+      staleAt: null,
+    })
   })
 })
 

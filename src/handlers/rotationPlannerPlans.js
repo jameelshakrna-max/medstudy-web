@@ -18,6 +18,7 @@ import {
   applyTaskUpdate, calculateTaskUpdateFingerprint, calculateRecalculationFingerprint,
   recalculatePlan, deriveActualTopicStates, persistRecalculationBatch,
   TERMINAL_STATUSES, VALID_ACTIONS, getFlashcardCapacityOwner,
+  parseUnlockCondition, isTaskEffectivelyLocked,
 } from '../services/rotationPlannerPlans/index.js'
 import { computeReviewWorkloadMap } from '../services/flashcardWorkload.js'
 import { computeSafeNewCardForecast } from '../services/flashcardForecast.js'
@@ -768,6 +769,21 @@ export async function handleUpdateTask(request, env, user) {
     }
 
     const task = mapTaskDto(taskRow)
+    if (task.unlockCondition) {
+      const parsedCondition = parseUnlockCondition(task.unlockCondition)
+      let lockState = null
+      if (parsedCondition?.canonicalTopicId) {
+        const [topics, tasks] = await Promise.all([
+          loadTopicsByPlan(env, planId),
+          loadTasksByPlan(env, planId),
+        ])
+        const derived = deriveActualTopicStates(topics, tasks, { asOfDate: occurredOn })
+        lockState = derived.find(s => s.canonicalTopicId === parsedCondition.canonicalTopicId) || null
+      }
+      if (isTaskEffectivelyLocked(task, lockState)) {
+        return errorResponse('TASK_LOCKED', 'This task is locked until its prerequisite is completed.', 409)
+      }
+    }
     let updatedTask
     try {
       ({ updatedTask, recalculationRequired } = applyTaskUpdate(task, action, payload, { occurredAt, occurredOn }))

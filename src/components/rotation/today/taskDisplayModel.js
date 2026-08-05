@@ -78,6 +78,7 @@ export function getTaskDisplayModel(task, todayKey, topic = null) {
     mode: task.mode,
 
     metadataJson: task.metadataJson,
+    unlockCondition: task.unlockCondition ?? null,
 
     // Flashcard review fields (passed through from backend)
     dueCardCount: task.dueCardCount ?? task.metadataJson?.dueCardCount ?? 0,
