@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import V2PlanDetail from '../V2PlanDetail'
+import { queryKeys } from '../../../lib/queryKeys'
 
-const { mockUseRotationPlanDetail, mockUseQuery, mockUsePlannerTaskMutations } = vi.hoisted(() => {
+const { mockUseRotationPlanDetail, mockUseQuery, mockUsePlannerTaskMutations, mockUseMutation, invalidateQueriesSpy } = vi.hoisted(() => {
   const mockUseQueryFn = vi.fn(() => ({ data: null, isLoading: false, error: null }))
   const mockRotationPlanDetailFn = vi.fn(() => ({
     data: { plan: { id: 'p1', revision: 1 }, topics: [], tasks: [], availability: [], sourcePace: null },
@@ -27,7 +28,9 @@ const { mockUseRotationPlanDetail, mockUseQuery, mockUsePlannerTaskMutations } =
     error: null,
     recalculationState: null,
   }))
-  return { mockUseRotationPlanDetail: mockRotationPlanDetailFn, mockUseQuery: mockUseQueryFn, mockUsePlannerTaskMutations: mockMutationsFn }
+  const mockUseMutationFn = vi.fn(() => ({ mutate: vi.fn(), isPending: false }))
+  const invalidateQueriesSpy = vi.fn()
+  return { mockUseRotationPlanDetail: mockRotationPlanDetailFn, mockUseQuery: mockUseQueryFn, mockUsePlannerTaskMutations: mockMutationsFn, mockUseMutation: mockUseMutationFn, invalidateQueriesSpy }
 })
 
 vi.mock('react-router-dom', () => ({
@@ -57,7 +60,29 @@ vi.mock('../today/useTaskAttachment', () => ({
 
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal()
-  return { ...actual, useQuery: mockUseQuery, useQueryClient: () => ({ invalidateQueries: vi.fn(), getQueryData: vi.fn() }) }
+  return {
+    ...actual,
+    useQuery: mockUseQuery,
+    useMutation: mockUseMutation,
+    useQueryClient: () => ({ invalidateQueries: invalidateQueriesSpy, getQueryData: vi.fn() }),
+  }
+})
+
+vi.mock('../../ui/Dropdown/Dropdown', () => {
+  const DropdownMock = ({ children }) => <div data-testid="plan-actions-dropdown">{children}</div>
+  DropdownMock.Trigger = ({ children }) => <div>{children}</div>
+  DropdownMock.Content = ({ children }) => <div>{children}</div>
+  DropdownMock.Item = ({ children, onSelect }) => <button type="button" onClick={onSelect}>{children}</button>
+  return { default: DropdownMock }
+})
+
+vi.mock('../../ui/Modal/Modal', () => {
+  const ModalMock = ({ open, children }) => open ? <div data-testid="modal">{children}</div> : null
+  ModalMock.Title = ({ children }) => <h2>{children}</h2>
+  ModalMock.Description = ({ children }) => <p>{children}</p>
+  ModalMock.Close = () => null
+  ModalMock.Footer = ({ children }) => <div>{children}</div>
+  return { default: ModalMock }
 })
 
 vi.mock('../today/TodayView', () => ({
@@ -165,6 +190,7 @@ describe('V2PlanDetail', () => {
       refetch: vi.fn(),
     })
     mockUseQuery.mockReturnValue({ data: null, isLoading: false, error: null })
+    mockUseMutation.mockReturnValue({ mutate: vi.fn(), isPending: false })
     mockUsePlannerTaskMutations.mockReturnValue({
       isPending: false,
       currentRevision: 1,
@@ -479,6 +505,191 @@ describe('V2PlanDetail', () => {
       })
       render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
       expect(screen.getByTestId('tabs')).toBeInTheDocument()
+    })
+  })
+
+  describe('rename plan', () => {
+    it('opens the rename modal prefilled with the current displayName', async () => {
+      const user = userEvent.setup()
+      mockUseRotationPlanDetail.mockReturnValue({
+        data: { plan: { id: 'p1', revision: 1, displayName: 'Cardio — Jan' }, topics: [], tasks: [], availability: [], sourcePace: null },
+        isLoading: false,
+        error: null,
+      })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: 'Plan actions' }))
+      await user.click(screen.getByRole('button', { name: /Rename Plan/i }))
+      expect(screen.getByTestId('modal')).toBeInTheDocument()
+      expect(screen.getByLabelText('Plan name')).toHaveValue('Cardio — Jan')
+    })
+
+    it('submits rename with displayName, expectedRevision, and clientRequestId', async () => {
+      const user = userEvent.setup()
+      const mutate = vi.fn()
+      mockUseMutation.mockReturnValue({ mutate, isPending: false })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: 'Plan actions' }))
+      await user.click(screen.getByRole('button', { name: /Rename Plan/i }))
+      await user.clear(screen.getByLabelText('Plan name'))
+      await user.type(screen.getByLabelText('Plan name'), 'New Cardio Name')
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+      expect(mutate).toHaveBeenCalledTimes(1)
+      const args = mutate.mock.calls[0][0]
+      expect(args.displayName).toBe('New Cardio Name')
+      expect(args.expectedRevision).toBe(1)
+      expect(typeof args.clientRequestId).toBe('string')
+    })
+
+    it('disables Save while the rename is pending', async () => {
+      const user = userEvent.setup()
+      mockUseMutation.mockReturnValue({ mutate: vi.fn(), isPending: true })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: 'Plan actions' }))
+      await user.click(screen.getByRole('button', { name: /Rename Plan/i }))
+      expect(screen.getByRole('button', { name: /Saving/ })).toBeDisabled()
+    })
+
+    it('shows error message when rename fails', async () => {
+      const user = userEvent.setup()
+      mockUseMutation.mockImplementation(({ onError }) => ({
+        mutate: () => onError(new Error('Rename failed')),
+        isPending: false,
+      }))
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: 'Plan actions' }))
+      await user.click(screen.getByRole('button', { name: /Rename Plan/i }))
+      await user.type(screen.getByLabelText('Plan name'), 'New Cardio Name')
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+      expect(screen.getByText('Rename failed')).toBeInTheDocument()
+    })
+
+    it('closes the modal and shows a success toast when rename succeeds', async () => {
+      const user = userEvent.setup()
+      mockUseMutation.mockImplementation(({ onSuccess }) => ({
+        mutate: () => onSuccess({ ok: true }),
+        isPending: false,
+      }))
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: 'Plan actions' }))
+      await user.click(screen.getByRole('button', { name: /Rename Plan/i }))
+      await user.type(screen.getByLabelText('Plan name'), 'New Cardio Name')
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+      expect(screen.queryByTestId('modal')).not.toBeInTheDocument()
+      expect(screen.getByTestId('toast')).toBeInTheDocument()
+      expect(screen.getByTestId('toast-title')).toHaveTextContent('Plan renamed')
+    })
+  })
+
+  describe('delete plan', () => {
+    function mockDeleteMutation({ error = false, isPending = false, mutate } = {}) {
+      mockUseMutation.mockImplementation((config) => {
+        const isDelete = typeof config.mutationFn === 'function' && config.mutationFn.toString().includes('apiDelete')
+        if (isDelete) {
+          const runMutate = mutate || (() => {
+            if (error) config.onError(new Error('Delete failed'))
+            else config.onSuccess({ success: true })
+          })
+          return { mutate: runMutate, isPending }
+        }
+        return { mutate: vi.fn(), isPending: false }
+      })
+    }
+
+    async function openDeleteDialog(user) {
+      await user.click(screen.getByRole('button', { name: 'Plan actions' }))
+      await user.click(screen.getByRole('button', { name: 'Delete Plan' }))
+    }
+
+    it('exposes delete only through the kebab (plan actions) menu', () => {
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+      const dropdown = screen.getByTestId('plan-actions-dropdown')
+      expect(within(dropdown).getByRole('button', { name: 'Delete Plan' })).toBeInTheDocument()
+    })
+
+    it('shows no delete controls when the plan cannot be loaded', () => {
+      mockUseRotationPlanDetail.mockReturnValue({ data: null, isLoading: false, error: null })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByText(/Plan not found/i)).toBeInTheDocument()
+      expect(screen.queryByTestId('plan-actions-dropdown')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Delete Plan' })).not.toBeInTheDocument()
+    })
+
+    it('shows the delete confirmation dialog with the plan name', async () => {
+      const user = userEvent.setup()
+      mockUseRotationPlanDetail.mockReturnValue({
+        data: { plan: { id: 'p1', revision: 1, displayName: 'Cardio — Jan' }, topics: [], tasks: [], availability: [], sourcePace: null },
+        isLoading: false,
+        error: null,
+      })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await openDeleteDialog(user)
+      const modal = screen.getByTestId('modal')
+      expect(within(modal).getByRole('heading', { name: 'Delete Plan' })).toBeInTheDocument()
+      expect(within(modal).getByText('Cardio — Jan')).toBeInTheDocument()
+    })
+
+    it('warns that deletion permanently removes the plan and cannot be undone', async () => {
+      const user = userEvent.setup()
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await openDeleteDialog(user)
+      const modal = screen.getByTestId('modal')
+      expect(within(modal).getByText(/permanently removes/i)).toBeInTheDocument()
+      expect(within(modal).getByText(/cannot be undone/i)).toBeInTheDocument()
+    })
+
+    it('calls the delete mutation when the user confirms', async () => {
+      const user = userEvent.setup()
+      const deleteMutate = vi.fn()
+      mockDeleteMutation({ mutate: deleteMutate })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await openDeleteDialog(user)
+      await user.click(within(screen.getByTestId('modal')).getByRole('button', { name: 'Delete Plan' }))
+      expect(deleteMutate).toHaveBeenCalledTimes(1)
+    })
+
+    it('disables the confirm button while the delete is pending', async () => {
+      const user = userEvent.setup()
+      mockDeleteMutation({ isPending: true })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await openDeleteDialog(user)
+      expect(within(screen.getByTestId('modal')).getByRole('button', { name: /Deleting/ })).toBeDisabled()
+    })
+
+    it('closes the dialog, invalidates caches, toasts, and navigates back on success', async () => {
+      const user = userEvent.setup()
+      const onBack = vi.fn()
+      mockDeleteMutation()
+      render(<V2PlanDetail planId="p1" onBack={onBack} />)
+      await openDeleteDialog(user)
+      await user.click(within(screen.getByTestId('modal')).getByRole('button', { name: 'Delete Plan' }))
+      expect(screen.queryByTestId('modal')).not.toBeInTheDocument()
+      expect(screen.getByTestId('toast')).toBeInTheDocument()
+      expect(screen.getByTestId('toast-title')).toHaveTextContent('Plan deleted')
+      expect(onBack).toHaveBeenCalledTimes(1)
+      expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.rotations.plans() })
+      expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.goals.list() })
+      expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.tracking.all })
+    })
+
+    it('shows an inline error and keeps the dialog open when delete fails', async () => {
+      const user = userEvent.setup()
+      mockDeleteMutation({ error: true })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await openDeleteDialog(user)
+      await user.click(within(screen.getByTestId('modal')).getByRole('button', { name: 'Delete Plan' }))
+      expect(within(screen.getByTestId('modal')).getByText('Delete failed')).toBeInTheDocument()
+      expect(screen.getByTestId('modal')).toBeInTheDocument()
+    })
+
+    it('keeps the pending state visible while the delete request is in flight', async () => {
+      const user = userEvent.setup()
+      mockDeleteMutation({ isPending: true })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await openDeleteDialog(user)
+      expect(screen.getByTestId('modal')).toBeInTheDocument()
+      expect(within(screen.getByTestId('modal')).getByRole('button', { name: /Deleting/ })).toBeDisabled()
+      expect(within(screen.getByTestId('modal')).getByText(/deleting/i)).toBeInTheDocument()
     })
   })
 })

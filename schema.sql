@@ -1070,6 +1070,7 @@ CREATE TABLE IF NOT EXISTS rotation_planner_plans (
     CHECK (status IN ('draft', 'active', 'paused', 'completed', 'archived')),
   client_request_id TEXT NOT NULL,
   request_fingerprint TEXT NOT NULL,
+  display_name TEXT,
   settings_json TEXT DEFAULT '{}',
   revision INTEGER NOT NULL DEFAULT 0,
   last_recalculated_at TEXT,

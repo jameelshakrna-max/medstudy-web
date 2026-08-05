@@ -6,6 +6,7 @@ import {
 } from './dtoMappers.js'
 import { getStudySource } from '../../data/studySources/sourceRegistry.js'
 import { getSharedTopicDefinition } from '../../data/studySources/sharedTopicKeys.js'
+import { getRotationById } from '../../data/studySources/rotationRegistry.js'
 import { generatePlanPreview } from './previewPipeline.js'
 import { createEmptyFlashcardForecast } from './forecastIntegration.js'
 const TASK_METADATA_FIELDS = {
@@ -39,7 +40,7 @@ function generateIds(resolvedTopics, previewTasks) {
 export async function persistPlanBatch(env, userId, validatedInput, resolvedTopics, preview, clientRequestId, fingerprint, creationForecast) {
   const source = getStudySource(validatedInput.sourceId)
   const sourceVersion = source?.version || '1.0.0'
-  const sourceTitle = source?.title || validatedInput.sourceId
+  const sourceTitle = source?.source?.title || validatedInput.sourceId
 
   const { planId, availabilityIds, topicIds, taskIds } = generateIds(resolvedTopics, preview.tasks)
 
@@ -126,6 +127,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     maximumActiveTopics: validatedInput.maximumActiveTopics,
     status: 'draft',
     usesFlashcardCapacity: 0,
+    displayName: validatedInput.displayName,
     settingsJson: parsedSettingsJson,
     createdAt,
     updatedAt: createdAt,
@@ -219,9 +221,9 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
       preferred_questions_per_day, minimum_questions_per_session,
       maximum_questions_per_day, average_minutes_per_question,
       buffer_percentage, maximum_active_topics,
-      status, uses_flashcard_capacity, client_request_id, request_fingerprint, settings_json,
+      status, uses_flashcard_capacity, display_name, client_request_id, request_fingerprint, settings_json,
       created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0, ?, ?, ?, ?, ?, ?)`
   ).bind(
     planId, userId, validatedInput.rotationId, validatedInput.sourceId, sourceVersion,
     validatedInput.startDate, validatedInput.endDate, validatedInput.examDate || null,
@@ -229,7 +231,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     validatedInput.preferredQuestionsPerDay, validatedInput.minimumQuestionsPerSession,
     validatedInput.maximumQuestionsPerDay, validatedInput.averageMinutesPerQuestion,
     validatedInput.bufferPercentage, validatedInput.maximumActiveTopics,
-    clientRequestId, fingerprint, settingsJson,
+    validatedInput.displayName, clientRequestId, fingerprint, settingsJson,
     createdAt, createdAt
   )
 
@@ -495,9 +497,9 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
           preferred_questions_per_day, minimum_questions_per_session,
           maximum_questions_per_day, average_minutes_per_question,
           buffer_percentage, maximum_active_topics,
-          status, uses_flashcard_capacity, client_request_id, request_fingerprint, settings_json,
+          status, uses_flashcard_capacity, display_name, client_request_id, request_fingerprint, settings_json,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0, ?, ?, ?, ?, ?, ?)`
       ).bind(
         planId, userId, validatedInput.rotationId, validatedInput.sourceId, sourceVersion,
         validatedInput.startDate, validatedInput.endDate, validatedInput.examDate || null,
@@ -505,7 +507,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
         validatedInput.preferredQuestionsPerDay, validatedInput.minimumQuestionsPerSession,
         validatedInput.maximumQuestionsPerDay, validatedInput.averageMinutesPerQuestion,
         validatedInput.bufferPercentage, validatedInput.maximumActiveTopics,
-        clientRequestId, fingerprint, retrySettingsJson,
+        validatedInput.displayName, clientRequestId, fingerprint, retrySettingsJson,
         createdAt, createdAt
       )
 
@@ -541,7 +543,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
 
 export async function loadPlanFromDb(env, planId, userId) {
   const { results: planRows } = await env.DB.prepare(
-    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, uses_flashcard_capacity, settings_json, created_at, updated_at, revision, last_recalculated_at, stale_at FROM rotation_planner_plans WHERE id = ? AND user_id = ?'
+    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, uses_flashcard_capacity, settings_json, created_at, updated_at, revision, last_recalculated_at, stale_at, display_name FROM rotation_planner_plans WHERE id = ? AND user_id = ?'
   ).bind(planId, userId).all()
 
   if (!planRows.length) return null
@@ -560,9 +562,15 @@ export async function loadPlanFromDb(env, planId, userId) {
 
   return {
     plan: (() => {
-      const dto = mapPlanDto(planRows[0])
       const source = getStudySource(planRows[0].source_id)
-      dto.sourceTitle = source?.title || planRows[0].source_id
+      const sourceTitle = source?.source?.title || planRows[0].source_id
+      const rotation = getRotationById(planRows[0].rotation_id)
+      const dto = mapPlanDto(
+        planRows[0],
+        sourceTitle,
+        rotation?.displayLabel || null
+      )
+      dto.sourceTitle = sourceTitle
       return dto
     })(),
     availability: availRows.map(r => mapAvailabilityDto(r)),
@@ -573,7 +581,7 @@ export async function loadPlanFromDb(env, planId, userId) {
 
 export async function loadPlanSummaries(env, userId) {
   const { results: planRows } = await env.DB.prepare(
-    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, uses_flashcard_capacity, settings_json, created_at, updated_at, revision, last_recalculated_at, stale_at FROM rotation_planner_plans WHERE user_id = ? ORDER BY created_at DESC'
+    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, uses_flashcard_capacity, settings_json, created_at, updated_at, revision, last_recalculated_at, stale_at, display_name FROM rotation_planner_plans WHERE user_id = ? ORDER BY created_at DESC'
   ).bind(userId).all()
 
   const summaries = []
@@ -589,14 +597,15 @@ export async function loadPlanSummaries(env, userId) {
     ).bind(planId).all()
 
     const source = getStudySource(row.source_id)
-    const sourceTitle = source?.title || row.source_id
+    const sourceTitle = source?.source?.title || row.source_id
+    const rotation = getRotationById(row.rotation_id)
 
     summaries.push(mapPlanSummaryDto(row, sourceTitle, {
       topicCount: topicCounts[0]?.total ?? 0,
       completedTopicCount: topicCounts[0]?.completed ?? 0,
       taskCount: taskCounts[0]?.total ?? 0,
       completedTaskCount: taskCounts[0]?.completed ?? 0,
-    }))
+    }, rotation?.displayLabel || null))
   }
 
   return summaries

@@ -20,6 +20,7 @@ function makeRequest(overrides = {}) {
 const VALID_BODY = {
   sourceId: 'step-up-medicine-6e-2024',
   rotationId: 'cardiology',
+  displayName: 'Cardiology — August 2026',
   startDate: '2026-08-01',
   endDate: '2026-08-14',
   studyStyle: 'active',
@@ -606,6 +607,7 @@ describe('ownership retry preserves forecastSettings', () => {
     return {
       sourceId: 'step-up-medicine-6e-2024',
       rotationId: 'cardiology',
+      displayName: 'Cardiology — August 2026',
       startDate: '2026-08-01',
       endDate: '2026-08-14',
       examDate: null,

@@ -368,6 +368,7 @@ describe('Phase 5 — persistence retry flashcard ownership', () => {
     return {
       sourceId: 'step-up-medicine-6e-2024',
       rotationId: 'cardiology',
+      displayName: 'Cardiology — January 2026',
       startDate: '2026-01-05',
       endDate: '2026-01-11',
       examDate: null,

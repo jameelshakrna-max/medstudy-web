@@ -330,6 +330,26 @@ describe('ActiveRotationSection', () => {
     expect(screen.queryByText('cardiology')).not.toBeInTheDocument()
   })
 
+  it('prefers displayName over sourceTitle in the Goals title and link', async () => {
+    mockApi.plans = [{ ...PLAN_ACTIVE, displayName: 'Cardiology — January 2026' }]
+    renderSection()
+
+    expect(await screen.findByText('Cardiology — January 2026')).toBeInTheDocument()
+    expect(screen.queryByText('Cardiology Step 1')).not.toBeInTheDocument()
+    const link = screen.getByRole('link', { name: 'Open Cardiology — January 2026 rotation plan' })
+    expect(link).toHaveAttribute('href', '/rotations?plan=p-active')
+  })
+
+  it('shows the planned name without any delete controls in Goals', async () => {
+    mockApi.plans = [{ ...PLAN_ACTIVE, displayName: 'Cardiology — January 2026' }]
+    renderSection()
+
+    expect(await screen.findByText('Cardiology — January 2026')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Open Cardiology — January 2026 rotation plan/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /delete plan/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/permanently removes/i)).not.toBeInTheDocument()
+  })
+
   it('renders overall, learning, and UWorld progress', async () => {
     renderSection()
 

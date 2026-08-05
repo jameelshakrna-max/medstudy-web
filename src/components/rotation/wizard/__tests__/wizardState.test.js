@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { INITIAL_FORM, PREVIEW_STEP, DRAFT_KEY, saveDraft, loadDraft, clearDraft, onSourceChange, onRotationChange, onTopicsLoaded } from '../wizardState'
+import { INITIAL_FORM, PREVIEW_STEP, DRAFT_KEY, saveDraft, loadDraft, clearDraft, onSourceChange, onRotationChange, onTopicsLoaded, buildDefaultPlanName } from '../wizardState'
 
 describe('INITIAL_FORM', () => {
   it('has correct default values', () => {
@@ -170,5 +170,34 @@ describe('onTopicsLoaded', () => {
     expect(result.topics[0].alreadyCompletedLearningPercentage).toBe(0)
     expect(result.topics[0].alreadyCompletedQuestionCount).toBe(0)
     expect(result.topics[0].incorrectQuestionsRemaining).toBe(0)
+  })
+})
+
+describe('buildDefaultPlanName', () => {
+  const rotations = [{ id: 'cardiology', displayLabel: 'Cardiology' }]
+
+  it('builds "Label — Month Year" from rotation label and start date', () => {
+    const form = { ...INITIAL_FORM, rotationId: 'cardiology', startDate: '2026-01-05' }
+    expect(buildDefaultPlanName(form, rotations)).toBe('Cardiology — January 2026')
+  })
+
+  it('returns empty when rotation label is missing', () => {
+    const form = { ...INITIAL_FORM, rotationId: 'unknown', startDate: '2026-01-05' }
+    expect(buildDefaultPlanName(form, rotations)).toBe('')
+  })
+
+  it('returns empty when startDate is missing', () => {
+    const form = { ...INITIAL_FORM, rotationId: 'cardiology', startDate: '' }
+    expect(buildDefaultPlanName(form, rotations)).toBe('')
+  })
+
+  it('returns empty when startDate is not a valid date', () => {
+    const form = { ...INITIAL_FORM, rotationId: 'cardiology', startDate: 'not-a-date' }
+    expect(buildDefaultPlanName(form, rotations)).toBe('')
+  })
+
+  it('matches the month of the start date regardless of day', () => {
+    const form = { ...INITIAL_FORM, rotationId: 'cardiology', startDate: '2026-08-31' }
+    expect(buildDefaultPlanName(form, rotations)).toBe('Cardiology — August 2026')
   })
 })

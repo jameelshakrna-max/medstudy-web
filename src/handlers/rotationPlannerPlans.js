@@ -15,10 +15,10 @@ import {
   loadTopicsByPlan, loadTasksByPlan, loadAvailabilityByPlan,
   checkTaskIdempotency, checkPlanIdempotency,
   classifyCreateBatchError, classifyBatchError, buildTaskMutationBatch, executeTaskMutationBatch,
-  applyTaskUpdate, calculateTaskUpdateFingerprint, calculateRecalculationFingerprint,
+  applyTaskUpdate,   calculateTaskUpdateFingerprint, calculateRecalculationFingerprint, calculateRenameFingerprint,
   recalculatePlan, deriveActualTopicStates, persistRecalculationBatch,
   TERMINAL_STATUSES, VALID_ACTIONS, getFlashcardCapacityOwner,
-  parseUnlockCondition, isTaskEffectivelyLocked,
+  parseUnlockCondition, isTaskEffectivelyLocked, validateDisplayName,
 } from '../services/rotationPlannerPlans/index.js'
 import { computeReviewWorkloadMap } from '../services/flashcardWorkload.js'
 import { computeSafeNewCardForecast } from '../services/flashcardForecast.js'
@@ -139,7 +139,8 @@ export async function handlePreviewRotationPlan(request, env, user) {
       scheduleFingerprint: fingerprint,
       rotationId: validation.parsed.rotationId,
       sourceId: validation.parsed.sourceId,
-      sourceTitle: source?.title || validation.parsed.sourceId,
+      sourceTitle: source?.source?.title || validation.parsed.sourceId,
+      displayName: validation.parsed.displayName,
       sourceVersion,
       startDate: validation.parsed.startDate,
       endDate: validation.parsed.endDate,
@@ -418,6 +419,124 @@ export async function handleDeleteRotationPlan(request, env, user) {
   } catch (e) {
     log('rotation_planner:delete_plan:error', { message: e.message, stack: e.stack?.slice(0, 500) })
     return errorResponse('INTERNAL_ERROR', 'Failed to delete plan.', 500)
+  }
+}
+
+export async function handleRenameRotationPlan(request, env, user) {
+  let clientRequestId, requestFingerprint
+  try {
+    const url = new URL(request.url)
+    const pathParts = url.pathname.split('/')
+    const planId = pathParts[pathParts.length - 1]
+
+    if (!planId) return errorResponse('VALIDATION_ERROR', 'Plan ID is required.', 400)
+
+    const body = await request.json()
+
+    const nameCheck = validateDisplayName(body.displayName)
+    if (!nameCheck.valid) {
+      return errorResponse('VALIDATION_ERROR', nameCheck.errors.map(e => e.message).join('; '), 400)
+    }
+
+    if (!Number.isInteger(body.expectedRevision) || body.expectedRevision < 0) {
+      return errorResponse('VALIDATION_ERROR', 'expectedRevision must be a non-negative integer.', 400)
+    }
+
+    clientRequestId = request.headers.get('Idempotency-Key') ?? body.clientRequestId ?? null
+    if (!clientRequestId || typeof clientRequestId !== 'string' || clientRequestId.trim() === '') {
+      return errorResponse('IDEMPOTENCY_KEY_REQUIRED', 'Idempotency-Key header or clientRequestId body field is required.', 400)
+    }
+
+    requestFingerprint = await calculateRenameFingerprint(user.sub, planId, nameCheck.value, body.expectedRevision)
+
+    const idemCheck = await checkPlanIdempotency(env, user.sub, clientRequestId)
+    if (idemCheck.status === 'found') {
+      if (idemCheck.existingFingerprint === requestFingerprint) {
+        return json(idemCheck.resultJson)
+      }
+      return errorResponse('IDEMPOTENCY_CONFLICT', 'Same idempotency key with different input.', 409)
+    }
+
+    const planRow = await loadPlanById(env, planId, user.sub)
+    if (!planRow) return errorResponse('PLAN_NOT_FOUND', 'Plan not found.', 404)
+
+    if (planRow.revision !== body.expectedRevision) {
+      return errorResponse('REVISION_CONFLICT', 'Plan revision mismatch. Reload the plan and try again.', 409)
+    }
+
+    const resultingRevision = body.expectedRevision + 1
+    const mutationId = crypto.randomUUID()
+
+    // Reuse the current plan snapshot so the stored result_json matches the
+    // loadPlanFromDb shape; the rename UPDATE then overlays the committed row.
+    const current = await loadPlanFromDb(env, planId, user.sub)
+    const baseResultJson = JSON.stringify(current)
+
+    // Claim the idempotent rename mutation first (guarded by the expected
+    // revision) so a duplicate clientRequestId trips the UNIQUE index instead
+    // of silently no-op'ing. Batch statements run sequentially, so the claim
+    // MUST precede the revision bump or the EXISTS guard would never match.
+    const mutationStmt = env.DB.prepare(
+      `INSERT INTO ${PLANNER_TABLES.planMutations} (
+        id, plan_id, user_id, client_request_id, request_fingerprint,
+        expected_revision, resulting_revision, operation, result_json
+      ) SELECT ?, ?, ?, ?, ?, ?, ?, 'rename', ?
+      WHERE EXISTS (SELECT 1 FROM ${PLANNER_TABLES.plans} WHERE id = ? AND user_id = ? AND revision = ?)`
+    ).bind(mutationId, planId, user.sub, clientRequestId, requestFingerprint, body.expectedRevision, resultingRevision, JSON.stringify(current), planId, user.sub, body.expectedRevision)
+
+    const renameStmt = env.DB.prepare(
+      `UPDATE ${PLANNER_TABLES.plans}
+       SET display_name = ?, revision = revision + 1, updated_at = datetime('now')
+       WHERE id = ? AND user_id = ? AND revision = ?
+       AND EXISTS (SELECT 1 FROM ${PLANNER_TABLES.planMutations} WHERE id = ?)`
+    ).bind(nameCheck.value, planId, user.sub, body.expectedRevision, mutationId)
+
+    const resultJsonStmt = env.DB.prepare(
+      `UPDATE ${PLANNER_TABLES.planMutations}
+       SET result_json = (
+         SELECT json_set(
+           ?,
+           '$.plan.revision', p.revision,
+           '$.plan.displayName', p.display_name,
+           '$.plan.updatedAt', p.updated_at
+         )
+         FROM ${PLANNER_TABLES.plans} p
+         WHERE p.id = ? AND p.user_id = ?
+       )
+       WHERE id = ? AND plan_id = ? AND user_id = ?`
+    ).bind(baseResultJson, planId, user.sub, mutationId, planId, user.sub)
+
+    const batchResults = await env.DB.batch([mutationStmt, renameStmt, resultJsonStmt])
+
+    // CAS: if the claim INSERT affected zero rows the revision moved since the
+    // client read it — return conflict (or the stored replay) instead of a
+    // silent success.
+    if ((batchResults[0]?.meta?.changes ?? 0) === 0) {
+      const recheck = await checkPlanIdempotency(env, user.sub, clientRequestId)
+      if (recheck.status === 'found' && recheck.existingFingerprint === requestFingerprint) {
+        return json(recheck.resultJson)
+      }
+      return errorResponse('REVISION_CONFLICT', 'Plan revision mismatch. Reload the plan and try again.', 409)
+    }
+
+    const plan = await loadPlanFromDb(env, planId, user.sub)
+    return json(plan)
+  } catch (e) {
+    log('rotation_planner:rename_plan:error', {
+      message: e.message,
+      stack: e.stack?.slice(0, 500),
+      userId: user?.sub,
+    })
+    if (clientRequestId && requestFingerprint && e.message && e.message.includes('UNIQUE constraint failed')) {
+      try {
+        const classified = await classifyCreateBatchError(env, user.sub, clientRequestId, requestFingerprint)
+        if (classified.type === 'replay') return json(classified.resultJson)
+        if (classified.type === 'IDEMPOTENCY_CONFLICT') {
+          return errorResponse('IDEMPOTENCY_CONFLICT', 'Same idempotency key with different input.', 409)
+        }
+      } catch (_) {}
+    }
+    return errorResponse('INTERNAL_ERROR', 'Failed to rename plan.', 500)
   }
 }
 

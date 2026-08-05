@@ -21,6 +21,23 @@ function validateDateStep(form) {
   return errors
 }
 
+const CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F]/
+
+function validatePlanNameStep(form) {
+  const errors = []
+  const name = typeof form.planName === 'string' ? form.planName.trim() : ''
+  if (name === '') {
+    errors.push('Plan name is required.')
+  }
+  if (name.length > 100) {
+    errors.push('Plan name must be 100 characters or fewer.')
+  }
+  if (CONTROL_CHAR_PATTERN.test(name)) {
+    errors.push('Plan name cannot contain control characters.')
+  }
+  return errors
+}
+
 function validateAvailabilityStep(form) {
   const errors = []
   if (!Array.isArray(form.availability) || form.availability.length !== 7) {
@@ -168,22 +185,23 @@ const VALIDATORS = {
     return errors
   },
   1: validateDateStep,
-  2: validateAvailabilityStep,
-  3: () => [],
-  4: (form) => {
+  2: validatePlanNameStep,
+  3: validateAvailabilityStep,
+  4: () => [],
+  5: (form) => {
     const errors = []
     if (!['focused', 'active', 'detailed_notes'].includes(form.studyStyle)) {
       errors.push('studyStyle must be "focused", "active", or "detailed_notes".')
     }
     return errors
   },
-  5: () => [],
-  6: validateTopicsStep,
-  7: validateQuestionConfigStep,
-   8: validateSchedulingConfigStep,
-   9: validateFlashcardSettingsStep,
-   10: () => [],
-   11: () => [],
+  6: () => [],
+  7: validateTopicsStep,
+  8: validateQuestionConfigStep,
+  9: validateSchedulingConfigStep,
+  10: validateFlashcardSettingsStep,
+  11: () => [],
+  12: () => [],
 }
 
 export function validateStep(step, form, topics) {

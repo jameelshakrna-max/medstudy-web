@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost } from '../../lib/api'
 import { queryKeys } from '../../lib/queryKeys'
@@ -7,12 +7,13 @@ import { ChevronRight, ChevronLeft } from 'lucide-react'
 import styles from './PlanCreationForm.module.css'
 import '../../pages/Page.module.css'
 
-import { INITIAL_FORM, PREVIEW_STEP, saveDraft, loadDraft, clearDraft, onSourceChange, onRotationChange, onTopicsLoaded } from './wizard/wizardState'
+import { INITIAL_FORM, PREVIEW_STEP, saveDraft, loadDraft, clearDraft, onSourceChange, onRotationChange, onTopicsLoaded, buildDefaultPlanName } from './wizard/wizardState'
 import { validateStep } from './wizard/wizardValidation'
 import { buildPreviewPayload, buildCreatePayload, normalizeSourcesResponse, normalizeRotationsResponse, normalizeTopicsResponse } from './wizard/buildPlanRequest'
 
 import StepSelectRotation from './wizard/StepSelectRotation'
 import StepSelectDates from './wizard/StepSelectDates'
+import StepPlanName from './wizard/StepPlanName'
 import StepAvailability from './wizard/StepAvailability'
 import StepSourceSummary from './wizard/StepSourceSummary'
 import StepStudyStyle from './wizard/StepStudyStyle'
@@ -25,11 +26,11 @@ import StepPreview from './wizard/StepPreview'
 import StepConfirm from './wizard/StepConfirm'
 
 const STEP_NAMES = [
-  'Rotation', 'Dates', 'Availability', 'Source', 'Study Style',
+  'Rotation', 'Dates', 'Plan Name', 'Availability', 'Source', 'Study Style',
   'Topics', 'UWorld', 'Questions', 'Scheduling', 'Flashcards', 'Preview', 'Confirm',
 ]
 
-const TOTAL_STEPS = 12
+const TOTAL_STEPS = 13
 
 export default function PlanCreationForm({ open, onClose, onCreated }) {
   const queryClient = useQueryClient()
@@ -73,6 +74,19 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
       setForm(current => onTopicsLoaded(current, apiTopics))
     }
   }, [apiTopics, form.rotationId])
+
+  // Suggest a default plan name once when the Plan Name step is reached
+  const lastSuggestedKeyRef = useRef(null)
+  useEffect(() => {
+    if (step !== 2) return
+    const key = `${form.rotationId}|${form.startDate}`
+    if (lastSuggestedKeyRef.current === key) return
+    if ((form.planName ?? '').trim() !== '') return
+    const suggested = buildDefaultPlanName(form, rotations)
+    if (!suggested) return
+    lastSuggestedKeyRef.current = key
+    setForm(current => ({ ...current, planName: suggested }))
+  }, [step, form.rotationId, form.startDate, form.planName, rotations])
 
   // Persist draft on form/step change
   useEffect(() => {
@@ -235,16 +249,17 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
         <div className={styles.stepContainer}>
           {step === 0 && <StepSelectRotation form={form} onSourceChange={handleSourceChange} onRotationChange={handleRotationChange} sources={sources} sourcesLoading={sourcesLoading} rotations={rotations} rotationsLoading={rotationsLoading} errors={validationErrors} />}
           {step === 1 && <StepSelectDates form={form} onFormChange={handleFormChange} errors={validationErrors} />}
-          {step === 2 && <StepAvailability form={form} onFormChange={handleSchedulingChange} errors={validationErrors} />}
-          {step === 3 && <StepSourceSummary form={form} topics={form.topics} />}
-          {step === 4 && <StepStudyStyle form={form} onFormChange={handleSchedulingChange} />}
-          {step === 5 && <StepReviewTopics form={form} topics={form.topics} />}
-          {step === 6 && <StepUWorldQuestions form={form} onFormChange={handleSchedulingChange} />}
-          {step === 7 && <StepQuestionConfig form={form} onFormChange={handleSchedulingChange} />}
-          {step === 8 && <StepSchedulingConfig form={form} onFormChange={handleSchedulingChange} />}
-          {step === 9 && <StepFlashcardSettings form={form} onFormChange={handleSchedulingChange} />}
-          {step === 10 && <StepPreview preview={preview} previewLoading={previewMutation.isPending} previewError={previewMutation.error} onRetry={handleRetryPreview} />}
-          {step === 11 && <StepConfirm form={form} preview={preview} overloadAccepted={overloadAccepted} onOverloadChange={setOverloadAccepted} />}
+          {step === 2 && <StepPlanName form={form} onFormChange={handleFormChange} errors={validationErrors} />}
+          {step === 3 && <StepAvailability form={form} onFormChange={handleSchedulingChange} errors={validationErrors} />}
+          {step === 4 && <StepSourceSummary form={form} topics={form.topics} />}
+          {step === 5 && <StepStudyStyle form={form} onFormChange={handleSchedulingChange} />}
+          {step === 6 && <StepReviewTopics form={form} topics={form.topics} />}
+          {step === 7 && <StepUWorldQuestions form={form} onFormChange={handleSchedulingChange} />}
+          {step === 8 && <StepQuestionConfig form={form} onFormChange={handleSchedulingChange} />}
+          {step === 9 && <StepSchedulingConfig form={form} onFormChange={handleSchedulingChange} />}
+          {step === 10 && <StepFlashcardSettings form={form} onFormChange={handleSchedulingChange} />}
+          {step === 11 && <StepPreview preview={preview} previewLoading={previewMutation.isPending} previewError={previewMutation.error} onRetry={handleRetryPreview} />}
+          {step === 12 && <StepConfirm form={form} preview={preview} overloadAccepted={overloadAccepted} onOverloadChange={setOverloadAccepted} />}
         </div>
 
         {/* Validation errors */}

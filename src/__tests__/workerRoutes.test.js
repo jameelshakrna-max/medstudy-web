@@ -209,6 +209,7 @@ describe('Worker route dispatch — rotation planner plans', () => {
 
     it('returns 400 when idempotency key is missing', async () => {
       const res = await postFetch('/api/rotation-planner/plans', {
+        displayName: 'Cardiology — January 2026',
         sourceId: 'step-up-medicine-6e-2024',
         rotationId: 'cardiology',
         startDate: '2026-01-05',
@@ -227,6 +228,7 @@ describe('Worker route dispatch — rotation planner plans', () => {
 
     it('returns 409 when previewToken does not match', async () => {
       const res = await postFetch('/api/rotation-planner/plans', {
+        displayName: 'Cardiology — January 2026',
         sourceId: 'step-up-medicine-6e-2024',
         rotationId: 'cardiology',
         startDate: '2026-01-05',
@@ -246,6 +248,7 @@ describe('Worker route dispatch — rotation planner plans', () => {
 
     it('returns 422 when plan is infeasible and acceptOverload is false', async () => {
       const res = await postFetch('/api/rotation-planner/plans', {
+        displayName: 'Cardiology — January 2026',
         sourceId: 'step-up-medicine-6e-2024',
         rotationId: 'cardiology',
         startDate: '2026-01-05',
@@ -272,6 +275,7 @@ describe('Worker route dispatch — rotation planner plans', () => {
 
     it('does not require idempotency key', async () => {
       const res = await postFetch('/api/rotation-planner/plans/preview', {
+        displayName: 'Cardiology — January 2026',
         sourceId: 'step-up-medicine-6e-2024',
         rotationId: 'cardiology',
         startDate: '2026-01-05',

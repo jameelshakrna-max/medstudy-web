@@ -411,7 +411,7 @@ export default function RotationPlanner() {
                 ? Math.round(((p.completedTaskCount || 0) / p.taskCount) * 100)
                 : 0
 
-            const planName = p.name || p.sourceTitle
+            const planName = p.displayName || p.name || p.sourceTitle
             const statusLabel =
               entry.version === 'v2' && p.status === 'draft'
                 ? 'Live'
