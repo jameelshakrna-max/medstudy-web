@@ -242,4 +242,146 @@ describe('getTaskLockState', () => {
     );
     expect(result).toEqual(UNLOCKED);
   });
+
+  describe('group-based unlock rules', () => {
+    function makeGroupState(overrides = {}) {
+      return {
+        groupKey: 'ischemic-heart-disease',
+        title: 'Ischemic Heart Disease',
+        completedCount: 10,
+        targetCount: 40,
+        incorrectCount: 3,
+        incorrectRemaining: 3,
+        remaining: 30,
+        status: 'learning',
+        excluded: false,
+        ...overrides,
+      };
+    }
+
+    it('learning_group_completed is satisfied when completedCount reaches targetCount', () => {
+      const result = getTaskLockState(
+        makeTask({ unlockCondition: 'learning_group_completed:ischemic-heart-disease' }),
+        makeTopics(),
+        { questionGroupStates: [makeGroupState({ completedCount: 40, targetCount: 40 })] }
+      );
+      expect(result).toEqual(UNLOCKED);
+    });
+
+    it('learning_group_completed is satisfied when completedCount exceeds targetCount', () => {
+      const result = getTaskLockState(
+        makeTask({ unlockCondition: 'learning_group_completed:ischemic-heart-disease' }),
+        makeTopics(),
+        { questionGroupStates: [makeGroupState({ completedCount: 45, targetCount: 40 })] }
+      );
+      expect(result).toEqual(UNLOCKED);
+    });
+
+    it('learning_group_completed stays locked while completedCount is below targetCount', () => {
+      const result = getTaskLockState(
+        makeTask({ unlockCondition: 'learning_group_completed:ischemic-heart-disease' }),
+        makeTopics(),
+        { questionGroupStates: [makeGroupState()] }
+      );
+      expect(result.isLocked).toBe(true);
+      expect(result.conditionType).toBe('learning_group_completed');
+      expect(result.prerequisiteTopic).toBeNull();
+      expect(result.message).toBe('Complete learning for Ischemic Heart Disease to unlock these questions.');
+    });
+
+    it('uworld_group_completed is satisfied when completedCount reaches targetCount', () => {
+      const result = getTaskLockState(
+        makeTask({ unlockCondition: 'uworld_group_completed:ischemic-heart-disease' }),
+        makeTopics(),
+        { questionGroupStates: [makeGroupState({ completedCount: 40, targetCount: 40 })] }
+      );
+      expect(result).toEqual(UNLOCKED);
+    });
+
+    it('uworld_group_completed stays locked while completedCount is below targetCount', () => {
+      const result = getTaskLockState(
+        makeTask({ unlockCondition: 'uworld_group_completed:ischemic-heart-disease' }),
+        makeTopics(),
+        { questionGroupStates: [makeGroupState()] }
+      );
+      expect(result.isLocked).toBe(true);
+      expect(result.conditionType).toBe('uworld_group_completed');
+      expect(result.message).toBe('Complete the UWorld questions for Ischemic Heart Disease to unlock this task.');
+    });
+
+    it('missing groupKey in context stays locked (never over-unlocks)', () => {
+      const result = getTaskLockState(
+        makeTask({ unlockCondition: 'learning_group_completed:stale-group-key' }),
+        makeTopics(),
+        { questionGroupStates: [makeGroupState()] }
+      );
+      expect(result.isLocked).toBe(true);
+      expect(result.message).toBe(FALLBACK_MESSAGE);
+    });
+
+    it('accepts questionGroupStates as a Map keyed by groupKey', () => {
+      const map = new Map([['ischemic-heart-disease', makeGroupState()]]);
+      const result = getTaskLockState(
+        makeTask({ unlockCondition: 'learning_group_completed:ischemic-heart-disease' }),
+        makeTopics(),
+        { questionGroupStates: map }
+      );
+      expect(result.isLocked).toBe(true);
+      expect(result.message).toContain('Ischemic Heart Disease');
+    });
+
+    it('accepts questionGroupStates keyed by state.key instead of state.groupKey', () => {
+      const state = makeGroupState();
+      delete state.groupKey;
+      state.key = 'ischemic-heart-disease';
+      const result = getTaskLockState(
+        makeTask({ unlockCondition: 'uworld_group_completed:ischemic-heart-disease' }),
+        makeTopics(),
+        { questionGroupStates: [state] }
+      );
+      expect(result.isLocked).toBe(true);
+      expect(result.message).toContain('Ischemic Heart Disease');
+    });
+
+    it('reads completedQuestions/targetQuestions when the legacy state shape is present', () => {
+      const result = getTaskLockState(
+        makeTask({ unlockCondition: 'learning_group_completed:ischemic-heart-disease' }),
+        makeTopics(),
+        { questionGroupStates: [{ key: 'ischemic-heart-disease', title: 'Ischemic Heart Disease', completedQuestions: 40, targetQuestions: 40 }] }
+      );
+      expect(result).toEqual(UNLOCKED);
+    });
+
+    it('fails closed when group target is missing or zero', () => {
+      const result = getTaskLockState(
+        makeTask({ unlockCondition: 'learning_group_completed:ischemic-heart-disease' }),
+        makeTopics(),
+        { questionGroupStates: [makeGroupState({ targetCount: 0, completedCount: 0 })] }
+      );
+      expect(result.isLocked).toBe(true);
+      expect(result.message).toContain('Ischemic Heart Disease');
+    });
+
+    it('does not throw when context is undefined or empty', () => {
+      expect(() => getTaskLockState(
+        makeTask({ unlockCondition: 'learning_group_completed:ischemic-heart-disease' }),
+        makeTopics()
+      )).not.toThrow();
+      const result = getTaskLockState(
+        makeTask({ unlockCondition: 'learning_group_completed:ischemic-heart-disease' }),
+        makeTopics(),
+        {}
+      );
+      expect(result.isLocked).toBe(true);
+    });
+
+    it('never leaks the groupKey into lock messages', () => {
+      const result = getTaskLockState(
+        makeTask({ unlockCondition: 'learning_group_completed:ischemic-heart-disease' }),
+        makeTopics(),
+        { questionGroupStates: [makeGroupState()] }
+      );
+      expect(result.message).not.toContain('ischemic-heart-disease');
+    });
+  });
 });

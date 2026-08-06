@@ -31,12 +31,14 @@ export function deriveActualGroupStates(groups, topics, tasks, { asOfDate } = {}
   const completedLearningMinutesByTopic = new Map()
   const unfinishedLearningByTopic = new Map()
   for (const task of tasks) {
-    if (!task.plan_topic_id || task.task_type !== 'learning') continue
+    const planTopicId = field(task, 'plan_topic_id', 'planTopicId')
+    const taskType = field(task, 'task_type', 'taskType')
+    if (!planTopicId || taskType !== 'learning') continue
     const fraction = getCompletionFraction(task)
-    if (fraction < 1) unfinishedLearningByTopic.set(task.plan_topic_id, true)
+    if (fraction < 1) unfinishedLearningByTopic.set(planTopicId, true)
     if (fraction <= 0) continue
-    const current = completedLearningMinutesByTopic.get(task.plan_topic_id) || 0
-    completedLearningMinutesByTopic.set(task.plan_topic_id, current + (task.estimated_minutes || 0) * fraction)
+    const current = completedLearningMinutesByTopic.get(planTopicId) || 0
+    completedLearningMinutesByTopic.set(planTopicId, current + (field(task, 'estimated_minutes', 'estimatedMinutes') || 0) * fraction)
   }
 
   const completedByGroup = new Map()
@@ -45,14 +47,15 @@ export function deriveActualGroupStates(groups, topics, tasks, { asOfDate } = {}
   const reviewedByGroup = new Map()
 
   for (const task of tasks) {
-    if (!task.plan_question_group_id) continue
-    const gid = task.plan_question_group_id
-    if (task.task_type === 'uworld_questions') {
-      completedByGroup.set(gid, (completedByGroup.get(gid) || 0) + (task.completed_count || 0))
-      targetByGroup.set(gid, (targetByGroup.get(gid) || 0) + (task.target_count || 0))
-      incorrectFromUworldByGroup.set(gid, (incorrectFromUworldByGroup.get(gid) || 0) + (task.incorrect_count || 0))
-    } else if (task.task_type === 'incorrect_review') {
-      reviewedByGroup.set(gid, (reviewedByGroup.get(gid) || 0) + (task.completed_count || 0))
+    const gid = field(task, 'plan_question_group_id', 'planQuestionGroupId')
+    if (!gid) continue
+    const taskType = field(task, 'task_type', 'taskType')
+    if (taskType === 'uworld_questions') {
+      completedByGroup.set(gid, (completedByGroup.get(gid) || 0) + (field(task, 'completed_count', 'completedCount') || 0))
+      targetByGroup.set(gid, (targetByGroup.get(gid) || 0) + (field(task, 'target_count', 'targetCount') || 0))
+      incorrectFromUworldByGroup.set(gid, (incorrectFromUworldByGroup.get(gid) || 0) + (field(task, 'incorrect_count', 'incorrectCount') || 0))
+    } else if (taskType === 'incorrect_review') {
+      reviewedByGroup.set(gid, (reviewedByGroup.get(gid) || 0) + (field(task, 'completed_count', 'completedCount') || 0))
     }
   }
 

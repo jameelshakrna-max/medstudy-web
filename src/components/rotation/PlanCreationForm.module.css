@@ -773,3 +773,145 @@
     font-size: 12px;
   }
 }
+
+/* UWorld group cards */
+.groupCard {
+  padding: 14px 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+}
+
+.groupCardExcluded {
+  opacity: 0.6;
+}
+
+.groupCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.groupBadge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--blue);
+  background: var(--blueL);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.groupExcluded {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--red);
+  background: var(--redL);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.groupTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.groupHint {
+  font-size: 12px;
+  color: var(--mist);
+  margin: 4px 0;
+}
+
+.groupRow {
+  margin-top: 6px;
+}
+
+.groupLabel {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--mist);
+  margin: 6px 0 2px;
+}
+
+.groupList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+
+.groupListItem {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.groupMissing {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--amberL);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: var(--radius-sm);
+}
+
+.groupNotCovered {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+}
+
+.groupActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.groupActionBtn {
+  padding: 4px 12px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.groupPendingNote {
+  opacity: 0.7;
+}
+
+.regeneratingNote {
+  font-size: 12px;
+  color: var(--blue);
+  font-weight: 600;
+  margin: 4px 0 8px;
+}
+
+@media (max-width: 480px) {
+  .groupCard {
+    padding: 12px;
+  }
+
+  .groupActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

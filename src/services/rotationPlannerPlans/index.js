@@ -1,6 +1,7 @@
 export { parseAndValidatePlanRequest, validateDisplayName } from './requestValidation.js'
 export { resolveTopicsFromRegistry } from './topicResolution.js'
 export { generatePlanPreview } from './previewPipeline.js'
+export { collectUnresolvedQuestionGroups } from './questionGroupBuilder.js'
 export { sha256Hex, calculateScheduleFingerprint, calculateRequestFingerprint, checkIdempotency, calculateTaskUpdateFingerprint, calculateRecalculationFingerprint, calculateRenameFingerprint } from './idempotency.js'
 export { persistPlanBatch, persistRecalculationBatch, loadPlanFromDb, loadPlanSummaries, loadQuestionGroupsByPlan, loadPlanRevision, updatePlanRevisionAndRecalculatedAt, updatePlanStatus, filterMetadata } from './persistence.js'
 export { getFlashcardCapacityOwner } from './ownership.js'

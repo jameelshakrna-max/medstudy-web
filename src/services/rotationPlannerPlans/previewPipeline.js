@@ -1,4 +1,5 @@
 import { getStudySource } from '../../data/studySources/sourceRegistry.js'
+import { getNormalizedTopicsForRotation } from '../../data/studySources/normalizedRegistry.js'
 import { buildRotationSchedule } from '../rotationPlannerV2/buildRotationSchedule.js'
 import { assignStudyBlocks } from '../rotationPlannerV2/studyBlockAssignment.js'
 import { buildQuestionGroups } from './questionGroupBuilder.js'
@@ -7,11 +8,19 @@ export function generatePlanPreview(resolvedTopics, validatedInput) {
   const source = getStudySource(validatedInput.sourceId)
   const sourceVersion = source?.version || '1.0.0'
 
+  let supportedTopics = []
+  try {
+    supportedTopics = getNormalizedTopicsForRotation(validatedInput.sourceId, validatedInput.rotationId)
+  } catch {
+    supportedTopics = []
+  }
+
   const isGrouped = (validatedInput.uworldSchedulingMode || 'per_topic') === 'grouped'
   let questionGroupResult = null
   if (isGrouped) {
     questionGroupResult = buildQuestionGroups({
       resolvedTopics,
+      supportedTopics,
       preferredQuestionsPerDay: validatedInput.preferredQuestionsPerDay,
       questionGroupExclusions: validatedInput.questionGroupExclusions || [],
     })
@@ -37,6 +46,8 @@ export function generatePlanPreview(resolvedTopics, validatedInput) {
     config,
     questionGroups: questionGroupResult?.groups || [],
     questionGroupErrors: questionGroupResult?.errors || [],
+    incompleteQuestionGroups: questionGroupResult?.incompleteQuestionGroups || [],
+    sourceAdaptedQuestionGroups: questionGroupResult?.sourceAdaptedQuestionGroups || [],
   }
 }
 

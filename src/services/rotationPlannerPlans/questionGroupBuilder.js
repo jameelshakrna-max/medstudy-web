@@ -1,6 +1,28 @@
 import { CURATED_UWORLD_QUESTION_GROUPS } from '../../data/uworldQuestionGroups/index.js'
+import { getAllNormalizedTopics } from '../../data/studySources/normalizedRegistry.js'
 
 const GROUP_KEY_PATTERN = /^[a-z0-9][a-z0-9.-]*$/
+
+let globalTitleById = null
+
+// Best-effort title lookup for topics that may not exist in the selected
+// source/rotation. Keyed by sourceTopicId AND canonicalTopicId so unavailable
+// required topics can still surface a human-readable title. Built lazily from
+// the normalized registry (memoized) and never throws.
+function getGlobalTitleById() {
+  if (globalTitleById) return globalTitleById
+  const map = new Map()
+  try {
+    for (const t of getAllNormalizedTopics()) {
+      if (t.sourceTopicId) map.set(t.sourceTopicId, t)
+      if (t.canonicalTopicId) map.set(t.canonicalTopicId, t)
+    }
+  } catch {
+    // Global lookup is optional; titles fall back to the raw id.
+  }
+  globalTitleById = map
+  return map
+}
 
 function slugify(value) {
   return String(value)
@@ -29,7 +51,14 @@ function fallbackTopicKey(sourceTopicId) {
 // will be produced by this builder. Unknown keys are rejected with
 // UNKNOWN_QUESTION_GROUP. Exclusions apply to curated AND fallback groups and
 // are persisted in the snapshot as `excluded: 1`.
-export function buildQuestionGroups({ resolvedTopics, preferredQuestionsPerDay, questionGroupExclusions = [] }) {
+//
+// Source adaptation: curated defs list requiredTopicIds for a full UWorld
+// universe, but the selected source+rotation may not cover every required
+// topic. Only SOURCE-SUPPORTED required topics that the user has not selected
+// make a group actionable/incomplete. Required topics absent from the source
+// are informational only (`sourceAdaptedQuestionGroups`) and are NOT persisted
+// in the snapshot's requiredTopicIds (no permanently-impossible locks).
+export function buildQuestionGroups({ resolvedTopics, supportedTopics = [], preferredQuestionsPerDay, questionGroupExclusions = [] }) {
   const errors = []
   const exclusionSet = new Set(questionGroupExclusions)
 
@@ -37,6 +66,11 @@ export function buildQuestionGroups({ resolvedTopics, preferredQuestionsPerDay, 
   for (const t of resolvedTopics) {
     if (t.sourceTopicId) resolvedById.set(t.sourceTopicId, t)
   }
+
+  const sourceSupportedIds = new Set(supportedTopics.map(t => t.sourceTopicId).filter(Boolean))
+  const supportedById = new Map(supportedTopics.map(t => [t.sourceTopicId, t]).filter(([id]) => id))
+  const globalById = getGlobalTitleById()
+  const titleFor = (id) => supportedById.get(id)?.title || globalById.get(id)?.title || id
 
   // Step 1 — curated candidates (before exclusions so every selectable group is
   // a valid exclusion target).
@@ -46,16 +80,18 @@ export function buildQuestionGroups({ resolvedTopics, preferredQuestionsPerDay, 
     const memberTopicIds = def.memberTopicIds.filter(id => resolvedById.has(id))
     if (memberTopicIds.length === 0) continue
     for (const id of memberTopicIds) claimedByCurated.add(id)
-    const requiredTopicIds = def.requiredTopicIds.filter(id => resolvedById.has(id))
-    const missingRequiredTopicIds = def.requiredTopicIds.filter(id => !resolvedById.has(id))
+    const unavailableRequiredTopicIds = def.requiredTopicIds.filter(id => !sourceSupportedIds.has(id))
+    const effectiveRequiredTopicIds = def.requiredTopicIds.filter(id => sourceSupportedIds.has(id))
+    const missingRequiredTopicIds = effectiveRequiredTopicIds.filter(id => !resolvedById.has(id))
     curatedCandidates.push({
       def,
       key: def.key,
       title: def.title,
       system: def.system,
       memberTopicIds,
-      requiredTopicIds,
+      requiredTopicIds: effectiveRequiredTopicIds,
       missingRequiredTopicIds,
+      unavailableRequiredTopicIds,
     })
   }
 
@@ -80,6 +116,7 @@ export function buildQuestionGroups({ resolvedTopics, preferredQuestionsPerDay, 
       memberTopicIds: topics.map(t => t.sourceTopicId),
       requiredTopicIds: topics.map(t => t.sourceTopicId),
       missingRequiredTopicIds: [],
+      unavailableRequiredTopicIds: [],
     })
   }
   for (const t of unclaimedWithoutSection) {
@@ -90,6 +127,7 @@ export function buildQuestionGroups({ resolvedTopics, preferredQuestionsPerDay, 
       memberTopicIds: [t.sourceTopicId],
       requiredTopicIds: [t.sourceTopicId],
       missingRequiredTopicIds: [],
+      unavailableRequiredTopicIds: [],
     })
   }
 
@@ -120,7 +158,7 @@ export function buildQuestionGroups({ resolvedTopics, preferredQuestionsPerDay, 
     }
   })
   if (errors.length > 0) {
-    return { groups: [], incompleteQuestionGroups: [], errors }
+    return { groups: [], incompleteQuestionGroups: [], sourceAdaptedQuestionGroups: [], errors }
   }
 
   // Step 4 — finalize snapshot groups, applying exclusions. Every built key is
@@ -154,6 +192,7 @@ export function buildQuestionGroups({ resolvedTopics, preferredQuestionsPerDay, 
         memberTopicIds: candidate.memberTopicIds,
         requiredTopicIds: candidate.requiredTopicIds,
         missingRequiredTopicIds: candidate.missingRequiredTopicIds,
+        missingRequiredTopicTitles: candidate.missingRequiredTopicIds.map(id => titleFor(id)),
       })
     }
   }
@@ -161,5 +200,34 @@ export function buildQuestionGroups({ resolvedTopics, preferredQuestionsPerDay, 
   for (const candidate of curatedCandidates) finalize(candidate)
   for (const candidate of fallbackCandidates) finalize(candidate)
 
-  return { groups, incompleteQuestionGroups, errors }
+  // Curated groups whose required topics are simply not covered by the selected
+  // source+rotation. Informational only — never blocks preview/creation and is
+  // not persisted as an obligation. Reported even when the group is excluded.
+  const sourceAdaptedQuestionGroups = []
+  for (const candidate of curatedCandidates) {
+    if (candidate.unavailableRequiredTopicIds.length === 0) continue
+    sourceAdaptedQuestionGroups.push({
+      groupKey: candidate.key,
+      title: candidate.title,
+      unavailableRequiredTopicIds: candidate.unavailableRequiredTopicIds,
+      unavailableRequiredTopicTitles: candidate.unavailableRequiredTopicIds.map(id => titleFor(id)),
+    })
+  }
+
+  return { groups, incompleteQuestionGroups, sourceAdaptedQuestionGroups, errors }
+}
+
+// Maps incomplete question groups to their actionable missing topics so the
+// create handler can gate on groups that are source-supported but unselected.
+// Groups whose only missing required topics are unavailable in the source are
+// filtered out (they are not actionable).
+export function collectUnresolvedQuestionGroups(incompleteQuestionGroups) {
+  return (incompleteQuestionGroups || [])
+    .filter(g => (g.missingRequiredTopicIds || []).length > 0)
+    .map(g => ({
+      key: g.key,
+      title: g.title,
+      missingRequiredTopicIds: g.missingRequiredTopicIds,
+      missingRequiredTopicTitles: g.missingRequiredTopicTitles || [],
+    }))
 }

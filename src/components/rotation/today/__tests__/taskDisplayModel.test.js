@@ -336,4 +336,129 @@ describe('getTaskDisplayModel', () => {
       expect(model.topicSection).toBeNull();
     });
   });
+
+  describe('grouped UWorld tasks', () => {
+    const group = {
+      key: 'ischemic-heart-disease',
+      title: 'Ischemic Heart Disease',
+      system: 'Cardiovascular',
+      targetQuestions: 40,
+      displayOrder: 1,
+    };
+
+    it('labels grouped uworld_questions task as "UWorld review block · N questions"', () => {
+      const model = getTaskDisplayModel(
+        makeTask({ taskType: 'uworld_questions', planQuestionGroupId: 'group-1', targetCount: 40 }),
+        null,
+        null,
+        group
+      );
+      expect(model.typeLabel).toBe('UWorld review block · 40 questions');
+    });
+
+    it('labels grouped uworld_questions task using targetCount from the task', () => {
+      const model = getTaskDisplayModel(
+        makeTask({ taskType: 'uworld_questions', planQuestionGroupId: 'group-1', targetCount: 25 }),
+        null,
+        null,
+        group
+      );
+      expect(model.typeLabel).toBe('UWorld review block · 25 questions');
+    });
+
+    it('falls back to group.targetQuestions when task targetCount is missing', () => {
+      const model = getTaskDisplayModel(
+        makeTask({ taskType: 'uworld_questions', planQuestionGroupId: 'group-1', targetCount: null }),
+        null,
+        null,
+        group
+      );
+      expect(model.typeLabel).toBe('UWorld review block · 40 questions');
+    });
+
+    it('derives N from estimatedMinutes/15 as a last resort', () => {
+      const model = getTaskDisplayModel(
+        makeTask({ taskType: 'uworld_questions', planQuestionGroupId: 'group-1', targetCount: null, estimatedMinutes: 60 }),
+        null,
+        null,
+        { ...group, targetQuestions: 0 }
+      );
+      expect(model.typeLabel).toBe('UWorld review block · 4 questions');
+    });
+
+    it('omits the count when no count source is available', () => {
+      const model = getTaskDisplayModel(
+        makeTask({ taskType: 'uworld_questions', planQuestionGroupId: 'group-1', targetCount: null, estimatedMinutes: 0 }),
+        null,
+        null,
+        { ...group, targetQuestions: 0 }
+      );
+      expect(model.typeLabel).toBe('UWorld review block');
+    });
+
+    it('labels grouped uworld_incorrect_review task as "Incorrect UWorld review · N questions"', () => {
+      const model = getTaskDisplayModel(
+        makeTask({ taskType: 'uworld_incorrect_review', planQuestionGroupId: 'group-1', targetCount: 12 }),
+        null,
+        null,
+        group
+      );
+      expect(model.typeLabel).toBe('Incorrect UWorld review · 12 questions');
+    });
+
+    it('uses the group title for topicTitle', () => {
+      const model = getTaskDisplayModel(
+        makeTask({ taskType: 'uworld_questions', planQuestionGroupId: 'group-1', targetCount: 40 }),
+        null,
+        null,
+        group
+      );
+      expect(model.topicTitle).toBe('Ischemic Heart Disease');
+    });
+
+    it('uses "UWorld group {title}" for the subtitle', () => {
+      const model = getTaskDisplayModel(
+        makeTask({ taskType: 'uworld_questions', planQuestionGroupId: 'group-1', targetCount: 40 }),
+        null,
+        null,
+        group
+      );
+      expect(model.topicSection).toBe('UWorld group Ischemic Heart Disease');
+    });
+
+    it('falls back to the topic-based path when group is null', () => {
+      const topic = { groupId: 'Cardiology', topicTitle: 'Angina' };
+      const model = getTaskDisplayModel(
+        makeTask({ taskType: 'uworld_questions', planQuestionGroupId: 'group-1', targetCount: 40 }),
+        null,
+        topic,
+        null
+      );
+      expect(model.typeLabel).toBe('UWorld Questions');
+      expect(model.topicTitle).toBe('Angina');
+      expect(model.topicSection).toBe('Cardiology');
+    });
+
+    it('falls back to the generic label when the grouped task type is unknown', () => {
+      const model = getTaskDisplayModel(
+        makeTask({ taskType: 'learning', planQuestionGroupId: 'group-1' }),
+        null,
+        null,
+        group
+      );
+      expect(model.typeLabel).toBe('Learning');
+      expect(model.topicTitle).toBe('Ischemic Heart Disease');
+    });
+
+    it('passes through planQuestionGroupId', () => {
+      const model = getTaskDisplayModel(
+        makeTask({ taskType: 'uworld_questions', planQuestionGroupId: 'group-1' }),
+        null,
+        null,
+        group
+      );
+      expect(model.planQuestionGroupId).toBe('group-1');
+      expect(getTaskDisplayModel(makeTask()).planQuestionGroupId).toBeNull();
+    });
+  });
 });

@@ -5,6 +5,7 @@ import {
   parseAndValidatePlanRequest,
   resolveTopicsFromRegistry,
   generatePlanPreview,
+  collectUnresolvedQuestionGroups,
   calculateScheduleFingerprint,
   calculateRequestFingerprint,
   checkIdempotency,
@@ -81,7 +82,7 @@ export async function handlePreviewRotationPlan(request, env, user) {
       }
     }
 
-    const { preview, sourceVersion, questionGroups, questionGroupErrors } = generatePlanPreview(resolvedTopics, validation.parsed)
+    const { preview, sourceVersion, questionGroups, questionGroupErrors, incompleteQuestionGroups, sourceAdaptedQuestionGroups } = generatePlanPreview(resolvedTopics, validation.parsed)
     const fingerprint = await calculateScheduleFingerprint(user.sub, { ...validation.parsed, sourceVersion })
 
     // ─── Forecast computation for preview (advisory only) ───
@@ -198,6 +199,8 @@ export async function handlePreviewRotationPlan(request, env, user) {
       unscheduledWork: preview.unscheduledWork,
       questionGroups,
       questionGroupStates: preview.groupStates || [],
+      incompleteQuestionGroups,
+      sourceAdaptedQuestionGroups,
     })
   } catch (e) {
     if (e.message && e.message.startsWith('QUESTION_GROUP_VALIDATION_FAILED: ')) {
@@ -252,7 +255,14 @@ export async function handleCreateRotationPlan(request, env, user) {
       }
     }
 
-    const { preview, sourceVersion, config } = generatePlanPreview(resolvedTopics, validation.parsed)
+    const { preview, sourceVersion, config, incompleteQuestionGroups } = generatePlanPreview(resolvedTopics, validation.parsed)
+
+    const unresolvedQuestionGroups = collectUnresolvedQuestionGroups(incompleteQuestionGroups)
+    if (unresolvedQuestionGroups.length > 0) {
+      const titles = unresolvedQuestionGroups.map(g => g.title)
+      return errorResponse('GROUP_REQUIRED_TOPIC_MISSING', `Resolve or exclude incomplete UWorld review groups: ${titles.join(', ')}.`, 422)
+    }
+
     const scheduleFingerprint = await calculateScheduleFingerprint(user.sub, { ...validation.parsed, sourceVersion })
     requestFingerprint = await calculateRequestFingerprint(user.sub, { ...validation.parsed, sourceVersion })
     clientRequestId = validation.parsed.clientRequestId
@@ -401,6 +411,10 @@ export async function handleGetRotationPlan(request, env, user) {
         )
         topic.estimateConfidence = registryTopic?.estimate_confidence || null
       }
+    }
+
+    if (plan.plan.uworldSchedulingMode === 'grouped') {
+      plan.questionGroupStates = deriveActualGroupStates(plan.questionGroups || [], plan.topics || [], plan.tasks || [], {})
     }
 
     return json(plan)

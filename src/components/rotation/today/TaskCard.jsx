@@ -23,6 +23,7 @@ export default function TaskCard({
   topicsById,
   sourceTitle,
   isMutating,
+  lockContext,
   onStart,
   onComplete,
   onPartial,
@@ -35,7 +36,7 @@ export default function TaskCard({
   const actions = useMemo(() => getAvailableTaskActions(task), [task])
   const TypeIcon = ICON_MAP[TASK_TYPE_ICONS[task.taskType]] || BookOpen
 
-  const lock = getTaskLockState(task, topicsById)
+  const lock = getTaskLockState(task, topicsById, lockContext)
   const isLocked = task.isLocked || lock.isLocked
   const isActive = task.isActive
   const isOverdue = task.isOverdue

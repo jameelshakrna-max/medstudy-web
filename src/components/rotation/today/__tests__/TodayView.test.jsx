@@ -125,4 +125,64 @@ describe('TodayView', () => {
     ], plan)
     expect(screen.getByText(/1 of 1 task completed/)).toBeInTheDocument()
   })
+
+  describe('grouped UWorld tasks', () => {
+    const questionGroups = [
+      { id: 'group-1', groupKey: 'ischemic-heart-disease', title: 'Ischemic Heart Disease', targetQuestions: 40, displayOrder: 1 },
+    ]
+
+    const lockedState = { key: 'ischemic-heart-disease', title: 'Ischemic Heart Disease', completedQuestions: 10, targetQuestions: 40, status: 'in_progress' }
+
+    function groupedTask(overrides = {}) {
+      return makeTask({
+        id: 't-group-1',
+        taskType: 'uworld_questions',
+        planQuestionGroupId: 'group-1',
+        targetCount: 40,
+        status: 'pending',
+        unlockCondition: 'learning_group_completed:ischemic-heart-disease',
+        ...overrides,
+      })
+    }
+
+    it('renders grouped tasks with the group label and group title', () => {
+      renderTodayView([groupedTask()], {}, {
+        questionGroups,
+        questionGroupStates: [lockedState],
+      })
+      expect(screen.getByText('UWorld')).toBeInTheDocument()
+      expect(screen.getByText('UWorld review block · 40 questions')).toBeInTheDocument()
+      expect(screen.getByText('Ischemic Heart Disease')).toBeInTheDocument()
+      expect(screen.getByText('UWorld group Ischemic Heart Disease')).toBeInTheDocument()
+    })
+
+    it('shows the lock hint for a locked group task using the lock context', () => {
+      renderTodayView([groupedTask()], {}, {
+        questionGroups,
+        questionGroupStates: [lockedState],
+      })
+      expect(screen.getByText('Complete learning for Ischemic Heart Disease to unlock these questions.')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Start/ })).not.toBeInTheDocument()
+    })
+
+    it('does not show the lock hint once the group is complete', () => {
+      renderTodayView([groupedTask()], {}, {
+        questionGroups,
+        questionGroupStates: [{ key: 'ischemic-heart-disease', title: 'Ischemic Heart Disease', completedQuestions: 40, targetQuestions: 40, status: 'completed' }],
+      })
+      expect(screen.queryByText(/Complete learning for Ischemic Heart Disease/)).not.toBeInTheDocument()
+      expect(screen.getByText(/Complete these questions in UWorld/)).toBeInTheDocument()
+    })
+
+    it('keeps rendering identical for legacy non-grouped tasks', () => {
+      const topic = { id: 'topic-1', canonicalTopicId: 'cardiology.stable-angina-pectoris', topicTitle: 'Stable Angina', status: 'completed' }
+      renderTodayView([makeTask({ id: 't2', taskType: 'uworld_questions', status: 'pending' })], {}, {
+        questionGroups,
+        questionGroupStates: [],
+        topicsById: new Map([['topic-1', topic]]),
+      })
+      expect(screen.getByText('UWorld Questions')).toBeInTheDocument()
+      expect(screen.queryByText('UWorld review block · 40 questions')).not.toBeInTheDocument()
+    })
+  })
 })

@@ -21,7 +21,13 @@ export function normalizeTopicsResponse(data) {
   return Array.isArray(data) ? data : []
 }
 
+export function toGroupedTopic(topic) {
+  const { uworldRemainingQuestions, alreadyCompletedQuestionCount, incorrectQuestionsRemaining, ...rest } = topic || {}
+  return rest
+}
+
 export function buildPreviewPayload(form) {
+  const isGrouped = form.uworldSchedulingMode === 'grouped'
   return {
     displayName: form.planName?.trim() || null,
     sourceId: form.sourceId,
@@ -44,7 +50,9 @@ export function buildPreviewPayload(form) {
     examReviewWindowDays: 0,
     mixedReviewQuestionsPerDay: 0,
     dueReviewMinutesByDate: {},
-    topics: form.topics,
+    uworldSchedulingMode: form.uworldSchedulingMode || 'grouped',
+    questionGroupExclusions: Array.isArray(form.questionGroupExclusions) ? form.questionGroupExclusions : [],
+    topics: isGrouped ? (form.topics || []).map(toGroupedTopic) : form.topics,
     flashcardSettings: form.flashcardSettings ?? {
       learningUnlockMode: 'learning_completed',
       maxProjectedFlashcardReviewMinutesPerDay: null,

@@ -25,7 +25,17 @@ export function mapV1Status(status) {
 
 export function normalizePlanResponse(response) {
   if (!response || typeof response !== "object") {
-    return { key: "", version: 1, plan: null, tasks: [], schedule: [], progress: [], availability: [] };
+    return {
+      key: "",
+      version: 1,
+      plan: null,
+      tasks: [],
+      schedule: [],
+      progress: [],
+      availability: [],
+      questionGroups: [],
+      questionGroupStates: [],
+    };
   }
 
   const plan = response.plan || response;
@@ -44,6 +54,8 @@ export function normalizePlanResponse(response) {
       progress: Array.isArray(response.progress) ? response.progress : [],
       availability: Array.isArray(response.availability) ? response.availability : [],
       sourcePace: response.sourcePace || null,
+      questionGroups: Array.isArray(response.questionGroups) ? response.questionGroups : [],
+      questionGroupStates: Array.isArray(response.questionGroupStates) ? response.questionGroupStates : [],
     };
   }
 
@@ -79,6 +91,8 @@ export function normalizePlanResponse(response) {
     schedule,
     progress: Array.isArray(response.progress) ? response.progress : [],
     availability: Array.isArray(response.availability) ? response.availability : [],
+    questionGroups: [],
+    questionGroupStates: [],
   };
 }
 

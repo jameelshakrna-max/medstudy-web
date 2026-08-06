@@ -18,6 +18,8 @@ export default function TodayView({
   isOrphaned,
   hasUnsyncedData,
   discardOrphanedPlannerContext,
+  questionGroups = [],
+  questionGroupStates = [],
   onStart,
   onComplete,
   onPartial,
@@ -31,9 +33,37 @@ export default function TodayView({
     return getTodayKey(new Date(), tz)
   }, [])
 
+  const groupByKey = useMemo(() => {
+    const map = new Map()
+    for (const group of questionGroups) {
+      if (!group) continue
+      if (group.id) map.set(group.id, group)
+      const key = group.key ?? group.groupKey
+      if (key) map.set(key, group)
+    }
+    return map
+  }, [questionGroups])
+
+  const groupStateByKey = useMemo(() => {
+    const map = new Map()
+    for (const state of questionGroupStates) {
+      const key = state?.groupKey ?? state?.key
+      if (state && key) map.set(key, state)
+    }
+    return map
+  }, [questionGroupStates])
+
+  const lockContext = useMemo(() => ({ questionGroupStates: groupStateByKey }), [groupStateByKey])
+
   const displayTasks = useMemo(
-    () => tasks.map(t => getTaskDisplayModel(t, todayKey, topicsById.get(t.planTopicId) || null)),
-    [tasks, todayKey, topicsById]
+    () => tasks.map(t => {
+      const topic = topicsById.get(t.planTopicId) || null
+      const group = t.planQuestionGroupId
+        ? (groupByKey.get(t.planQuestionGroupId) || (t.groupKey ? groupByKey.get(t.groupKey) : null) || null)
+        : null
+      return getTaskDisplayModel(t, todayKey, topic, group)
+    }),
+    [tasks, todayKey, topicsById, groupByKey]
   )
 
   const sections = useMemo(
@@ -161,6 +191,7 @@ export default function TodayView({
           topicsById={topicsById}
           sourceTitle={sourceTitle}
           isMutating={isMutating}
+          lockContext={lockContext}
           onStart={onStart}
           onComplete={onComplete}
           onPartial={onPartial}

@@ -12,6 +12,7 @@ export default function StudyBlock({
   topicsById,
   sourceTitle,
   isMutating,
+  lockContext,
   onStart,
   onComplete,
   onPartial,
@@ -128,6 +129,7 @@ export default function StudyBlock({
               topicsById={topicsById}
               sourceTitle={sourceTitle}
               isMutating={isMutating}
+              lockContext={lockContext}
               onStart={onStart}
               onComplete={onComplete}
               onPartial={onPartial}

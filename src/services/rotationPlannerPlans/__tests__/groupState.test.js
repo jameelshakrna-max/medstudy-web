@@ -173,4 +173,26 @@ describe('deriveActualGroupStates', () => {
     expect(states[0].remainingQuestions).toBe(30)
     expect(states[0].status).toBe('pending')
   })
+
+  it('derives the same group states from camelCase DTO task rows (GET handler shape)', () => {
+    const groups = [makeGroup({ targetQuestions: 30 })]
+    const topics = [
+      makeTopic('cardiology.stable-angina-pectoris'),
+      makeTopic('cardiology.acute-coronary-syndromes-acs'),
+    ]
+    const tasks = [
+      { id: 't1', planTopicId: 'topic-stable-angina-pectoris', taskType: 'learning', status: 'completed', estimatedMinutes: 30 },
+      { id: 't2', planTopicId: 'topic-acute-coronary-syndromes-acs', taskType: 'learning', status: 'completed', estimatedMinutes: 30 },
+      { id: 't3', planQuestionGroupId: 'group-1', taskType: 'uworld_questions', status: 'partial', completionPercentage: 50, targetCount: 15, completedCount: 10, incorrectCount: 3 },
+      { id: 't4', planQuestionGroupId: 'group-1', taskType: 'uworld_questions', status: 'pending', targetCount: 15, completedCount: 0, incorrectCount: 0 },
+      { id: 't5', planQuestionGroupId: 'group-1', taskType: 'incorrect_review', status: 'completed', targetCount: 1, completedCount: 1 },
+    ]
+    const states = deriveActualGroupStates(groups, topics, tasks)
+    expect(states[0].requiredLearningCompleted).toBe(true)
+    expect(states[0].completedQuestions).toBe(10)
+    expect(states[0].remainingQuestions).toBe(20)
+    expect(states[0].incorrectQuestionsRemaining).toBe(2)
+    expect(states[0].status).toBe('in_progress')
+    expect(states[0].unfinishedRequiredTopics).toEqual([])
+  })
 })

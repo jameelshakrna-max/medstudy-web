@@ -1,6 +1,8 @@
+import { useMemo } from 'react'
 import styles from '../PlanCreationForm.module.css'
+import UWorldGroupCard from './UWorldGroupCard'
 
-export default function StepPreview({ preview, previewLoading, previewError, onRetry }) {
+export default function StepPreview({ preview, previewLoading, previewError, onRetry, form = {} }) {
   if (previewLoading) {
     return (
       <div className={styles.stepContent}>
@@ -38,6 +40,17 @@ export default function StepPreview({ preview, previewLoading, previewError, onR
     return counts
   }, {})
 
+  const topicTitleById = useMemo(() => {
+    const map = new Map()
+    for (const t of form.topics || []) {
+      if (t.sourceTopicId != null) map.set(t.sourceTopicId, t.title)
+    }
+    return map
+  }, [form.topics])
+
+  const questionGroups = [...(preview.questionGroups || [])]
+    .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
+
   return (
     <div className={styles.stepContent}>
       <div className={`${styles.feasibilityBanner} ${feasible ? styles.feasible : styles.infeasible}`}>
@@ -67,6 +80,30 @@ export default function StepPreview({ preview, previewLoading, previewError, onR
           {possibleSolutions.map((sol, i) => (
             <p key={i} className={styles.hint}>{sol}</p>
           ))}
+        </div>
+      )}
+
+      {questionGroups.length > 0 && (
+        <div className={styles.summarySection}>
+          <h4 className={styles.label}>UWorld Groups</h4>
+          {questionGroups.map(group => {
+            const isFallback = group.key.startsWith('fallback-')
+            const excluded = (form.questionGroupExclusions || []).includes(group.key)
+            const incomplete = preview.incompleteQuestionGroups?.find(g => g.key === group.key) || null
+            const adapted = preview.sourceAdaptedQuestionGroups?.find(g => g.groupKey === group.key) || null
+            return (
+              <UWorldGroupCard
+                key={group.key}
+                group={group}
+                isFallback={isFallback}
+                excluded={excluded}
+                incomplete={incomplete}
+                adapted={adapted}
+                preferredQuestionsPerDay={form.preferredQuestionsPerDay ?? 0}
+                topicTitleById={topicTitleById}
+              />
+            )
+          })}
         </div>
       )}
 

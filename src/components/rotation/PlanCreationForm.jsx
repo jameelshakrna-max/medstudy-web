@@ -88,6 +88,9 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
     setForm(current => ({ ...current, planName: suggested }))
   }, [step, form.rotationId, form.startDate, form.planName, rotations])
 
+  // When preview should navigate to the preview step on success
+  const advanceToPreviewRef = useRef(false)
+
   // Persist draft on form/step change
   useEffect(() => {
     if (open) saveDraft(step, form)
@@ -99,13 +102,35 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
     onSuccess: (data) => {
       setPreview(data)
       setPreviewToken(data.previewToken)
-      setStep(PREVIEW_STEP)
+      if (advanceToPreviewRef.current) {
+        setStep(PREVIEW_STEP)
+      }
+      advanceToPreviewRef.current = false
       setValidationErrors([])
     },
     onError: (err) => {
       setValidationErrors([err.message || 'Preview failed'])
     },
   })
+
+  // Auto-generate the preview when landing on the UWorld review groups step
+  useEffect(() => {
+    if (step === 7 && !preview && !previewMutation.isPending && !previewMutation.error) {
+      advanceToPreviewRef.current = false
+      previewMutation.mutate(buildPreviewPayload(form))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, preview, previewMutation.isPending, previewMutation.error])
+
+  // Regenerate the preview, optionally from an already-computed next form
+  const runPreview = useCallback((payloadOverride) => {
+    setPreview(null)
+    setPreviewToken(null)
+    setCreateRequestId(null)
+    setOverloadAccepted(false)
+    setValidationErrors([])
+    previewMutation.mutate(buildPreviewPayload(payloadOverride || form))
+  }, [previewMutation, form])
 
   // Create mutation
   const createMutation = useMutation({
@@ -183,6 +208,7 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
 
     // Trigger preview when advancing from the step before preview
     if (step === PREVIEW_STEP - 1) {
+      advanceToPreviewRef.current = true
       const payload = buildPreviewPayload(form)
       previewMutation.mutate(payload)
       return
@@ -197,6 +223,45 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
     setStep(s => Math.max(0, s - 1))
   }
 
+  // UWorld group actions — compute the next form first, then refresh the preview
+  function handleGroupAddRelatedTopics(sourceTopicIds) {
+    const existingIds = new Set(form.topics.map(t => t.sourceTopicId))
+    const additions = apiTopics.filter(t => sourceTopicIds.includes(t.sourceTopicId) && !existingIds.has(t.sourceTopicId))
+    const next = {
+      ...form,
+      topics: [
+        ...form.topics,
+        ...additions.map(t => ({
+          ...t,
+          uworldRemainingQuestions: 0,
+          alreadyCompletedLearningPercentage: 0,
+          alreadyCompletedQuestionCount: 0,
+          incorrectQuestionsRemaining: 0,
+        })),
+      ],
+    }
+    setForm(next)
+    runPreview(next)
+  }
+
+  function handleExcludeGroup(key) {
+    const next = {
+      ...form,
+      questionGroupExclusions: [...(form.questionGroupExclusions || []), key],
+    }
+    setForm(next)
+    runPreview(next)
+  }
+
+  function handleUndoExclusion(key) {
+    const next = {
+      ...form,
+      questionGroupExclusions: (form.questionGroupExclusions || []).filter(k => k !== key),
+    }
+    setForm(next)
+    runPreview(next)
+  }
+
   // Create plan
   function handleCreate() {
     const key = createRequestId ?? crypto.randomUUID()
@@ -207,13 +272,13 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
 
   // Retry preview
   function handleRetryPreview() {
-    const payload = buildPreviewPayload(form)
-    previewMutation.mutate(payload)
+    runPreview()
   }
 
   const isLastStep = step === TOTAL_STEPS - 1
   const isPreviewStep = step === PREVIEW_STEP
-  const canCreate = isLastStep && previewToken && (preview?.feasibility?.feasible || overloadAccepted)
+  const hasUnresolvedIncompleteGroup = (preview?.incompleteQuestionGroups || []).length > 0
+  const canCreate = isLastStep && previewToken && !hasUnresolvedIncompleteGroup && (preview?.feasibility?.feasible || overloadAccepted)
   const isCreating = createMutation.isPending
 
   return (
@@ -254,11 +319,11 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
           {step === 4 && <StepSourceSummary form={form} topics={form.topics} />}
           {step === 5 && <StepStudyStyle form={form} onFormChange={handleSchedulingChange} />}
           {step === 6 && <StepReviewTopics form={form} topics={form.topics} />}
-          {step === 7 && <StepUWorldQuestions form={form} onFormChange={handleSchedulingChange} />}
+          {step === 7 && <StepUWorldQuestions form={form} preview={preview} previewLoading={previewMutation.isPending} previewError={previewMutation.error} allTopics={apiTopics} onRegeneratePreview={runPreview} onAddRelatedTopics={handleGroupAddRelatedTopics} onExcludeGroup={handleExcludeGroup} onUndoExclusion={handleUndoExclusion} />}
           {step === 8 && <StepQuestionConfig form={form} onFormChange={handleSchedulingChange} />}
           {step === 9 && <StepSchedulingConfig form={form} onFormChange={handleSchedulingChange} />}
           {step === 10 && <StepFlashcardSettings form={form} onFormChange={handleSchedulingChange} />}
-          {step === 11 && <StepPreview preview={preview} previewLoading={previewMutation.isPending} previewError={previewMutation.error} onRetry={handleRetryPreview} />}
+          {step === 11 && <StepPreview preview={preview} previewLoading={previewMutation.isPending} previewError={previewMutation.error} onRetry={handleRetryPreview} form={form} />}
           {step === 12 && <StepConfirm form={form} preview={preview} overloadAccepted={overloadAccepted} onOverloadChange={setOverloadAccepted} />}
         </div>
 

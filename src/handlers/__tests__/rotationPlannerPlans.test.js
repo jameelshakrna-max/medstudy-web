@@ -108,11 +108,11 @@ function makeBody(overrides = {}) {
 
 // ─── Preview ───
 describe('handlePreviewRotationPlan', () => {
-  it('returns 200 with V2 contract shape { plan, topics, tasks, availability, previewToken, feasibility, unscheduledWork, questionGroups, questionGroupStates }', async () => {
+  it('returns 200 with V2 contract shape { plan, topics, tasks, availability, previewToken, feasibility, unscheduledWork, questionGroups, questionGroupStates, incompleteQuestionGroups, sourceAdaptedQuestionGroups }', async () => {
     const res = await preview()
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(Object.keys(body).sort()).toEqual(['availability', 'feasibility', 'plan', 'previewToken', 'questionGroupStates', 'questionGroups', 'tasks', 'topics', 'unscheduledWork'])
+    expect(Object.keys(body).sort()).toEqual(['availability', 'feasibility', 'incompleteQuestionGroups', 'plan', 'previewToken', 'questionGroupStates', 'questionGroups', 'sourceAdaptedQuestionGroups', 'tasks', 'topics', 'unscheduledWork'])
     expect(body.plan).toBeDefined()
     expect(body.topics).toBeDefined()
     expect(Array.isArray(body.topics)).toBe(true)
@@ -3221,6 +3221,11 @@ describe('Grouped UWorld scheduling', () => {
     expect(Array.isArray(body.questionGroupStates)).toBe(true)
     expect(body.questionGroupStates.length).toBeGreaterThan(0)
     expect(body.questionGroupStates.some(g => g.key === 'ischemic-heart-disease')).toBe(true)
+
+    expect(Array.isArray(body.incompleteQuestionGroups)).toBe(true)
+    expect(body.incompleteQuestionGroups).toEqual([])
+    expect(Array.isArray(body.sourceAdaptedQuestionGroups)).toBe(true)
+    expect(body.sourceAdaptedQuestionGroups).toEqual([])
   })
 
   it('preview returns empty arrays for per_topic mode', async () => {
@@ -3231,6 +3236,8 @@ describe('Grouped UWorld scheduling', () => {
     expect(body.questionGroups).toEqual([])
     expect(Array.isArray(body.questionGroupStates)).toBe(true)
     expect(body.questionGroupStates).toEqual([])
+    expect(body.incompleteQuestionGroups).toEqual([])
+    expect(body.sourceAdaptedQuestionGroups).toEqual([])
   })
 
   it('preview returns 400 UNKNOWN_QUESTION_GROUP for an unknown exclusion', async () => {
@@ -3276,6 +3283,48 @@ describe('Grouped UWorld scheduling', () => {
 
     const groupedTasks = body.tasks.filter(t => t.planQuestionGroupId === ischemic.id)
     expect(groupedTasks.length).toBeGreaterThan(0)
+  })
+
+  it('create returns 422 GROUP_REQUIRED_TOPIC_MISSING when a source-supported required topic is unselected', async () => {
+    const body = makeBody({
+      uworldSchedulingMode: 'grouped',
+      preferredQuestionsPerDay: 30,
+      topics: [
+        {
+          normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.stable-angina-pectoris',
+          uworldRemainingQuestions: 20,
+          alreadyCompletedLearningPercentage: 0,
+          alreadyCompletedQuestionCount: 0,
+        },
+      ],
+    })
+    const res = await createPlan(body)
+    expect(res.status).toBe(422)
+    const result = await res.json()
+    expect(result.error.code).toBe('GROUP_REQUIRED_TOPIC_MISSING')
+    expect(result.error.message).toContain('Ischemic Heart Disease')
+  })
+
+  it('creates a grouped plan when a required topic is unavailable in the source (source-adapted)', async () => {
+    const body = makeBody({
+      uworldSchedulingMode: 'grouped',
+      preferredQuestionsPerDay: 30,
+      topics: [
+        {
+          normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.acute-decompensated-heart-failure',
+          uworldRemainingQuestions: 20,
+          alreadyCompletedLearningPercentage: 0,
+          alreadyCompletedQuestionCount: 0,
+        },
+      ],
+    })
+    const res = await createPlan(body)
+    expect(res.status).toBe(201)
+    const result = await res.json()
+    const heartFailure = result.questionGroups.find(g => g.groupKey === 'heart-failure')
+    expect(heartFailure).toBeDefined()
+    expect(heartFailure.requiredTopicIds).toEqual(['cardiology.acute-decompensated-heart-failure'])
+    expect(heartFailure.requiredTopicIds).not.toContain('cardiology.congestive-heart-failure')
   })
 })
 

@@ -1,68 +1,154 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import styles from '../PlanCreationForm.module.css'
+import Modal from '../../ui/Modal/Modal'
+import UWorldGroupCard from './UWorldGroupCard'
 
-export default function StepUWorldQuestions({ form, onFormChange }) {
-  const [batchValue, setBatchValue] = useState('')
+export default function StepUWorldQuestions({
+  form,
+  preview,
+  previewLoading,
+  previewError,
+  allTopics,
+  onRegeneratePreview,
+  onAddRelatedTopics,
+  onExcludeGroup,
+  onUndoExclusion,
+}) {
+  const [confirm, setConfirm] = useState({ open: false, key: null })
 
-  function updateTopic(index, field, value) {
-    const num = Math.max(0, parseInt(value, 10) || 0)
-    const newTopics = form.topics.map((t, i) =>
-      i === index ? { ...t, [field]: num } : t
+  const topicTitleById = useMemo(() => {
+    const map = new Map()
+    for (const t of form.topics || []) {
+      if (t.sourceTopicId != null) map.set(t.sourceTopicId, t.title)
+    }
+    for (const t of allTopics || []) {
+      if (t.sourceTopicId != null && !map.has(t.sourceTopicId)) map.set(t.sourceTopicId, t.title)
+    }
+    return map
+  }, [form.topics, allTopics])
+
+  if (previewLoading && !preview) {
+    return (
+      <div className={styles.stepContent}>
+        <p className={styles.hint}>Generating UWorld review groups...</p>
+        <div className={styles.spinner} />
+      </div>
     )
-    onFormChange({ topics: newTopics })
   }
 
-  function applyBatch() {
-    const num = Math.max(0, parseInt(batchValue, 10) || 0)
-    const newTopics = form.topics.map(t => ({ ...t, uworldRemainingQuestions: num }))
-    onFormChange({ topics: newTopics })
-    setBatchValue('')
+  if (previewError && !preview) {
+    return (
+      <div className={styles.stepContent}>
+        <p className={styles.errorText}>Failed to generate UWorld review groups.</p>
+        <p className={styles.hint}>{previewError.message || 'Unknown error'}</p>
+        <button type="button" onClick={onRegeneratePreview} className={styles.btnSmall}>Retry</button>
+      </div>
+    )
   }
 
-  const totalQuestions = form.topics.reduce((sum, t) => sum + (t.uworldRemainingQuestions || 0), 0)
-  const topicsWithQuestions = form.topics.filter(t => t.uworldRemainingQuestions > 0).length
+  if (!preview) {
+    return (
+      <div className={styles.stepContent}>
+        <h3 className={styles.label}>UWorld Review Groups</h3>
+        <p className={styles.hint}>Questions are scheduled after you complete the related learning topics.</p>
+        <button type="button" onClick={onRegeneratePreview} className={styles.btnPrimary}>Generate UWorld Groups</button>
+      </div>
+    )
+  }
+
+  const groups = [...(preview.questionGroups || [])].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
 
   return (
     <div className={styles.stepContent}>
-      <p className={styles.hint}>{topicsWithQuestions} of {form.topics.length} topics with questions, {totalQuestions} total</p>
+      <h3 className={styles.label}>UWorld Review Groups</h3>
+      <p className={styles.hint}>Questions are scheduled after you complete the related learning topics.</p>
 
-      <div className={styles.batchRow}>
-        <label className={styles.label}>Set all topics to:</label>
-        <input
-          type="number"
-          min="0"
-          value={batchValue}
-          onChange={e => setBatchValue(e.target.value)}
-          className={styles.inputSmall}
-          placeholder="0"
-        />
-        <button type="button" onClick={applyBatch} className={styles.btnSmall}>Apply</button>
-      </div>
+      {previewLoading && <p className={styles.regeneratingNote}>Regenerating...</p>}
 
-      <div className={styles.topicList}>
-        {form.topics.map((t, i) => (
-          <div key={t.normalizedTopicId} className={styles.topicRow}>
-            <div className={styles.topicInfo}>
-              <span className={styles.topicTitle}>{t.title || t.normalizedTopicId}</span>
-              {t.title && t.title !== t.normalizedTopicId && (
-                <span className={styles.topicSubtitle}>{t.normalizedTopicId}</span>
-              )}
-            </div>
-            <div className={styles.topicStats}>
-              <span className={styles.topicCount}>{t.uworldRemainingQuestions || 0} Q</span>
-              <input
-                type="number"
-                min="0"
-                value={t.uworldRemainingQuestions}
-                onChange={e => updateTopic(i, 'uworldRemainingQuestions', e.target.value)}
-                className={styles.inputSmall}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
+      {groups.length === 0 ? (
+        <p className={styles.hint}>No UWorld review groups found for these topics.</p>
+      ) : (
+        groups.map((group) => {
+          const isFallback = group.key.startsWith('fallback-')
+          const excluded = (form.questionGroupExclusions || []).includes(group.key)
+          const incomplete = preview.incompleteQuestionGroups?.find((g) => g.key === group.key) || null
+          const adapted = preview.sourceAdaptedQuestionGroups?.find((g) => g.groupKey === group.key) || null
 
-      <p className={styles.hint}>Total UWorld questions: {totalQuestions}</p>
+          let actions
+          if (excluded) {
+            actions = (
+              <div className={`${styles.groupActions} ${previewLoading ? styles.groupPendingNote : ''}`}>
+                <button type="button" className={styles.btnSmall} disabled={previewLoading} onClick={() => onUndoExclusion(group.key)}>
+                  Undo
+                </button>
+              </div>
+            )
+          } else if (incomplete) {
+            actions = (
+              <div className={`${styles.groupActions} ${previewLoading ? styles.groupPendingNote : ''}`}>
+                <button
+                  type="button"
+                  className={styles.btnPrimary}
+                  disabled={previewLoading}
+                  onClick={() => onAddRelatedTopics(incomplete.missingRequiredTopicIds)}
+                >
+                  Add Related Topics
+                </button>
+                <button type="button" className={styles.btnSecondary} disabled={previewLoading} onClick={() => setConfirm({ open: true, key: group.key })}>
+                  Exclude UWorld Group
+                </button>
+              </div>
+            )
+          } else {
+            actions = (
+              <div className={`${styles.groupActions} ${previewLoading ? styles.groupPendingNote : ''}`}>
+                <button type="button" className={styles.btnSecondary} disabled={previewLoading} onClick={() => setConfirm({ open: true, key: group.key })}>
+                  Exclude UWorld Group
+                </button>
+              </div>
+            )
+          }
+
+          return (
+            <UWorldGroupCard
+              key={group.key}
+              group={group}
+              isFallback={isFallback}
+              excluded={excluded}
+              incomplete={incomplete}
+              adapted={adapted}
+              preferredQuestionsPerDay={form.preferredQuestionsPerDay}
+              topicTitleById={topicTitleById}
+            >
+              {actions}
+            </UWorldGroupCard>
+          )
+        })
+      )}
+
+      <p className={styles.hint}>{(form.questionGroupExclusions || []).length} group(s) excluded</p>
+
+      <Modal
+        open={confirm.open}
+        onOpenChange={(v) => { if (!v) setConfirm({ open: false, key: null }) }}
+        size="sm"
+      >
+        <Modal.Title>Exclude UWorld Group</Modal.Title>
+        <Modal.Description>This group will be excluded from the plan. You can undo this at any time.</Modal.Description>
+        <div className={styles.groupActions}>
+          <button type="button" className={styles.btnSecondary} onClick={() => setConfirm({ open: false, key: null })}>Cancel</button>
+          <button
+            type="button"
+            className={styles.btnPrimary}
+            onClick={() => {
+              if (confirm.key) onExcludeGroup(confirm.key)
+              setConfirm({ open: false, key: null })
+            }}
+          >
+            Confirm Exclude
+          </button>
+        </div>
+      </Modal>
     </div>
   )
 }
