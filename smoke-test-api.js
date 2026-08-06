@@ -2,6 +2,32 @@ const APPROVED_STAGING_HOST = 'medstudy-api-staging.medstudy.workers.dev';
 const PRODUCTION_BASE = 'https://medstudy-api.medstudy.workers.dev';
 const CLEANUP_MAX_PASSES = 3;
 
+const REQUEST_MIN_GAP_MS = 350;
+const RATE_LIMIT_MAX_RETRIES = 5;
+const RATE_LIMIT_BASE_DELAY_MS = 800;
+const rawFetch = globalThis.fetch;
+let lastRequestAt = 0;
+
+async function throttledFetch(url, init) {
+  const elapsed = Date.now() - lastRequestAt;
+  if (elapsed < REQUEST_MIN_GAP_MS) {
+    await new Promise(resolve => setTimeout(resolve, REQUEST_MIN_GAP_MS - elapsed));
+  }
+  lastRequestAt = Date.now();
+  let attempts = 0;
+  for (;;) {
+    const res = await rawFetch(url, init);
+    if (res.status === 429 && attempts < RATE_LIMIT_MAX_RETRIES) {
+      attempts += 1;
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_BASE_DELAY_MS * attempts));
+      continue;
+    }
+    return res;
+  }
+}
+
+globalThis.fetch = throttledFetch;
+
 function requireEnv(name, fallback) {
   const v = process.env[name];
   if (v !== undefined && v !== '') return v;
@@ -240,6 +266,7 @@ async function run() {
     { name: '13. Idempotency', tests: [testSuite13()] },
     { name: '14. Cross-user isolation', tests: [testSuite14()] },
     { name: '15. Plan naming, rename, and delete (Phases 1-2)', tests: testSuite15() },
+    { name: '16. Grouped UWorld scheduling (R2)', tests: testSuite16() },
   ];
 
   try {
@@ -710,6 +737,23 @@ function testSuite14() {
 
 let namingPlanId = null;
 
+// Suite 16 — grouped UWorld scheduling (R2)
+let groupedPlanId = null
+let groupedIschemicId = null
+let groupedRev = 0
+let mainCreateIdemKey = null
+let mainUworldTaskId = null
+let mainUworldTargetCount = null
+let mainUworldCompleteIdemKey = null
+let mainUworldCompletePayload = null
+let mainUworldFirstRev = null
+let perTopicPlanId = null
+let progressPlanId = null
+let progressRev = 0
+let progressUworldTaskId = null
+
+const PREVIEW_CONTRACT_KEYS = ['availability', 'feasibility', 'incompleteQuestionGroups', 'plan', 'previewToken', 'questionGroupStates', 'questionGroups', 'sourceAdaptedQuestionGroups', 'tasks', 'topics', 'unscheduledWork']
+
 async function createNamingPlan(token, displayName, withCapacity = false) {
   const payload = buildPreviewPayload(withCapacity, displayName);
   const previewRes = await fetch(`${BASE}/api/rotation-planner/plans/preview`, {
@@ -930,6 +974,582 @@ function testSuite15() {
 }
 
 // ===================================================================
+// SUITE 16 — Grouped UWorld scheduling (R2)
+// ===================================================================
+
+function testSuite16() {
+  return [
+    // ─── A — Backward compatibility (per_topic unchanged) [1-3] ───
+    test('S16.1', 'Per-topic preview keeps grouped arrays empty with contract key order', 'Suite 16', async () => {
+      const res = await fetch(`${BASE}/api/rotation-planner/plans/preview`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPreviewPayload(false)),
+      })
+      if (res.status !== 200) throw new Error(`Preview failed: ${res.status}`)
+      const body = await res.json()
+      if (Object.keys(body).sort().join(',') !== PREVIEW_CONTRACT_KEYS.join(',')) {
+        throw new Error(`Unexpected body keys: ${Object.keys(body).sort().join(',')}`)
+      }
+      if (!Array.isArray(body.questionGroups) || body.questionGroups.length !== 0) throw new Error('Expected empty questionGroups for per_topic preview')
+      if (!Array.isArray(body.questionGroupStates) || body.questionGroupStates.length !== 0) throw new Error('Expected empty questionGroupStates for per_topic preview')
+      if (!Array.isArray(body.incompleteQuestionGroups) || body.incompleteQuestionGroups.length !== 0) throw new Error('Expected empty incompleteQuestionGroups')
+      if (!Array.isArray(body.sourceAdaptedQuestionGroups) || body.sourceAdaptedQuestionGroups.length !== 0) throw new Error('Expected empty sourceAdaptedQuestionGroups')
+    }),
+
+    test('S16.2', 'Per-topic create stays legacy: no groups, no gated tasks', 'Suite 16', async () => {
+      const created = await createPlanFromPreview(tokens.A, buildPreviewPayload(false, 'Per Topic Compat Smoke'))
+      if (created.status !== 201) throw new Error(`Create failed: ${created.status} ${created.text}`)
+      const body = created.body
+      if (body.plan.uworldSchedulingMode !== 'per_topic') throw new Error(`Expected per_topic mode, got ${body.plan.uworldSchedulingMode}`)
+      if (!Array.isArray(body.questionGroups) || body.questionGroups.length !== 0) throw new Error('Expected empty questionGroups on create')
+      for (const t of body.tasks) {
+        if (t.planQuestionGroupId) throw new Error(`Unexpected planQuestionGroupId on per-topic task ${t.id}`)
+        if (t.unlockCondition && String(t.unlockCondition).startsWith('learning_group_completed:')) {
+          throw new Error('Unexpected gated unlock on per-topic task')
+        }
+      }
+      perTopicPlanId = body.plan.id
+      console.log(`    Per-topic compat plan created: ${perTopicPlanId}`)
+    }),
+
+    test('S16.3', 'Per-topic detail and recalc stay legacy; plan deletes cleanly', 'Suite 16', async () => {
+      if (!perTopicPlanId) throw new Error('S16.2 must pass first')
+      const detail = await getPlanDetail(tokens.A, perTopicPlanId)
+      if (detail.status !== 200) throw new Error(`Detail failed: ${detail.status}`)
+      if (!Array.isArray(detail.body.questionGroups) || detail.body.questionGroups.length !== 0) throw new Error('Expected empty questionGroups in per-topic detail')
+      if ('questionGroupStates' in detail.body) throw new Error('per-topic detail must not expose questionGroupStates')
+      const rev = detail.body.plan.revision
+      const rec = await recalcRequest(tokens.A, perTopicPlanId, rev, '2026-08-07')
+      if (rec.status !== 200) throw new Error(`Per-topic recalc failed: ${rec.status} ${rec.text}`)
+      if (rec.body.revision !== rev + 1) throw new Error(`Per-topic recalc revision mismatch: ${rec.body.revision}`)
+      if (!Array.isArray(rec.body.topicStates)) throw new Error('Expected topicStates in per-topic recalc response')
+      const after = await getPlanDetail(tokens.A, perTopicPlanId)
+      if (after.body.plan.uworldSchedulingMode !== 'per_topic') throw new Error('Per-topic mode changed after recalc')
+      const delRes = await fetch(`${BASE}/api/rotation-planner/plans/${perTopicPlanId}`, { method: 'DELETE', headers: authHeaders('A') })
+      if (delRes.status !== 200) throw new Error(`Per-topic delete failed: ${delRes.status}`)
+      const getRes = await fetch(`${BASE}/api/rotation-planner/plans/${perTopicPlanId}`, { headers: authHeaders('A') })
+      if (getRes.status !== 404) throw new Error('Per-topic plan still exists after delete')
+      perTopicPlanId = null
+    }),
+
+    // ─── B — Grouped preview [4-10] ───
+    test('S16.4', 'Grouped preview builds ischemic-heart-disease group with target 30', 'Suite 16', async () => {
+      const res = await fetch(`${BASE}/api/rotation-planner/plans/preview`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildGroupedPayload()),
+      })
+      if (res.status !== 200) throw new Error(`Preview failed: ${res.status} ${await res.text()}`)
+      const body = await res.json()
+      if (!Array.isArray(body.questionGroups) || body.questionGroups.length === 0) throw new Error('Expected questionGroups')
+      const ischemic = body.questionGroups.find(g => g.key === 'ischemic-heart-disease')
+      if (!ischemic) throw new Error('Missing ischemic-heart-disease group')
+      if (ischemic.targetQuestions !== 30) throw new Error(`Expected targetQuestions 30, got ${ischemic.targetQuestions}`)
+      if (JSON.stringify(ischemic.memberTopicIds) !== JSON.stringify(['cardiology.stable-angina-pectoris', 'cardiology.acute-coronary-syndromes-acs'])) {
+        throw new Error(`Unexpected memberTopicIds: ${JSON.stringify(ischemic.memberTopicIds)}`)
+      }
+      if (JSON.stringify(ischemic.requiredTopicIds) !== JSON.stringify(['cardiology.stable-angina-pectoris', 'cardiology.acute-coronary-syndromes-acs'])) {
+        throw new Error(`Unexpected requiredTopicIds: ${JSON.stringify(ischemic.requiredTopicIds)}`)
+      }
+    }),
+
+    test('S16.5', 'Grouped preview group state projects full-plan completion', 'Suite 16', async () => {
+      const res = await fetch(`${BASE}/api/rotation-planner/plans/preview`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildGroupedPayload()),
+      })
+      if (res.status !== 200) throw new Error(`Preview failed: ${res.status} ${await res.text()}`)
+      const body = await res.json()
+      if (!Array.isArray(body.questionGroupStates) || body.questionGroupStates.length === 0) throw new Error('Expected questionGroupStates')
+      const state = body.questionGroupStates.find(s => s.key === 'ischemic-heart-disease')
+      if (!state) throw new Error('Missing ischemic group state')
+      if (state.targetQuestions !== 30) throw new Error(`Expected targetQuestions 30, got ${state.targetQuestions}`)
+      if (state.status !== 'in_progress') throw new Error(`Expected in_progress, got ${state.status}`)
+      if (state.completedQuestions !== 30 || state.remainingQuestions !== 0) {
+        throw new Error(`Unexpected projected counts: ${JSON.stringify(state)}`)
+      }
+      if (state.requiredLearningCompleted !== true) throw new Error('Expected requiredLearningCompleted true')
+      if (!state.unlockedAt) throw new Error('unlockedAt not set')
+      if (state.excluded !== false) throw new Error('Expected excluded false')
+      if (!Array.isArray(state.requiredTopicIds) || state.requiredTopicIds.length !== 2) throw new Error('Expected requiredTopicIds on state')
+    }),
+
+    test('S16.6', 'Grouped preview reports no incomplete/source-adapted groups; gated UWorld tasks gated', 'Suite 16', async () => {
+      const res = await fetch(`${BASE}/api/rotation-planner/plans/preview`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildGroupedPayload()),
+      })
+      if (res.status !== 200) throw new Error(`Preview failed: ${res.status} ${await res.text()}`)
+      const body = await res.json()
+      if (!Array.isArray(body.incompleteQuestionGroups) || body.incompleteQuestionGroups.length !== 0) throw new Error('Expected empty incompleteQuestionGroups')
+      if (!Array.isArray(body.sourceAdaptedQuestionGroups) || body.sourceAdaptedQuestionGroups.length !== 0) throw new Error('Expected empty sourceAdaptedQuestionGroups')
+      const uworldTasks = body.tasks.filter(t => t.taskType === 'uworld_questions')
+      for (const t of uworldTasks) {
+        if (!String(t.unlockCondition).startsWith('learning_group_completed:ischemic-heart-disease')) {
+          throw new Error(`Unexpected unlockCondition on grouped preview task: ${t.unlockCondition}`)
+        }
+      }
+      if (body.tasks.filter(t => t.taskType === 'learning').length === 0) throw new Error('Expected learning tasks in grouped preview')
+    }),
+
+    test('S16.7', 'Grouped preview plan metadata and contract key order', 'Suite 16', async () => {
+      const res = await fetch(`${BASE}/api/rotation-planner/plans/preview`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildGroupedPayload()),
+      })
+      if (res.status !== 200) throw new Error(`Preview failed: ${res.status} ${await res.text()}`)
+      const body = await res.json()
+      if (Object.keys(body).sort().join(',') !== PREVIEW_CONTRACT_KEYS.join(',')) {
+        throw new Error(`Unexpected body keys: ${Object.keys(body).sort().join(',')}`)
+      }
+      if (body.plan.uworldSchedulingMode !== 'grouped') throw new Error('Expected grouped uworldSchedulingMode')
+      if (body.previewToken !== body.plan.scheduleFingerprint) throw new Error('previewToken must equal scheduleFingerprint')
+      if (body.plan.id !== null) throw new Error('Preview plan id must be null')
+      if (body.plan.revision !== 0) throw new Error('Preview plan revision must be 0')
+    }),
+
+    test('S16.8', 'Grouped preview rejects unknown group exclusion with 400 UNKNOWN_QUESTION_GROUP', 'Suite 16', async () => {
+      const res = await fetch(`${BASE}/api/rotation-planner/plans/preview`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildGroupedPayload({ questionGroupExclusions: ['does-not-exist'] })),
+      })
+      if (res.status !== 400) throw new Error(`Expected 400, got ${res.status}`)
+      const body = await res.json()
+      if (body.error.code !== 'UNKNOWN_QUESTION_GROUP') throw new Error(`Expected UNKNOWN_QUESTION_GROUP, got ${body.error.code}`)
+    }),
+
+    test('S16.9', 'Grouped preview flags missing source-supported required topic as incomplete', 'Suite 16', async () => {
+      const payload = buildGroupedPayload({ topics: [
+        { normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.stable-angina-pectoris', uworldRemainingQuestions: 20, alreadyCompletedLearningPercentage: 0, alreadyCompletedQuestionCount: 0, incorrectQuestionsRemaining: 0 },
+      ] })
+      const res = await fetch(`${BASE}/api/rotation-planner/plans/preview`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (res.status !== 200) throw new Error(`Preview should return 200, got ${res.status}: ${await res.text()}`)
+      const body = await res.json()
+      if (!Array.isArray(body.incompleteQuestionGroups) || body.incompleteQuestionGroups.length === 0) throw new Error('Expected incompleteQuestionGroups')
+      if (!body.incompleteQuestionGroups.some(g => g.key === 'ischemic-heart-disease')) throw new Error('Expected ischemic-heart-disease in incompleteQuestionGroups')
+    }),
+
+    test('S16.10', 'Grouped preview exclusion marks the group excluded in questionGroups and states', 'Suite 16', async () => {
+      const res = await fetch(`${BASE}/api/rotation-planner/plans/preview`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildGroupedPayload({ questionGroupExclusions: ['ischemic-heart-disease'] })),
+      })
+      if (res.status !== 200) throw new Error(`Preview failed: ${res.status} ${await res.text()}`)
+      const body = await res.json()
+      const group = body.questionGroups.find(g => g.key === 'ischemic-heart-disease')
+      if (!group) throw new Error('Expected ischemic group in exclusions preview')
+      if (group.excluded !== 1) throw new Error(`Expected excluded 1, got ${group.excluded}`)
+      const state = body.questionGroupStates.find(s => s.key === 'ischemic-heart-disease')
+      if (!state) throw new Error('Expected ischemic state')
+      if (state.status !== 'excluded') throw new Error(`Expected excluded status, got ${state.status}`)
+    }),
+
+    // ─── C — Grouped create [11-16] ───
+    test('S16.11', 'Create grouped plan persists ischemic group with stable id and target 30', 'Suite 16', async () => {
+      mainCreateIdemKey = 'smoke-grouped-create-' + Date.now() + '-' + Math.random().toString(36).slice(2)
+      const created = await createGroupedPlan(tokens.A, { displayName: 'Grouped UWorld Smoke' }, mainCreateIdemKey)
+      if (created.status !== 201) throw new Error(`Create failed: ${created.status} ${created.text}`)
+      const body = created.body
+      if (!Array.isArray(body.questionGroups) || body.questionGroups.length === 0) throw new Error('Expected questionGroups on create')
+      const ischemic = body.questionGroups.find(g => g.groupKey === 'ischemic-heart-disease')
+      if (!ischemic) throw new Error('Missing persisted ischemic group')
+      if (!ischemic.id) throw new Error('Persisted group must have a non-null id')
+      if (ischemic.targetQuestions !== 30) throw new Error(`Expected target 30, got ${ischemic.targetQuestions}`)
+      if (JSON.stringify(ischemic.requiredTopicIds) !== JSON.stringify(['cardiology.stable-angina-pectoris', 'cardiology.acute-coronary-syndromes-acs'])) {
+        throw new Error(`Unexpected persisted requiredTopicIds: ${JSON.stringify(ischemic.requiredTopicIds)}`)
+      }
+      groupedPlanId = body.plan.id
+      groupedIschemicId = ischemic.id
+      groupedRev = body.plan.revision
+      console.log(`    Grouped plan created: ${groupedPlanId} (group ${groupedIschemicId})`)
+    }),
+
+    test('S16.12', 'Created grouped plan tasks reference the persisted group and gating', 'Suite 16', async () => {
+      if (!groupedPlanId) throw new Error('S16.11 must pass first')
+      const detail = await getPlanDetail(tokens.A, groupedPlanId)
+      const body = detail.body
+      const gated = body.tasks.filter(t => t.taskType === 'uworld_questions' && t.planQuestionGroupId === groupedIschemicId)
+      if (gated.length === 0) throw new Error('Expected grouped UWorld tasks on create')
+      for (const t of gated) {
+        if (t.unlockCondition !== 'learning_group_completed:ischemic-heart-disease') {
+          throw new Error(`Unexpected gating: ${t.unlockCondition}`)
+        }
+      }
+      if (body.tasks.filter(t => t.taskType === 'learning').length === 0) throw new Error('Expected learning tasks')
+      if (body.plan.revision !== 0) throw new Error(`Expected revision 0, got ${body.plan.revision}`)
+    }),
+
+    test('S16.13', 'Create rejects unknown group exclusion with 400 UNKNOWN_QUESTION_GROUP', 'Suite 16', async () => {
+      const res = await fetch(`${BASE}/api/rotation-planner/plans`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ ...buildGroupedPayload(), previewToken: 'whatever', acceptOverload: true, questionGroupExclusions: ['does-not-exist'] }),
+      })
+      if (res.status !== 400) throw new Error(`Expected 400, got ${res.status}: ${await res.text()}`)
+      const body = await res.json()
+      if (body.error.code !== 'UNKNOWN_QUESTION_GROUP') throw new Error(`Expected UNKNOWN_QUESTION_GROUP, got ${body.error.code}`)
+    }),
+
+    test('S16.14', 'Create with missing source-supported required topic → 422 GROUP_REQUIRED_TOPIC_MISSING', 'Suite 16', async () => {
+      const payload = buildGroupedPayload({ displayName: 'Missing Required Topic', topics: [
+        { normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.stable-angina-pectoris', uworldRemainingQuestions: 20, alreadyCompletedLearningPercentage: 0, alreadyCompletedQuestionCount: 0, incorrectQuestionsRemaining: 0 },
+      ] })
+      const res = await fetch(`${BASE}/api/rotation-planner/plans`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ ...payload, previewToken: 'whatever', acceptOverload: true }),
+      })
+      if (res.status !== 422) throw new Error(`Expected 422, got ${res.status}: ${await res.text()}`)
+      const body = await res.json()
+      if (body.error.code !== 'GROUP_REQUIRED_TOPIC_MISSING') throw new Error(`Expected GROUP_REQUIRED_TOPIC_MISSING, got ${body.error.code}`)
+      if (!String(body.error.message).includes('Ischemic Heart Disease')) throw new Error(`Message missing group title: ${body.error.message}`)
+    }),
+
+    test('S16.15', 'Grouped plan detail and list expose grouped mode and groups', 'Suite 16', async () => {
+      if (!groupedPlanId) throw new Error('S16.11 must pass first')
+      const detail = await getPlanDetail(tokens.A, groupedPlanId)
+      if (detail.status !== 200) throw new Error(`Detail failed: ${detail.status}`)
+      if (detail.body.plan.uworldSchedulingMode !== 'grouped') throw new Error('Expected grouped mode in detail')
+      const ischemic = detail.body.questionGroups.find(g => g.id === groupedIschemicId)
+      if (!ischemic) throw new Error('Group missing from detail')
+      if (!Array.isArray(detail.body.questionGroupStates)) throw new Error('Expected questionGroupStates in grouped detail')
+      const list = await listPlans(tokens.A)
+      const inList = list.find(p => p.id === groupedPlanId)
+      if (!inList) throw new Error('Grouped plan missing from list')
+      if (inList.uworldSchedulingMode !== 'grouped') throw new Error(`List mode mismatch: ${inList.uworldSchedulingMode}`)
+    }),
+
+    test('S16.16', 'Grouped plan detail derives locked group state from task history', 'Suite 16', async () => {
+      if (!groupedPlanId) throw new Error('S16.11 must pass first')
+      const detail = await getPlanDetail(tokens.A, groupedPlanId)
+      const state = detail.body.questionGroupStates.find(s => s.key === 'ischemic-heart-disease')
+      if (!state) throw new Error('Missing ischemic state')
+      if (state.targetQuestions !== 30 || state.completedQuestions !== 0 || state.remainingQuestions !== 30 || state.incorrectQuestionsRemaining !== 0) {
+        throw new Error(`Unexpected derived state: ${JSON.stringify(state)}`)
+      }
+      if (state.requiredLearningCompleted !== false || state.status !== 'locked') throw new Error(`Expected locked, got ${state.status}`)
+    }),
+
+    // ─── D — Scheduling & locking [17-23] ───
+    test('S16.17', 'Locked grouped UWorld task rejects mutations with TASK_LOCKED', 'Suite 16', async () => {
+      if (!groupedPlanId) throw new Error('S16.11 must pass first')
+      const detail = await getPlanDetail(tokens.A, groupedPlanId)
+      const gated = detail.body.tasks.find(t => t.taskType === 'uworld_questions' && (t.unlockCondition || '').startsWith('learning_group_completed:') && t.status === 'pending')
+      if (!gated) throw new Error('No gated grouped UWorld task in fresh plan')
+      const attempts = [
+        { action: 'complete', payload: { actualMinutes: 45, completedCount: gated.targetCount, incorrectCount: 2 } },
+        { action: 'start', payload: {} },
+      ]
+      for (const { action, payload } of attempts) {
+        const res = await patchTaskRequest(tokens.A, groupedPlanId, gated.id, action, payload, detail.body.plan.revision)
+        if (res.status !== 409) throw new Error(`Expected 409 for ${action}, got ${res.status}: ${res.text}`)
+        if (res.body.error.code !== 'TASK_LOCKED') throw new Error(`Expected TASK_LOCKED for ${action}, got ${res.body.error.code}`)
+        if (res.body.error.message !== 'Complete the Ischemic Heart Disease learning topics to unlock this UWorld review block.') {
+          throw new Error(`Unexpected lock message: ${res.body.error.message}`)
+        }
+      }
+      const after = await getPlanDetail(tokens.A, groupedPlanId)
+      if (after.body.plan.revision !== 0) throw new Error('Revision changed after locked attempts')
+    }),
+
+    test('S16.18', 'Completing group learning unlocks the grouped UWorld task', 'Suite 16', async () => {
+      if (!groupedPlanId) throw new Error('S16.11 must pass first')
+      let detail = await getPlanDetail(tokens.A, groupedPlanId)
+      let rev = detail.body.plan.revision
+      const learningTasks = detail.body.tasks.filter(t => t.taskType === 'learning' && t.status === 'pending')
+      if (learningTasks.length === 0) throw new Error('No learning tasks in grouped plan')
+      for (const lt of learningTasks) {
+        const res = await patchTaskRequest(tokens.A, groupedPlanId, lt.id, 'complete', { actualMinutes: 15 }, rev)
+        if (res.status !== 200) throw new Error(`Complete learning failed: ${res.status} ${res.text}`)
+        rev = res.body.revision
+      }
+      groupedRev = rev
+      const after = await getPlanDetail(tokens.A, groupedPlanId)
+      const state = after.body.questionGroupStates.find(s => s.key === 'ischemic-heart-disease')
+      if (!state) throw new Error('Missing ischemic state')
+      if (state.requiredLearningCompleted !== true) throw new Error('Group did not unlock after learning')
+      if (!state.unlockedAt) throw new Error('unlockedAt not set')
+      if (state.status !== 'pending') throw new Error(`Expected pending, got ${state.status}`)
+    }),
+
+    test('S16.19', 'Unlocked grouped task accepts start and record_questions partial progress', 'Suite 16', async () => {
+      if (!groupedPlanId) throw new Error('S16.11 must pass first')
+      let detail = await getPlanDetail(tokens.A, groupedPlanId)
+      let rev = detail.body.plan.revision
+      const gated = detail.body.tasks.find(t => t.taskType === 'uworld_questions' && (t.unlockCondition || '').startsWith('learning_group_completed:') && t.status === 'pending')
+      if (!gated) throw new Error('No pending unlocked grouped UWorld task')
+      const startRes = await patchTaskRequest(tokens.A, groupedPlanId, gated.id, 'start', {}, rev)
+      if (startRes.status !== 200) throw new Error(`start failed: ${startRes.status} ${startRes.text}`)
+      rev = startRes.body.revision
+      const rqRes = await patchTaskRequest(tokens.A, groupedPlanId, gated.id, 'record_questions', { actualMinutes: 20, completedCount: 15, incorrectCount: 1 }, rev)
+      if (rqRes.status !== 200) throw new Error(`record_questions failed: ${rqRes.status} ${rqRes.text}`)
+      if (rqRes.body.status !== 'in_progress') throw new Error(`Expected in_progress, got ${rqRes.body.status}`)
+      if (rqRes.body.recalculationRequired !== false) throw new Error('record_questions must not require recalculation')
+      groupedRev = rqRes.body.revision
+      const after = await getPlanDetail(tokens.A, groupedPlanId)
+      const task = after.body.tasks.find(t => t.id === gated.id)
+      if (task.completedCount !== 15 || task.incorrectCount !== 1) throw new Error(`Counts not persisted: ${JSON.stringify(task)}`)
+      const state = after.body.questionGroupStates.find(s => s.key === 'ischemic-heart-disease')
+      if (state.completedQuestions !== 15 || state.remainingQuestions !== 15 || state.incorrectQuestionsRemaining !== 1) {
+        throw new Error(`Unexpected group state: ${JSON.stringify(state)}`)
+      }
+      if (state.status !== 'in_progress') throw new Error(`Expected in_progress, got ${state.status}`)
+    }),
+
+    test('S16.20', 'Completing all grouped UWorld tasks marks group questions done', 'Suite 16', async () => {
+      if (!groupedPlanId) throw new Error('S16.11 must pass first')
+      let detail = await getPlanDetail(tokens.A, groupedPlanId)
+      let rev = detail.body.plan.revision
+      const gatedTasks = detail.body.tasks.filter(t => t.taskType === 'uworld_questions' && t.planQuestionGroupId === groupedIschemicId && t.status !== 'completed')
+      if (gatedTasks.length === 0) throw new Error('No un-completed grouped UWorld tasks')
+      for (let i = 0; i < gatedTasks.length; i++) {
+        const t = gatedTasks[i]
+        const payload = { actualMinutes: 45, completedCount: t.targetCount, incorrectCount: i === 0 ? 2 : 0 }
+        const idemKey = i === 0 ? `smoke-grouped-complete-${Date.now()}-${Math.random().toString(36).slice(2)}` : undefined
+        const res = await patchTaskRequest(tokens.A, groupedPlanId, t.id, 'complete', payload, rev, idemKey)
+        if (res.status !== 200) throw new Error(`complete uworld failed: ${res.status} ${res.text}`)
+        rev = res.body.revision
+        if (i === 0) {
+          if (res.body.status !== 'completed') throw new Error(`Expected completed, got ${res.body.status}`)
+          if (res.body.recalculationRequired !== true) throw new Error('Expected recalculationRequired true')
+          mainUworldTaskId = t.id
+          mainUworldTargetCount = t.targetCount
+          mainUworldCompleteIdemKey = idemKey
+          mainUworldCompletePayload = payload
+          mainUworldFirstRev = res.body.revision
+        }
+      }
+      groupedRev = rev
+    }),
+
+    test('S16.21', 'Group state reflects completed questions and pending incorrect review', 'Suite 16', async () => {
+      if (!groupedPlanId) throw new Error('S16.11 must pass first')
+      const detail = await getPlanDetail(tokens.A, groupedPlanId)
+      const state = detail.body.questionGroupStates.find(s => s.key === 'ischemic-heart-disease')
+      if (!state) throw new Error('Missing ischemic state')
+      if (state.completedQuestions !== 30 || state.remainingQuestions !== 0) throw new Error(`Unexpected completion: ${JSON.stringify(state)}`)
+      if (state.incorrectQuestionsRemaining !== 2) throw new Error(`Expected incorrect 2, got ${state.incorrectQuestionsRemaining}`)
+      if (state.status !== 'in_progress') throw new Error(`Expected in_progress, got ${state.status}`)
+    }),
+
+    test('S16.22', 'Idempotent replay of grouped task complete returns cached result', 'Suite 16', async () => {
+      if (!groupedPlanId || !mainUworldTaskId) throw new Error('S16.20 must pass first')
+      const detail = await getPlanDetail(tokens.A, groupedPlanId)
+      const rev = detail.body.plan.revision
+      const res = await patchTaskRequest(tokens.A, groupedPlanId, mainUworldTaskId, 'complete', mainUworldCompletePayload, rev, mainUworldCompleteIdemKey)
+      if (res.status !== 200) throw new Error(`Replay failed: ${res.status} ${res.text}`)
+      if (res.body.revision !== mainUworldFirstRev) throw new Error(`Replay returned revision ${res.body.revision}, expected ${mainUworldFirstRev}`)
+      const after = await getPlanDetail(tokens.A, groupedPlanId)
+      if (after.body.plan.revision !== groupedRev) throw new Error('Replay mutated the plan revision')
+    }),
+
+    test('S16.23', 'Recalculate keeps grouped mode and schedules gated incorrect_review', 'Suite 16', async () => {
+      if (!groupedPlanId) throw new Error('S16.11 must pass first')
+      const detail = await getPlanDetail(tokens.A, groupedPlanId)
+      const rev = detail.body.plan.revision
+      const res = await recalcRequest(tokens.A, groupedPlanId, rev, '2026-08-07')
+      if (res.status !== 200) throw new Error(`Recalc failed: ${res.status} ${res.text}`)
+      const r = res.body
+      if (r.revision !== rev + 1) throw new Error(`Expected revision ${rev + 1}, got ${r.revision}`)
+      if (r.replayed !== false) throw new Error('Expected replayed false')
+      for (const key of ['planId', 'revision', 'recalculationDate', 'replayed', 'tasks', 'topicStates', 'feasibility']) {
+        if (!(key in r)) throw new Error(`Missing recalc response key: ${key}`)
+      }
+      if (!Array.isArray(r.topicStates) || r.topicStates.length === 0) throw new Error('Expected non-empty topicStates')
+      for (const ts of r.topicStates) {
+        if (!('id' in ts) || !('status' in ts) || !('learningComplete' in ts) || !('projectedQuestionsRemaining' in ts)) {
+          throw new Error(`Bad topicState shape: ${JSON.stringify(ts)}`)
+        }
+      }
+      groupedRev = r.revision
+      const after = await getPlanDetail(tokens.A, groupedPlanId)
+      if (after.body.plan.uworldSchedulingMode !== 'grouped') throw new Error('Grouped mode lost after recalc')
+      const ischemic = after.body.questionGroups.find(g => g.id === groupedIschemicId)
+      if (!ischemic) throw new Error('Group lost after recalc')
+      const reviewTasks = after.body.tasks.filter(t => t.taskType === 'incorrect_review' && (t.unlockCondition || '').startsWith('uworld_group_completed:'))
+      if (reviewTasks.length === 0) throw new Error('No incorrect_review tasks scheduled after recalc')
+      const pendingUworld = after.body.tasks.filter(t => t.taskType === 'uworld_questions' && t.planQuestionGroupId === groupedIschemicId && t.status === 'pending')
+      if (pendingUworld.length !== 0) throw new Error('Pending grouped UWorld tasks remain after completion')
+    }),
+
+    // ─── E — Progress & incorrect review [24-29] ───
+    test('S16.24', 'Group incorrect_review task unlocks and completes after group questions done', 'Suite 16', async () => {
+      if (!groupedPlanId) throw new Error('S16.11 must pass first')
+      let detail = await getPlanDetail(tokens.A, groupedPlanId)
+      let rev = detail.body.plan.revision
+      const reviewTasks = detail.body.tasks.filter(t => t.taskType === 'incorrect_review' && (t.unlockCondition || '').startsWith('uworld_group_completed:') && t.status === 'pending')
+      if (reviewTasks.length === 0) throw new Error('No pending incorrect_review tasks')
+      for (const t of reviewTasks) {
+        const res = await patchTaskRequest(tokens.A, groupedPlanId, t.id, 'complete', { actualMinutes: 5, completedCount: t.targetCount }, rev)
+        if (res.status !== 200) throw new Error(`complete incorrect_review failed: ${res.status} ${res.text}`)
+        rev = res.body.revision
+      }
+      groupedRev = rev
+    }),
+
+    test('S16.25', 'Group state completes after incorrect review is done', 'Suite 16', async () => {
+      if (!groupedPlanId) throw new Error('S16.11 must pass first')
+      const detail = await getPlanDetail(tokens.A, groupedPlanId)
+      const state = detail.body.questionGroupStates.find(s => s.key === 'ischemic-heart-disease')
+      if (!state) throw new Error('Missing ischemic state')
+      if (state.incorrectQuestionsRemaining !== 0) throw new Error(`Expected incorrect 0, got ${state.incorrectQuestionsRemaining}`)
+      if (state.remainingQuestions !== 0) throw new Error(`Expected remaining 0, got ${state.remainingQuestions}`)
+      if (state.status !== 'completed') throw new Error(`Expected completed, got ${state.status}`)
+    }),
+
+    test('S16.26', 'Count-task validation rejects oversized completedCount and incorrectCount', 'Suite 16', async () => {
+      const created = await createGroupedPlan(tokens.A, { displayName: 'Grouped Progress Smoke' })
+      if (created.status !== 201) throw new Error(`Create failed: ${created.status} ${created.text}`)
+      progressPlanId = created.body.plan.id
+      let detail = await getPlanDetail(tokens.A, progressPlanId)
+      let rev = detail.body.plan.revision
+      const learningTasks = detail.body.tasks.filter(t => t.taskType === 'learning' && t.status === 'pending')
+      for (const lt of learningTasks) {
+        const res = await patchTaskRequest(tokens.A, progressPlanId, lt.id, 'complete', { actualMinutes: 15 }, rev)
+        if (res.status !== 200) throw new Error(`Learning failed: ${res.status} ${res.text}`)
+        rev = res.body.revision
+      }
+      const after = await getPlanDetail(tokens.A, progressPlanId)
+      const gated = after.body.tasks.find(t => t.taskType === 'uworld_questions' && (t.unlockCondition || '').startsWith('learning_group_completed:') && t.status === 'pending')
+      if (!gated) throw new Error('No unlocked pending grouped UWorld task in progress plan')
+      progressUworldTaskId = gated.id
+      progressRev = rev
+      const tooMany = await patchTaskRequest(tokens.A, progressPlanId, gated.id, 'complete', { actualMinutes: 45, completedCount: gated.targetCount + 5, incorrectCount: 2 }, rev)
+      if (tooMany.status !== 400) throw new Error(`Expected 400 oversized, got ${tooMany.status} ${tooMany.text}`)
+      if (tooMany.body.error.code !== 'VALIDATION_ERROR') throw new Error(`Expected VALIDATION_ERROR, got ${tooMany.body.error.code}`)
+      if (tooMany.body.error.message !== 'COMPLETED_COUNT_EXCEEDS_TARGET') throw new Error(`Expected COMPLETED_COUNT_EXCEEDS_TARGET message, got ${tooMany.body.error.message}`)
+      const badIncorrect = await patchTaskRequest(tokens.A, progressPlanId, gated.id, 'complete', { actualMinutes: 45, completedCount: 5, incorrectCount: 6 }, rev)
+      if (badIncorrect.status !== 400) throw new Error(`Expected 400 bad incorrect, got ${badIncorrect.status} ${badIncorrect.text}`)
+      if (badIncorrect.body.error.code !== 'VALIDATION_ERROR') throw new Error(`Expected VALIDATION_ERROR, got ${badIncorrect.body.error.code}`)
+      if (badIncorrect.body.error.message !== 'INCORRECT_COUNT_EXCEEDS_COMPLETED') throw new Error(`Expected INCORRECT_COUNT_EXCEEDS_COMPLETED message, got ${badIncorrect.body.error.message}`)
+      const after2 = await getPlanDetail(tokens.A, progressPlanId)
+      if (after2.body.plan.revision !== rev) throw new Error('Revision changed after validation failures')
+    }),
+
+    test('S16.27', 'Partial update on grouped count task records progress and is terminal', 'Suite 16', async () => {
+      if (!progressPlanId || !progressUworldTaskId) throw new Error('S16.26 must pass first')
+      const res = await patchTaskRequest(tokens.A, progressPlanId, progressUworldTaskId, 'partial', { actualMinutes: 20, completedCount: 10, incorrectCount: 1 }, progressRev)
+      if (res.status !== 200) throw new Error(`partial failed: ${res.status} ${res.text}`)
+      if (res.body.status !== 'partial') throw new Error(`Expected partial, got ${res.body.status}`)
+      progressRev = res.body.revision
+      const after = await getPlanDetail(tokens.A, progressPlanId)
+      const task = after.body.tasks.find(t => t.id === progressUworldTaskId)
+      if (task.status !== 'partial' || task.completedCount !== 10 || task.incorrectCount !== 1) {
+        throw new Error(`Partial not persisted: ${JSON.stringify(task)}`)
+      }
+      const state = after.body.questionGroupStates.find(s => s.key === 'ischemic-heart-disease')
+      if (state.completedQuestions !== 10 || state.remainingQuestions !== 20 || state.incorrectQuestionsRemaining !== 1 || state.status !== 'in_progress') {
+        throw new Error(`Unexpected partial group state: ${JSON.stringify(state)}`)
+      }
+      const immut = await patchTaskRequest(tokens.A, progressPlanId, progressUworldTaskId, 'complete', { actualMinutes: 45, completedCount: 30, incorrectCount: 2 }, progressRev)
+      if (immut.status !== 409) throw new Error(`Expected 409 immutable, got ${immut.status} ${immut.text}`)
+      if (immut.body.error.code !== 'COMPLETED_TASK_IMMUTABLE') throw new Error(`Expected COMPLETED_TASK_IMMUTABLE, got ${immut.body.error.code}`)
+    }),
+
+    test('S16.28', 'Stale expectedRevision on grouped task update → 409 PLAN_REVISION_CONFLICT', 'Suite 16', async () => {
+      if (!progressPlanId || !progressUworldTaskId) throw new Error('S16.26 must pass first')
+      const res = await patchTaskRequest(tokens.A, progressPlanId, progressUworldTaskId, 'start', {}, progressRev - 1)
+      if (res.status !== 409) throw new Error(`Expected 409, got ${res.status} ${res.text}`)
+      if (res.body.error.code !== 'PLAN_REVISION_CONFLICT') throw new Error(`Expected PLAN_REVISION_CONFLICT, got ${res.body.error.code}`)
+    }),
+
+    test('S16.29', 'Invalid action and missing expectedRevision rejected with 400 VALIDATION_ERROR', 'Suite 16', async () => {
+      if (!progressPlanId || !progressUworldTaskId) throw new Error('S16.26 must pass first')
+      const bad = await patchTaskRequest(tokens.A, progressPlanId, progressUworldTaskId, 'explode', {}, progressRev)
+      if (bad.status !== 400) throw new Error(`Expected 400, got ${bad.status} ${bad.text}`)
+      if (bad.body.error.code !== 'VALIDATION_ERROR') throw new Error(`Expected VALIDATION_ERROR, got ${bad.body.error.code}`)
+      const noRev = await fetch(`${BASE}/api/rotation-planner/plans/${progressPlanId}/tasks/${progressUworldTaskId}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start', payload: {} }),
+      })
+      if (noRev.status !== 400) throw new Error(`Expected 400 for missing expectedRevision, got ${noRev.status}`)
+    }),
+
+    // ─── F — API & cleanup [30-35] ───
+    test('S16.30', 'Cross-user access to grouped plan is blocked (404)', 'Suite 16', async () => {
+      if (!groupedPlanId) throw new Error('S16.11 must pass first')
+      const getRes = await fetch(`${BASE}/api/rotation-planner/plans/${groupedPlanId}`, { headers: authHeaders('B') })
+      if (getRes.status !== 404) throw new Error(`Expected 404, got ${getRes.status}`)
+      const delRes = await fetch(`${BASE}/api/rotation-planner/plans/${groupedPlanId}`, { method: 'DELETE', headers: authHeaders('B') })
+      if (delRes.status !== 404) throw new Error(`Expected 404 delete, got ${delRes.status}`)
+      const owner = await getPlanDetail(tokens.A, groupedPlanId)
+      if (owner.status !== 200) throw new Error('Owner lost access after blocked cross-user delete')
+    }),
+
+    test('S16.31', 'Unknown plan returns 404 for detail, delete, and recalc', 'Suite 16', async () => {
+      const missing = '00000000-0000-0000-0000-000000000000'
+      const getRes = await fetch(`${BASE}/api/rotation-planner/plans/${missing}`, { headers: authHeaders('A') })
+      if (getRes.status !== 404) throw new Error(`Expected 404 detail, got ${getRes.status}`)
+      const delRes = await fetch(`${BASE}/api/rotation-planner/plans/${missing}`, { method: 'DELETE', headers: authHeaders('A') })
+      if (delRes.status !== 404) throw new Error(`Expected 404 delete, got ${delRes.status}`)
+      const recRes = await fetch(`${BASE}/api/rotation-planner/plans/${missing}/recalculate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recalculationDate: '2026-08-07', expectedRevision: 0, clientRequestId: crypto.randomUUID() }),
+      })
+      if (recRes.status !== 404) throw new Error(`Expected 404 recalc, got ${recRes.status}`)
+    }),
+
+    test('S16.32', 'Reusing a plan idempotency key with different input → 409 IDEMPOTENCY_CONFLICT', 'Suite 16', async () => {
+      if (!mainCreateIdemKey) throw new Error('S16.11 must pass first')
+      const res = await createGroupedPlan(tokens.A, { displayName: 'Idempotency Conflict Plan' }, mainCreateIdemKey)
+      if (res.status !== 409) throw new Error(`Expected 409, got ${res.status}: ${res.text}`)
+      if (res.body.error.code !== 'IDEMPOTENCY_CONFLICT') throw new Error(`Expected IDEMPOTENCY_CONFLICT, got ${res.body.error.code}`)
+    }),
+
+    test('S16.33', 'Forecast endpoint works for grouped plan', 'Suite 16', async () => {
+      if (!progressPlanId) throw new Error('S16.26 must pass first')
+      const res = await fetch(`${BASE}/api/rotation-planner/plans/${progressPlanId}/forecast`, { headers: authHeaders('A') })
+      if (res.status !== 200) throw new Error(`Forecast failed: ${res.status}`)
+      const forecast = await res.json()
+      if (!forecast || typeof forecast !== 'object') throw new Error('Expected forecast object')
+      if (typeof forecast.feasible !== 'boolean') throw new Error('Expected feasible boolean')
+    }),
+
+    test('S16.34', 'Deleting grouped plan cascades and duplicate delete → 404', 'Suite 16', async () => {
+      if (!groupedPlanId) throw new Error('S16.11 must pass first')
+      const delRes = await fetch(`${BASE}/api/rotation-planner/plans/${groupedPlanId}`, { method: 'DELETE', headers: authHeaders('A') })
+      if (delRes.status !== 200) throw new Error(`Delete failed: ${delRes.status}`)
+      const delBody = await delRes.json()
+      if (delBody.success !== true) throw new Error('Expected success:true')
+      const getRes = await fetch(`${BASE}/api/rotation-planner/plans/${groupedPlanId}`, { headers: authHeaders('A') })
+      if (getRes.status !== 404) throw new Error(`Expected 404 after delete, got ${getRes.status}`)
+      const again = await fetch(`${BASE}/api/rotation-planner/plans/${groupedPlanId}`, { method: 'DELETE', headers: authHeaders('A') })
+      if (again.status !== 404) throw new Error(`Expected 404 duplicate delete, got ${again.status}`)
+      groupedPlanId = null
+    }),
+
+    test('S16.35', 'Cleanup: delete remaining grouped progress plan', 'Suite 16', async () => {
+      for (const pid of [progressPlanId, perTopicPlanId]) {
+        if (!pid) continue
+        const res = await fetch(`${BASE}/api/rotation-planner/plans/${pid}`, { method: 'DELETE', headers: authHeaders('A') })
+        if (res.status !== 200 && res.status !== 404) throw new Error(`Delete ${pid} failed: ${res.status}`)
+        const getRes = await fetch(`${BASE}/api/rotation-planner/plans/${pid}`, { headers: authHeaders('A') })
+        if (getRes.status !== 404) throw new Error(`Expected 404 for ${pid} after delete, got ${getRes.status}`)
+      }
+      const list = await listPlans(tokens.A)
+      for (const pid of [groupedPlanId, progressPlanId, perTopicPlanId]) {
+        if (pid && list.some(p => p.id === pid)) throw new Error(`Plan ${pid} still present in list`)
+      }
+      progressPlanId = null
+      perTopicPlanId = null
+      console.log('    Suite 16 cleanup complete')
+    }),
+  ]
+}
+
+// ===================================================================
 // HELPERS
 // ===================================================================
 
@@ -975,6 +1595,109 @@ function buildPreviewPayload(withCapacity, displayName = 'Smoke Test Plan') {
     },
     timezone: 'UTC',
   };
+}
+
+function buildGroupedPayload(overrides = {}) {
+  return {
+    sourceId: 'step-up-medicine-6e-2024',
+    rotationId: 'cardiology',
+    displayName: 'Grouped Smoke Plan',
+    startDate: '2026-08-03',
+    endDate: '2026-08-16',
+    studyStyle: 'active',
+    schedulingMode: 'efficient',
+    questionStartRule: 'next_available_day',
+    availability: Array.from({ length: 7 }, (_, i) => ({ weekday: i, availableMinutes: 120, isDayOff: false })),
+    bufferPercentage: 20,
+    preferredQuestionsPerDay: 30,
+    minimumQuestionsPerSession: 10,
+    maximumQuestionsPerDay: 50,
+    averageMinutesPerQuestion: 1.5,
+    maximumActiveTopics: 5,
+    personalSourcePaceMultiplier: 1.0,
+    examReviewWindowDays: 0,
+    mixedReviewQuestionsPerDay: 0,
+    dueReviewMinutesByDate: {},
+    topics: [
+      { normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.stable-angina-pectoris', uworldRemainingQuestions: 20, alreadyCompletedLearningPercentage: 0, alreadyCompletedQuestionCount: 0, incorrectQuestionsRemaining: 0 },
+      { normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.acute-coronary-syndromes-acs', uworldRemainingQuestions: 10, alreadyCompletedLearningPercentage: 0, alreadyCompletedQuestionCount: 0, incorrectQuestionsRemaining: 0 },
+    ],
+    flashcardSettings: {
+      learningUnlockMode: 'learning_completed',
+      maxProjectedFlashcardReviewMinutesPerDay: null,
+    },
+    uworldSchedulingMode: 'grouped',
+    questionGroupExclusions: [],
+    timezone: 'UTC',
+    ...overrides,
+  };
+}
+
+async function createPlanFromPreview(token, previewPayload, idemKey) {
+  const previewRes = await fetch(`${BASE}/api/rotation-planner/plans/preview`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(previewPayload),
+  });
+  const previewText = await previewRes.text();
+  let preview = null;
+  try { preview = JSON.parse(previewText); } catch {}
+  if (previewRes.status !== 200 || !preview) return { status: previewRes.status, text: previewText, body: null };
+  const fingerprint = preview.plan && preview.plan.scheduleFingerprint;
+  if (!fingerprint) return { status: 500, text: 'No scheduleFingerprint in preview', body: null };
+  const createRes = await fetch(`${BASE}/api/rotation-planner/plans`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idemKey || crypto.randomUUID(),
+    },
+    body: JSON.stringify({ ...previewPayload, previewToken: fingerprint, acceptOverload: true }),
+  });
+  const text = await createRes.text();
+  let body = null;
+  try { body = JSON.parse(text); } catch {}
+  return { status: createRes.status, text, body };
+}
+
+function createGroupedPlan(token, { displayName } = {}, idemKey) {
+  return createPlanFromPreview(token, buildGroupedPayload({ displayName }), idemKey);
+}
+
+async function getPlanDetail(token, planId) {
+  const res = await fetch(`${BASE}/api/rotation-planner/plans/${planId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const text = await res.text();
+  let body = null;
+  try { body = JSON.parse(text); } catch {}
+  return { status: res.status, body };
+}
+
+async function recalcRequest(token, planId, expectedRevision, recalculationDate) {
+  const res = await fetch(`${BASE}/api/rotation-planner/plans/${planId}/recalculate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recalculationDate, expectedRevision, clientRequestId: crypto.randomUUID() }),
+  });
+  const text = await res.text();
+  let body = null;
+  try { body = JSON.parse(text); } catch {}
+  return { status: res.status, text, body };
+}
+
+async function patchTaskRequest(token, planId, taskId, action, payload, expectedRevision, idemKey) {
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  if (idemKey) headers['Idempotency-Key'] = idemKey;
+  const res = await fetch(`${BASE}/api/rotation-planner/plans/${planId}/tasks/${taskId}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ action, payload, expectedRevision }),
+  });
+  const text = await res.text();
+  let body = null;
+  try { body = JSON.parse(text); } catch {}
+  return { status: res.status, text, body };
 }
 
 function report() {
