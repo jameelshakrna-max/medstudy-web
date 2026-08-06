@@ -3,6 +3,7 @@ export const PLANNER_TABLES = {
   availability: 'rotation_planner_availability',
   topics: 'rotation_planner_topics',
   dailyTasks: 'rotation_planner_daily_tasks',
+  questionGroups: 'rotation_planner_question_groups',
   taskSessions: 'rotation_planner_task_sessions',
   userSourcePace: 'user_source_pace',
   taskMutations: 'rotation_planner_task_mutations',
@@ -17,6 +18,8 @@ export const STUDY_STYLES = ['focused', 'active', 'detailed_notes']
 export const SCHEDULING_MODES = ['focused', 'efficient']
 
 export const QUESTION_START_RULES = ['next_available_day', 'same_day_if_capacity']
+
+export const UWORLD_SCHEDULING_MODES = ['per_topic', 'grouped']
 
 export const TOPIC_STATUSES = [
   'not_started',
@@ -62,7 +65,8 @@ export const ALL_PLANNER_COLUMNS = {
     'preferred_questions_per_day', 'minimum_questions_per_session',
     'maximum_questions_per_day', 'average_minutes_per_question',
     'buffer_percentage', 'maximum_active_topics',
-    'status', 'uses_flashcard_capacity', 'client_request_id', 'request_fingerprint',
+    'status', 'uses_flashcard_capacity', 'uworld_scheduling_mode',
+    'client_request_id', 'request_fingerprint',
     'settings_json', 'revision', 'last_recalculated_at',
     'stale_at',
     'created_at', 'updated_at',
@@ -81,13 +85,18 @@ export const ALL_PLANNER_COLUMNS = {
     'status', 'mastery_score', 'display_order',
   ],
   dailyTasks: [
-    'id', 'plan_id', 'plan_topic_id', 'task_date', 'task_type',
+    'id', 'plan_id', 'plan_topic_id', 'plan_question_group_id', 'task_date', 'task_type',
     'provider', 'estimated_minutes', 'actual_minutes',
     'target_count', 'completed_count', 'completion_percentage',
     'incorrect_count', 'completed_at', 'completed_on',
     'mode', 'question_pool',
     'status', 'unlock_condition', 'display_order',
     'is_pinned', 'metadata_json', 'created_at', 'updated_at',
+  ],
+  questionGroups: [
+    'id', 'plan_id', 'group_key', 'title', 'system',
+    'target_questions', 'member_topic_ids_json', 'required_topic_ids_json',
+    'excluded', 'display_order', 'created_at', 'updated_at',
   ],
   taskSessions: [
     'id', 'user_id', 'task_id', 'source_id',

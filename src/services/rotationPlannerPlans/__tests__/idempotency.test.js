@@ -85,6 +85,26 @@ describe('calculateScheduleFingerprint', () => {
     const b = await calculateScheduleFingerprint('user-1', { ...BASE_INPUT, acceptOverload: true })
     expect(a).toBe(b)
   })
+
+  it('is affected by uworldSchedulingMode', async () => {
+    const a = await calculateScheduleFingerprint('user-1', { ...BASE_INPUT, uworldSchedulingMode: 'per_topic' })
+    const b = await calculateScheduleFingerprint('user-1', { ...BASE_INPUT, uworldSchedulingMode: 'grouped' })
+    expect(a).not.toBe(b)
+  })
+
+  it('missing uworldSchedulingMode is equivalent to per_topic', async () => {
+    const a = await calculateScheduleFingerprint('user-1', { ...BASE_INPUT })
+    const b = await calculateScheduleFingerprint('user-1', { ...BASE_INPUT, uworldSchedulingMode: 'per_topic' })
+    expect(a).toBe(b)
+  })
+
+  it('is affected by questionGroupExclusions and order does not matter', async () => {
+    const a = await calculateScheduleFingerprint('user-1', { ...BASE_INPUT, questionGroupExclusions: ['x', 'y'] })
+    const b = await calculateScheduleFingerprint('user-1', { ...BASE_INPUT, questionGroupExclusions: ['y', 'x'] })
+    const c = await calculateScheduleFingerprint('user-1', { ...BASE_INPUT, questionGroupExclusions: ['x'] })
+    expect(a).toBe(b)
+    expect(a).not.toBe(c)
+  })
 })
 
 describe('calculateRequestFingerprint', () => {

@@ -68,6 +68,19 @@ describe('isUnlockConditionSatisfied', () => {
     expect(isUnlockConditionSatisfied('uworld_completed:abc', null)).toBe(false)
   })
 
+  it('evaluates learning_group_completed against derived group state', () => {
+    expect(isUnlockConditionSatisfied('learning_group_completed:ischemic-heart-disease', { requiredLearningCompleted: true })).toBe(true)
+    expect(isUnlockConditionSatisfied('learning_group_completed:ischemic-heart-disease', { requiredLearningCompleted: false })).toBe(false)
+    expect(isUnlockConditionSatisfied('learning_group_completed:ischemic-heart-disease', {})).toBe(false)
+    expect(isUnlockConditionSatisfied('learning_group_completed:ischemic-heart-disease', null)).toBe(false)
+  })
+
+  it('evaluates uworld_group_completed against derived group state', () => {
+    expect(isUnlockConditionSatisfied('uworld_group_completed:ischemic-heart-disease', { remainingQuestions: 0 })).toBe(true)
+    expect(isUnlockConditionSatisfied('uworld_group_completed:ischemic-heart-disease', { remainingQuestions: 5 })).toBe(false)
+    expect(isUnlockConditionSatisfied('uworld_group_completed:ischemic-heart-disease', { remainingQuestions: 30 })).toBe(false)
+  })
+
   it('treats unknown condition types as unsatisfied (conservative)', () => {
     expect(isUnlockConditionSatisfied('some_future_condition:abc', {})).toBe(false)
   })
@@ -98,6 +111,28 @@ describe('isTaskEffectivelyLocked', () => {
     expect(isTaskEffectivelyLocked(
       { taskType: 'incorrect_review', unlockCondition: 'uworld_completed:abc' },
       { totalUworldQuestions: 10, completedUworldQuestions: 10 },
+    )).toBe(false)
+  })
+
+  it('is true for a group-condition task with a locked group state', () => {
+    expect(isTaskEffectivelyLocked(
+      { taskType: 'uworld_questions', unlockCondition: 'learning_group_completed:ischemic-heart-disease' },
+      { requiredLearningCompleted: false },
+    )).toBe(true)
+    expect(isTaskEffectivelyLocked(
+      { taskType: 'incorrect_review', unlockCondition: 'uworld_group_completed:ischemic-heart-disease' },
+      { remainingQuestions: 12 },
+    )).toBe(true)
+  })
+
+  it('is false for a group-condition task with an unlocked group state', () => {
+    expect(isTaskEffectivelyLocked(
+      { taskType: 'uworld_questions', unlockCondition: 'learning_group_completed:ischemic-heart-disease' },
+      { requiredLearningCompleted: true },
+    )).toBe(false)
+    expect(isTaskEffectivelyLocked(
+      { taskType: 'incorrect_review', unlockCondition: 'uworld_group_completed:ischemic-heart-disease' },
+      { remainingQuestions: 0 },
     )).toBe(false)
   })
 })

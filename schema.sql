@@ -1066,6 +1066,8 @@ CREATE TABLE IF NOT EXISTS rotation_planner_plans (
   buffer_percentage INTEGER DEFAULT 20,
   maximum_active_topics INTEGER DEFAULT 5,
   uses_flashcard_capacity INTEGER NOT NULL DEFAULT 0,
+  uworld_scheduling_mode TEXT NOT NULL DEFAULT 'per_topic'
+    CHECK (uworld_scheduling_mode IN ('per_topic', 'grouped')),
   status TEXT DEFAULT 'draft'
     CHECK (status IN ('draft', 'active', 'paused', 'completed', 'archived')),
   client_request_id TEXT NOT NULL,
@@ -1152,6 +1154,8 @@ CREATE TABLE IF NOT EXISTS rotation_planner_daily_tasks (
     REFERENCES rotation_planner_plans(id) ON DELETE CASCADE,
   plan_topic_id TEXT
     REFERENCES rotation_planner_topics(id) ON DELETE SET NULL,
+  plan_question_group_id TEXT DEFAULT NULL
+    REFERENCES rotation_planner_question_groups(id) ON DELETE CASCADE,
   task_date TEXT NOT NULL,
   task_type TEXT NOT NULL
     CHECK (task_type IN (
@@ -1196,6 +1200,30 @@ CREATE INDEX IF NOT EXISTS idx_rpd_plan ON rotation_planner_daily_tasks(plan_id)
 CREATE INDEX IF NOT EXISTS idx_rpd_date ON rotation_planner_daily_tasks(plan_id, task_date);
 CREATE INDEX IF NOT EXISTS idx_rpd_status ON rotation_planner_daily_tasks(plan_id, status);
 CREATE INDEX IF NOT EXISTS idx_rpd_topic ON rotation_planner_daily_tasks(plan_topic_id);
+CREATE INDEX IF NOT EXISTS idx_rpdt_question_group ON rotation_planner_daily_tasks(plan_question_group_id);
+
+-- ════════════════════════════════════════════════════════════
+-- ROTATION PLANNER v2.2 — question groups
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS rotation_planner_question_groups (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL
+    REFERENCES rotation_planner_plans(id) ON DELETE CASCADE,
+  group_key TEXT NOT NULL,
+  title TEXT NOT NULL,
+  system TEXT,
+  target_questions INTEGER NOT NULL
+    CHECK (target_questions > 0),
+  member_topic_ids_json TEXT NOT NULL,
+  required_topic_ids_json TEXT NOT NULL,
+  excluded INTEGER DEFAULT 0
+    CHECK (excluded IN (0, 1)),
+  display_order INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(plan_id, group_key)
+);
+CREATE INDEX IF NOT EXISTS idx_rpqg_plan ON rotation_planner_question_groups(plan_id);
 
 -- ════════════════════════════════════════════════════════════
 -- ROTATION PLANNER v2 — task sessions
