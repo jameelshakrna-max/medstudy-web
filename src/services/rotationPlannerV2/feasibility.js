@@ -5,6 +5,7 @@ export function calculatePlanFeasibility({
   dateCapacities,
   planConfig,
   topicStates,
+  groupStates,
 }) {
   let totalRequiredMinutes = 0;
   const topicsLeftUnscheduled = [];
@@ -20,6 +21,17 @@ export function calculatePlanFeasibility({
 
     if (state.personalizedLearningMinutes > 0 || state.remainingUworldQuestions > 0) {
       topicsLeftUnscheduled.push(topic.canonicalTopicId);
+    }
+  }
+
+  if (groupStates) {
+    for (const state of groupStates) {
+      if (!state || state.excluded) continue;
+      if (state.remainingQuestions > 0) {
+        totalRequiredMinutes += Math.ceil(
+          state.remainingQuestions * planConfig.averageMinutesPerQuestion
+        );
+      }
     }
   }
 

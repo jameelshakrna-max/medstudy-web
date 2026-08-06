@@ -2,6 +2,7 @@ const VALID_STUDY_STYLES = ['focused', 'active', 'detailed_notes']
 const VALID_SCHEDULING_MODES = ['focused', 'efficient']
 const VALID_QUESTION_START_RULES = ['next_available_day', 'same_day_if_capacity']
 const VALID_LEARNING_UNLOCK_MODES = ['learning_completed', 'learning_started']
+const VALID_UWORLD_SCHEDULING_MODES = ['per_topic', 'grouped']
 const MAX_FLASHCARD_REVIEW_MINUTES_PER_DAY = 1440
 const MAX_DISPLAY_NAME_LENGTH = 100
 
@@ -74,6 +75,23 @@ export function parseAndValidatePlanRequest(request, body, { requireIdempotencyK
   if (body.questionStartRule && !VALID_QUESTION_START_RULES.includes(body.questionStartRule)) {
     errors.push({ code: 'VALIDATION_ERROR', message: `questionStartRule must be one of: ${VALID_QUESTION_START_RULES.join(', ')}`, field: 'questionStartRule' })
   }
+  if (body.uworldSchedulingMode !== undefined && body.uworldSchedulingMode !== null && !VALID_UWORLD_SCHEDULING_MODES.includes(body.uworldSchedulingMode)) {
+    errors.push({ code: 'VALIDATION_ERROR', message: `uworldSchedulingMode must be one of: ${VALID_UWORLD_SCHEDULING_MODES.join(', ')}`, field: 'uworldSchedulingMode' })
+  }
+
+  const uworldSchedulingMode = VALID_UWORLD_SCHEDULING_MODES.includes(body.uworldSchedulingMode) ? body.uworldSchedulingMode : 'per_topic'
+
+  if (body.questionGroupExclusions !== undefined && body.questionGroupExclusions !== null) {
+    if (!Array.isArray(body.questionGroupExclusions)) {
+      errors.push({ code: 'VALIDATION_ERROR', message: 'questionGroupExclusions must be an array.', field: 'questionGroupExclusions' })
+    } else {
+      for (let i = 0; i < body.questionGroupExclusions.length; i++) {
+        if (typeof body.questionGroupExclusions[i] !== 'string' || body.questionGroupExclusions[i].trim() === '') {
+          errors.push({ code: 'VALIDATION_ERROR', message: `questionGroupExclusions[${i}] must be a non-empty string.`, field: `questionGroupExclusions[${i}]` })
+        }
+      }
+    }
+  }
 
   if (!isValidDateString(body.startDate)) {
     errors.push({ code: 'VALIDATION_ERROR', message: 'startDate must be a valid YYYY-MM-DD date.', field: 'startDate' })
@@ -125,19 +143,21 @@ export function parseAndValidatePlanRequest(request, body, { requireIdempotencyK
       } else {
         seenIds.add(t.normalizedTopicId)
       }
-      if (!Number.isInteger(t.uworldRemainingQuestions) || t.uworldRemainingQuestions < 0) {
-        errors.push({ code: 'VALIDATION_ERROR', message: `${prefix}.uworldRemainingQuestions must be an integer >= 0.`, field: `${prefix}.uworldRemainingQuestions` })
+      if (uworldSchedulingMode === 'per_topic') {
+        if (!Number.isInteger(t.uworldRemainingQuestions) || t.uworldRemainingQuestions < 0) {
+          errors.push({ code: 'VALIDATION_ERROR', message: `${prefix}.uworldRemainingQuestions must be an integer >= 0.`, field: `${prefix}.uworldRemainingQuestions` })
+        }
+        if (!Number.isInteger(t.alreadyCompletedQuestionCount) || t.alreadyCompletedQuestionCount < 0) {
+          errors.push({ code: 'VALIDATION_ERROR', message: `${prefix}.alreadyCompletedQuestionCount must be an integer >= 0.`, field: `${prefix}.alreadyCompletedQuestionCount` })
+        }
+        if (t.incorrectQuestionsRemaining !== undefined && t.incorrectQuestionsRemaining !== null) {
+          if (!Number.isInteger(t.incorrectQuestionsRemaining) || t.incorrectQuestionsRemaining < 0) {
+            errors.push({ code: 'VALIDATION_ERROR', message: `${prefix}.incorrectQuestionsRemaining must be an integer >= 0.`, field: `${prefix}.incorrectQuestionsRemaining` })
+          }
+        }
       }
       if (typeof t.alreadyCompletedLearningPercentage !== 'number' || t.alreadyCompletedLearningPercentage < 0 || t.alreadyCompletedLearningPercentage > 100) {
         errors.push({ code: 'VALIDATION_ERROR', message: `${prefix}.alreadyCompletedLearningPercentage must be a number 0-100.`, field: `${prefix}.alreadyCompletedLearningPercentage` })
-      }
-      if (!Number.isInteger(t.alreadyCompletedQuestionCount) || t.alreadyCompletedQuestionCount < 0) {
-        errors.push({ code: 'VALIDATION_ERROR', message: `${prefix}.alreadyCompletedQuestionCount must be an integer >= 0.`, field: `${prefix}.alreadyCompletedQuestionCount` })
-      }
-      if (t.incorrectQuestionsRemaining !== undefined && t.incorrectQuestionsRemaining !== null) {
-        if (!Number.isInteger(t.incorrectQuestionsRemaining) || t.incorrectQuestionsRemaining < 0) {
-          errors.push({ code: 'VALIDATION_ERROR', message: `${prefix}.incorrectQuestionsRemaining must be an integer >= 0.`, field: `${prefix}.incorrectQuestionsRemaining` })
-        }
       }
     }
   }
@@ -229,6 +249,8 @@ export function parseAndValidatePlanRequest(request, body, { requireIdempotencyK
       studyStyle: body.studyStyle,
       schedulingMode: body.schedulingMode,
       questionStartRule: body.questionStartRule,
+      uworldSchedulingMode,
+      questionGroupExclusions: body.questionGroupExclusions || [],
       availability: body.availability,
       topics: body.topics,
       blockedDates: body.blockedDates || [],

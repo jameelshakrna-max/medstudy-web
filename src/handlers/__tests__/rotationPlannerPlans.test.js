@@ -108,11 +108,11 @@ function makeBody(overrides = {}) {
 
 // ─── Preview ───
 describe('handlePreviewRotationPlan', () => {
-  it('returns 200 with V2 contract shape { plan, topics, tasks, availability, previewToken, feasibility, unscheduledWork }', async () => {
+  it('returns 200 with V2 contract shape { plan, topics, tasks, availability, previewToken, feasibility, unscheduledWork, questionGroups, questionGroupStates, incompleteQuestionGroups, sourceAdaptedQuestionGroups }', async () => {
     const res = await preview()
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(Object.keys(body).sort()).toEqual(['availability', 'feasibility', 'plan', 'previewToken', 'tasks', 'topics', 'unscheduledWork'])
+    expect(Object.keys(body).sort()).toEqual(['availability', 'feasibility', 'incompleteQuestionGroups', 'plan', 'previewToken', 'questionGroupStates', 'questionGroups', 'sourceAdaptedQuestionGroups', 'tasks', 'topics', 'unscheduledWork'])
     expect(body.plan).toBeDefined()
     expect(body.topics).toBeDefined()
     expect(Array.isArray(body.topics)).toBe(true)
@@ -3176,5 +3176,528 @@ describe('Phase 1 — rename', () => {
 
     const row = await db.prepare('SELECT display_name FROM rotation_planner_plans WHERE id = ?').bind(plan.id).first()
     expect(row.display_name).toBe('Cardiology — January 2026')
+  })
+})
+
+// ─── Grouped UWorld scheduling (Step 9) ───
+describe('Grouped UWorld scheduling', () => {
+  function groupedBody(overrides = {}) {
+    return makeBody({
+      uworldSchedulingMode: 'grouped',
+      preferredQuestionsPerDay: 30,
+      topics: [
+        {
+          normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.stable-angina-pectoris',
+          uworldRemainingQuestions: 20,
+          alreadyCompletedLearningPercentage: 0,
+          alreadyCompletedQuestionCount: 0,
+        },
+        {
+          normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.acute-coronary-syndromes-acs',
+          uworldRemainingQuestions: 10,
+          alreadyCompletedLearningPercentage: 0,
+          alreadyCompletedQuestionCount: 0,
+        },
+      ],
+      ...overrides,
+    })
+  }
+
+  it('preview returns questionGroups and questionGroupStates for grouped mode', async () => {
+    const res = await preview(groupedBody())
+    expect(res.status).toBe(200)
+    const body = await res.json()
+
+    expect(Array.isArray(body.questionGroups)).toBe(true)
+    expect(body.questionGroups.length).toBeGreaterThan(0)
+    const ischemic = body.questionGroups.find(g => g.key === 'ischemic-heart-disease')
+    expect(ischemic).toBeDefined()
+    expect(ischemic.targetQuestions).toBe(30)
+    expect(ischemic.memberTopicIds).toEqual([
+      'cardiology.stable-angina-pectoris',
+      'cardiology.acute-coronary-syndromes-acs',
+    ])
+
+    expect(Array.isArray(body.questionGroupStates)).toBe(true)
+    expect(body.questionGroupStates.length).toBeGreaterThan(0)
+    expect(body.questionGroupStates.some(g => g.key === 'ischemic-heart-disease')).toBe(true)
+
+    expect(Array.isArray(body.incompleteQuestionGroups)).toBe(true)
+    expect(body.incompleteQuestionGroups).toEqual([])
+    expect(Array.isArray(body.sourceAdaptedQuestionGroups)).toBe(true)
+    expect(body.sourceAdaptedQuestionGroups).toEqual([])
+  })
+
+  it('preview returns empty arrays for per_topic mode', async () => {
+    const res = await preview(makeBody())
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(Array.isArray(body.questionGroups)).toBe(true)
+    expect(body.questionGroups).toEqual([])
+    expect(Array.isArray(body.questionGroupStates)).toBe(true)
+    expect(body.questionGroupStates).toEqual([])
+    expect(body.incompleteQuestionGroups).toEqual([])
+    expect(body.sourceAdaptedQuestionGroups).toEqual([])
+  })
+
+  it('preview returns 400 UNKNOWN_QUESTION_GROUP for an unknown exclusion', async () => {
+    const res = await preview(groupedBody({ questionGroupExclusions: ['does-not-exist'] }))
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error.code).toBe('UNKNOWN_QUESTION_GROUP')
+  })
+
+  it('create returns 400 UNKNOWN_QUESTION_GROUP for an unknown exclusion', async () => {
+    const res = await createPlan(groupedBody({ questionGroupExclusions: ['does-not-exist'] }))
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error.code).toBe('UNKNOWN_QUESTION_GROUP')
+  })
+
+  it('creates a grouped plan and persists questionGroups', async () => {
+    const previewRes = await preview(groupedBody())
+    expect(previewRes.status).toBe(200)
+    const previewBody = await previewRes.json()
+
+    const idemKey = 'idem-grouped-' + Date.now()
+    const res = await createPlan(
+      makeBody({ ...groupedBody(), previewToken: previewBody.plan.scheduleFingerprint }),
+      USER_A,
+      { 'Idempotency-Key': idemKey },
+    )
+    expect(res.status).toBe(201)
+    const body = await res.json()
+
+    expect(Array.isArray(body.questionGroups)).toBe(true)
+    const ischemic = body.questionGroups.find(g => g.groupKey === 'ischemic-heart-disease')
+    expect(ischemic).toBeDefined()
+    expect(ischemic.targetQuestions).toBe(30)
+    expect(ischemic.memberTopicIds).toEqual([
+      'cardiology.stable-angina-pectoris',
+      'cardiology.acute-coronary-syndromes-acs',
+    ])
+    expect(ischemic.requiredTopicIds).toEqual([
+      'cardiology.stable-angina-pectoris',
+      'cardiology.acute-coronary-syndromes-acs',
+    ])
+
+    const groupedTasks = body.tasks.filter(t => t.planQuestionGroupId === ischemic.id)
+    expect(groupedTasks.length).toBeGreaterThan(0)
+  })
+
+  it('create returns 422 GROUP_REQUIRED_TOPIC_MISSING when a source-supported required topic is unselected', async () => {
+    const body = makeBody({
+      uworldSchedulingMode: 'grouped',
+      preferredQuestionsPerDay: 30,
+      topics: [
+        {
+          normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.stable-angina-pectoris',
+          uworldRemainingQuestions: 20,
+          alreadyCompletedLearningPercentage: 0,
+          alreadyCompletedQuestionCount: 0,
+        },
+      ],
+    })
+    const res = await createPlan(body)
+    expect(res.status).toBe(422)
+    const result = await res.json()
+    expect(result.error.code).toBe('GROUP_REQUIRED_TOPIC_MISSING')
+    expect(result.error.message).toContain('Ischemic Heart Disease')
+  })
+
+  it('creates a grouped plan when a required topic is unavailable in the source (source-adapted)', async () => {
+    const body = makeBody({
+      uworldSchedulingMode: 'grouped',
+      preferredQuestionsPerDay: 30,
+      topics: [
+        {
+          normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.acute-decompensated-heart-failure',
+          uworldRemainingQuestions: 20,
+          alreadyCompletedLearningPercentage: 0,
+          alreadyCompletedQuestionCount: 0,
+        },
+      ],
+    })
+    const res = await createPlan(body)
+    expect(res.status).toBe(201)
+    const result = await res.json()
+    const heartFailure = result.questionGroups.find(g => g.groupKey === 'heart-failure')
+    expect(heartFailure).toBeDefined()
+    expect(heartFailure.requiredTopicIds).toEqual(['cardiology.acute-decompensated-heart-failure'])
+    expect(heartFailure.requiredTopicIds).not.toContain('cardiology.congestive-heart-failure')
+  })
+})
+
+// ─── Grouped unlock enforcement (Step 10) ───
+describe('R2 — Grouped unlock enforcement', () => {
+  function groupedBody(overrides = {}) {
+    return makeBody({
+      uworldSchedulingMode: 'grouped',
+      preferredQuestionsPerDay: 30,
+      topics: [
+        {
+          normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.stable-angina-pectoris',
+          uworldRemainingQuestions: 20,
+          alreadyCompletedLearningPercentage: 0,
+          alreadyCompletedQuestionCount: 0,
+        },
+        {
+          normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.acute-coronary-syndromes-acs',
+          uworldRemainingQuestions: 10,
+          alreadyCompletedLearningPercentage: 0,
+          alreadyCompletedQuestionCount: 0,
+        },
+      ],
+      ...overrides,
+    })
+  }
+
+  function payloadForTask(task, overrides = {}) {
+    const payload = { actualMinutes: overrides.actualMinutes ?? 15 }
+    if (task.taskType === 'uworld_questions') {
+      payload.completedCount = overrides.completedCount ?? task.targetCount ?? 10
+      payload.incorrectCount = overrides.incorrectCount ?? 2
+    } else if (task.taskType === 'incorrect_review') {
+      payload.completedCount = overrides.completedCount ?? task.targetCount ?? 5
+    }
+    return payload
+  }
+
+  async function createGroupedPlan() {
+    const previewRes = await preview(groupedBody())
+    expect(previewRes.status).toBe(200)
+    const previewBody = await previewRes.json()
+    const idemKey = 'idem-grouped-r2-' + Date.now() + '-' + Math.random().toString(36).slice(2)
+    const res = await createPlan(
+      makeBody({ ...groupedBody(), previewToken: previewBody.plan.scheduleFingerprint }),
+      USER_A,
+      { 'Idempotency-Key': idemKey },
+    )
+    expect(res.status).toBe(201)
+    return res.json()
+  }
+
+  async function findGroupedTask(planId, taskType, conditionPrefix) {
+    const getRes = await getPlan(planId)
+    expect(getRes.status).toBe(200)
+    const body = await getRes.json()
+    const task = body.tasks.find(t => t.taskType === taskType && (t.unlockCondition || '').startsWith(conditionPrefix + ':'))
+    expect(task, `expected a ${taskType} task gated on ${conditionPrefix}`).toBeDefined()
+    return { task, body }
+  }
+
+  it('rejects every mutating action on a locked grouped uworld task with TASK_LOCKED and the group-title message', async () => {
+    const { plan } = await createGroupedPlan()
+    const { task } = await findGroupedTask(plan.id, 'uworld_questions', 'learning_group_completed')
+
+    const attempts = [
+      { action: 'start', payload: {} },
+      { action: 'complete', payload: { actualMinutes: 15, completedCount: 10, incorrectCount: 2 } },
+      { action: 'partial', payload: { completedPercentage: 50, actualMinutes: 10 } },
+      { action: 'record_questions', payload: { actualMinutes: 15, completedCount: 10, incorrectCount: 2 } },
+      { action: 'skip', payload: {} },
+      { action: 'reschedule', payload: { newDate: '2026-01-08' } },
+    ]
+
+    for (const { action, payload } of attempts) {
+      const res = await patchTask(plan.id, task.id, { action, payload, expectedRevision: 0 })
+      expect(res.status).toBe(409)
+      const body = await res.json()
+      expect(body.error.code).toBe('TASK_LOCKED')
+      expect(body.error.message).toBe('Complete the Ischemic Heart Disease learning topics to unlock this UWorld review block.')
+    }
+
+    const row = await db.prepare('SELECT * FROM rotation_planner_daily_tasks WHERE id = ?').bind(task.id).first()
+    expect(row.status).toBe('pending')
+    expect(row.completed_count).toBe(0)
+    const planRow = await db.prepare('SELECT revision FROM rotation_planner_plans WHERE id = ?').bind(plan.id).first()
+    expect(planRow.revision).toBe(0)
+  })
+
+  it('unlocks the grouped uworld task once all required group learning is completed', async () => {
+    const { plan } = await createGroupedPlan()
+    const { task, body } = await findGroupedTask(plan.id, 'uworld_questions', 'learning_group_completed')
+
+    let rev = 0
+    const learningTasks = body.tasks.filter(t => t.taskType === 'learning')
+    expect(learningTasks.length).toBeGreaterThan(0)
+    for (const learning of learningTasks) {
+      const res = await patchTask(plan.id, learning.id, { action: 'complete', payload: { actualMinutes: 15 }, expectedRevision: rev })
+      expect(res.status).toBe(200)
+      rev++
+    }
+
+    const res = await patchTask(plan.id, task.id, { action: 'complete', payload: payloadForTask(task), expectedRevision: rev })
+    expect(res.status).toBe(200)
+    const result = await res.json()
+    expect(result.status).toBe('completed')
+    expect(result.revision).toBe(rev + 1)
+  })
+
+  it('keeps incorrect_review locked under a grouped plan until the group uworld questions are done', async () => {
+    const { plan } = await createGroupedPlan()
+    let rev = 0
+
+    const initial = await (await getPlan(plan.id)).json()
+    const learningTasks = initial.tasks.filter(t => t.taskType === 'learning')
+    for (const learning of learningTasks) {
+      const res = await patchTask(plan.id, learning.id, { action: 'complete', payload: { actualMinutes: 15 }, expectedRevision: rev })
+      expect(res.status).toBe(200)
+      rev++
+    }
+
+    const gated = initial.tasks.find(t => t.taskType === 'uworld_questions' && (t.unlockCondition || '').startsWith('learning_group_completed:'))
+    expect(gated, 'expected a grouped uworld task gated on learning_group_completed').toBeDefined()
+    const gatedRes = await patchTask(plan.id, gated.id, { action: 'complete', payload: payloadForTask(gated), expectedRevision: rev })
+    expect(gatedRes.status).toBe(200)
+    rev = (await gatedRes.json()).revision
+
+    let recalcRes = await recalculate(plan.id, { recalculationDate: '2026-01-06', expectedRevision: rev })
+    expect(recalcRes.status).toBe(200)
+    rev = (await recalcRes.json()).revision
+
+    const afterRecalc = await (await getPlan(plan.id)).json()
+    const gatedReviewTasks = afterRecalc.tasks.filter(t => t.taskType === 'incorrect_review' && (t.unlockCondition || '').startsWith('uworld_group_completed:'))
+    const groupStillHasQuestions = afterRecalc.tasks.some(t => t.taskType === 'uworld_questions' && t.planQuestionGroupId && (t.completedCount || 0) < (t.targetCount || 0))
+
+    if (gatedReviewTasks.length > 0) {
+      for (const task of gatedReviewTasks) {
+        if (groupStillHasQuestions) {
+          const lockedRes = await patchTask(plan.id, task.id, { action: 'complete', payload: payloadForTask(task), expectedRevision: rev })
+          expect(lockedRes.status).toBe(409)
+          const lockedBody = await lockedRes.json()
+          expect(lockedBody.error.code).toBe('TASK_LOCKED')
+          expect(lockedBody.error.message).toBe('Complete the Ischemic Heart Disease UWorld questions to unlock this review block.')
+        } else {
+          const okRes = await patchTask(plan.id, task.id, { action: 'complete', payload: payloadForTask(task), expectedRevision: rev })
+          expect(okRes.status).toBe(200)
+          rev = (await okRes.json()).revision
+        }
+      }
+    } else {
+      expect(gatedReviewTasks.length).toBe(0)
+    }
+
+    const groupedUworldTasks = afterRecalc.tasks.filter(t => t.taskType === 'uworld_questions' && t.planQuestionGroupId)
+    for (const task of groupedUworldTasks) {
+      if ((task.completedCount || 0) >= (task.targetCount || 0)) continue
+      const res = await patchTask(plan.id, task.id, { action: 'complete', payload: payloadForTask(task), expectedRevision: rev })
+      expect(res.status).toBe(200)
+      rev++
+    }
+
+    recalcRes = await recalculate(plan.id, { recalculationDate: '2026-01-06', expectedRevision: rev })
+    expect(recalcRes.status).toBe(200)
+    rev = (await recalcRes.json()).revision
+
+    const final = await (await getPlan(plan.id)).json()
+    const finalReviewTasks = final.tasks.filter(t => t.taskType === 'incorrect_review' && (t.unlockCondition || '').startsWith('uworld_group_completed:') && t.status === 'pending')
+    if (finalReviewTasks.length > 0) {
+      for (const task of finalReviewTasks) {
+        const res = await patchTask(plan.id, task.id, { action: 'complete', payload: payloadForTask(task), expectedRevision: rev })
+        expect(res.status).toBe(200)
+        rev++
+      }
+    } else {
+      expect(finalReviewTasks.length).toBe(0)
+    }
+  })
+
+  it('records no mutation row and no revision change for a locked grouped attempt', async () => {
+    const { plan } = await createGroupedPlan()
+    const { task } = await findGroupedTask(plan.id, 'uworld_questions', 'learning_group_completed')
+
+    const clientRequestId = 'grouped-locked-attempt-' + Date.now() + '-' + Math.random().toString(36).slice(2)
+    const res = await patchTask(
+      plan.id, task.id,
+      { action: 'complete', payload: payloadForTask(task), expectedRevision: 0 },
+      USER_A,
+      { 'Idempotency-Key': clientRequestId },
+    )
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.error.code).toBe('TASK_LOCKED')
+
+    const mutationRow = await db.prepare('SELECT * FROM rotation_planner_task_mutations WHERE user_id = ? AND client_request_id = ?').bind(USER_A.sub, clientRequestId).first()
+    expect(mutationRow).toBeNull()
+
+    const planRow = await db.prepare('SELECT revision FROM rotation_planner_plans WHERE id = ?').bind(plan.id).first()
+    expect(planRow.revision).toBe(0)
+  })
+})
+
+// ─── R2 — Grouped recalculation routing (Step 11) ───
+describe('R2 — Grouped recalculation routing', () => {
+  beforeEach(async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-05T12:00:00.000Z'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  function groupedBody(overrides = {}) {
+    return makeBody({
+      uworldSchedulingMode: 'grouped',
+      preferredQuestionsPerDay: 30,
+      topics: [
+        {
+          normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.stable-angina-pectoris',
+          uworldRemainingQuestions: 20,
+          alreadyCompletedLearningPercentage: 0,
+          alreadyCompletedQuestionCount: 0,
+        },
+        {
+          normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.acute-coronary-syndromes-acs',
+          uworldRemainingQuestions: 10,
+          alreadyCompletedLearningPercentage: 0,
+          alreadyCompletedQuestionCount: 0,
+        },
+      ],
+      ...overrides,
+    })
+  }
+
+  async function createGroupedPlan() {
+    const previewRes = await preview(groupedBody())
+    expect(previewRes.status).toBe(200)
+    const previewBody = await previewRes.json()
+    const idemKey = 'idem-grouped-recalc-' + Date.now() + '-' + Math.random().toString(36).slice(2)
+    const res = await createPlan(
+      makeBody({ ...groupedBody(), previewToken: previewBody.plan.scheduleFingerprint }),
+      USER_A,
+      { 'Idempotency-Key': idemKey },
+    )
+    expect(res.status).toBe(201)
+    return res.json()
+  }
+
+  async function persistedGroupIds(planId) {
+    const { results } = await db.prepare('SELECT id FROM rotation_planner_question_groups WHERE plan_id = ?').bind(planId).all()
+    return results.map(r => r.id)
+  }
+
+  it('recalculate keeps grouped mode and persists plan_question_group_id', async () => {
+    const { plan } = await createGroupedPlan()
+
+    const initial = await (await getPlan(plan.id)).json()
+    const groupedTasks = initial.tasks.filter(t => t.planQuestionGroupId)
+    expect(groupedTasks.length).toBeGreaterThan(0)
+    const gatedUworld = groupedTasks.filter(t => t.taskType === 'uworld_questions' && (t.unlockCondition || '').startsWith('learning_group_completed:'))
+    expect(gatedUworld.length).toBeGreaterThan(0)
+    const unlockConditions = gatedUworld.map(t => t.unlockCondition)
+
+    const recalcRes = await recalculate(plan.id, { recalculationDate: '2026-01-06', expectedRevision: 0 })
+    expect(recalcRes.status).toBe(200)
+
+    const after = await (await getPlan(plan.id)).json()
+    const afterGrouped = after.tasks.filter(t => t.planQuestionGroupId)
+    expect(afterGrouped.length).toBeGreaterThan(0)
+    const afterGated = afterGrouped.filter(t => t.taskType === 'uworld_questions' && (t.unlockCondition || '').startsWith('learning_group_completed:'))
+    expect(afterGated.length).toBeGreaterThan(0)
+    for (const cond of unlockConditions) {
+      expect(afterGated.some(t => t.unlockCondition === cond)).toBe(true)
+    }
+
+    const ids = await persistedGroupIds(plan.id)
+    expect(ids.length).toBeGreaterThan(0)
+    const { results: groupedRows } = await db.prepare(
+      `SELECT plan_question_group_id FROM rotation_planner_daily_tasks WHERE plan_id = ? AND task_type IN ('uworld_questions','incorrect_review')`
+    ).bind(plan.id).all()
+    expect(groupedRows.length).toBeGreaterThan(0)
+    for (const row of groupedRows) {
+      expect(row.plan_question_group_id).toBeTruthy()
+      expect(ids).toContain(row.plan_question_group_id)
+    }
+  })
+
+  it('reschedule of a grouped task preserves its group', async () => {
+    const { plan } = await createGroupedPlan()
+    const initial = await (await getPlan(plan.id)).json()
+
+    let rev = 0
+    const learningTasks = initial.tasks.filter(t => t.taskType === 'learning')
+    expect(learningTasks.length).toBeGreaterThan(0)
+    for (const learning of learningTasks) {
+      const res = await patchTask(plan.id, learning.id, { action: 'complete', payload: { actualMinutes: 15 }, expectedRevision: rev })
+      expect(res.status).toBe(200)
+      rev++
+    }
+
+    const gated = initial.tasks.find(t => t.taskType === 'uworld_questions' && t.planQuestionGroupId)
+    expect(gated).toBeDefined()
+
+    const res = await patchTask(plan.id, gated.id, { action: 'reschedule', payload: { newTaskDate: '2026-01-08' }, expectedRevision: rev })
+    expect(res.status).toBe(200)
+    const result = await res.json()
+    expect(result.taskId).toBe(gated.id)
+    expect(result.revision).toBe(rev + 1)
+
+    const moved = await db.prepare('SELECT plan_question_group_id FROM rotation_planner_daily_tasks WHERE id = ?').bind(gated.id).first()
+    expect(moved.plan_question_group_id).toBeTruthy()
+
+    const ids = await persistedGroupIds(plan.id)
+    expect(ids.length).toBeGreaterThan(0)
+    const { results: rows } = await db.prepare(
+      `SELECT task_type, plan_question_group_id, unlock_condition FROM rotation_planner_daily_tasks WHERE plan_id = ?`
+    ).bind(plan.id).all()
+    const groupedRows = rows.filter(r => (r.task_type === 'uworld_questions' || r.task_type === 'incorrect_review') && (r.unlock_condition || '').match(/^(learning|uworld)_group_completed:/))
+    expect(groupedRows.length).toBeGreaterThan(0)
+    for (const row of groupedRows) {
+      expect(row.plan_question_group_id).toBeTruthy()
+      expect(ids).toContain(row.plan_question_group_id)
+    }
+  })
+
+  it('recalculates from persisted group progress without reopening completed group uworld', async () => {
+    const { plan } = await createGroupedPlan()
+    const initial = await (await getPlan(plan.id)).json()
+
+    let rev = 0
+    const learningTasks = initial.tasks.filter(t => t.taskType === 'learning')
+    for (const learning of learningTasks) {
+      const res = await patchTask(plan.id, learning.id, { action: 'complete', payload: { actualMinutes: 15 }, expectedRevision: rev })
+      expect(res.status).toBe(200)
+      rev++
+    }
+
+    const groupedUworld = initial.tasks.filter(t => t.taskType === 'uworld_questions' && t.planQuestionGroupId)
+    expect(groupedUworld.length).toBeGreaterThan(0)
+    for (const task of groupedUworld) {
+      const res = await patchTask(plan.id, task.id, {
+        action: 'complete',
+        payload: { actualMinutes: 15, completedCount: task.targetCount, incorrectCount: 1 },
+        expectedRevision: rev,
+      })
+      expect(res.status).toBe(200)
+      rev++
+    }
+
+    const recalcRes = await recalculate(plan.id, { recalculationDate: '2026-01-06', expectedRevision: rev })
+    expect(recalcRes.status).toBe(200)
+
+    const ids = await persistedGroupIds(plan.id)
+    expect(ids.length).toBeGreaterThan(0)
+
+    const { results: groupRows } = await db.prepare('SELECT id, target_questions FROM rotation_planner_question_groups WHERE plan_id = ?').bind(plan.id).all()
+    const { results: taskRows } = await db.prepare(
+      `SELECT plan_question_group_id, task_type, status, completed_count FROM rotation_planner_daily_tasks WHERE plan_id = ? AND task_type IN ('uworld_questions','incorrect_review')`
+    ).bind(plan.id).all()
+
+    for (const row of taskRows) {
+      expect(row.plan_question_group_id).toBeTruthy()
+      expect(ids).toContain(row.plan_question_group_id)
+    }
+
+    for (const g of groupRows) {
+      const groupTasks = taskRows.filter(r => r.plan_question_group_id === g.id)
+      const completed = groupTasks.reduce((sum, r) => sum + (r.completed_count || 0), 0)
+      if (completed >= (g.target_questions || 0)) {
+        const pendingUworld = groupTasks.filter(r => r.task_type === 'uworld_questions' && r.status === 'pending')
+        expect(pendingUworld.length).toBe(0)
+      }
+    }
   })
 })

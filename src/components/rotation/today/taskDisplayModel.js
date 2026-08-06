@@ -38,15 +38,29 @@ export function formatProgress(task, status) {
   return { percent: 0, label: 'Not started' };
 }
 
-export function getTaskDisplayModel(task, todayKey, topic = null) {
+export function getTaskDisplayModel(task, todayKey, topic = null, group = null) {
   const progress = formatProgress(task, task.status);
   const taskDate = task.taskDate || '';
   const isOverdue = todayKey ? taskDate < todayKey && !TERMINAL_STATUSES.has(task.status) : false;
+
+  const isGrouped = !!group && !!task.planQuestionGroupId;
+  const isUworldQuestions = isGrouped && (task.taskType === 'uworld_questions' || (typeof task.taskType === 'string' && task.taskType.endsWith('uworld_questions')));
+  const isIncorrectReview = isGrouped && (task.taskType === 'uworld_incorrect_review' || (typeof task.taskType === 'string' && task.taskType.endsWith('uworld_incorrect_review')));
+
+  let typeLabel = TASK_TYPE_LABELS[task.taskType] || task.taskType;
+  if (isUworldQuestions || isIncorrectReview) {
+    const n = getGroupQuestionCount(task, group);
+    const base = isUworldQuestions ? 'UWorld review block' : 'Incorrect UWorld review';
+    typeLabel = n ? `${base} · ${n} questions` : base;
+  }
+
+  const groupTitle = isGrouped ? group.title : null;
 
   return {
     id: task.id,
     planId: task.planId,
     planTopicId: task.planTopicId,
+    planQuestionGroupId: task.planQuestionGroupId ?? null,
     taskDate: task.taskDate,
     taskType: task.taskType,
     status: task.status,
@@ -54,7 +68,7 @@ export function getTaskDisplayModel(task, todayKey, topic = null) {
     studyBlockId: task.studyBlockId ?? null,
 
     statusLabel: STATUS_LABELS[task.status] || task.status,
-    typeLabel: TASK_TYPE_LABELS[task.taskType] || task.taskType,
+    typeLabel,
     estimatedMinutes: task.estimatedMinutes || 0,
     actualMinutes: task.actualMinutes || 0,
     targetCount: task.targetCount,
@@ -86,7 +100,14 @@ export function getTaskDisplayModel(task, todayKey, topic = null) {
     unmetReviewMinutes: task.unmetReviewMinutes ?? task.metadataJson?.unmetReviewMinutes ?? 0,
     deckNames: task.deckNames ?? task.metadataJson?.deckNames ?? [],
 
-    topicTitle: topic?.topicTitle || null,
-    topicSection: topic?.groupId || null,
+    topicTitle: groupTitle || topic?.topicTitle || null,
+    topicSection: groupTitle ? `UWorld group ${groupTitle}` : (topic?.groupId || null),
   };
+}
+
+function getGroupQuestionCount(task, group) {
+  if (Number.isFinite(task.targetCount) && task.targetCount > 0) return task.targetCount;
+  if (Number.isFinite(group?.targetQuestions) && group.targetQuestions > 0) return group.targetQuestions;
+  const fromMinutes = Math.floor((task.estimatedMinutes || 0) / 15);
+  return fromMinutes > 0 ? fromMinutes : null;
 }

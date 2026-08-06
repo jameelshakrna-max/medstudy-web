@@ -14,6 +14,7 @@ export default function TodaySection({
   topicsById,
   sourceTitle,
   isMutating,
+  lockContext,
   onStart,
   onComplete,
   onPartial,
@@ -49,6 +50,7 @@ export default function TodaySection({
               topicsById={topicsById}
               sourceTitle={sourceTitle}
               isMutating={isMutating}
+              lockContext={lockContext}
               onStart={onStart}
               onComplete={onComplete}
               onPartial={onPartial}
@@ -74,6 +76,7 @@ export default function TodaySection({
               topicsById={topicsById}
               sourceTitle={sourceTitle}
               isMutating={isMutating}
+              lockContext={lockContext}
               onStart={onStart}
               onComplete={onComplete}
               onPartial={onPartial}

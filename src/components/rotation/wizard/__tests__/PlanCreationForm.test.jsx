@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { INITIAL_FORM } from '../wizardState'
 
@@ -35,6 +35,8 @@ const {
       topicsLeftUnscheduled: [],
       possibleSolutions: [],
     },
+    incompleteQuestionGroups: [],
+    sourceAdaptedQuestionGroups: [],
     unscheduledWork: [],
   }
   const previewMutate = vi.fn((payload) => {
@@ -89,7 +91,11 @@ vi.mock('../StepAvailability', () => ({ default: () => null }))
 vi.mock('../StepSourceSummary', () => ({ default: () => null }))
 vi.mock('../StepStudyStyle', () => ({ default: () => null }))
 vi.mock('../StepReviewTopics', () => ({ default: () => null }))
-vi.mock('../StepUWorldQuestions', () => ({ default: () => null }))
+vi.mock('../StepUWorldQuestions', () => ({
+  default: ({ onExcludeGroup }) => (
+    <button type="button" onClick={() => onExcludeGroup('group-1')}>Mock Exclude</button>
+  ),
+}))
 vi.mock('../StepQuestionConfig', () => ({ default: () => null }))
 vi.mock('../StepSchedulingConfig', () => ({ default: () => null }))
 vi.mock('../StepFlashcardSettings', () => ({ default: () => null }))
@@ -104,7 +110,7 @@ vi.mock('../../../../pages/Page.module.css', () => ({ default: {} }))
 
 import PlanCreationForm from '../../PlanCreationForm'
 
-function seedDraft({ step = 10 } = {}) {
+function seedDraft({ step = 10, formOverrides = {} } = {}) {
   localStorage.setItem('rotationWizardDraft', JSON.stringify({
     schemaVersion: 1,
     savedAt: Date.now(),
@@ -117,11 +123,13 @@ function seedDraft({ step = 10 } = {}) {
       endDate: '2026-02-05',
       topics: [{
         normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.stable-angina-pectoris',
+        sourceTopicId: 's1',
         uworldRemainingQuestions: 20,
         alreadyCompletedLearningPercentage: 0,
         alreadyCompletedQuestionCount: 0,
         incorrectQuestionsRemaining: 0,
       }],
+      ...formOverrides,
     },
   }))
 }
@@ -146,6 +154,7 @@ describe('PlanCreationForm', () => {
     pending.preview = false
     pending.create = false
     MOCK_PREVIEW_RESPONSE.feasibility.feasible = true
+    MOCK_PREVIEW_RESPONSE.incompleteQuestionGroups = []
     previewShouldFail.value = false
     previewPayloads.length = 0
     vi.clearAllMocks()
@@ -216,9 +225,8 @@ describe('PlanCreationForm', () => {
 
     previewShouldFail.value = false
     await user.click(screen.getByRole('button', { name: /Next/i }))
-    expect(previewPayloads).toHaveLength(2)
-    expect(previewPayloads[0].displayName).toBe('My Custom Name')
-    expect(previewPayloads[1].displayName).toBe('My Custom Name')
+    expect(previewPayloads).toHaveLength(3)
+    expect(previewPayloads.map(p => p.displayName)).toEqual(['My Custom Name', 'My Custom Name', 'My Custom Name'])
   })
 
   it('persists the plan name through preview into the create request', async () => {
@@ -234,5 +242,52 @@ describe('PlanCreationForm', () => {
     await user.click(screen.getByRole('button', { name: /Create Plan/i }))
     expect(createMutate).toHaveBeenCalledTimes(1)
     expect(createMutate.mock.calls[0][0].payload.displayName).toBe('My Custom Name')
+  })
+
+  it('auto-generates a grouped preview when entering the UWorld step', async () => {
+    localStorage.clear()
+    seedDraft({ step: 7 })
+    render(<PlanCreationForm open onClose={vi.fn()} onCreated={vi.fn()} />)
+    await waitFor(() => expect(previewPayloads.length).toBe(1))
+    expect(previewPayloads[0].uworldSchedulingMode).toBe('grouped')
+    expect(previewPayloads[0].questionGroupExclusions).toEqual([])
+  })
+
+  it('advancing from the flashcards step lands on the preview step, not confirm', async () => {
+    const user = userEvent.setup()
+    render(<PlanCreationForm open onClose={vi.fn()} onCreated={vi.fn()} />)
+    await user.click(screen.getByRole('button', { name: /Next/i }))
+    expect(screen.getByRole('button', { name: /Next/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Create Plan/i })).not.toBeInTheDocument()
+  })
+
+  it('disables creation while there are unresolved incomplete question groups', async () => {
+    MOCK_PREVIEW_RESPONSE.incompleteQuestionGroups = [{ key: 'group-1' }]
+    const user = userEvent.setup()
+    render(<PlanCreationForm open onClose={vi.fn()} onCreated={vi.fn()} />)
+    await reachCreateStep(user)
+    expect(screen.getByRole('button', { name: /Create Plan/i })).toBeDisabled()
+  })
+
+  it('a group exclusion action re-runs the preview with questionGroupExclusions', async () => {
+    localStorage.clear()
+    seedDraft({ step: 7 })
+    const user = userEvent.setup()
+    render(<PlanCreationForm open onClose={vi.fn()} onCreated={vi.fn()} />)
+    await waitFor(() => expect(previewPayloads.length).toBe(1))
+    await user.click(screen.getByRole('button', { name: /Mock Exclude/i }))
+    await waitFor(() => expect(previewPayloads.length).toBe(2))
+    expect(previewPayloads[1].questionGroupExclusions).toEqual(['group-1'])
+  })
+
+  it('sends questionGroupExclusions in the create payload', async () => {
+    localStorage.clear()
+    seedDraft({ step: 10, formOverrides: { questionGroupExclusions: ['group-1'] } })
+    const user = userEvent.setup()
+    render(<PlanCreationForm open onClose={vi.fn()} onCreated={vi.fn()} />)
+    await reachCreateStep(user)
+    await user.click(screen.getByRole('button', { name: /Create Plan/i }))
+    expect(createMutate).toHaveBeenCalledTimes(1)
+    expect(createMutate.mock.calls[0][0].payload.questionGroupExclusions).toEqual(['group-1'])
   })
 })

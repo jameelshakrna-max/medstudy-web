@@ -5,7 +5,7 @@ const PLAN_SUMMARY_COLUMNS = [
   'preferred_questions_per_day', 'minimum_questions_per_session',
   'maximum_questions_per_day', 'average_minutes_per_question',
   'buffer_percentage', 'maximum_active_topics',
-  'status', 'uses_flashcard_capacity', 'settings_json', 'created_at', 'updated_at',
+  'status', 'uses_flashcard_capacity', 'uworld_scheduling_mode', 'settings_json', 'created_at', 'updated_at',
   'revision', 'last_recalculated_at', 'stale_at',
   'display_name',
 ]
@@ -23,12 +23,17 @@ const TOPIC_COLUMNS = [
   'incorrect_questions_remaining',
 ]
 const TASK_COLUMNS = [
-  'id', 'plan_id', 'plan_topic_id', 'task_date', 'task_type',
+  'id', 'plan_id', 'plan_topic_id', 'plan_question_group_id', 'task_date', 'task_type',
   'provider', 'estimated_minutes', 'actual_minutes',
   'target_count', 'completed_count', 'mode', 'question_pool',
   'status', 'unlock_condition', 'display_order',
   'is_pinned', 'metadata_json', 'created_at', 'updated_at',
   'completion_percentage', 'incorrect_count', 'completed_at', 'completed_on',
+]
+const QUESTION_GROUP_COLUMNS = [
+  'id', 'plan_id', 'group_key', 'title', 'system',
+  'target_questions', 'member_topic_ids_json', 'required_topic_ids_json',
+  'excluded', 'display_order', 'created_at', 'updated_at',
 ]
 
 function toCamelCase(snakeStr) {
@@ -95,6 +100,15 @@ function mapTaskDto(row) {
   return dto
 }
 
+function mapQuestionGroupDto(row) {
+  const dto = mapRow(row, QUESTION_GROUP_COLUMNS)
+  dto.memberTopicIds = safeParseJson(dto.memberTopicIdsJson, [])
+  dto.requiredTopicIds = safeParseJson(dto.requiredTopicIdsJson, [])
+  delete dto.memberTopicIdsJson
+  delete dto.requiredTopicIdsJson
+  return dto
+}
+
 function toSnakeCaseKey(camelStr) {
   return camelStr.replace(/([A-Z])/g, '_$1').toLowerCase()
 }
@@ -113,6 +127,7 @@ export {
   AVAILABILITY_COLUMNS,
   TOPIC_COLUMNS,
   TASK_COLUMNS,
+  QUESTION_GROUP_COLUMNS,
   toCamelCase,
   mapRow,
   safeParseJson,
@@ -121,6 +136,7 @@ export {
   mapAvailabilityDto,
   mapTopicDto,
   mapTaskDto,
+  mapQuestionGroupDto,
   toSnakeCaseKey,
   mapToSnakeCase,
 }

@@ -3,6 +3,8 @@ import { buildRotationSchedule } from '../rotationPlannerV2/buildRotationSchedul
 import { generateDateRange } from '../rotationPlannerV2/dateUtils.js'
 import { assignStudyBlocks } from '../rotationPlannerV2/studyBlockAssignment.js'
 import { loadTasksByPlan, loadTopicsByPlan, loadAvailabilityByPlan } from './taskMutation.js'
+import { loadQuestionGroupsByPlan } from './persistence.js'
+import { deriveActualGroupStates } from './groupState.js'
 import { findNormalizedTopic } from '../../data/studySources/normalizedRegistry.js'
 import { computeReviewWorkloadMap } from '../flashcardWorkload.js'
 
@@ -135,6 +137,8 @@ export async function recalculatePlan(env, planId, userId, recalculationDate, op
 
   if (!planRow) throw new Error('PLAN_NOT_FOUND')
 
+  const questionGroups = await loadQuestionGroupsByPlan(env, planId)
+
   const [topics, dbTasks, availability] = await Promise.all([
     loadTopicsByPlan(env, planId),
     loadTasksByPlan(env, planId),
@@ -179,6 +183,20 @@ export async function recalculatePlan(env, planId, userId, recalculationDate, op
     examDate: planRow.exam_date || undefined,
     studyStyle: planRow.study_style,
     schedulingMode: planRow.scheduling_mode,
+    uworldSchedulingMode: planRow.uworld_scheduling_mode || 'per_topic',
+    questionGroups: planRow.uworld_scheduling_mode === 'grouped'
+      ? questionGroups.map(g => ({
+          id: g.id,
+          key: g.groupKey,
+          title: g.title,
+          system: g.system || null,
+          targetQuestions: g.targetQuestions,
+          memberTopicIds: g.memberTopicIds || [],
+          requiredTopicIds: g.requiredTopicIds || [],
+          excluded: g.excluded,
+          displayOrder: g.displayOrder || 0,
+        }))
+      : undefined,
     questionStartRule: planRow.question_start_rule,
     preferredQuestionsPerDay: planRow.preferred_questions_per_day,
     minimumQuestionsPerSession: planRow.minimum_questions_per_session,
@@ -271,8 +289,23 @@ export async function recalculatePlan(env, planId, userId, recalculationDate, op
     }
   }
 
+  let initialGroupStates
+  if (planRow.uworld_scheduling_mode === 'grouped') {
+    const derivedGroupStates = deriveActualGroupStates(questionGroups, topics, dbTasks, { asOfDate: recalculationDate })
+    initialGroupStates = {}
+    for (const gs of derivedGroupStates) {
+      initialGroupStates[gs.key] = {
+        completedQuestions: gs.completedQuestions,
+        incorrectQuestionsRemaining: gs.incorrectQuestionsRemaining,
+        requiredLearningCompleted: gs.requiredLearningCompleted,
+        unlockedAt: gs.unlockedAt,
+      }
+    }
+  }
+
   const recalculation = buildRotationSchedule(planConfig, {
     initialTopicStates,
+    initialGroupStates,
     scheduleStartDate: recalculationDate,
     reservedMinutesByDate,
     pinnedTasks,

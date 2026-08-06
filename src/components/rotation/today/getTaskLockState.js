@@ -21,7 +21,63 @@ function findTopicByCanonicalId(topicsById, canonicalTopicId) {
   return topicValues(topicsById).find(topic => topic && topic.canonicalTopicId === canonicalTopicId) || null
 }
 
-export default function getTaskLockState(task, topicsById) {
+function groupStateValues(context) {
+  const states = context?.questionGroupStates
+  if (!states) return []
+  if (Array.isArray(states)) return states
+  if (typeof states.values === 'function') return Array.from(states.values())
+  if (typeof states === 'object') return Object.values(states)
+  return []
+}
+
+function findGroupState(context, groupKey) {
+  const key = groupKey == null ? '' : String(groupKey)
+  if (!key) return null
+
+  if (context?.questionGroupStates instanceof Map) {
+    const direct = context.questionGroupStates.get(key) || context.questionGroupStates.get(groupKey)
+    if (direct) return direct
+  }
+
+  for (const state of groupStateValues(context)) {
+    const stateKey = state?.groupKey ?? state?.key
+    if (stateKey != null && String(stateKey) === key) return state
+  }
+  return null
+}
+
+function groupProgress(state) {
+  const completed = state?.completedCount ?? state?.completedQuestions ?? 0
+  const target = state?.targetCount ?? state?.targetQuestions ?? 0
+  return { completed: Number(completed) || 0, target: Number(target) || 0 }
+}
+
+function resolveGroupLock({ type, canonicalTopicId }, context) {
+  const groupState = findGroupState(context, canonicalTopicId)
+  const groupKey = groupState?.groupKey ?? groupState?.key ?? canonicalTopicId
+  const groupTitle = groupState?.title || null
+
+  if (groupState) {
+    const { completed, target } = groupProgress(groupState)
+    if (target > 0 && completed >= target) return UNLOCKED
+  }
+
+  const message = groupTitle
+    ? type === 'learning_group_completed'
+      ? `Complete learning for ${groupTitle} to unlock these questions.`
+      : `Complete the UWorld questions for ${groupTitle} to unlock this task.`
+    : FALLBACK_MESSAGE
+
+  return {
+    isLocked: true,
+    conditionType: type,
+    prerequisiteTopic: null,
+    prerequisiteGroup: groupState ? { groupKey, groupTitle } : null,
+    message,
+  }
+}
+
+export default function getTaskLockState(task, topicsById, context = {}) {
   const source = task || {}
   const condition = source.unlockCondition ?? source.unlock_condition
 
@@ -33,6 +89,11 @@ export default function getTaskLockState(task, topicsById) {
   }
 
   const { type, canonicalTopicId } = parsed
+
+  if (type === 'learning_group_completed' || type === 'uworld_group_completed') {
+    return resolveGroupLock(parsed, context)
+  }
+
   const topic = findTopicByCanonicalId(topicsById, canonicalTopicId)
   const prerequisiteTopic = topic
     ? { canonicalTopicId: topic.canonicalTopicId, topicTitle: topic.topicTitle }

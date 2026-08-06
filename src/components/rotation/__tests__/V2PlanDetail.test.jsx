@@ -86,8 +86,8 @@ vi.mock('../../ui/Modal/Modal', () => {
 })
 
 vi.mock('../today/TodayView', () => ({
-  default: ({ onStart, onComplete, onPartial, onRecordTime, onRecordQuestions, onSkip }) => (
-    <div data-testid="today-view">
+  default: ({ onStart, onComplete, onPartial, onRecordTime, onRecordQuestions, onSkip, questionGroups = [], questionGroupStates = [] }) => (
+    <div data-testid="today-view" data-question-groups={questionGroups.length} data-question-group-states={questionGroupStates.length}>
       <button data-testid="btn-start" onClick={() => onStart({ id: 't1' })} />
       <button data-testid="btn-complete" onClick={() => onComplete({ id: 't1' })} />
       <button data-testid="btn-partial" onClick={() => onPartial({ id: 't1' })} />
@@ -690,6 +690,135 @@ describe('V2PlanDetail', () => {
       expect(screen.getByTestId('modal')).toBeInTheDocument()
       expect(within(screen.getByTestId('modal')).getByRole('button', { name: /Deleting/ })).toBeDisabled()
       expect(within(screen.getByTestId('modal')).getByText(/deleting/i)).toBeInTheDocument()
+    })
+  })
+
+  describe('UWorld Review Groups', () => {
+    function mockGroupedPlan(overrides = {}) {
+      const plan = {
+        id: 'p1',
+        revision: 1,
+        uworldSchedulingMode: 'grouped',
+        questionGroups: [
+          { id: 'g1', groupKey: 'ischemic-heart-disease', title: 'Ischemic Heart Disease', system: 'Cardiology', targetQuestions: 40, displayOrder: 1 },
+          { id: 'g2', groupKey: 'arrhythmias', title: 'Arrhythmias', system: 'Cardiology', targetQuestions: 30, displayOrder: 2 },
+        ],
+        questionGroupStates: [
+          { key: 'ischemic-heart-disease', title: 'Ischemic Heart Disease', targetQuestions: 40, completedQuestions: 15, remainingQuestions: 25, incorrectQuestionsRemaining: 3, status: 'in_progress', excluded: false },
+          { key: 'arrhythmias', title: 'Arrhythmias', targetQuestions: 30, completedQuestions: 30, remainingQuestions: 0, incorrectQuestionsRemaining: 0, status: 'completed', excluded: false },
+        ],
+        ...overrides,
+      }
+      mockUseRotationPlanDetail.mockReturnValue({
+        data: { plan, topics: [], tasks: [], availability: [], sourcePace: null },
+        isLoading: false,
+        error: null,
+      })
+    }
+
+    it('renders the UWorld Review Groups section with progress and stats for a grouped plan', () => {
+      mockGroupedPlan()
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByText('UWorld Review Groups')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Ischemic Heart Disease' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Arrhythmias' })).toBeInTheDocument()
+      expect(screen.getByText('Learning 15/40')).toBeInTheDocument()
+      expect(screen.getByText('25 questions left')).toBeInTheDocument()
+      expect(screen.getByText('3 incorrect to review')).toBeInTheDocument()
+    })
+
+    it('shows the completed badge when a group state is completed', () => {
+      mockGroupedPlan()
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByText('Completed')).toBeInTheDocument()
+    })
+
+    it('shows an Excluded badge for an excluded group', () => {
+      mockGroupedPlan({
+        questionGroupStates: [
+          { key: 'arrhythmias', title: 'Arrhythmias', targetQuestions: 30, completedQuestions: 0, remainingQuestions: 30, incorrectQuestionsRemaining: 0, status: 'excluded', excluded: true },
+        ],
+      })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByText('Excluded')).toBeInTheDocument()
+      expect(screen.getByText(/Excluded from this plan's schedule/)).toBeInTheDocument()
+    })
+
+    it('does not render the section for a non-grouped plan', () => {
+      mockUseRotationPlanDetail.mockReturnValue({
+        data: { plan: { id: 'p1', revision: 1, uworldSchedulingMode: 'topic-based' }, topics: [], tasks: [], availability: [], sourcePace: null },
+        isLoading: false,
+        error: null,
+      })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.queryByText('UWorld Review Groups')).not.toBeInTheDocument()
+    })
+
+    it('does not render the section when a grouped plan has no question groups', () => {
+      mockGroupedPlan({ questionGroups: [], questionGroupStates: [] })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.queryByText('UWorld Review Groups')).not.toBeInTheDocument()
+    })
+
+    it('passes questionGroups and questionGroupStates to TodayView', () => {
+      mockGroupedPlan()
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByTestId('today-view').getAttribute('data-question-groups')).toBe('2')
+      expect(screen.getByTestId('today-view').getAttribute('data-question-group-states')).toBe('2')
+    })
+  })
+
+  describe('TASK_LOCKED toast', () => {
+    const baseMutations = {
+      isPending: false,
+      currentRevision: 1,
+      startTask: vi.fn(),
+      completeTask: vi.fn(),
+      partialTask: vi.fn(),
+      recordTime: vi.fn(),
+      recordQuestions: vi.fn(),
+      rescheduleTask: vi.fn(),
+      skipTask: vi.fn(),
+      retryRecalculation: vi.fn(),
+      reset: vi.fn(),
+      error: null,
+      recalculationState: null,
+    }
+
+    it('shows a Task locked toast with the server message when a mutation fails with TASK_LOCKED', () => {
+      mockUsePlannerTaskMutations.mockReturnValue({
+        ...baseMutations,
+        lastFailedOperation: { error: { code: 'TASK_LOCKED', message: 'Complete the Ischemic Heart Disease group first.' } },
+      })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByTestId('toast')).toBeInTheDocument()
+      expect(screen.getByTestId('toast-title')).toHaveTextContent('Task locked')
+      expect(screen.getByText('Complete the Ischemic Heart Disease group first.')).toBeInTheDocument()
+    })
+
+    it('reads the code from the nested payload.error when present', () => {
+      mockUsePlannerTaskMutations.mockReturnValue({
+        ...baseMutations,
+        lastFailedOperation: { error: { payload: { error: { code: 'TASK_LOCKED' } } } },
+      })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByTestId('toast')).toBeInTheDocument()
+      expect(screen.getByTestId('toast-title')).toHaveTextContent('Task locked')
+    })
+
+    it('does not show the Task locked toast for non-TASK_LOCKED failures', () => {
+      mockUsePlannerTaskMutations.mockReturnValue({
+        ...baseMutations,
+        lastFailedOperation: { error: { code: 'INTERNAL_ERROR', message: 'boom' } },
+      })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.queryByTestId('toast')).not.toBeInTheDocument()
+    })
+
+    it('does not show a toast when lastFailedOperation is absent', () => {
+      mockUsePlannerTaskMutations.mockReturnValue(baseMutations)
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.queryByTestId('toast')).not.toBeInTheDocument()
     })
   })
 })

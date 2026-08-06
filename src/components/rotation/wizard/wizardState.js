@@ -12,6 +12,8 @@ export const INITIAL_FORM = {
   })),
   studyStyle: 'active',
   topics: [],
+  uworldSchedulingMode: 'grouped',
+  questionGroupExclusions: [],
   preferredQuestionsPerDay: 30,
   minimumQuestionsPerSession: 10,
   maximumQuestionsPerDay: 50,
@@ -50,7 +52,7 @@ export function loadDraft() {
   let step = draft.step;
   if (step >= PREVIEW_STEP) step = PREVIEW_STEP - 1;
 
-  return { step, form: draft.form };
+  return { step, form: { ...INITIAL_FORM, ...draft.form } };
 }
 
 export function clearDraft() {

@@ -7,6 +7,12 @@ function generateClientId() {
   return `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+function isTaskLockedError(error) {
+  const code = error?.code
+  const nestedCode = error?.payload?.error?.code
+  return code === 'TASK_LOCKED' || nestedCode === 'TASK_LOCKED'
+}
+
 export default function usePlannerTaskMutations({ planId, initialRevision, getRecalculationDate, timezone }) {
   const queryClient = useQueryClient()
   const [currentRevision, setCurrentRevision] = useState(initialRevision ?? 0)
@@ -67,7 +73,7 @@ export default function usePlannerTaskMutations({ planId, initialRevision, getRe
     onError: (error, { operationId, taskId, action }) => {
       const code = error?.code || ''
 
-      if (code === 'PLAN_REVISION_CONFLICT' || code === 'TASK_LOCKED') {
+      if (code === 'PLAN_REVISION_CONFLICT' || isTaskLockedError(error)) {
         invalidatePlan()
       }
 
@@ -219,5 +225,6 @@ export default function usePlannerTaskMutations({ planId, initialRevision, getRe
     recalculationState,
     retryRecalculation,
     currentRevision,
+    lastFailedOperation,
   }
 }

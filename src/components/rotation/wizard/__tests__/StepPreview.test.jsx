@@ -43,4 +43,38 @@ describe('StepPreview', () => {
     await user.click(screen.getByRole('button', { name: /Retry/i }))
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
+
+  it('renders the UWorld Groups section with each group once', () => {
+    const preview = {
+      questionGroups: [
+        { key: 'g1', title: 'Cardiac Review', system: 'Cardiology', targetQuestions: 20, memberTopicIds: ['s1'], requiredTopicIds: ['s1'], excluded: false, displayOrder: 1 },
+        { key: 'g2', title: 'Pulm Review', system: 'Respiratory', targetQuestions: 15, memberTopicIds: ['s2'], requiredTopicIds: [], excluded: false, displayOrder: 2 },
+      ],
+      incompleteQuestionGroups: [],
+      sourceAdaptedQuestionGroups: [],
+      feasibility: { feasible: true, totalRequiredMinutes: 100, availableMinutes: 200, missingCapacity: 0, topicsLeftUnscheduled: [], possibleSolutions: [] },
+      unscheduledWork: [],
+    }
+    render(<StepPreview preview={preview} previewLoading={false} previewError={null} onRetry={vi.fn()} form={{ topics: [{ sourceTopicId: 's1', title: 'Stable Angina' }, { sourceTopicId: 's2', title: 'Pneumonia' }], questionGroupExclusions: [], preferredQuestionsPerDay: 30 }} />)
+    expect(screen.getByText('UWorld Groups')).toBeInTheDocument()
+    expect(screen.getByText('Cardiac Review')).toBeInTheDocument()
+    expect(screen.getByText('Pulm Review')).toBeInTheDocument()
+    expect(screen.queryByText('Excluded')).not.toBeInTheDocument()
+  })
+
+  it('marks excluded groups in the UWorld Groups section', () => {
+    const preview = {
+      questionGroups: [
+        { key: 'g1', title: 'Cardiac Review', system: 'Cardiology', targetQuestions: 20, memberTopicIds: ['s1'], requiredTopicIds: ['s1'], excluded: false, displayOrder: 1 },
+        { key: 'g2', title: 'Pulm Review', system: 'Respiratory', targetQuestions: 15, memberTopicIds: ['s2'], requiredTopicIds: [], excluded: false, displayOrder: 2 },
+      ],
+      incompleteQuestionGroups: [],
+      sourceAdaptedQuestionGroups: [],
+      feasibility: { feasible: true, totalRequiredMinutes: 100, availableMinutes: 200, missingCapacity: 0, topicsLeftUnscheduled: [], possibleSolutions: [] },
+      unscheduledWork: [],
+    }
+    render(<StepPreview preview={preview} previewLoading={false} previewError={null} onRetry={vi.fn()} form={{ topics: [], questionGroupExclusions: ['g1'], preferredQuestionsPerDay: 30 }} />)
+    const excludedBadges = screen.getAllByText('Excluded')
+    expect(excludedBadges).toHaveLength(1)
+  })
 })

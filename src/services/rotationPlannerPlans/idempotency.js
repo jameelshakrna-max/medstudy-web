@@ -16,6 +16,7 @@ export async function calculateScheduleFingerprint(userId, validatedInput) {
     studyStyle: validatedInput.studyStyle,
     schedulingMode: validatedInput.schedulingMode,
     questionStartRule: validatedInput.questionStartRule,
+    uworldSchedulingMode: validatedInput.uworldSchedulingMode ?? 'per_topic',
     preferredQuestionsPerDay: validatedInput.preferredQuestionsPerDay,
     minimumQuestionsPerSession: validatedInput.minimumQuestionsPerSession,
     maximumQuestionsPerDay: validatedInput.maximumQuestionsPerDay,
@@ -26,6 +27,7 @@ export async function calculateScheduleFingerprint(userId, validatedInput) {
       .map(a => ({ weekday: a.weekday, availableMinutes: a.availableMinutes, isDayOff: a.isDayOff }))
       .sort((a, b) => a.weekday - b.weekday),
     blockedDates: [...validatedInput.blockedDates].sort(),
+    questionGroupExclusions: [...(validatedInput.questionGroupExclusions ?? [])].sort(),
     topics: validatedInput.topics
       .map(t => ({
         normalizedTopicId: t.normalizedTopicId,
@@ -58,6 +60,7 @@ export async function calculateRequestFingerprint(userId, validatedInput) {
     studyStyle: validatedInput.studyStyle,
     schedulingMode: validatedInput.schedulingMode,
     questionStartRule: validatedInput.questionStartRule,
+    uworldSchedulingMode: validatedInput.uworldSchedulingMode ?? 'per_topic',
     preferredQuestionsPerDay: validatedInput.preferredQuestionsPerDay,
     minimumQuestionsPerSession: validatedInput.minimumQuestionsPerSession,
     maximumQuestionsPerDay: validatedInput.maximumQuestionsPerDay,
@@ -68,6 +71,7 @@ export async function calculateRequestFingerprint(userId, validatedInput) {
       .map(a => ({ weekday: a.weekday, availableMinutes: a.availableMinutes, isDayOff: a.isDayOff }))
       .sort((a, b) => a.weekday - b.weekday),
     blockedDates: [...validatedInput.blockedDates].sort(),
+    questionGroupExclusions: [...(validatedInput.questionGroupExclusions ?? [])].sort(),
     topics: validatedInput.topics
       .map(t => ({
         normalizedTopicId: t.normalizedTopicId,

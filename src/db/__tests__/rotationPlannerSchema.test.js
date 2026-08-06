@@ -9,6 +9,7 @@ import {
   STUDY_STYLES,
   SCHEDULING_MODES,
   QUESTION_START_RULES,
+  UWORLD_SCHEDULING_MODES,
   TOPIC_STATUSES,
   TASK_TYPES,
   TASK_STATUSES,
@@ -49,6 +50,10 @@ function loadMigration20Sql() {
   return readFileSync(resolve(__dirname, '../../../schema-migration20.sql'), 'utf8')
 }
 
+function loadMigration23Sql() {
+  return readFileSync(resolve(__dirname, '../../../schema-migration23.sql'), 'utf8')
+}
+
 const FLASHCARDS_STUB = `
 CREATE TABLE IF NOT EXISTS flashcards (
   id TEXT PRIMARY KEY,
@@ -75,6 +80,7 @@ beforeAll(async () => {
   db.run(loadMigration18Sql())
   db.run(loadMigration19Sql())
   db.run(loadMigration20Sql())
+  db.run(loadMigration23Sql())
 })
 
 function tableExists(name) {
@@ -1056,5 +1062,176 @@ describe('Migration 20 — new-card forecast pagination index', () => {
     const ddl = result[0].values[0][0]
     expect(ddl).toContain('flashcards(user_id, created_at, id)')
     expect(ddl).toContain('WHERE state = 0 OR last_review IS NULL')
+  })
+})
+
+// ──────────────────────────────────────────────────────────
+// Migration 23 — grouped UWorld scheduling
+// ──────────────────────────────────────────────────────────
+describe('Migration 23 — question groups table', () => {
+  it('creates rotation_planner_question_groups table', () => {
+    expect(tableExists(PLANNER_TABLES.questionGroups)).toBe(true)
+  })
+
+  it('has all expected columns', () => {
+    const columns = getColumns(PLANNER_TABLES.questionGroups)
+    for (const col of ALL_PLANNER_COLUMNS.questionGroups) {
+      expect(columns).toContain(col)
+    }
+  })
+
+  it('creates idx_rpqg_plan index', () => {
+    const indexes = getIndexes(PLANNER_TABLES.questionGroups)
+    expect(indexes).toContain('idx_rpqg_plan')
+  })
+
+  it('question_groups references plans with CASCADE', () => {
+    const ddl = getCreateTableSql(PLANNER_TABLES.questionGroups)
+    expect(ddl).toContain('REFERENCES rotation_planner_plans(id)')
+    expect(ddl).toContain('ON DELETE CASCADE')
+  })
+
+  it('enforces UNIQUE(plan_id, group_key)', () => {
+    const planId = 'plan-m23-uniq'
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES (?, 'u-m23-uniq', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-m23-uniq', 'fp-m23-uniq')`,
+      [planId]
+    )
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.questionGroups} (id, plan_id, group_key, title, target_questions, member_topic_ids_json, required_topic_ids_json)
+       VALUES ('qg-uniq-1', ?, 'uworld.valvular-heart-disease', 'Valvular Heart Disease', 30, '[]', '[]')`,
+      [planId]
+    )
+    const r = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.questionGroups} (id, plan_id, group_key, title, target_questions, member_topic_ids_json, required_topic_ids_json)
+       VALUES ('qg-uniq-2', ?, 'uworld.valvular-heart-disease', 'Valvular Heart Disease 2', 30, '[]', '[]')`,
+      [planId]
+    )
+    expect(r.ok).toBe(false)
+  })
+
+  it('rejects target_questions <= 0', () => {
+    const r = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.questionGroups} (id, plan_id, group_key, title, target_questions, member_topic_ids_json, required_topic_ids_json)
+       VALUES ('qg-bad-1', 'plan-check-1', 'uworld.test', 'Test', 0, '[]', '[]')`
+    )
+    expect(r.ok).toBe(false)
+  })
+
+  it('rejects excluded outside 0/1', () => {
+    const r = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.questionGroups} (id, plan_id, group_key, title, target_questions, member_topic_ids_json, required_topic_ids_json, excluded)
+       VALUES ('qg-bad-2', 'plan-check-1', 'uworld.test', 'Test', 30, '[]', '[]', 2)`
+    )
+    expect(r.ok).toBe(false)
+  })
+
+  it('deleting a plan cascades to question_groups', () => {
+    const planId = 'plan-m23-cascade'
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES (?, 'u-m23-cascade', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-m23-cascade', 'fp-m23-cascade')`,
+      [planId]
+    )
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.questionGroups} (id, plan_id, group_key, title, target_questions, member_topic_ids_json, required_topic_ids_json)
+       VALUES ('qg-cascade', ?, 'uworld.cascade', 'Cascade', 30, '[]', '[]')`,
+      [planId]
+    )
+    db.run(`DELETE FROM ${PLANNER_TABLES.plans} WHERE id = ?`, [planId])
+
+    const result = db.exec(
+      `SELECT * FROM ${PLANNER_TABLES.questionGroups} WHERE plan_id = '${planId}'`
+    )
+    expect(result.length === 0 || result[0].values.length === 0).toBe(true)
+  })
+})
+
+describe('Migration 23 — uworld_scheduling_mode', () => {
+  it('column exists on rotation_planner_plans', () => {
+    const columns = getColumns(PLANNER_TABLES.plans)
+    expect(columns).toContain('uworld_scheduling_mode')
+  })
+
+  it('defaults to per_topic for existing-style inserts', () => {
+    const planId = 'plan-m23-default'
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES (?, 'u-m23-default', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-m23-default', 'fp-m23-default')`,
+      [planId]
+    )
+    const result = db.exec(
+      `SELECT uworld_scheduling_mode FROM ${PLANNER_TABLES.plans} WHERE id = '${planId}'`
+    )
+    expect(result[0].values[0][0]).toBe('per_topic')
+  })
+
+  it('accepts all valid uworld_scheduling_mode values', () => {
+    for (const mode of UWORLD_SCHEDULING_MODES) {
+      const r = runSafe(
+        `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint, uworld_scheduling_mode)
+         VALUES ('plan-uwsm-${mode}', 'u-m23-modes', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-uwsm-${mode}', 'fp-uwsm-${mode}', '${mode}')`
+      )
+      expect(r.ok).toBe(true)
+    }
+  })
+
+  it('rejects invalid uworld_scheduling_mode', () => {
+    const r = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint, uworld_scheduling_mode)
+       VALUES ('plan-uwsm-bad', 'u-m23-modes', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-uwsm-bad', 'fp-uwsm-bad', 'auto')`
+    )
+    expect(r.ok).toBe(false)
+  })
+})
+
+describe('Migration 23 — plan_question_group_id', () => {
+  it('column exists on rotation_planner_daily_tasks', () => {
+    const columns = getColumns(PLANNER_TABLES.dailyTasks)
+    expect(columns).toContain('plan_question_group_id')
+  })
+
+  it('defaults to NULL on new tasks', () => {
+    const result = db.exec(
+      `SELECT plan_question_group_id FROM ${PLANNER_TABLES.dailyTasks} WHERE id = 'task-cp-default'`
+    )
+    expect(result[0].values[0][0]).toBeNull()
+  })
+
+  it('creates idx_rpdt_question_group index', () => {
+    const indexes = getIndexes(PLANNER_TABLES.dailyTasks)
+    expect(indexes).toContain('idx_rpdt_question_group')
+  })
+
+  it('daily_tasks references question_groups with CASCADE', () => {
+    const ddl = getCreateTableSql(PLANNER_TABLES.dailyTasks)
+    expect(ddl).toContain('REFERENCES rotation_planner_question_groups(id)')
+    expect(ddl).toContain('ON DELETE CASCADE')
+  })
+
+  it('deleting a group cascades to its tasks', () => {
+    const planId = 'plan-m23-taskcascade'
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES (?, 'u-m23-taskcascade', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-m23-taskcascade', 'fp-m23-taskcascade')`,
+      [planId]
+    )
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.questionGroups} (id, plan_id, group_key, title, target_questions, member_topic_ids_json, required_topic_ids_json)
+       VALUES ('qg-taskcascade', ?, 'uworld.taskcascade', 'Task Cascade', 30, '[]', '[]')`,
+      [planId]
+    )
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.dailyTasks} (id, plan_id, plan_question_group_id, task_date, task_type, status)
+       VALUES ('task-m23-grouped', ?, 'qg-taskcascade', '2026-01-15', 'uworld_questions', 'pending')`,
+      [planId]
+    )
+    db.run(`DELETE FROM ${PLANNER_TABLES.questionGroups} WHERE id = 'qg-taskcascade'`)
+
+    const result = db.exec(
+      `SELECT * FROM ${PLANNER_TABLES.dailyTasks} WHERE id = 'task-m23-grouped'`
+    )
+    expect(result.length === 0 || result[0].values.length === 0).toBe(true)
   })
 })

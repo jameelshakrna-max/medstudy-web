@@ -1,12 +1,35 @@
 import { getStudySource } from '../../data/studySources/sourceRegistry.js'
+import { getNormalizedTopicsForRotation } from '../../data/studySources/normalizedRegistry.js'
 import { buildRotationSchedule } from '../rotationPlannerV2/buildRotationSchedule.js'
 import { assignStudyBlocks } from '../rotationPlannerV2/studyBlockAssignment.js'
+import { buildQuestionGroups } from './questionGroupBuilder.js'
 
 export function generatePlanPreview(resolvedTopics, validatedInput) {
   const source = getStudySource(validatedInput.sourceId)
   const sourceVersion = source?.version || '1.0.0'
 
-  const config = buildSchedulerConfig(resolvedTopics, validatedInput, sourceVersion)
+  let supportedTopics = []
+  try {
+    supportedTopics = getNormalizedTopicsForRotation(validatedInput.sourceId, validatedInput.rotationId)
+  } catch {
+    supportedTopics = []
+  }
+
+  const isGrouped = (validatedInput.uworldSchedulingMode || 'per_topic') === 'grouped'
+  let questionGroupResult = null
+  if (isGrouped) {
+    questionGroupResult = buildQuestionGroups({
+      resolvedTopics,
+      supportedTopics,
+      preferredQuestionsPerDay: validatedInput.preferredQuestionsPerDay,
+      questionGroupExclusions: validatedInput.questionGroupExclusions || [],
+    })
+    if (questionGroupResult.errors.length > 0) {
+      throw new Error(`QUESTION_GROUP_VALIDATION_FAILED: ${questionGroupResult.errors[0].message}`)
+    }
+  }
+
+  const config = buildSchedulerConfig(resolvedTopics, validatedInput, sourceVersion, questionGroupResult?.groups)
   const preview = buildRotationSchedule(config)
 
   const topicMap = new Map()
@@ -15,15 +38,20 @@ export function generatePlanPreview(resolvedTopics, validatedInput) {
   }
 
   preview.tasks = assignStudyBlocks(preview.tasks, topicMap)
+  preview.questionGroups = questionGroupResult?.groups || []
 
   return {
     preview,
     sourceVersion,
     config,
+    questionGroups: questionGroupResult?.groups || [],
+    questionGroupErrors: questionGroupResult?.errors || [],
+    incompleteQuestionGroups: questionGroupResult?.incompleteQuestionGroups || [],
+    sourceAdaptedQuestionGroups: questionGroupResult?.sourceAdaptedQuestionGroups || [],
   }
 }
 
-function buildSchedulerConfig(resolvedTopics, validatedInput, sourceVersion) {
+function buildSchedulerConfig(resolvedTopics, validatedInput, sourceVersion, questionGroups) {
   const dueReviewMinutesByDate = {}
   for (const [dateStr, minutes] of Object.entries(validatedInput.dueReviewMinutesByDate || {})) {
     dueReviewMinutesByDate[dateStr] = minutes
@@ -37,6 +65,8 @@ function buildSchedulerConfig(resolvedTopics, validatedInput, sourceVersion) {
     examDate: validatedInput.examDate || undefined,
     studyStyle: validatedInput.studyStyle,
     schedulingMode: validatedInput.schedulingMode,
+    uworldSchedulingMode: validatedInput.uworldSchedulingMode || 'per_topic',
+    questionGroups: questionGroups || undefined,
     questionStartRule: validatedInput.questionStartRule,
     preferredQuestionsPerDay: validatedInput.preferredQuestionsPerDay,
     minimumQuestionsPerSession: validatedInput.minimumQuestionsPerSession,

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createTestDb } from '../../../__tests__/helpers/d1TestHarness.js'
-import { persistPlanBatch, loadPlanFromDb, loadPlanSummaries } from '../persistence.js'
+import { persistPlanBatch, loadPlanFromDb, loadPlanSummaries, loadQuestionGroupsByPlan } from '../persistence.js'
 
 const VALID_SOURCE_ID = 'step-up-medicine-6e-2024'
 const VALID_ROTATION_ID = 'cardiology'
@@ -339,5 +339,145 @@ describe('idempotency unique constraint', () => {
     const r2 = await persistPlanBatch({ DB: db }, 'user-B', input, resolved, preview, 'shared-key', 'fp-b')
 
     expect(r1.planId).not.toBe(r2.planId)
+  })
+})
+
+function makeGroupedPreview(resolved) {
+  const preview = makePreview(resolved)
+  preview.questionGroups = [
+    {
+      key: 'ischemic-heart-disease',
+      title: 'Ischemic Heart Disease',
+      system: 'uworld',
+      targetQuestions: 30,
+      memberTopicIds: ['cardiology.stable-angina-pectoris'],
+      requiredTopicIds: ['cardiology.stable-angina-pectoris'],
+      excluded: 0,
+      displayOrder: 0,
+    },
+  ]
+  preview.tasks.push({
+    groupKey: 'ischemic-heart-disease',
+    planQuestionGroupId: null,
+    taskDate: '2026-01-06',
+    taskType: 'uworld_questions',
+    provider: 'uworld',
+    estimatedMinutes: 30,
+    targetCount: 30,
+    mode: 'tutor',
+    questionPool: 'unused',
+    selection: 'group',
+    unlockCondition: 'learning_group_completed:ischemic-heart-disease',
+    displayOrder: 1,
+    metadata: { groupKey: 'ischemic-heart-disease' },
+  })
+  return preview
+}
+
+describe('grouped plan persistence', () => {
+  it('persists question groups with correct columns', async () => {
+    const db = await createTestDb()
+    const input = makeValidatedInput()
+    const resolved = makeResolvedTopics(input)
+    const preview = makeGroupedPreview(resolved)
+    const { planId } = await persistPlanBatch({ DB: db }, 'user-1', input, resolved, preview, 'req-group', 'fp-group')
+
+    const { results: groups } = await db.prepare(
+      'SELECT id, plan_id, group_key, title, system, target_questions, member_topic_ids_json, required_topic_ids_json, excluded, display_order FROM rotation_planner_question_groups WHERE plan_id = ?'
+    ).bind(planId).all()
+
+    expect(groups).toHaveLength(1)
+    const group = groups[0]
+    expect(group.plan_id).toBe(planId)
+    expect(group.group_key).toBe('ischemic-heart-disease')
+    expect(group.title).toBe('Ischemic Heart Disease')
+    expect(group.system).toBe('uworld')
+    expect(group.target_questions).toBe(30)
+    expect(group.excluded).toBe(0)
+    expect(group.display_order).toBe(0)
+    expect(JSON.parse(group.member_topic_ids_json)).toEqual(['cardiology.stable-angina-pectoris'])
+    expect(JSON.parse(group.required_topic_ids_json)).toEqual(['cardiology.stable-angina-pectoris'])
+  })
+
+  it('grouped tasks get plan_question_group_id pointing at the persisted group id', async () => {
+    const db = await createTestDb()
+    const input = makeValidatedInput()
+    const resolved = makeResolvedTopics(input)
+    const preview = makeGroupedPreview(resolved)
+    const { planId } = await persistPlanBatch({ DB: db }, 'user-1', input, resolved, preview, 'req-group-task', 'fp-group-task')
+
+    const { results: groups } = await db.prepare(
+      'SELECT id FROM rotation_planner_question_groups WHERE plan_id = ?'
+    ).bind(planId).all()
+    const groupId = groups[0].id
+
+    const { results: tasks } = await db.prepare(
+      'SELECT task_type, plan_question_group_id, plan_topic_id FROM rotation_planner_daily_tasks WHERE plan_id = ?'
+    ).bind(planId).all()
+    const uworldTask = tasks.find(t => t.task_type === 'uworld_questions')
+    expect(uworldTask).toBeDefined()
+    expect(uworldTask.plan_question_group_id).toBe(groupId)
+    expect(uworldTask.plan_topic_id).toBeNull()
+  })
+
+  it('loadPlanFromDb returns questionGroups and grouped tasks with planQuestionGroupId', async () => {
+    const db = await createTestDb()
+    const input = makeValidatedInput()
+    const resolved = makeResolvedTopics(input)
+    const preview = makeGroupedPreview(resolved)
+    const { planId } = await persistPlanBatch({ DB: db }, 'user-1', input, resolved, preview, 'req-group-load', 'fp-group-load')
+
+    const plan = await loadPlanFromDb({ DB: db }, planId, 'user-1')
+    expect(plan.questionGroups).toHaveLength(1)
+    const group = plan.questionGroups[0]
+    expect(group.id).toBeDefined()
+    expect(group.groupKey).toBe('ischemic-heart-disease')
+    expect(group.memberTopicIds).toEqual(['cardiology.stable-angina-pectoris'])
+    expect(group.requiredTopicIds).toEqual(['cardiology.stable-angina-pectoris'])
+    expect(group.system).toBe('uworld')
+
+    const uworldTask = plan.tasks.find(t => t.taskType === 'uworld_questions')
+    expect(uworldTask).toBeDefined()
+    expect(uworldTask.planQuestionGroupId).toBe(group.id)
+    expect(uworldTask.planTopicId).toBeNull()
+  })
+
+  it('loadQuestionGroupsByPlan returns mapped groups and [] for a plan without groups', async () => {
+    const db = await createTestDb()
+    const input = makeValidatedInput()
+    const resolved = makeResolvedTopics(input)
+    const groupedPreview = makeGroupedPreview(resolved)
+    const { planId } = await persistPlanBatch({ DB: db }, 'user-1', input, resolved, groupedPreview, 'req-group-query', 'fp-group-query')
+
+    const groups = await loadQuestionGroupsByPlan({ DB: db }, planId)
+    expect(groups).toHaveLength(1)
+    expect(groups[0].memberTopicIds).toEqual(['cardiology.stable-angina-pectoris'])
+    expect(groups[0].requiredTopicIds).toEqual(['cardiology.stable-angina-pectoris'])
+    expect(groups[0].excluded).toBe(0)
+    expect(groups[0].displayOrder).toBe(0)
+
+    const plainInput = makeValidatedInput()
+    const plainResolved = makeResolvedTopics(plainInput)
+    const plainPreview = makePreview(plainResolved)
+    const { planId: plainPlanId } = await persistPlanBatch({ DB: db }, 'user-2', plainInput, plainResolved, plainPreview, 'req-plain', 'fp-plain')
+
+    const emptyGroups = await loadQuestionGroupsByPlan({ DB: db }, plainPlanId)
+    expect(emptyGroups).toEqual([])
+  })
+
+  it('deleting the plan cascades to question_groups rows', async () => {
+    const db = await createTestDb()
+    const input = makeValidatedInput()
+    const resolved = makeResolvedTopics(input)
+    const preview = makeGroupedPreview(resolved)
+    const { planId } = await persistPlanBatch({ DB: db }, 'user-cascade-group', input, resolved, preview, 'req-cascade-group', 'fp-cascade-group')
+
+    await db.prepare('DELETE FROM rotation_planner_plans WHERE id = ?').bind(planId).run()
+
+    const groups = await db.prepare('SELECT * FROM rotation_planner_question_groups WHERE plan_id = ?').bind(planId).all()
+    expect(groups.results).toHaveLength(0)
+
+    const tasks = await db.prepare('SELECT * FROM rotation_planner_daily_tasks WHERE plan_id = ?').bind(planId).all()
+    expect(tasks.results).toHaveLength(0)
   })
 })

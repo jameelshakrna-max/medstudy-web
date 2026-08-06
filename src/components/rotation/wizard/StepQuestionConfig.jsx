@@ -8,7 +8,7 @@ export default function StepQuestionConfig({ form, onFormChange }) {
   return (
     <div className={styles.stepContent}>
       <div className={styles.formField}>
-        <label htmlFor="wiz-pref-qpd" className={styles.label}>Preferred Questions Per Day</label>
+        <label htmlFor="wiz-pref-qpd" className={styles.label}>Questions per UWorld review block</label>
         <input id="wiz-pref-qpd" type="number" min="0" value={form.preferredQuestionsPerDay}
           onChange={e => update('preferredQuestionsPerDay', parseInt(e.target.value, 10) || 0)}
           className={styles.input} />

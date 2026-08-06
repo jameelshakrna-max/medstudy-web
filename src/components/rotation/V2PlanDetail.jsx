@@ -27,7 +27,106 @@ import ProgressView from './ProgressView'
 import { apiGet, apiPatch, apiDelete } from '../../lib/api'
 import { queryKeys } from '../../lib/queryKeys'
 import { getTodayKey, resolvePlannerTimezone, getBrowserTimezone } from './today/todayUtils'
+import ProgressBar from '../ui/ProgressBar/ProgressBar'
 import styles from './V2PlanDetail.module.css'
+
+const GROUP_STATUS_LABEL = {
+  learning: 'Learning',
+  in_progress: 'Learning',
+  pending: 'Learning',
+  completed: 'Completed',
+  excluded: 'Excluded',
+}
+
+function getGroupKey(group) {
+  return group?.key ?? group?.groupKey ?? null
+}
+
+function getGroupState(states, group) {
+  const key = getGroupKey(group)
+  if (!key) return null
+  const arr = Array.isArray(states) ? states : []
+  return arr.find(state => {
+    const stateKey = state?.groupKey ?? state?.key
+    return stateKey != null && String(stateKey) === String(key)
+  }) || null
+}
+
+function normalizeGroupState(state) {
+  if (!state) return null
+  return {
+    completedCount: state.completedCount ?? state.completedQuestions ?? 0,
+    targetCount: state.targetCount ?? state.targetQuestions ?? 0,
+    incorrectRemaining: state.incorrectRemaining ?? state.incorrectQuestionsRemaining ?? 0,
+    remaining: state.remaining ?? state.remainingQuestions ?? 0,
+    status: state.status ?? (state.excluded ? 'excluded' : 'learning'),
+    excluded: !!state.excluded,
+  }
+}
+
+function UWorldGroupCard({ group, state }) {
+  const title = group.title || getGroupKey(group) || 'UWorld group'
+  const status = state?.status || 'learning'
+  const excluded = !!state?.excluded || !!group.excluded
+  const targetCount = state?.targetCount ?? group.targetQuestions ?? 0
+  const completedCount = state?.completedCount ?? 0
+  const remaining = state?.remaining ?? Math.max(0, targetCount - completedCount)
+  const incorrectRemaining = state?.incorrectRemaining ?? 0
+  const percent = targetCount > 0 ? Math.min(1, completedCount / targetCount) : 0
+  const statusLabel = GROUP_STATUS_LABEL[status] || 'Learning'
+  const badgeClass = status === 'completed'
+    ? styles.groupBadgeSuccess
+    : status === 'excluded'
+      ? styles.groupBadgeMuted
+      : styles.groupBadgeActive
+
+  return (
+    <div className={styles.groupCard} data-status={status}>
+      <div className={styles.groupCardHeader}>
+        <div className={styles.groupCardTitleGroup}>
+          <h3 className={styles.groupCardTitle}>{title}</h3>
+          {group.system && <div className={styles.groupCardMeta}>{group.system}</div>}
+        </div>
+        <span className={`${styles.groupBadge} ${badgeClass}`}>{statusLabel}</span>
+      </div>
+      {excluded ? (
+        <p className={styles.groupExcluded}>Excluded from this plan's schedule.</p>
+      ) : state ? (
+        <div className={styles.groupProgress}>
+          <div className={styles.groupProgressRow}>
+            <span className={styles.groupProgressLabel}>
+              {targetCount > 0 ? `Learning ${completedCount}/${targetCount}` : 'Learning'}
+            </span>
+            <span className={styles.groupProgressValue}>{Math.round(percent * 100)}%</span>
+          </div>
+          <ProgressBar value={percent} size="sm" />
+          <div className={styles.groupStats}>
+            {remaining > 0 && <span>{remaining} questions left</span>}
+            {incorrectRemaining > 0 && <span>{incorrectRemaining} incorrect to review</span>}
+          </div>
+        </div>
+      ) : (
+        <p className={styles.groupNoProgress}>No progress yet</p>
+      )}
+    </div>
+  )
+}
+
+function UWorldReviewGroups({ groups, states }) {
+  const ordered = [...groups].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
+  return (
+    <section className={styles.groupSection} aria-label="UWorld Review Groups">
+      <h2 className={styles.groupSectionTitle}>UWorld Review Groups</h2>
+      {ordered.map(group => (
+        <UWorldGroupCard
+          key={getGroupKey(group) || group.id || group.title}
+          group={group}
+          state={normalizeGroupState(getGroupState(states, group))}
+        />
+      ))}
+    </section>
+  )
+}
 
 export default function V2PlanDetail({ planId, onBack }) {
   const navigate = useNavigate()
@@ -156,7 +255,24 @@ export default function V2PlanDetail({ planId, onBack }) {
     timezone: resolvedTimezone,
   })
 
+  useEffect(() => {
+    const op = mutations.lastFailedOperation
+    const err = op?.error
+    const code = err?.code || err?.payload?.error?.code
+    if (code === 'TASK_LOCKED') {
+      setToast({
+        open: true,
+        title: 'Task locked',
+        description: err?.message || 'This task is locked. Complete its prerequisite first.',
+        variant: 'error',
+      })
+    }
+  }, [mutations.lastFailedOperation])
+
   const tasks = data?.tasks || []
+
+  const questionGroups = data?.questionGroups ?? data?.plan?.questionGroups ?? []
+  const questionGroupStates = data?.questionGroupStates ?? data?.plan?.questionGroupStates ?? []
 
   const completedTopicCount = useMemo(() => {
     return (data?.topics || []).filter(t => t.status === 'completed').length
@@ -183,7 +299,10 @@ export default function V2PlanDetail({ planId, onBack }) {
     try {
       await mutations.startTask(task.id)
     } catch (err) {
-      setToast({ open: true, title: 'Failed to start task', description: err?.message || 'Please try again.', variant: 'error' })
+      const code = err?.code || err?.payload?.error?.code
+      if (code !== 'TASK_LOCKED') {
+        setToast({ open: true, title: 'Failed to start task', description: err?.message || 'Please try again.', variant: 'error' })
+      }
     }
   }, [mutations])
 
@@ -236,7 +355,10 @@ export default function V2PlanDetail({ planId, onBack }) {
     try {
       await mutations.rescheduleTask(taskId, newTaskDate)
     } catch (err) {
-      setToast({ open: true, title: 'Failed to move task', description: err?.message || 'Please try again.', variant: 'error' })
+      const code = err?.code || err?.payload?.error?.code
+      if (code !== 'TASK_LOCKED') {
+        setToast({ open: true, title: 'Failed to move task', description: err?.message || 'Please try again.', variant: 'error' })
+      }
     }
   }, [mutations])
 
@@ -356,6 +478,8 @@ export default function V2PlanDetail({ planId, onBack }) {
             isOrphaned={taskAttachment.isOrphaned}
             hasUnsyncedData={taskAttachment.hasUnsyncedData}
             discardOrphanedPlannerContext={taskAttachment.discardOrphanedPlannerContext}
+            questionGroups={questionGroups}
+            questionGroupStates={questionGroupStates}
             onStart={handleStart}
             onComplete={handleComplete}
             onPartial={handlePartial}
@@ -397,6 +521,9 @@ export default function V2PlanDetail({ planId, onBack }) {
           />
         </TabsContent>
         <TabsContent value="topics">
+          {plan.uworldSchedulingMode === 'grouped' && Array.isArray(questionGroups) && questionGroups.length > 0 && (
+            <UWorldReviewGroups groups={questionGroups} states={questionGroupStates} />
+          )}
           <TopicsView topics={topics} sourceTitle={plan.sourceTitle} />
         </TabsContent>
         <TabsContent value="progress">

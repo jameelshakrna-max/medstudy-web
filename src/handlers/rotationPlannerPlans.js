@@ -5,6 +5,7 @@ import {
   parseAndValidatePlanRequest,
   resolveTopicsFromRegistry,
   generatePlanPreview,
+  collectUnresolvedQuestionGroups,
   calculateScheduleFingerprint,
   calculateRequestFingerprint,
   checkIdempotency,
@@ -12,11 +13,11 @@ import {
   loadPlanFromDb,
   loadPlanSummaries,
   loadPlanById, loadTaskById, loadTopicById, loadPlanRevision,
-  loadTopicsByPlan, loadTasksByPlan, loadAvailabilityByPlan,
+  loadTopicsByPlan, loadTasksByPlan, loadQuestionGroupsByPlan, loadAvailabilityByPlan,
   checkTaskIdempotency, checkPlanIdempotency,
   classifyCreateBatchError, classifyBatchError, buildTaskMutationBatch, executeTaskMutationBatch,
   applyTaskUpdate,   calculateTaskUpdateFingerprint, calculateRecalculationFingerprint, calculateRenameFingerprint,
-  recalculatePlan, deriveActualTopicStates, persistRecalculationBatch,
+  recalculatePlan, deriveActualTopicStates, deriveActualGroupStates, persistRecalculationBatch,
   TERMINAL_STATUSES, VALID_ACTIONS, getFlashcardCapacityOwner,
   parseUnlockCondition, isTaskEffectivelyLocked, validateDisplayName,
 } from '../services/rotationPlannerPlans/index.js'
@@ -81,7 +82,7 @@ export async function handlePreviewRotationPlan(request, env, user) {
       }
     }
 
-    const { preview, sourceVersion } = generatePlanPreview(resolvedTopics, validation.parsed)
+    const { preview, sourceVersion, questionGroups, questionGroupErrors, incompleteQuestionGroups, sourceAdaptedQuestionGroups } = generatePlanPreview(resolvedTopics, validation.parsed)
     const fingerprint = await calculateScheduleFingerprint(user.sub, { ...validation.parsed, sourceVersion })
 
     // ─── Forecast computation for preview (advisory only) ───
@@ -148,6 +149,7 @@ export async function handlePreviewRotationPlan(request, env, user) {
       studyStyle: validation.parsed.studyStyle,
       schedulingMode: validation.parsed.schedulingMode,
       questionStartRule: validation.parsed.questionStartRule,
+      uworldSchedulingMode: validation.parsed.uworldSchedulingMode || 'per_topic',
       preferredQuestionsPerDay: validation.parsed.preferredQuestionsPerDay,
       minimumQuestionsPerSession: validation.parsed.minimumQuestionsPerSession,
       maximumQuestionsPerDay: validation.parsed.maximumQuestionsPerDay,
@@ -195,8 +197,15 @@ export async function handlePreviewRotationPlan(request, env, user) {
       previewToken: fingerprint,
       feasibility: preview.feasibility,
       unscheduledWork: preview.unscheduledWork,
+      questionGroups,
+      questionGroupStates: preview.groupStates || [],
+      incompleteQuestionGroups,
+      sourceAdaptedQuestionGroups,
     })
   } catch (e) {
+    if (e.message && e.message.startsWith('QUESTION_GROUP_VALIDATION_FAILED: ')) {
+      return errorResponse('UNKNOWN_QUESTION_GROUP', e.message.replace('QUESTION_GROUP_VALIDATION_FAILED: ', ''), 400)
+    }
     log('rotation_planner:preview:error', { message: e.message, stack: e.stack?.slice(0, 500), cause: e.cause?.message })
     return errorResponse('INTERNAL_ERROR', 'Failed to generate preview.', 500)
   }
@@ -246,7 +255,14 @@ export async function handleCreateRotationPlan(request, env, user) {
       }
     }
 
-    const { preview, sourceVersion, config } = generatePlanPreview(resolvedTopics, validation.parsed)
+    const { preview, sourceVersion, config, incompleteQuestionGroups } = generatePlanPreview(resolvedTopics, validation.parsed)
+
+    const unresolvedQuestionGroups = collectUnresolvedQuestionGroups(incompleteQuestionGroups)
+    if (unresolvedQuestionGroups.length > 0) {
+      const titles = unresolvedQuestionGroups.map(g => g.title)
+      return errorResponse('GROUP_REQUIRED_TOPIC_MISSING', `Resolve or exclude incomplete UWorld review groups: ${titles.join(', ')}.`, 422)
+    }
+
     const scheduleFingerprint = await calculateScheduleFingerprint(user.sub, { ...validation.parsed, sourceVersion })
     requestFingerprint = await calculateRequestFingerprint(user.sub, { ...validation.parsed, sourceVersion })
     clientRequestId = validation.parsed.clientRequestId
@@ -330,6 +346,9 @@ export async function handleCreateRotationPlan(request, env, user) {
     const plan = await loadPlanFromDb(env, planId, user.sub)
     return json(plan, 201)
   } catch (e) {
+    if (e.message && e.message.startsWith('QUESTION_GROUP_VALIDATION_FAILED: ')) {
+      return errorResponse('UNKNOWN_QUESTION_GROUP', e.message.replace('QUESTION_GROUP_VALIDATION_FAILED: ', ''), 400)
+    }
     log('rotation_planner:create_plan:error', {
       message: e.message,
       stack: e.stack?.slice(0, 500),
@@ -392,6 +411,10 @@ export async function handleGetRotationPlan(request, env, user) {
         )
         topic.estimateConfidence = registryTopic?.estimate_confidence || null
       }
+    }
+
+    if (plan.plan.uworldSchedulingMode === 'grouped') {
+      plan.questionGroupStates = deriveActualGroupStates(plan.questionGroups || [], plan.topics || [], plan.tasks || [], {})
     }
 
     return json(plan)
@@ -633,6 +656,10 @@ async function handleRescheduleCompound({
   const terminalTasks = dbTasks.filter(t => TERMINAL_STATUSES.has(t.status))
   const reservedMinutesByDate = buildReservedMinutesMap(terminalTasks, remainingDates)
 
+  const questionGroups = plan.uworld_scheduling_mode === 'grouped'
+    ? await loadQuestionGroupsByPlan(env, planId)
+    : []
+
   const planConfig = {
     rotationId: plan.rotation_id,
     sourceId: plan.source_id,
@@ -641,6 +668,20 @@ async function handleRescheduleCompound({
     examDate: plan.exam_date || undefined,
     studyStyle: plan.study_style,
     schedulingMode: plan.scheduling_mode,
+    uworldSchedulingMode: plan.uworld_scheduling_mode || 'per_topic',
+    questionGroups: plan.uworld_scheduling_mode === 'grouped'
+      ? questionGroups.map(g => ({
+          id: g.id,
+          key: g.groupKey,
+          title: g.title,
+          system: g.system || null,
+          targetQuestions: g.targetQuestions,
+          memberTopicIds: g.memberTopicIds || [],
+          requiredTopicIds: g.requiredTopicIds || [],
+          excluded: g.excluded,
+          displayOrder: g.displayOrder || 0,
+        }))
+      : undefined,
     questionStartRule: plan.question_start_rule,
     preferredQuestionsPerDay: plan.preferred_questions_per_day,
     minimumQuestionsPerSession: plan.minimum_questions_per_session,
@@ -700,8 +741,23 @@ async function handleRescheduleCompound({
     }
   }
 
+  let initialGroupStates
+  if (plan.uworld_scheduling_mode === 'grouped') {
+    const derivedGroupStates = deriveActualGroupStates(questionGroups, topics, dbTasks, { asOfDate: occurredOn })
+    initialGroupStates = {}
+    for (const gs of derivedGroupStates) {
+      initialGroupStates[gs.key] = {
+        completedQuestions: gs.completedQuestions,
+        incorrectQuestionsRemaining: gs.incorrectQuestionsRemaining,
+        requiredLearningCompleted: gs.requiredLearningCompleted,
+        unlockedAt: gs.unlockedAt,
+      }
+    }
+  }
+
   const recalculation = buildRotationSchedule(planConfig, {
     initialTopicStates,
+    initialGroupStates,
     scheduleStartDate: occurredOn,
     reservedMinutesByDate,
     pinnedTasks,
@@ -724,6 +780,7 @@ async function handleRescheduleCompound({
     .map(t => ({
       id: crypto.randomUUID(),
       planTopicId: t.planTopicId || null,
+      planQuestionGroupId: t.planQuestionGroupId || null,
       taskDate: t.taskDate,
       taskType: t.taskType,
       provider: t.provider || null,
@@ -796,8 +853,8 @@ async function handleRescheduleCompound({
   ).bind(planId, mutationId))
 
   statements.push(env.DB.prepare(
-    `INSERT INTO ${T.dailyTasks} (id, plan_id, plan_topic_id, task_date, task_type, provider, estimated_minutes, target_count, completed_count, mode, question_pool, status, unlock_condition, display_order, is_pinned, metadata_json)
-     SELECT json_extract(value, '$.id'), ?, json_extract(value, '$.planTopicId'), json_extract(value, '$.taskDate'), json_extract(value, '$.taskType'), json_extract(value, '$.provider'), json_extract(value, '$.estimatedMinutes'), json_extract(value, '$.targetCount'), 0, json_extract(value, '$.mode'), json_extract(value, '$.questionPool'), json_extract(value, '$.status'), json_extract(value, '$.unlockCondition'), json_extract(value, '$.displayOrder'), 0, json_extract(value, '$.metadataJson')
+    `INSERT INTO ${T.dailyTasks} (id, plan_id, plan_topic_id, plan_question_group_id, task_date, task_type, provider, estimated_minutes, target_count, completed_count, mode, question_pool, status, unlock_condition, display_order, is_pinned, metadata_json)
+     SELECT json_extract(value, '$.id'), ?, json_extract(value, '$.planTopicId'), json_extract(value, '$.planQuestionGroupId'), json_extract(value, '$.taskDate'), json_extract(value, '$.taskType'), json_extract(value, '$.provider'), json_extract(value, '$.estimatedMinutes'), json_extract(value, '$.targetCount'), 0, json_extract(value, '$.mode'), json_extract(value, '$.questionPool'), json_extract(value, '$.status'), json_extract(value, '$.unlockCondition'), json_extract(value, '$.displayOrder'), 0, json_extract(value, '$.metadataJson')
      FROM json_each(?)
      WHERE EXISTS (SELECT 1 FROM ${T.planMutations} WHERE id = ?)`
   ).bind(planId, tasksJson, mutationId))
@@ -891,16 +948,27 @@ export async function handleUpdateTask(request, env, user) {
     if (task.unlockCondition) {
       const parsedCondition = parseUnlockCondition(task.unlockCondition)
       let lockState = null
-      if (parsedCondition?.canonicalTopicId) {
+      let lockMessage = 'This task is locked until its prerequisite is completed.'
+      if (parsedCondition) {
         const [topics, tasks] = await Promise.all([
           loadTopicsByPlan(env, planId),
           loadTasksByPlan(env, planId),
         ])
-        const derived = deriveActualTopicStates(topics, tasks, { asOfDate: occurredOn })
-        lockState = derived.find(s => s.canonicalTopicId === parsedCondition.canonicalTopicId) || null
+        if (parsedCondition.type === 'learning_group_completed' || parsedCondition.type === 'uworld_group_completed') {
+          const groups = await loadQuestionGroupsByPlan(env, planId)
+          const derived = deriveActualGroupStates(groups, topics, tasks, { asOfDate: occurredOn })
+          lockState = derived.find(s => s.key === parsedCondition.canonicalTopicId) || null
+          const title = groups.find(g => g.groupKey === parsedCondition.canonicalTopicId)?.title || 'group'
+          lockMessage = parsedCondition.type === 'learning_group_completed'
+            ? `Complete the ${title} learning topics to unlock this UWorld review block.`
+            : `Complete the ${title} UWorld questions to unlock this review block.`
+        } else if (parsedCondition.canonicalTopicId) {
+          const derived = deriveActualTopicStates(topics, tasks, { asOfDate: occurredOn })
+          lockState = derived.find(s => s.canonicalTopicId === parsedCondition.canonicalTopicId) || null
+        }
       }
       if (isTaskEffectivelyLocked(task, lockState)) {
-        return errorResponse('TASK_LOCKED', 'This task is locked until its prerequisite is completed.', 409)
+        return errorResponse('TASK_LOCKED', lockMessage, 409)
       }
     }
     let updatedTask

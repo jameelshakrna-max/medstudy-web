@@ -1,7 +1,7 @@
 import { PLANNER_TABLES } from '../../db/rotationPlannerSchema.js'
 import {
-  mapPlanSummaryDto, mapPlanDto, mapAvailabilityDto, mapTopicDto, mapTaskDto,
-  AVAILABILITY_COLUMNS, TOPIC_COLUMNS, TASK_COLUMNS, PLAN_NESTED_COLUMNS,
+  mapPlanSummaryDto, mapPlanDto, mapAvailabilityDto, mapTopicDto, mapTaskDto, mapQuestionGroupDto,
+  AVAILABILITY_COLUMNS, TOPIC_COLUMNS, TASK_COLUMNS, PLAN_NESTED_COLUMNS, QUESTION_GROUP_COLUMNS,
   safeParseJson,
 } from './dtoMappers.js'
 import { getStudySource } from '../../data/studySources/sourceRegistry.js'
@@ -29,12 +29,13 @@ export function filterMetadata(taskType, metadata) {
   return filtered
 }
 
-function generateIds(resolvedTopics, previewTasks) {
+function generateIds(resolvedTopics, previewTasks, questionGroups = []) {
   const planId = crypto.randomUUID()
   const availabilityIds = Array.from({ length: 7 }, () => crypto.randomUUID())
   const topicIds = resolvedTopics.map(() => crypto.randomUUID())
   const taskIds = previewTasks.map(() => crypto.randomUUID())
-  return { planId, availabilityIds, topicIds, taskIds }
+  const groupIds = questionGroups.map(() => crypto.randomUUID())
+  return { planId, availabilityIds, topicIds, taskIds, groupIds }
 }
 
 export async function persistPlanBatch(env, userId, validatedInput, resolvedTopics, preview, clientRequestId, fingerprint, creationForecast) {
@@ -42,7 +43,12 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
   const sourceVersion = source?.version || '1.0.0'
   const sourceTitle = source?.source?.title || validatedInput.sourceId
 
-  const { planId, availabilityIds, topicIds, taskIds } = generateIds(resolvedTopics, preview.tasks)
+  const questionGroups = preview.questionGroups || []
+
+  const { planId, availabilityIds, topicIds, taskIds, groupIds } = generateIds(resolvedTopics, preview.tasks, questionGroups)
+
+  const groupIdsByKey = new Map()
+  questionGroups.forEach((g, i) => groupIdsByKey.set(g.key, groupIds[i]))
 
   const topicIdByNormalized = new Map()
   for (let i = 0; i < resolvedTopics.length; i++) {
@@ -90,6 +96,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
       return {
         id: crypto.randomUUID(),
         planTopicId: planTopicId ?? null,
+        planQuestionGroupId: task.groupKey ? (groupIdsByKey.get(task.groupKey) || null) : null,
         taskDate: task.taskDate,
         taskType: task.taskType,
         provider: task.provider ?? null,
@@ -127,6 +134,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     maximumActiveTopics: validatedInput.maximumActiveTopics,
     status: 'draft',
     usesFlashcardCapacity: 0,
+    uworldSchedulingMode: validatedInput.uworldSchedulingMode || 'per_topic',
     displayName: validatedInput.displayName,
     settingsJson: parsedSettingsJson,
     createdAt,
@@ -179,6 +187,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
       id: taskIds[i],
       planId,
       planTopicId: planTopicId ?? null,
+      planQuestionGroupId: task.groupKey ? (groupIdsByKey.get(task.groupKey) || null) : null,
       taskDate: task.taskDate,
       taskType: task.taskType,
       provider: task.provider ?? null,
@@ -208,6 +217,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     availability: baseAvailability,
     topics: baseTopics,
     tasks: baseTasks,
+    questionGroups: questionGroups.map((g, i) => ({ id: groupIds[i], ...g })),
   }
 
   // ─── Batch statements ───
@@ -221,9 +231,9 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
       preferred_questions_per_day, minimum_questions_per_session,
       maximum_questions_per_day, average_minutes_per_question,
       buffer_percentage, maximum_active_topics,
-      status, uses_flashcard_capacity, display_name, client_request_id, request_fingerprint, settings_json,
+      status, uses_flashcard_capacity, uworld_scheduling_mode, display_name, client_request_id, request_fingerprint, settings_json,
       created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0, ?, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     planId, userId, validatedInput.rotationId, validatedInput.sourceId, sourceVersion,
     validatedInput.startDate, validatedInput.endDate, validatedInput.examDate || null,
@@ -231,7 +241,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     validatedInput.preferredQuestionsPerDay, validatedInput.minimumQuestionsPerSession,
     validatedInput.maximumQuestionsPerDay, validatedInput.averageMinutesPerQuestion,
     validatedInput.bufferPercentage, validatedInput.maximumActiveTopics,
-    validatedInput.displayName, clientRequestId, fingerprint, settingsJson,
+    validatedInput.uworldSchedulingMode || 'per_topic', validatedInput.displayName, clientRequestId, fingerprint, settingsJson,
     createdAt, createdAt
   )
 
@@ -302,6 +312,33 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     WHERE EXISTS (SELECT 1 FROM ${PLANNER_TABLES.planMutations} WHERE id = ?)`
   ).bind(planId, topicsJson, mutationId)
 
+  const groupsJson = JSON.stringify(questionGroups.map((g, i) => ({
+    id: groupIds[i],
+    groupKey: g.key,
+    title: g.title,
+    system: g.system || null,
+    targetQuestions: g.targetQuestions,
+    memberTopicIds: g.memberTopicIds || [],
+    requiredTopicIds: g.requiredTopicIds || [],
+    excluded: g.excluded ? 1 : 0,
+    displayOrder: g.displayOrder || 0,
+  })))
+  // S5b: Insert question groups. Must run after S4 (topics) and before S5 (tasks):
+  // daily_tasks.plan_question_group_id references question_groups.id.
+  const groupsStmt = env.DB.prepare(
+    `INSERT INTO ${PLANNER_TABLES.questionGroups} (
+       id, plan_id, group_key, title, system, target_questions,
+       member_topic_ids_json, required_topic_ids_json, excluded, display_order
+     ) SELECT
+       json_extract(value,'$.id'), ?,
+       json_extract(value,'$.groupKey'), json_extract(value,'$.title'), json_extract(value,'$.system'),
+       CAST(json_extract(value,'$.targetQuestions') AS INTEGER),
+       json_extract(value,'$.memberTopicIds'), json_extract(value,'$.requiredTopicIds'),
+       CAST(json_extract(value,'$.excluded') AS INTEGER), CAST(json_extract(value,'$.displayOrder') AS INTEGER)
+     FROM json_each(?)
+     WHERE EXISTS (SELECT 1 FROM ${PLANNER_TABLES.planMutations} WHERE id = ?)`
+  ).bind(planId, groupsJson, mutationId)
+
   const taskRows = preview.tasks.map((task, i) => {
     let planTopicId = null
     if (task.normalizedTopicId) {
@@ -310,6 +347,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     return {
       id: taskIds[i],
       planTopicId: planTopicId ?? null,
+      planQuestionGroupId: task.groupKey ? (groupIdsByKey.get(task.groupKey) || null) : null,
       taskDate: task.taskDate,
       taskType: task.taskType,
       provider: task.provider ?? null,
@@ -327,14 +365,14 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
   // S5: Insert tasks with explicit timestamps
   const tasksStmt = env.DB.prepare(
     `INSERT INTO ${PLANNER_TABLES.dailyTasks} (
-      id, plan_id, plan_topic_id, task_date, task_type,
+      id, plan_id, plan_topic_id, plan_question_group_id, task_date, task_type,
       provider, estimated_minutes, actual_minutes,
       target_count, completed_count, mode, question_pool,
       status, unlock_condition, display_order, metadata_json,
       created_at, updated_at
     ) SELECT
       json_extract(value,'$.id'), ?,
-      json_extract(value,'$.planTopicId'), json_extract(value,'$.taskDate'),
+      json_extract(value,'$.planTopicId'), json_extract(value,'$.planQuestionGroupId'), json_extract(value,'$.taskDate'),
       json_extract(value,'$.taskType'), json_extract(value,'$.provider'),
       json_extract(value,'$.estimatedMinutes'), NULL,
       json_extract(value,'$.targetCount'), 0,
@@ -384,11 +422,11 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
   ).bind(resultJsonPayload, planId, userId, mutationId, planId, userId)
 
   try {
-    const batchResults = await env.DB.batch([planStmt, claimStmt, availStmt, topicsStmt, tasksStmt, ownershipStmt, resultJsonStmt])
-    // Defensive: if S6 (index 5) affected zero rows, ownership claim failed silently.
+    const batchResults = await env.DB.batch([planStmt, claimStmt, availStmt, topicsStmt, groupsStmt, tasksStmt, ownershipStmt, resultJsonStmt])
+    // Defensive: if S6 (index 6) affected zero rows, ownership claim failed silently.
     // This should no longer happen after removing NOT EXISTS (the unique index fires),
     // but guard against it to prevent silent invariant violations.
-    const s6Changes = batchResults[5]?.meta?.changes
+    const s6Changes = batchResults[6]?.meta?.changes
     if (s6Changes === 0) {
       const { results: blockers } = await env.DB.prepare(
         `SELECT 1 FROM ${PLANNER_TABLES.plans}
@@ -413,6 +451,10 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
       })
       // Ownership race lost — use empty forecast but preserve requested forecastSettings (for future ownership transfer & deterministic replay)
       const retrySettingsObj = { ...settingsObj, forecast: createEmptyFlashcardForecast(), forecastSettings: settingsObj.forecastSettings }
+      const retryQuestionGroups = noWorkloadPreview.questionGroups || []
+      const retryGroupIds = retryQuestionGroups.map(() => crypto.randomUUID())
+      const retryGroupIdsByKey = new Map()
+      retryQuestionGroups.forEach((g, i) => retryGroupIdsByKey.set(g.key, retryGroupIds[i]))
       const retryTaskIds = noWorkloadPreview.tasks.map(() => crypto.randomUUID())
       const retryTaskRows = noWorkloadPreview.tasks.map((task, i) => {
         let planTopicId = null
@@ -422,6 +464,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
         return {
           id: retryTaskIds[i],
           planTopicId: planTopicId ?? null,
+          planQuestionGroupId: task.groupKey ? (retryGroupIdsByKey.get(task.groupKey) || null) : null,
           taskDate: task.taskDate,
           taskType: task.taskType,
           provider: task.provider ?? null,
@@ -436,15 +479,39 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
         }
       })
       const retryTasksJson = JSON.stringify(retryTaskRows)
+      const retryGroupsJson = JSON.stringify(retryQuestionGroups.map((g, i) => ({
+        id: retryGroupIds[i],
+        groupKey: g.key,
+        title: g.title,
+        system: g.system || null,
+        targetQuestions: g.targetQuestions,
+        memberTopicIds: g.memberTopicIds || [],
+        requiredTopicIds: g.requiredTopicIds || [],
+        excluded: g.excluded ? 1 : 0,
+        displayOrder: g.displayOrder || 0,
+      })))
+      const retryGroupsStmt = env.DB.prepare(
+        `INSERT INTO ${PLANNER_TABLES.questionGroups} (
+           id, plan_id, group_key, title, system, target_questions,
+           member_topic_ids_json, required_topic_ids_json, excluded, display_order
+         ) SELECT
+           json_extract(value,'$.id'), ?,
+           json_extract(value,'$.groupKey'), json_extract(value,'$.title'), json_extract(value,'$.system'),
+           CAST(json_extract(value,'$.targetQuestions') AS INTEGER),
+           json_extract(value,'$.memberTopicIds'), json_extract(value,'$.requiredTopicIds'),
+           CAST(json_extract(value,'$.excluded') AS INTEGER), CAST(json_extract(value,'$.displayOrder') AS INTEGER)
+         FROM json_each(?)
+         WHERE EXISTS (SELECT 1 FROM ${PLANNER_TABLES.planMutations} WHERE id = ?)`
+      ).bind(planId, retryGroupsJson, mutationId)
       const retryTasksStmt = env.DB.prepare(
         `INSERT INTO ${PLANNER_TABLES.dailyTasks} (
-           id, plan_id, plan_topic_id, task_date, task_type,
+           id, plan_id, plan_topic_id, plan_question_group_id, task_date, task_type,
            provider, estimated_minutes, target_count, mode, question_pool,
            status, unlock_condition, display_order, metadata_json,
            created_at, updated_at
          ) SELECT
            json_extract(value,'$.id'), ?,
-           json_extract(value,'$.planTopicId'), json_extract(value,'$.taskDate'),
+           json_extract(value,'$.planTopicId'), json_extract(value,'$.planQuestionGroupId'), json_extract(value,'$.taskDate'),
            json_extract(value,'$.taskType'), json_extract(value,'$.provider'),
            json_extract(value,'$.estimatedMinutes'), json_extract(value,'$.targetCount'),
            json_extract(value,'$.mode'), json_extract(value,'$.questionPool'),
@@ -465,6 +532,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
           id: retryTaskIds[i],
           planId,
           planTopicId: planTopicId ?? null,
+          planQuestionGroupId: task.groupKey ? (retryGroupIdsByKey.get(task.groupKey) || null) : null,
           taskDate: task.taskDate,
           taskType: task.taskType,
           provider: task.provider ?? null,
@@ -497,9 +565,9 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
           preferred_questions_per_day, minimum_questions_per_session,
           maximum_questions_per_day, average_minutes_per_question,
           buffer_percentage, maximum_active_topics,
-          status, uses_flashcard_capacity, display_name, client_request_id, request_fingerprint, settings_json,
+          status, uses_flashcard_capacity, uworld_scheduling_mode, display_name, client_request_id, request_fingerprint, settings_json,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         planId, userId, validatedInput.rotationId, validatedInput.sourceId, sourceVersion,
         validatedInput.startDate, validatedInput.endDate, validatedInput.examDate || null,
@@ -507,12 +575,12 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
         validatedInput.preferredQuestionsPerDay, validatedInput.minimumQuestionsPerSession,
         validatedInput.maximumQuestionsPerDay, validatedInput.averageMinutesPerQuestion,
         validatedInput.bufferPercentage, validatedInput.maximumActiveTopics,
-        validatedInput.displayName, clientRequestId, fingerprint, retrySettingsJson,
+        validatedInput.uworldSchedulingMode || 'per_topic', validatedInput.displayName, clientRequestId, fingerprint, retrySettingsJson,
         createdAt, createdAt
       )
 
       const retryPlanDto = { ...basePlanDto, settingsJson: retrySettingsObj }
-      const retryResultJson = { ...baseResultJson, plan: retryPlanDto, tasks: retryBaseTasks }
+      const retryResultJson = { ...baseResultJson, plan: retryPlanDto, tasks: retryBaseTasks, questionGroups: retryQuestionGroups.map((g, i) => ({ id: retryGroupIds[i], ...g })) }
       const retryResultJsonPayload = JSON.stringify(retryResultJson)
       const retryResultJsonStmt = env.DB.prepare(
         `UPDATE ${PLANNER_TABLES.planMutations}
@@ -532,7 +600,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
          WHERE id = ? AND plan_id = ? AND user_id = ?`
       ).bind(retryResultJsonPayload, planId, userId, mutationId, planId, userId)
 
-      await env.DB.batch([retryPlanStmt, claimStmt, availStmt, topicsStmt, retryTasksStmt, retryResultJsonStmt])
+      await env.DB.batch([retryPlanStmt, claimStmt, availStmt, topicsStmt, retryGroupsStmt, retryTasksStmt, retryResultJsonStmt])
     } else {
       throw e
     }
@@ -543,7 +611,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
 
 export async function loadPlanFromDb(env, planId, userId) {
   const { results: planRows } = await env.DB.prepare(
-    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, uses_flashcard_capacity, settings_json, created_at, updated_at, revision, last_recalculated_at, stale_at, display_name FROM rotation_planner_plans WHERE id = ? AND user_id = ?'
+    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, uses_flashcard_capacity, uworld_scheduling_mode, settings_json, created_at, updated_at, revision, last_recalculated_at, stale_at, display_name FROM rotation_planner_plans WHERE id = ? AND user_id = ?'
   ).bind(planId, userId).all()
 
   if (!planRows.length) return null
@@ -557,7 +625,11 @@ export async function loadPlanFromDb(env, planId, userId) {
   ).bind(planId).all()
 
   const { results: taskRows } = await env.DB.prepare(
-    'SELECT id, plan_id, plan_topic_id, task_date, task_type, provider, estimated_minutes, actual_minutes, target_count, completed_count, mode, question_pool, status, unlock_condition, display_order, is_pinned, metadata_json, created_at, updated_at, completion_percentage, incorrect_count, completed_at, completed_on FROM rotation_planner_daily_tasks WHERE plan_id = ? ORDER BY task_date, display_order'
+    'SELECT id, plan_id, plan_topic_id, plan_question_group_id, task_date, task_type, provider, estimated_minutes, actual_minutes, target_count, completed_count, mode, question_pool, status, unlock_condition, display_order, is_pinned, metadata_json, created_at, updated_at, completion_percentage, incorrect_count, completed_at, completed_on FROM rotation_planner_daily_tasks WHERE plan_id = ? ORDER BY task_date, display_order'
+  ).bind(planId).all()
+
+  const { results: questionGroupRows } = await env.DB.prepare(
+    `SELECT ${QUESTION_GROUP_COLUMNS.join(', ')} FROM ${PLANNER_TABLES.questionGroups} WHERE plan_id = ? ORDER BY display_order`
   ).bind(planId).all()
 
   return {
@@ -576,12 +648,21 @@ export async function loadPlanFromDb(env, planId, userId) {
     availability: availRows.map(r => mapAvailabilityDto(r)),
     topics: topicRows.map(r => mapTopicDto(r)),
     tasks: taskRows.map(r => mapTaskDto(r)),
+    questionGroups: questionGroupRows.map(mapQuestionGroupDto),
   }
+}
+
+export async function loadQuestionGroupsByPlan(env, planId) {
+  const { results } = await env.DB.prepare(
+    `SELECT ${QUESTION_GROUP_COLUMNS.join(', ')} FROM ${PLANNER_TABLES.questionGroups}
+     WHERE plan_id = ? ORDER BY display_order`
+  ).bind(planId).all()
+  return (results || []).map(mapQuestionGroupDto)
 }
 
 export async function loadPlanSummaries(env, userId) {
   const { results: planRows } = await env.DB.prepare(
-    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, uses_flashcard_capacity, settings_json, created_at, updated_at, revision, last_recalculated_at, stale_at, display_name FROM rotation_planner_plans WHERE user_id = ? ORDER BY created_at DESC'
+    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, uses_flashcard_capacity, uworld_scheduling_mode, settings_json, created_at, updated_at, revision, last_recalculated_at, stale_at, display_name FROM rotation_planner_plans WHERE user_id = ? ORDER BY created_at DESC'
   ).bind(userId).all()
 
   const summaries = []
@@ -709,6 +790,7 @@ export async function persistRecalculationBatch(env, {
   const tasksJson = JSON.stringify(regeneratedTasks.map(task => ({
     id: task.id,
     planTopicId: task.planTopicId || null,
+    planQuestionGroupId: task.planQuestionGroupId || null,
     taskDate: task.taskDate,
     taskType: task.taskType,
     provider: task.provider || null,
@@ -724,14 +806,14 @@ export async function persistRecalculationBatch(env, {
 
   const insertTasksStmt = env.DB.prepare(
     `INSERT INTO ${T.dailyTasks} (
-       id, plan_id, plan_topic_id, task_date, task_type, provider,
+       id, plan_id, plan_topic_id, plan_question_group_id, task_date, task_type, provider,
        estimated_minutes, target_count, completed_count,
        mode, question_pool, status, unlock_condition, display_order,
        is_pinned, metadata_json
      )
      SELECT
        json_extract(value, '$.id'), ?,
-       json_extract(value, '$.planTopicId'), json_extract(value, '$.taskDate'),
+       json_extract(value, '$.planTopicId'), json_extract(value, '$.planQuestionGroupId'), json_extract(value, '$.taskDate'),
        json_extract(value, '$.taskType'), json_extract(value, '$.provider'),
        json_extract(value, '$.estimatedMinutes'), json_extract(value, '$.targetCount'),
        0,

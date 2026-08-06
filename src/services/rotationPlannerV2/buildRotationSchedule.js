@@ -3,6 +3,7 @@ import { validatePlanConfig, validateTopicInputs } from './validation.js'
 import { calculateDailyCapacity } from './capacity.js'
 import { resolveTopicLearningMinutes, scheduleLearningTasks } from './learning.js'
 import { scheduleUworldTasks, scheduleIncorrectReview, scheduleMixedReview } from './questions.js'
+import { initializeGroupStates, evaluateGroupLearning, scheduleGroupedUworldTasks, scheduleGroupedIncorrectReview } from './groupedQuestions.js'
 import { applyPrerequisites } from './prerequisites.js'
 import { deduplicateSharedTopics } from './sharedTopics.js'
 import { calculatePlanFeasibility, buildUnscheduledWork } from './feasibility.js'
@@ -134,6 +135,12 @@ export function buildRotationSchedule(planConfig, options = {}) {
 
   const topicStates = initTopicStates(orderedTopics, resolvedMinutes, options.initialTopicStates)
 
+  const isGroupedUworld = planConfig.uworldSchedulingMode === 'grouped'
+  const questionGroups = isGroupedUworld ? (planConfig.questionGroups || []) : []
+  let groupStates = isGroupedUworld
+    ? initializeGroupStates({ groups: questionGroups, topics: orderedTopics, initialGroupStates: options.initialGroupStates })
+    : null
+
   const examReviewWindowDays = planConfig.examReviewWindowDays || 0
   const mixedReviewQPd = planConfig.mixedReviewQuestionsPerDay || 0
 
@@ -263,39 +270,65 @@ export function buildRotationSchedule(planConfig, options = {}) {
       }
     }
 
-    const topicsForQuestions = getTopicsWithCompletedLearning(orderedTopics, topicStates)
-    if (topicsForQuestions.length > 0 && remainingMinutes > 0) {
-      const qr = scheduleUworldTasks({
+    if (isGroupedUworld) {
+      evaluateGroupLearning(groupStates, topicStates, dateStr)
+      const gr = scheduleGroupedUworldTasks({
         dayDate: dateStr,
         usableMinutes: remainingMinutes,
-        eligibleTopics: topicsForQuestions,
-        topicStates,
+        groups: questionGroups,
+        groupStates,
         questionStartRule: planConfig.questionStartRule || 'next_available_day',
         planConfig,
       })
-      allTasks.push(...qr.tasks)
-      remainingMinutes = qr.remainingCapacity
-      if (qr.topicStates) {
-        for (const [id, state] of Object.entries(qr.topicStates)) {
-          topicStates[id] = state
-        }
-      }
-    }
+      allTasks.push(...gr.tasks)
+      remainingMinutes = gr.remainingCapacity
+      groupStates = gr.groupStates
 
-    const topicsForIncorrect = getTopicsNeedingIncorrectReview(orderedTopics, topicStates)
-    if (topicsForIncorrect.length > 0 && remainingMinutes > 0) {
-      const ir = scheduleIncorrectReview({
+      const gir = scheduleGroupedIncorrectReview({
         dayDate: dateStr,
         usableMinutes: remainingMinutes,
-        topicsNeedingReview: topicsForIncorrect,
-        topicStates,
+        groups: questionGroups,
+        groupStates,
         planConfig,
       })
-      allTasks.push(...ir.tasks)
-      remainingMinutes = ir.remainingCapacity
-      if (ir.topicStates) {
-        for (const [id, state] of Object.entries(ir.topicStates)) {
-          topicStates[id] = state
+      allTasks.push(...gir.tasks)
+      remainingMinutes = gir.remainingCapacity
+      groupStates = gir.groupStates
+    } else {
+      const topicsForQuestions = getTopicsWithCompletedLearning(orderedTopics, topicStates)
+      if (topicsForQuestions.length > 0 && remainingMinutes > 0) {
+        const qr = scheduleUworldTasks({
+          dayDate: dateStr,
+          usableMinutes: remainingMinutes,
+          eligibleTopics: topicsForQuestions,
+          topicStates,
+          questionStartRule: planConfig.questionStartRule || 'next_available_day',
+          planConfig,
+        })
+        allTasks.push(...qr.tasks)
+        remainingMinutes = qr.remainingCapacity
+        if (qr.topicStates) {
+          for (const [id, state] of Object.entries(qr.topicStates)) {
+            topicStates[id] = state
+          }
+        }
+      }
+
+      const topicsForIncorrect = getTopicsNeedingIncorrectReview(orderedTopics, topicStates)
+      if (topicsForIncorrect.length > 0 && remainingMinutes > 0) {
+        const ir = scheduleIncorrectReview({
+          dayDate: dateStr,
+          usableMinutes: remainingMinutes,
+          topicsNeedingReview: topicsForIncorrect,
+          topicStates,
+          planConfig,
+        })
+        allTasks.push(...ir.tasks)
+        remainingMinutes = ir.remainingCapacity
+        if (ir.topicStates) {
+          for (const [id, state] of Object.entries(ir.topicStates)) {
+            topicStates[id] = state
+          }
         }
       }
     }
@@ -343,6 +376,7 @@ export function buildRotationSchedule(planConfig, options = {}) {
     dateCapacities,
     planConfig,
     topicStates,
+    groupStates: groupStates ? Object.values(groupStates) : undefined,
   })
 
   const unscheduledWork = buildUnscheduledWork({
@@ -363,6 +397,7 @@ export function buildRotationSchedule(planConfig, options = {}) {
     unscheduledWork,
     feasibility,
     deduplicationLog,
+    groupStates: groupStates ? Object.values(groupStates) : [],
   }
 }
 

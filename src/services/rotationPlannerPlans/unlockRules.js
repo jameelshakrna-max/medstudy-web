@@ -27,6 +27,10 @@ function isUnlockConditionSatisfied(unlockCondition, topicState) {
       return hasCompletedLearning(topicState)
     case 'uworld_completed':
       return hasCompletedUworld(topicState)
+    case 'learning_group_completed':
+      return !!(topicState?.requiredLearningCompleted)
+    case 'uworld_group_completed':
+      return (topicState?.remainingQuestions ?? -1) <= 0
     default:
       return false
   }

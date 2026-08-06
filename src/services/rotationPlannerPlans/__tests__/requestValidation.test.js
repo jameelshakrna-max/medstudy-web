@@ -192,4 +192,75 @@ describe('parseAndValidatePlanRequest', () => {
     expect(result.valid).toBe(false)
     expect(result.errors.some(e => e.field === 'displayName')).toBe(true)
   })
+
+  it('defaults uworldSchedulingMode to per_topic when missing', () => {
+    const req = makeRequest()
+    const result = parseAndValidatePlanRequest(req, VALID_BODY, {})
+    expect(result.valid).toBe(true)
+    expect(result.parsed.uworldSchedulingMode).toBe('per_topic')
+    expect(result.parsed.questionGroupExclusions).toEqual([])
+  })
+
+  it('accepts grouped uworldSchedulingMode and passes exclusions through', () => {
+    const req = makeRequest()
+    const body = {
+      ...VALID_BODY,
+      uworldSchedulingMode: 'grouped',
+      questionGroupExclusions: ['ischemic-heart-disease', 'heart-failure'],
+    }
+    const result = parseAndValidatePlanRequest(req, body, {})
+    expect(result.valid).toBe(true)
+    expect(result.parsed.uworldSchedulingMode).toBe('grouped')
+    expect(result.parsed.questionGroupExclusions).toEqual(['ischemic-heart-disease', 'heart-failure'])
+  })
+
+  it('returns error for invalid uworldSchedulingMode', () => {
+    const req = makeRequest()
+    const result = parseAndValidatePlanRequest(req, { ...VALID_BODY, uworldSchedulingMode: 'per-day' }, {})
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.field === 'uworldSchedulingMode')).toBe(true)
+  })
+
+  it('returns error when questionGroupExclusions is not an array', () => {
+    const req = makeRequest()
+    const result = parseAndValidatePlanRequest(req, { ...VALID_BODY, questionGroupExclusions: 'ischemic-heart-disease' }, {})
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.field === 'questionGroupExclusions')).toBe(true)
+  })
+
+  it('returns error when questionGroupExclusions contains an empty entry', () => {
+    const req = makeRequest()
+    const result = parseAndValidatePlanRequest(req, { ...VALID_BODY, questionGroupExclusions: ['ok', ''] }, {})
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.field === 'questionGroupExclusions[1]')).toBe(true)
+  })
+
+  it('does not require per-topic count fields in grouped mode', () => {
+    const req = makeRequest()
+    const body = {
+      ...VALID_BODY,
+      uworldSchedulingMode: 'grouped',
+      topics: [{
+        normalizedTopicId: 'step-up-medicine-6e-2024::cardiology::ascvd',
+        alreadyCompletedLearningPercentage: 0,
+      }],
+    }
+    const result = parseAndValidatePlanRequest(req, body, {})
+    expect(result.valid).toBe(true)
+    expect(result.parsed.topics[0].uworldRemainingQuestions).toBeUndefined()
+  })
+
+  it('still requires per-topic count fields in per_topic mode', () => {
+    const req = makeRequest()
+    const body = {
+      ...VALID_BODY,
+      topics: [{
+        normalizedTopicId: 'step-up-medicine-6e-2024::cardiology::ascvd',
+        alreadyCompletedLearningPercentage: 0,
+      }],
+    }
+    const result = parseAndValidatePlanRequest(req, body, {})
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.field === 'topics[0].uworldRemainingQuestions')).toBe(true)
+  })
 })

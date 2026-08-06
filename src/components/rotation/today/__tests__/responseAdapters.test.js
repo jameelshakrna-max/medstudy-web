@@ -77,7 +77,17 @@ describe("mapV1Status", () => {
 describe("normalizePlanResponse", () => {
   it("returns empty shape for null/undefined input", () => {
     const result = normalizePlanResponse(null);
-    expect(result).toEqual({ key: "", version: 1, plan: null, tasks: [], schedule: [], progress: [], availability: [] });
+    expect(result).toEqual({
+      key: "",
+      version: 1,
+      plan: null,
+      tasks: [],
+      schedule: [],
+      progress: [],
+      availability: [],
+      questionGroups: [],
+      questionGroupStates: [],
+    });
   });
 
   it("returns empty shape for non-object input", () => {
@@ -195,6 +205,12 @@ describe("normalizePlanResponse", () => {
       expect(result.schedule).toEqual([]);
       expect(result.progress).toEqual([]);
       expect(result.availability).toEqual([]);
+    });
+
+    it("returns empty questionGroups and questionGroupStates for legacy rotation plans", () => {
+      const result = normalizePlanResponse(v1Response);
+      expect(result.questionGroups).toEqual([]);
+      expect(result.questionGroupStates).toEqual([]);
     });
 
     it("preserves plan fields on V1 fallback", () => {
@@ -360,6 +376,28 @@ describe("normalizePlanResponse", () => {
       const result = normalizePlanResponse({ plan: { id: "p", version: 2 }, tasks: [] });
       expect(result.plan).toBeDefined();
       expect(result.plan.settingsJson).toBeUndefined();
+    });
+
+    it("passes through questionGroups on the V2 plan summary", () => {
+      const groups = [
+        { key: "ischemic-heart-disease", title: "Ischemic Heart Disease", targetQuestions: 40, displayOrder: 1 },
+      ];
+      const result = normalizePlanResponse({ plan: { id: "p", version: 2 }, tasks: [], questionGroups: groups });
+      expect(result.questionGroups).toBe(groups);
+    });
+
+    it("passes through questionGroupStates on the V2 plan summary", () => {
+      const states = [
+        { groupKey: "ischemic-heart-disease", completedCount: 10, targetCount: 40, status: "learning" },
+      ];
+      const result = normalizePlanResponse({ plan: { id: "p", version: 2 }, tasks: [], questionGroupStates: states });
+      expect(result.questionGroupStates).toBe(states);
+    });
+
+    it("defaults questionGroups and questionGroupStates to empty arrays when absent on V2", () => {
+      const result = normalizePlanResponse({ plan: { id: "p", version: 2 }, tasks: [] });
+      expect(result.questionGroups).toEqual([]);
+      expect(result.questionGroupStates).toEqual([]);
     });
   });
 });

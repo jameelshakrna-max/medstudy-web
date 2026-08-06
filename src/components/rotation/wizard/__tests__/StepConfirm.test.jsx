@@ -38,4 +38,14 @@ describe('StepConfirm', () => {
     await user.click(checkbox)
     expect(onOverloadChange).toHaveBeenCalledWith(true)
   })
+
+  it('warns when there are unresolved incomplete question groups', () => {
+    render(<StepConfirm form={FORM} preview={{ feasibility: { feasible: true }, incompleteQuestionGroups: [{ key: 'g1' }] }} overloadAccepted={false} onOverloadChange={vi.fn()} />)
+    expect(screen.getByText(/Resolve or exclude incomplete UWorld review groups before creating this plan/)).toBeInTheDocument()
+  })
+
+  it('does not warn when incomplete question groups is empty', () => {
+    render(<StepConfirm form={FORM} preview={{ feasibility: { feasible: true }, incompleteQuestionGroups: [] }} overloadAccepted={false} onOverloadChange={vi.fn()} />)
+    expect(screen.queryByText(/Resolve or exclude incomplete UWorld review groups/)).not.toBeInTheDocument()
+  })
 })

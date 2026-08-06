@@ -333,6 +333,89 @@ describe('usePlannerTaskMutations', () => {
       expect(caught.code).toBe('SOME_ERROR')
       expect(caught.message).toBe('Something went wrong')
     })
+
+    it('exposes lastFailedOperation as null initially and after success', async () => {
+      const { result } = renderMutationsHook({}, { wrapper })
+      expect(result.current.lastFailedOperation).toBeNull()
+
+      apiPatch.mockResolvedValueOnce({ taskId: TASK_ID, action: 'start', status: 'in_progress', revision: 1 })
+      await act(async () => {
+        await result.current.startTask(TASK_ID)
+      })
+
+      expect(result.current.lastFailedOperation).toBeNull()
+    })
+
+    it('sets lastFailedOperation with operation metadata and the error on TASK_LOCKED', async () => {
+      const err = new ApiError({ code: 'TASK_LOCKED', message: 'Complete the group first', status: 409 })
+      apiPatch.mockRejectedValueOnce(err)
+
+      const { result } = renderMutationsHook({}, { wrapper })
+
+      await act(async () => {
+        try { await result.current.startTask(TASK_ID) } catch {}
+      })
+
+      expect(result.current.lastFailedOperation).toEqual({
+        operationId: expect.any(String),
+        taskId: TASK_ID,
+        action: 'start',
+        status: 'failed',
+        error: err,
+      })
+    })
+
+    it('does not optimistically apply on TASK_LOCKED and keeps local revision stable', async () => {
+      apiPatch.mockRejectedValueOnce(
+        new ApiError({ code: 'TASK_LOCKED', message: 'Task is locked', status: 409 })
+      )
+
+      const { result } = renderMutationsHook({}, { wrapper })
+
+      await act(async () => {
+        try { await result.current.startTask(TASK_ID) } catch {}
+      })
+
+      expect(result.current.currentRevision).toBe(0)
+      expect(result.current.lastFailedOperation).not.toBeNull()
+      expect(result.current.lastFailedOperation.error.code).toBe('TASK_LOCKED')
+    })
+
+    it('recognizes TASK_LOCKED nested in payload.error.code', async () => {
+      const err = new ApiError({ code: 'TASK_LOCKED', message: 'Task is locked', status: 409 })
+      err.payload = { error: { code: 'TASK_LOCKED', message: 'Task is locked' } }
+      apiPatch.mockRejectedValueOnce(err)
+
+      const { result } = renderMutationsHook({}, { wrapper })
+
+      await act(async () => {
+        try { await result.current.startTask(TASK_ID) } catch {}
+      })
+
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: expect.arrayContaining(['rotations', 'plan', PLAN_ID]) })
+      )
+      expect(result.current.lastFailedOperation.error.code).toBe('TASK_LOCKED')
+    })
+
+    it('keeps lastFailedOperation set for non-locked failures too', async () => {
+      const err = new ApiError({ code: 'IDEMPOTENCY_CONFLICT', message: 'Duplicate', status: 409 })
+      apiPatch.mockRejectedValueOnce(err)
+
+      const { result } = renderMutationsHook({}, { wrapper })
+
+      await act(async () => {
+        try { await result.current.startTask(TASK_ID) } catch {}
+      })
+
+      expect(result.current.lastFailedOperation).toEqual({
+        operationId: expect.any(String),
+        taskId: TASK_ID,
+        action: 'start',
+        status: 'failed',
+        error: err,
+      })
+    })
   })
 
   describe('recalculation mutex — inFlightRef', () => {

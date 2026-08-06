@@ -2,6 +2,7 @@ import styles from '../PlanCreationForm.module.css'
 
 export default function StepConfirm({ form, preview, overloadAccepted, onOverloadChange }) {
   const feasible = preview?.feasibility?.feasible
+  const hasIncompleteGroups = (preview?.incompleteQuestionGroups || []).length > 0
 
   return (
     <div className={styles.stepContent}>
@@ -17,6 +18,14 @@ export default function StepConfirm({ form, preview, overloadAccepted, onOverloa
         <p className={styles.hint}>Buffer: {form.bufferPercentage}%</p>
         <p className={styles.hint}>Max Active Topics: {form.maximumActiveTopics}</p>
       </div>
+
+      {hasIncompleteGroups && (
+        <div className={styles.overloadSection}>
+          <p className={styles.warningText}>
+            Resolve or exclude incomplete UWorld review groups before creating this plan.
+          </p>
+        </div>
+      )}
 
       {!feasible && (
         <div className={styles.overloadSection}>

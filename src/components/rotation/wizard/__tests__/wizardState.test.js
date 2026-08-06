@@ -21,6 +21,11 @@ describe('INITIAL_FORM', () => {
     expect(INITIAL_FORM.maximumActiveTopics).toBe(2)
   })
 
+  it('defaults uworldSchedulingMode to grouped with no exclusions', () => {
+    expect(INITIAL_FORM.uworldSchedulingMode).toBe('grouped')
+    expect(INITIAL_FORM.questionGroupExclusions).toEqual([])
+  })
+
   it('has 7 availability entries', () => {
     expect(INITIAL_FORM.availability).toHaveLength(7)
   })
@@ -101,6 +106,51 @@ describe('saveDraft / loadDraft / clearDraft', () => {
     }))
     const draft = loadDraft()
     expect(draft.step).toBe(PREVIEW_STEP - 1)
+  })
+
+  it('loadDraft merges the new grouped defaults onto old drafts lacking them', () => {
+    const oldForm = {
+      planName: '',
+      sourceId: 'old-source',
+      rotationId: 'cardiology',
+      startDate: '2026-01-05',
+      endDate: '2026-02-05',
+      examDate: '',
+      availability: [],
+      studyStyle: 'active',
+      topics: [],
+      preferredQuestionsPerDay: 30,
+      minimumQuestionsPerSession: 10,
+      maximumQuestionsPerDay: 50,
+      averageMinutesPerQuestion: 1.5,
+      schedulingMode: 'efficient',
+      questionStartRule: 'next_available_day',
+      bufferPercentage: 20,
+      maximumActiveTopics: 2,
+      flashcardSettings: { learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: null },
+    }
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      schemaVersion: 1,
+      savedAt: Date.now(),
+      step: 5,
+      form: oldForm,
+    }))
+    const draft = loadDraft()
+    expect(draft.form.uworldSchedulingMode).toBe('grouped')
+    expect(draft.form.questionGroupExclusions).toEqual([])
+    expect(draft.form.sourceId).toBe('old-source')
+  })
+
+  it('loadDraft preserves user-set uworldSchedulingMode and exclusions', () => {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      schemaVersion: 1,
+      savedAt: Date.now(),
+      step: 7,
+      form: { ...INITIAL_FORM, uworldSchedulingMode: 'spaced', questionGroupExclusions: ['group-1'] },
+    }))
+    const draft = loadDraft()
+    expect(draft.form.uworldSchedulingMode).toBe('spaced')
+    expect(draft.form.questionGroupExclusions).toEqual(['group-1'])
   })
 
   it('loadDraft clamps step 11 to PREVIEW_STEP - 1', () => {
