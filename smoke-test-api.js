@@ -239,6 +239,7 @@ async function run() {
     { name: '12. History preservation', tests: [testSuite12()] },
     { name: '13. Idempotency', tests: [testSuite13()] },
     { name: '14. Cross-user isolation', tests: [testSuite14()] },
+    { name: '15. Plan naming, rename, and delete (Phases 1-2)', tests: testSuite15() },
   ];
 
   try {
@@ -704,13 +705,239 @@ function testSuite14() {
 }
 
 // ===================================================================
+// SUITE 15 — Plan naming, rename, and delete (Phases 1-2)
+// ===================================================================
+
+let namingPlanId = null;
+
+async function createNamingPlan(token, displayName, withCapacity = false) {
+  const payload = buildPreviewPayload(withCapacity, displayName);
+  const previewRes = await fetch(`${BASE}/api/rotation-planner/plans/preview`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (previewRes.status !== 200) {
+    const body = await previewRes.text();
+    throw new Error(`Preview failed: ${previewRes.status} ${body}`);
+  }
+  const preview = await previewRes.json();
+  const fingerprint = preview.plan?.scheduleFingerprint;
+  if (!fingerprint) throw new Error('No scheduleFingerprint');
+
+  const createRes = await fetch(`${BASE}/api/rotation-planner/plans`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': crypto.randomUUID(),
+    },
+    body: JSON.stringify({ ...payload, previewToken: fingerprint, acceptOverload: true }),
+  });
+  const text = await createRes.text();
+  if (createRes.status !== 201) throw new Error(`Create plan failed: ${createRes.status} ${text}`);
+  return JSON.parse(text);
+}
+
+function testSuite15() {
+  return [
+    test('S15.1', 'Create plan with custom displayName; persists in list and detail', 'Suite 15', async () => {
+      const customName = 'Custom Cardiology Plan';
+      const created = await createNamingPlan(tokens.A, customName, false);
+      const planId = created.plan.id;
+      namingPlanId = planId;
+      if (created.plan.displayName !== customName) {
+        throw new Error(`Expected displayName "${customName}" got "${created.plan.displayName}"`);
+      }
+
+      const list = await listPlans(tokens.A);
+      const inList = list.find(p => p.id === planId);
+      if (!inList) throw new Error('Created plan missing from list');
+      if (inList.displayName !== customName) throw new Error(`List displayName mismatch: ${inList.displayName}`);
+
+      const detailRes = await fetch(`${BASE}/api/rotation-planner/plans/${planId}`, { headers: authHeaders('A') });
+      if (detailRes.status !== 200) throw new Error(`Detail failed: ${detailRes.status}`);
+      const detail = await detailRes.json();
+      if (detail.plan.displayName !== customName) throw new Error(`Detail displayName mismatch: ${detail.plan.displayName}`);
+      if (typeof detail.plan.revision !== 'number' || detail.plan.revision < 0) throw new Error('Invalid revision');
+      console.log(`    Created naming plan ${planId} (revision ${detail.plan.revision})`);
+    }),
+
+    test('S15.2', 'Create with blank displayName is rejected (400)', 'Suite 15', async () => {
+      const res = await fetch(`${BASE}/api/rotation-planner/plans/preview`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPreviewPayload(false, '   ')),
+      });
+      if (res.status !== 400) throw new Error(`Expected 400 for blank displayName, got ${res.status}`);
+      const body = await res.json();
+      if (!body.error || body.error.code !== 'VALIDATION_ERROR') throw new Error('Expected VALIDATION_ERROR');
+    }),
+
+    test('S15.3', 'Rename updates displayName, bumps revision by exactly 1, no schedule change', 'Suite 15', async () => {
+      if (!namingPlanId) throw new Error('S15.1 must pass first');
+      const beforeRes = await fetch(`${BASE}/api/rotation-planner/plans/${namingPlanId}`, { headers: authHeaders('A') });
+      const before = await beforeRes.json();
+
+      const newName = 'Renamed Cardiology Plan';
+      const patchRes = await fetch(`${BASE}/api/rotation-planner/plans/${namingPlanId}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ displayName: newName, expectedRevision: before.plan.revision }),
+      });
+      if (patchRes.status !== 200) {
+        const body = await patchRes.text();
+        throw new Error(`Rename failed: ${patchRes.status} ${body}`);
+      }
+      const renamed = await patchRes.json();
+      if (renamed.plan.displayName !== newName) throw new Error(`Rename displayName mismatch: ${renamed.plan.displayName}`);
+      if (renamed.plan.revision !== before.plan.revision + 1) {
+        throw new Error(`Expected revision ${before.plan.revision + 1} got ${renamed.plan.revision}`);
+      }
+      const taskDatesBefore = before.tasks.map(t => `${t.id}:${t.taskDate}`).sort();
+      const taskDatesAfter = renamed.tasks.map(t => `${t.id}:${t.taskDate}`).sort();
+      if (JSON.stringify(taskDatesBefore) !== JSON.stringify(taskDatesAfter)) {
+        throw new Error('Task set changed after rename (unexpected recalculation)');
+      }
+      if (before.plan.lastRecalculatedAt !== renamed.plan.lastRecalculatedAt) {
+        throw new Error('lastRecalculatedAt changed after rename');
+      }
+    }),
+
+    test('S15.4', 'Rename persists after refresh', 'Suite 15', async () => {
+      if (!namingPlanId) throw new Error('S15.3 must pass first');
+      const list = await listPlans(tokens.A);
+      const inList = list.find(p => p.id === namingPlanId);
+      if (!inList) throw new Error('Plan missing after rename');
+      if (inList.displayName !== 'Renamed Cardiology Plan') throw new Error(`Refresh list did not persist name: ${inList.displayName}`);
+      const detailRes = await fetch(`${BASE}/api/rotation-planner/plans/${namingPlanId}`, { headers: authHeaders('A') });
+      if (detailRes.status !== 200) throw new Error(`Detail failed after rename: ${detailRes.status}`);
+      const detail = await detailRes.json();
+      if (detail.plan.displayName !== 'Renamed Cardiology Plan') throw new Error(`Refresh detail did not persist name: ${detail.plan.displayName}`);
+    }),
+
+    test('S15.5', 'Rename with stale expectedRevision → 409, no partial rename', 'Suite 15', async () => {
+      if (!namingPlanId) throw new Error('S15.3 must pass first');
+      const detailRes = await fetch(`${BASE}/api/rotation-planner/plans/${namingPlanId}`, { headers: authHeaders('A') });
+      const detail = await detailRes.json();
+
+      const patchRes = await fetch(`${BASE}/api/rotation-planner/plans/${namingPlanId}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ displayName: 'Should Not Apply', expectedRevision: detail.plan.revision - 1 }),
+      });
+      if (patchRes.status !== 409) throw new Error(`Expected 409 for stale revision, got ${patchRes.status}`);
+      const body = await patchRes.json();
+      if (!body.error || body.error.code !== 'REVISION_CONFLICT') throw new Error('Expected REVISION_CONFLICT');
+
+      const afterRes = await fetch(`${BASE}/api/rotation-planner/plans/${namingPlanId}`, { headers: authHeaders('A') });
+      const after = await afterRes.json();
+      if (after.plan.displayName !== 'Renamed Cardiology Plan') throw new Error('Stale rename partially applied');
+      if (after.plan.revision !== detail.plan.revision) throw new Error('Revision changed after failed rename');
+    }),
+
+    test('S15.6', 'Rename with invalid displayName → 400, name unchanged', 'Suite 15', async () => {
+      if (!namingPlanId) throw new Error('S15.3 must pass first');
+      const detailRes = await fetch(`${BASE}/api/rotation-planner/plans/${namingPlanId}`, { headers: authHeaders('A') });
+      const detail = await detailRes.json();
+
+      for (const badName of ['', '   ', 'x'.repeat(101)]) {
+        const patchRes = await fetch(`${BASE}/api/rotation-planner/plans/${namingPlanId}`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
+          body: JSON.stringify({ displayName: badName, expectedRevision: detail.plan.revision }),
+        });
+        if (patchRes.status !== 400) throw new Error(`Expected 400 for invalid displayName, got ${patchRes.status}`);
+      }
+
+      const afterRes = await fetch(`${BASE}/api/rotation-planner/plans/${namingPlanId}`, { headers: authHeaders('A') });
+      const after = await afterRes.json();
+      if (after.plan.displayName !== 'Renamed Cardiology Plan') throw new Error('Name changed despite validation failures');
+    }),
+
+    test('S15.7', 'Delete preserves Anki decks/cards, removes plan, duplicate delete → 404', 'Suite 15', async () => {
+      if (!namingPlanId) throw new Error('S15.1 must pass first');
+      const deckName = `SmokeDeleteDeck_${Date.now()}`;
+      const deckRes = await fetch(`${BASE}/api/decks`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deck_name: deckName }),
+      });
+      if (deckRes.status !== 200) throw new Error(`Create deck failed: ${deckRes.status}`);
+
+      const cardRes = await fetch(`${BASE}/api/flashcards`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.A}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cards: [{ deck_name: deckName, front: 'Front delete', back: 'Back delete' }] }),
+      });
+      if (cardRes.status !== 201) throw new Error(`Create card failed: ${cardRes.status}`);
+
+      const delRes = await fetch(`${BASE}/api/rotation-planner/plans/${namingPlanId}`, {
+        method: 'DELETE',
+        headers: authHeaders('A'),
+      });
+      if (delRes.status !== 200) {
+        const body = await delRes.text();
+        throw new Error(`Delete plan failed: ${delRes.status} ${body}`);
+      }
+      const delBody = await delRes.json();
+      if (delBody.success !== true) throw new Error('Delete did not return success:true');
+
+      const detailRes = await fetch(`${BASE}/api/rotation-planner/plans/${namingPlanId}`, { headers: authHeaders('A') });
+      if (detailRes.status !== 404) throw new Error(`Expected 404 after delete, got ${detailRes.status}`);
+
+      const list = await listPlans(tokens.A);
+      if (list.some(p => p.id === namingPlanId)) throw new Error('Deleted plan still in list');
+
+      const decksRes = await fetch(`${BASE}/api/decks`, { headers: authHeaders('A') });
+      const decks = await decksRes.json();
+      if (!decks.some(d => d.name === deckName)) throw new Error('Anki deck was not preserved after plan delete');
+
+      const cardsRes = await fetch(`${BASE}/api/flashcards?deck_id=${encodeURIComponent(deckName)}`, { headers: authHeaders('A') });
+      const cards = await cardsRes.json();
+      if (!Array.isArray(cards) || cards.length === 0) throw new Error('Flashcards were not preserved after plan delete');
+
+      const delAgain = await fetch(`${BASE}/api/rotation-planner/plans/${namingPlanId}`, {
+        method: 'DELETE',
+        headers: authHeaders('A'),
+      });
+      if (delAgain.status !== 404) throw new Error(`Expected 404 for duplicate delete, got ${delAgain.status}`);
+
+      namingPlanId = null;
+      console.log(`    Deleted plan; deck "${deckName}" preserved`);
+    }),
+
+    test('S15.8', 'Cross-user delete is blocked (404)', 'Suite 15', async () => {
+      const created = await createNamingPlan(tokens.A, 'Cross User Delete Target', false);
+      const planId = created.plan.id;
+      try {
+        const delRes = await fetch(`${BASE}/api/rotation-planner/plans/${planId}`, {
+          method: 'DELETE',
+          headers: authHeaders('B'),
+        });
+        if (delRes.status !== 404) throw new Error(`Expected 404 for cross-user delete, got ${delRes.status}`);
+        const detailRes = await fetch(`${BASE}/api/rotation-planner/plans/${planId}`, { headers: authHeaders('A') });
+        if (detailRes.status !== 200) throw new Error('Plan deleted despite cross-user block');
+      } finally {
+        const delRes = await fetch(`${BASE}/api/rotation-planner/plans/${planId}`, {
+          method: 'DELETE',
+          headers: authHeaders('A'),
+        });
+        if (delRes.status !== 200) console.error(`  [WARN] cleanup delete ${planId}: ${delRes.status}`);
+      }
+    }),
+  ];
+}
+
+// ===================================================================
 // HELPERS
 // ===================================================================
 
-function buildPreviewPayload(withCapacity) {
+function buildPreviewPayload(withCapacity, displayName = 'Smoke Test Plan') {
   return {
     sourceId: 'step-up-medicine-6e-2024',
     rotationId: 'cardiology',
+    displayName,
     startDate: '2026-08-03',
     endDate: '2026-08-16',
     studyStyle: 'active',
