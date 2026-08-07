@@ -9,6 +9,7 @@ import { getSharedTopicDefinition } from '../../data/studySources/sharedTopicKey
 import { getRotationById } from '../../data/studySources/rotationRegistry.js'
 import { generatePlanPreview } from './previewPipeline.js'
 import { createEmptyFlashcardForecast } from './forecastIntegration.js'
+import { computeLinkedDeckStats } from './deckDueCounts.js'
 const TASK_METADATA_FIELDS = {
   flashcard_review: ['priority', 'dueCardCount', 'unmetReviewMinutes', 'scheduledMinutes', 'deckNames'],
   mixed_review: ['topicCount', 'includedTopicIds'],
@@ -86,6 +87,9 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
 
   const createdAt = new Date().toISOString().replace('T', ' ').slice(0, 19)
   const parsedSettingsJson = JSON.parse(settingsJson)
+
+  const deckNames = validatedInput.deckNames || []
+  const primaryDeckName = validatedInput.primaryDeckName || null
 
   function buildTaskRows(tasks, topicIdByNormalized, planId, createdAt) {
     return tasks.map((task, i) => {
@@ -215,12 +219,28 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     }
   })
 
+  const baseLinkedDecks = deckNames.map((name, i) => ({
+    id: crypto.randomUUID(),
+    planId,
+    deckName: name,
+    isPrimary: name === primaryDeckName ? 1 : 0,
+    createdAt,
+  }))
+
+  const baseLinkedDecksDto = await computeLinkedDeckStats(
+    env,
+    userId,
+    baseLinkedDecks.map(d => ({ deck_name: d.deckName, is_primary: d.isPrimary })),
+    validatedInput.timezone || 'UTC'
+  )
+
   const baseResultJson = {
     plan: basePlanDto,
     availability: baseAvailability,
     topics: baseTopics,
     tasks: baseTasks,
     questionGroups: questionGroups.map((g, i) => ({ id: groupIds[i], ...g })),
+    linkedDecks: baseLinkedDecksDto,
   }
 
   // ─── Batch statements ───
@@ -253,6 +273,18 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     `INSERT INTO ${PLANNER_TABLES.planMutations} (id, plan_id, user_id, client_request_id, request_fingerprint, expected_revision, resulting_revision, operation, result_json)
      VALUES (?, ?, ?, ?, ?, 0, 0, 'create', '{}')`
   ).bind(mutationId, planId, userId, clientRequestId, fingerprint)
+
+  const planDecksJson = JSON.stringify(baseLinkedDecks)
+  // S2b: Insert linked decks (display-only associations, no FSRS/capacity meaning)
+  const planDecksStmt = env.DB.prepare(
+    `INSERT INTO ${PLANNER_TABLES.planDecks} (id, plan_id, deck_name, is_primary, created_at)
+     SELECT json_extract(value,'$.id'), ?,
+            json_extract(value,'$.deckName'),
+            CAST(json_extract(value,'$.isPrimary') AS INTEGER),
+            json_extract(value,'$.createdAt')
+     FROM json_each(?)
+     WHERE EXISTS (SELECT 1 FROM ${PLANNER_TABLES.planMutations} WHERE id = ?)`
+  ).bind(planId, planDecksJson, mutationId)
 
   const availJson = JSON.stringify(
     validatedInput.availability.map((a, i) => ({
@@ -425,11 +457,11 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
   ).bind(resultJsonPayload, planId, userId, mutationId, planId, userId)
 
   try {
-    const batchResults = await env.DB.batch([planStmt, claimStmt, availStmt, topicsStmt, groupsStmt, tasksStmt, ownershipStmt, resultJsonStmt])
-    // Defensive: if S6 (index 6) affected zero rows, ownership claim failed silently.
+    const batchResults = await env.DB.batch([planStmt, claimStmt, planDecksStmt, availStmt, topicsStmt, groupsStmt, tasksStmt, ownershipStmt, resultJsonStmt])
+    // Defensive: if S6 (index 7) affected zero rows, ownership claim failed silently.
     // This should no longer happen after removing NOT EXISTS (the unique index fires),
     // but guard against it to prevent silent invariant violations.
-    const s6Changes = batchResults[6]?.meta?.changes
+    const s6Changes = batchResults[7]?.meta?.changes
     if (s6Changes === 0) {
       const { results: blockers } = await env.DB.prepare(
         `SELECT 1 FROM ${PLANNER_TABLES.plans}
@@ -603,7 +635,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
          WHERE id = ? AND plan_id = ? AND user_id = ?`
       ).bind(retryResultJsonPayload, planId, userId, mutationId, planId, userId)
 
-      await env.DB.batch([retryPlanStmt, claimStmt, availStmt, topicsStmt, retryGroupsStmt, retryTasksStmt, retryResultJsonStmt])
+      await env.DB.batch([retryPlanStmt, claimStmt, planDecksStmt, availStmt, topicsStmt, retryGroupsStmt, retryTasksStmt, retryResultJsonStmt])
     } else {
       throw e
     }
@@ -635,23 +667,34 @@ export async function loadPlanFromDb(env, planId, userId) {
     `SELECT ${QUESTION_GROUP_COLUMNS.join(', ')} FROM ${PLANNER_TABLES.questionGroups} WHERE plan_id = ? ORDER BY display_order`
   ).bind(planId).all()
 
+  const { results: deckRows } = await env.DB.prepare(
+    `SELECT id, plan_id, deck_name, is_primary, created_at FROM ${PLANNER_TABLES.planDecks} WHERE plan_id = ? ORDER BY is_primary DESC, deck_name COLLATE NOCASE`
+  ).bind(planId).all()
+
+  const planDto = (() => {
+    const source = getStudySource(planRows[0].source_id)
+    const sourceTitle = source?.source?.title || planRows[0].source_id
+    const rotation = getRotationById(planRows[0].rotation_id)
+    const dto = mapPlanDto(
+      planRows[0],
+      sourceTitle,
+      rotation?.displayLabel || null
+    )
+    dto.sourceTitle = sourceTitle
+    return dto
+  })()
+  const planSettings = typeof planRows[0].settings_json === 'string'
+    ? JSON.parse(planRows[0].settings_json)
+    : (planRows[0].settings_json || {})
+  const linkedDecks = await computeLinkedDeckStats(env, userId, deckRows || [], planSettings?.timezone || 'UTC')
+
   return {
-    plan: (() => {
-      const source = getStudySource(planRows[0].source_id)
-      const sourceTitle = source?.source?.title || planRows[0].source_id
-      const rotation = getRotationById(planRows[0].rotation_id)
-      const dto = mapPlanDto(
-        planRows[0],
-        sourceTitle,
-        rotation?.displayLabel || null
-      )
-      dto.sourceTitle = sourceTitle
-      return dto
-    })(),
+    plan: planDto,
     availability: availRows.map(r => mapAvailabilityDto(r)),
     topics: topicRows.map(r => mapTopicDto(r)),
     tasks: taskRows.map(r => mapTaskDto(r)),
     questionGroups: questionGroupRows.map(mapQuestionGroupDto),
+    linkedDecks,
   }
 }
 
@@ -980,5 +1023,94 @@ export async function persistPlanLifecycleBatch(env, {
   ).bind(baseResultJson, planId, userId, mutationId, planId, userId)
 
   const batchResults = await env.DB.batch([claimStmt, updateStmt, resultJsonStmt])
+  return { batchResults, mutationId }
+}
+
+// Atomic linked-deck replacement: mutation claim (revision CAS) → delete old
+// deck rows → insert new deck rows → revision bump → response snapshot. A
+// successful replace increments revision exactly once and writes exactly one
+// idempotency receipt. A stale or forged request claims zero rows and makes
+// zero writes; the caller maps that to REVISION_CONFLICT.
+export async function replacePlanDecksBatch(env, {
+  planId,
+  userId,
+  clientRequestId,
+  requestFingerprint,
+  expectedRevision,
+  resultingRevision,
+  deckNames,
+  primaryDeckName,
+  mutationId,
+  baseResultJson,
+  createdAt,
+  timezone,
+}) {
+  const T = PLANNER_TABLES
+
+  const deckRows = deckNames.map((deckName, i) => ({
+    id: crypto.randomUUID(),
+    planId,
+    deckName,
+    isPrimary: deckName === primaryDeckName ? 1 : 0,
+    createdAt,
+  }))
+  const deckJson = JSON.stringify(deckRows)
+  const linkedDecksDtoJson = JSON.stringify(await computeLinkedDeckStats(
+    env,
+    userId,
+    deckRows.map(d => ({ deck_name: d.deckName, is_primary: d.isPrimary })),
+    timezone
+  ))
+
+  const claimStmt = env.DB.prepare(
+    `INSERT INTO ${T.planMutations} (
+      id, plan_id, user_id, client_request_id, request_fingerprint,
+      expected_revision, resulting_revision, operation, result_json
+    ) SELECT ?, ?, ?, ?, ?, ?, ?, 'replace_decks', ?
+    WHERE EXISTS (SELECT 1 FROM ${T.plans} WHERE id = ? AND user_id = ? AND revision = ?)`
+  ).bind(
+    mutationId, planId, userId, clientRequestId, requestFingerprint,
+    expectedRevision, resultingRevision, baseResultJson,
+    planId, userId, expectedRevision
+  )
+
+  const deleteStmt = env.DB.prepare(
+    `DELETE FROM ${T.planDecks}
+     WHERE plan_id = ?
+     AND EXISTS (SELECT 1 FROM ${T.planMutations} WHERE id = ?)`
+  ).bind(planId, mutationId)
+
+  const insertStmt = env.DB.prepare(
+    `INSERT INTO ${T.planDecks} (id, plan_id, deck_name, is_primary, created_at)
+     SELECT json_extract(value, '$.id'), ?,
+            json_extract(value, '$.deckName'),
+            CAST(json_extract(value, '$.isPrimary') AS INTEGER),
+            json_extract(value, '$.createdAt')
+     FROM json_each(?)
+     WHERE EXISTS (SELECT 1 FROM ${T.planMutations} WHERE id = ?)`
+  ).bind(planId, deckJson, mutationId)
+
+  const revisionStmt = env.DB.prepare(
+    `UPDATE ${T.plans} SET revision = ?, updated_at = ?
+     WHERE id = ? AND user_id = ?
+     AND EXISTS (SELECT 1 FROM ${T.planMutations} WHERE id = ?)`
+  ).bind(resultingRevision, createdAt, planId, userId, mutationId)
+
+  const resultJsonStmt = env.DB.prepare(
+    `UPDATE ${T.planMutations}
+     SET result_json = (
+       SELECT json_set(
+         ?,
+         '$.plan.revision', p.revision,
+         '$.plan.updatedAt', p.updated_at,
+         '$.linkedDecks', json(?)
+       )
+       FROM ${T.plans} p
+       WHERE p.id = ? AND p.user_id = ?
+     )
+     WHERE id = ? AND plan_id = ? AND user_id = ?`
+  ).bind(baseResultJson, linkedDecksDtoJson, planId, userId, mutationId, planId, userId)
+
+  const batchResults = await env.DB.batch([claimStmt, deleteStmt, insertStmt, revisionStmt, resultJsonStmt])
   return { batchResults, mutationId }
 }

@@ -123,7 +123,7 @@ import {
   handlePreviewRotationPlan, handleCreateRotationPlan,
   handleListRotationPlans, handleGetRotationPlan, handleDeleteRotationPlan,
   handleRenameRotationPlan, handleUpdateTask, handleRecalculatePlan, handleGetPlanForecast,
-  handleUpdatePlanStatus,
+  handleUpdatePlanStatus, handleGetPlanDecks, handleReplacePlanDecks,
 } from './handlers/rotationPlannerPlans.js'
 
 import {
@@ -615,6 +615,10 @@ export default {
       // Forecast: GET /plans/:planId/forecast
       if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/forecast$/) && request.method === 'GET') return handleGetPlanForecast(request, env, user)
 
+      // Linked decks: GET/PUT /plans/:planId/decks
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/decks$/) && request.method === 'GET') return handleGetPlanDecks(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/decks$/) && request.method === 'PUT') return handleReplacePlanDecks(request, env, user)
+
       return json({ error: 'Not found' }, 404)
     } catch (err) {
       console.error(`[${requestId}]`, err)
@@ -732,6 +736,7 @@ async function handleDeleteDeck(request, env, user) {
   const deckName = decodeURIComponent(extractId(request.url))
   await env.DB.prepare('DELETE FROM flashcards WHERE user_id = ? AND deck_name = ?').bind(user.sub, deckName).run()
   await env.DB.prepare('DELETE FROM deck_settings WHERE user_id = ? AND deck_name = ?').bind(user.sub, deckName).run()
+  await env.DB.prepare('DELETE FROM rotation_planner_plan_decks WHERE deck_name = ? AND plan_id IN (SELECT id FROM rotation_planner_plans WHERE user_id = ?)').bind(deckName, user.sub).run()
   await cleanupOrphanMapping(env, user.sub, deckName)
   signalFlashcardMappingsStaleness(env, user.sub, EXISTING_REVIEW_IMPACT).catch(() => {})
   return json({ success: true })

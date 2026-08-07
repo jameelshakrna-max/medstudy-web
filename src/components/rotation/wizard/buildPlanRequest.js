@@ -57,6 +57,8 @@ export function buildPreviewPayload(form) {
       learningUnlockMode: 'learning_completed',
       maxProjectedFlashcardReviewMinutesPerDay: null,
     },
+    deckNames: Array.isArray(form.linkedDeckNames) ? form.linkedDeckNames : [],
+    primaryDeckName: form.primaryDeckName || null,
   }
 }
 

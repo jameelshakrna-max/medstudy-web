@@ -8,6 +8,56 @@ const MAX_DISPLAY_NAME_LENGTH = 100
 
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001F\u007F]/
 
+export function validatePlanDecksInput(body) {
+  const errors = []
+  const hasDeckNames = body?.deckNames !== undefined && body?.deckNames !== null
+  const hasPrimary = body?.primaryDeckName !== undefined && body?.primaryDeckName !== null
+
+  let deckNames = []
+  if (hasDeckNames) {
+    if (!Array.isArray(body.deckNames)) {
+      errors.push({ code: 'VALIDATION_ERROR', message: 'deckNames must be an array.', field: 'deckNames' })
+    } else {
+      const seen = new Set()
+      for (let i = 0; i < body.deckNames.length; i++) {
+        const raw = body.deckNames[i]
+        if (typeof raw !== 'string' || raw.trim() === '') {
+          errors.push({ code: 'VALIDATION_ERROR', message: `deckNames[${i}] must be a non-empty string.`, field: `deckNames[${i}]` })
+          continue
+        }
+        const name = raw.trim()
+        if (name.length > 200) {
+          errors.push({ code: 'VALIDATION_ERROR', message: `deckNames[${i}] exceeds 200 characters.`, field: `deckNames[${i}]` })
+        } else if (seen.has(name)) {
+          errors.push({ code: 'VALIDATION_ERROR', message: `deckNames contains duplicate: ${name}`, field: `deckNames[${i}]` })
+        } else {
+          seen.add(name)
+          deckNames.push(name)
+        }
+      }
+    }
+  }
+
+  let primaryDeckName = null
+  if (hasPrimary) {
+    if (typeof body.primaryDeckName !== 'string' || body.primaryDeckName.trim() === '') {
+      errors.push({ code: 'VALIDATION_ERROR', message: 'primaryDeckName must be a non-empty string.', field: 'primaryDeckName' })
+    } else {
+      primaryDeckName = body.primaryDeckName.trim()
+    }
+  }
+
+  if (primaryDeckName && deckNames.length === 0) {
+    errors.push({ code: 'VALIDATION_ERROR', message: 'primaryDeckName requires at least one deck in deckNames.', field: 'primaryDeckName' })
+  }
+  if (primaryDeckName && deckNames.length > 0 && !deckNames.includes(primaryDeckName)) {
+    errors.push({ code: 'VALIDATION_ERROR', message: 'primaryDeckName must be one of deckNames.', field: 'primaryDeckName' })
+  }
+
+  if (errors.length > 0) return { valid: false, errors }
+  return { valid: true, value: { deckNames, primaryDeckName } }
+}
+
 export function validateDisplayName(value) {
   const errors = []
   if (typeof value !== 'string') {
@@ -64,6 +114,11 @@ export function parseAndValidatePlanRequest(request, body, { requireIdempotencyK
   const displayNameCheck = validateDisplayName(body.displayName)
   if (!displayNameCheck.valid) {
     errors.push(...displayNameCheck.errors)
+  }
+
+  const deckCheck = validatePlanDecksInput(body)
+  if (!deckCheck.valid) {
+    errors.push(...deckCheck.errors)
   }
 
   if (body.studyStyle && !VALID_STUDY_STYLES.includes(body.studyStyle)) {
@@ -270,6 +325,8 @@ export function parseAndValidatePlanRequest(request, body, { requireIdempotencyK
       clientRequestId,
       previewToken: body.previewToken || null,
       acceptOverload: body.acceptOverload ?? false,
+      deckNames: deckCheck.value.deckNames,
+      primaryDeckName: deckCheck.value.primaryDeckName,
       flashcardSettings: {
         learningUnlockMode,
         maxProjectedFlashcardReviewMinutesPerDay,

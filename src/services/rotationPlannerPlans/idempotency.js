@@ -87,7 +87,20 @@ export async function calculateRequestFingerprint(userId, validatedInput) {
     dueReviewMinutesByDate: Object.entries(validatedInput.dueReviewMinutesByDate ?? {})
       .sort(([a], [b]) => a.localeCompare(b)),
     acceptOverload: validatedInput.acceptOverload ?? false,
+    deckNames: [...(validatedInput.deckNames ?? [])].sort((a, b) => a.localeCompare(b)),
+    primaryDeckName: validatedInput.primaryDeckName ?? null,
     flashcardSettings: validatedInput.flashcardSettings ?? { learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: null },
+  }, null, 0)
+  return sha256Hex(canonical)
+}
+
+export async function calculateReplacePlanDecksFingerprint(userId, planId, deckNames, primaryDeckName, expectedRevision) {
+  const canonical = JSON.stringify({
+    userId,
+    planId,
+    deckNames: [...(deckNames ?? [])].sort((a, b) => a.localeCompare(b)),
+    primaryDeckName: primaryDeckName ?? null,
+    expectedRevision,
   }, null, 0)
   return sha256Hex(canonical)
 }

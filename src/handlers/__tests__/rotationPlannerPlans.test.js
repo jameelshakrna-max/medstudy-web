@@ -9,6 +9,8 @@ import {
   handleRenameRotationPlan,
   handleUpdateTask,
   handleRecalculatePlan,
+  handleGetPlanDecks,
+  handleReplacePlanDecks,
 } from '../rotationPlannerPlans.js'
 import { persistRecalculationBatch } from '../../services/rotationPlannerPlans/persistence.js'
 import { createEmptyFlashcardForecast } from '../../services/rotationPlannerPlans/forecastIntegration.js'
@@ -3699,5 +3701,283 @@ describe('R2 — Grouped recalculation routing', () => {
         expect(pendingUworld.length).toBe(0)
       }
     }
+  })
+})
+
+// ─── Rotation-specific Anki deck associations (linked decks) ───
+describe('linked decks', () => {
+  async function getPlanDecks(planId, user = USER_A) {
+    const req = makeRequest(`/api/rotation-planner/plans/${planId}/decks`)
+    return handleGetPlanDecks(req, { DB: db }, user)
+  }
+
+  async function replacePlanDecks(planId, body, user = USER_A, extraHeaders = {}) {
+    const req = makeRequest(`/api/rotation-planner/plans/${planId}/decks`, {
+      method: 'PUT',
+      body,
+      headers: extraHeaders,
+    })
+    return handleReplacePlanDecks(req, { DB: db }, user)
+  }
+
+  async function insertCard(userId, deckName, overrides = {}) {
+    await db.prepare(
+      `INSERT INTO flashcards (id, user_id, deck_name, state, last_review, next_review, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      `c-${Math.random().toString(36).slice(2, 10)}`,
+      userId,
+      deckName,
+      overrides.state ?? 2,
+      overrides.lastReview ?? '2026-01-01T10:00:00.000Z',
+      overrides.nextReview ?? '2000-01-01T10:00:00.000Z',
+      overrides.createdAt ?? '2026-01-01T00:00:00.000Z'
+    ).run()
+  }
+
+  it('create plan with deckNames persists linked decks and returns them', async () => {
+    const res = await createPlan(makeBody({
+      deckNames: ['Cardio Deck', 'Neuro Deck'],
+      primaryDeckName: 'Cardio Deck',
+    }))
+    expect(res.status).toBe(201)
+    const result = await res.json()
+    expect(result.linkedDecks).toHaveLength(2)
+    expect(result.linkedDecks[0].deckName).toBe('Cardio Deck')
+    expect(result.linkedDecks[0].isPrimary).toBe(true)
+    expect(result.linkedDecks[1].deckName).toBe('Neuro Deck')
+    expect(result.linkedDecks[1].isPrimary).toBe(false)
+
+    const { results: rows } = await db.prepare(
+      'SELECT deck_name, is_primary FROM rotation_planner_plan_decks WHERE plan_id = ? ORDER BY deck_name'
+    ).bind(result.plan.id).all()
+    expect(rows).toHaveLength(2)
+    expect(rows.map(r => r.deck_name)).toEqual(['Cardio Deck', 'Neuro Deck'])
+  })
+
+  it('create plan without deckNames persists no linked decks', async () => {
+    const res = await createPlan()
+    expect(res.status).toBe(201)
+    const result = await res.json()
+    expect(result.linkedDecks).toEqual([])
+  })
+
+  it('create plan with primaryDeckName not in deckNames returns 400', async () => {
+    const res = await createPlan(makeBody({ deckNames: ['Cardio Deck'], primaryDeckName: 'Other Deck' }))
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error.message).toContain('primaryDeckName must be one of deckNames')
+  })
+
+  it('GET /decks returns card/due counts and open urls, primary first', async () => {
+    const res = await createPlan(makeBody({
+      deckNames: ['Cardio Deck', 'Neuro Deck'],
+      primaryDeckName: 'Cardio Deck',
+    }))
+    const { plan } = await res.json()
+
+    await insertCard(USER_A.sub, 'Cardio Deck', { nextReview: '2000-01-01T10:00:00.000Z' })
+    await insertCard(USER_A.sub, 'Cardio Deck', { nextReview: '2099-01-01T10:00:00.000Z' })
+    await insertCard(USER_A.sub, 'Cardio Deck', { state: 0, nextReview: '2000-01-01T10:00:00.000Z' })
+    await insertCard(USER_A.sub, 'Neuro Deck', { nextReview: '2000-01-01T10:00:00.000Z' })
+
+    const decksRes = await getPlanDecks(plan.id)
+    expect(decksRes.status).toBe(200)
+    const { linkedDecks } = await decksRes.json()
+    expect(linkedDecks).toHaveLength(2)
+    expect(linkedDecks[0].deckName).toBe('Cardio Deck')
+    expect(linkedDecks[0].isPrimary).toBe(true)
+    expect(linkedDecks[0].cardCount).toBe(3)
+    expect(linkedDecks[0].dueCount).toBe(1)
+    expect(linkedDecks[0].openUrl).toBe('/anki?deck=Cardio%20Deck')
+    expect(linkedDecks[1].deckName).toBe('Neuro Deck')
+    expect(linkedDecks[1].isPrimary).toBe(false)
+    expect(linkedDecks[1].cardCount).toBe(1)
+    expect(linkedDecks[1].dueCount).toBe(1)
+    expect(linkedDecks[1].openUrl).toBe('/anki?deck=Neuro%20Deck')
+  })
+
+  it('GET /decks returns empty array when the plan has no linked decks', async () => {
+    const res = await createPlan()
+    const { plan } = await res.json()
+    const decksRes = await getPlanDecks(plan.id)
+    expect(decksRes.status).toBe(200)
+    const body = await decksRes.json()
+    expect(body.linkedDecks).toEqual([])
+  })
+
+  it('GET /decks returns 404 for an unknown plan', async () => {
+    const decksRes = await getPlanDecks('no-such-plan')
+    expect(decksRes.status).toBe(404)
+  })
+
+  it('GET /decks is scoped to the plan owner', async () => {
+    const res = await createPlan()
+    const { plan } = await res.json()
+    const decksRes = await getPlanDecks(plan.id, USER_B)
+    expect(decksRes.status).toBe(404)
+  })
+
+  it('PUT /decks replaces the deck set atomically', async () => {
+    await insertCard(USER_A.sub, 'New Deck A')
+    await insertCard(USER_A.sub, 'New Deck B')
+
+    const res = await createPlan(makeBody({ deckNames: ['Old Deck'], primaryDeckName: 'Old Deck' }))
+    const { plan } = await res.json()
+
+    const putRes = await replacePlanDecks(plan.id, {
+      deckNames: ['New Deck A', 'New Deck B'],
+      primaryDeckName: 'New Deck B',
+      expectedRevision: plan.revision,
+      clientRequestId: 'dec-replace-1',
+    })
+    expect(putRes.status).toBe(200)
+    const result = await putRes.json()
+    expect(result.plan.revision).toBe(plan.revision + 1)
+    expect(result.linkedDecks.map(d => d.deckName).sort()).toEqual(['New Deck A', 'New Deck B'])
+
+    const { results: rows } = await db.prepare(
+      'SELECT deck_name, is_primary FROM rotation_planner_plan_decks WHERE plan_id = ? ORDER BY deck_name'
+    ).bind(plan.id).all()
+    expect(rows).toHaveLength(2)
+    expect(rows.map(r => r.deck_name)).toEqual(['New Deck A', 'New Deck B'])
+    expect(rows.find(r => r.deck_name === 'New Deck B').is_primary).toBe(1)
+    expect(rows.find(r => r.deck_name === 'New Deck A').is_primary).toBe(0)
+  })
+
+  it('PUT /decks with empty deckNames clears all linked decks', async () => {
+    const res = await createPlan(makeBody({ deckNames: ['Cardio Deck'], primaryDeckName: 'Cardio Deck' }))
+    const { plan } = await res.json()
+
+    const putRes = await replacePlanDecks(plan.id, {
+      deckNames: [],
+      expectedRevision: plan.revision,
+      clientRequestId: 'dec-clear-1',
+    })
+    expect(putRes.status).toBe(200)
+    const result = await putRes.json()
+    expect(result.linkedDecks).toEqual([])
+
+    const { results: rows } = await db.prepare(
+      'SELECT deck_name FROM rotation_planner_plan_decks WHERE plan_id = ?'
+    ).bind(plan.id).all()
+    expect(rows).toHaveLength(0)
+  })
+
+  it('PUT /decks returns 404 when a deck does not exist for the user', async () => {
+    const res = await createPlan()
+    const { plan } = await res.json()
+    const putRes = await replacePlanDecks(plan.id, {
+      deckNames: ['No Such Deck'],
+      expectedRevision: plan.revision,
+      clientRequestId: 'dec-missing-1',
+    })
+    expect(putRes.status).toBe(404)
+    const body = await putRes.json()
+    expect(body.error.message).toBe('Deck not found for this user: No Such Deck')
+  })
+
+  it('PUT /decks rejects completed plans as terminal', async () => {
+    const res = await createPlan(makeBody({ deckNames: ['Cardio Deck'] }))
+    const { plan } = await res.json()
+    await db.prepare("UPDATE rotation_planner_plans SET status = 'completed' WHERE id = ?").bind(plan.id).run()
+
+    const putRes = await replacePlanDecks(plan.id, {
+      deckNames: ['Cardio Deck'],
+      expectedRevision: plan.revision,
+      clientRequestId: 'dec-terminal-1',
+    })
+    expect(putRes.status).toBe(409)
+    const body = await putRes.json()
+    expect(body.error.code).toBe('PLAN_TERMINAL')
+  })
+
+  it('PUT /decks returns 409 REVISION_CONFLICT on a stale revision', async () => {
+    const res = await createPlan(makeBody({ deckNames: ['Cardio Deck'] }))
+    const { plan } = await res.json()
+
+    const putRes = await replacePlanDecks(plan.id, {
+      deckNames: ['Cardio Deck'],
+      expectedRevision: 99,
+      clientRequestId: 'dec-stale-1',
+    })
+    expect(putRes.status).toBe(409)
+    const body = await putRes.json()
+    expect(body.error.code).toBe('REVISION_CONFLICT')
+  })
+
+  it('PUT /decks is idempotent for the same key and input', async () => {
+    await insertCard(USER_A.sub, 'Cardio Deck')
+    await insertCard(USER_A.sub, 'Neuro Deck')
+
+    const res = await createPlan()
+    const { plan } = await res.json()
+    const key = 'dec-idem-' + Date.now()
+    const payload = {
+      deckNames: ['Cardio Deck', 'Neuro Deck'],
+      primaryDeckName: 'Cardio Deck',
+      expectedRevision: plan.revision,
+      clientRequestId: key,
+    }
+
+    const first = await replacePlanDecks(plan.id, payload, USER_A, { 'Idempotency-Key': key })
+    expect(first.status).toBe(200)
+    const firstBody = await first.json()
+
+    const second = await replacePlanDecks(plan.id, payload, USER_A, { 'Idempotency-Key': key })
+    expect(second.status).toBe(200)
+    const secondBody = await second.json()
+    expect(secondBody.plan.revision).toBe(firstBody.plan.revision)
+    expect(secondBody.linkedDecks.map(d => d.deckName).sort()).toEqual(['Cardio Deck', 'Neuro Deck'])
+  })
+
+  it('PUT /decks returns 409 IDEMPOTENCY_CONFLICT for same key with different input', async () => {
+    await insertCard(USER_A.sub, 'Cardio Deck')
+
+    const res = await createPlan()
+    const { plan } = await res.json()
+    const key = 'dec-conflict-' + Date.now()
+
+    const first = await replacePlanDecks(plan.id, {
+      deckNames: ['Cardio Deck'],
+      expectedRevision: plan.revision,
+      clientRequestId: key,
+    })
+    expect(first.status).toBe(200)
+
+    const second = await replacePlanDecks(plan.id, {
+      deckNames: ['Cardio Deck'],
+      primaryDeckName: 'Cardio Deck',
+      expectedRevision: plan.revision,
+      clientRequestId: key,
+    })
+    expect(second.status).toBe(409)
+    const body = await second.json()
+    expect(body.error.code).toBe('IDEMPOTENCY_CONFLICT')
+  })
+
+  it('PUT /decks requires an idempotency key', async () => {
+    const res = await createPlan(makeBody({ deckNames: ['Cardio Deck'] }))
+    const { plan } = await res.json()
+    const putRes = await replacePlanDecks(plan.id, {
+      deckNames: ['Cardio Deck'],
+      expectedRevision: plan.revision,
+    })
+    expect(putRes.status).toBe(400)
+    const body = await putRes.json()
+    expect(body.error.code).toBe('IDEMPOTENCY_KEY_REQUIRED')
+  })
+
+  it('PUT /decks validates deckNames input', async () => {
+    const res = await createPlan()
+    const { plan } = await res.json()
+    const putRes = await replacePlanDecks(plan.id, {
+      deckNames: ['Cardio Deck'],
+      primaryDeckName: 'Other Deck',
+      expectedRevision: plan.revision,
+      clientRequestId: 'dec-validate-1',
+    })
+    expect(putRes.status).toBe(400)
+    const body = await putRes.json()
+    expect(body.error.message).toContain('primaryDeckName must be one of deckNames')
   })
 })

@@ -14,6 +14,8 @@ const VALID_FORM = {
   topics: [
     { normalizedTopicId: 't1', sourceTopicId: 's1', uworldRemainingQuestions: 10, alreadyCompletedLearningPercentage: 0, alreadyCompletedQuestionCount: 0, incorrectQuestionsRemaining: 0 },
   ],
+  linkedDeckNames: ['Cardio Deck'],
+  primaryDeckName: 'Cardio Deck',
 }
 
 describe('Step 0 — Select Rotation', () => {
@@ -210,6 +212,7 @@ describe('canAdvanceStep', () => {
     expect(canAdvanceStep(6, VALID_FORM)).toBe(true)
     expect(canAdvanceStep(10, VALID_FORM)).toBe(true)
     expect(canAdvanceStep(11, VALID_FORM)).toBe(true)
+    expect(canAdvanceStep(12, VALID_FORM)).toBe(true)
   })
 
   it('returns false when validation fails', () => {
@@ -256,5 +259,30 @@ describe('Step 10 — Flashcard Settings', () => {
   it('passes with valid limit', () => {
     const form = { ...VALID_FORM, flashcardSettings: { learningUnlockMode: 'learning_started', maxProjectedFlashcardReviewMinutesPerDay: 60 } }
     expect(validateStep(10, form).valid).toBe(true)
+  })
+})
+
+describe('Step 11 — Anki Decks', () => {
+  it('fails without any linked decks', () => {
+    const form = { ...VALID_FORM, linkedDeckNames: [], primaryDeckName: null }
+    const result = validateStep(11, form)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.includes('At least one'))).toBe(true)
+  })
+
+  it('fails when no primary deck is selected', () => {
+    const form = { ...VALID_FORM, linkedDeckNames: ['Cardio Deck'], primaryDeckName: null }
+    expect(validateStep(11, form).valid).toBe(false)
+  })
+
+  it('fails when the primary deck is not among the linked decks', () => {
+    const form = { ...VALID_FORM, linkedDeckNames: ['Cardio Deck'], primaryDeckName: 'Other Deck' }
+    const result = validateStep(11, form)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.includes('primaryDeckName'))).toBe(true)
+  })
+
+  it('passes with at least one linked deck and a primary in the linked set', () => {
+    expect(validateStep(11, VALID_FORM).valid).toBe(true)
   })
 })

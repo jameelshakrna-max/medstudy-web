@@ -18,16 +18,19 @@ import {
   classifyCreateBatchError, classifyBatchError, buildTaskMutationBatch, executeTaskMutationBatch,
   applyTaskUpdate,   calculateTaskUpdateFingerprint, calculateRecalculationFingerprint, calculateRenameFingerprint,
   calculateLifecycleFingerprint,
+  calculateReplacePlanDecksFingerprint,
   recalculatePlan, deriveActualTopicStates, deriveActualGroupStates, persistRecalculationBatch,
-  persistPlanLifecycleBatch,
+  persistPlanLifecycleBatch, replacePlanDecksBatch,
   LIFECYCLE_ACTIONS, LIFECYCLE_OPERATIONS, LIFECYCLE_TRANSITIONS,
   isValidLifecycleTransition, computeOutstandingSummary, buildLifecycleTimestamps,
   TERMINAL_STATUSES, VALID_ACTIONS, getFlashcardCapacityOwner,
   parseUnlockCondition, isTaskEffectivelyLocked, validateDisplayName,
+  validatePlanDecksInput,
 } from '../services/rotationPlannerPlans/index.js'
 import { computeReviewWorkloadMap } from '../services/flashcardWorkload.js'
 import { computeSafeNewCardForecast } from '../services/flashcardForecast.js'
 import { computeExistingReviewBaseline, createEmptyFlashcardForecast } from '../services/rotationPlannerPlans/forecastIntegration.js'
+import { verifyDeckExists } from '../services/flashcardMappings.js'
 import { addDays } from '../services/rotationPlannerV2/dateUtils.js'
 import { mapPlanSummaryDto, mapPlanDto, mapAvailabilityDto, mapTopicDto, mapTaskDto, mapToSnakeCase } from '../services/rotationPlannerPlans/dtoMappers.js'
 import { isValidTimezone, getDateKeyForTimezone } from '../lib/dateUtils.js'
@@ -564,6 +567,135 @@ export async function handleRenameRotationPlan(request, env, user) {
       } catch (_) {}
     }
     return errorResponse('INTERNAL_ERROR', 'Failed to rename plan.', 500)
+  }
+}
+
+export async function handleGetPlanDecks(request, env, user) {
+  try {
+    const url = new URL(request.url)
+    const pathParts = url.pathname.split('/')
+    const planId = pathParts[pathParts.length - 2]
+
+    if (!planId) return errorResponse('VALIDATION_ERROR', 'Plan ID is required.', 400)
+
+    const plan = await loadPlanFromDb(env, planId, user.sub)
+    if (!plan) return errorResponse('PLAN_NOT_FOUND', 'Plan not found.', 404)
+
+    return json({ planId, linkedDecks: plan.linkedDecks || [] })
+  } catch (e) {
+    log('rotation_planner:get_plan_decks:error', { message: e.message, stack: e.stack?.slice(0, 500) })
+    return errorResponse('INTERNAL_ERROR', 'Failed to get plan decks.', 500)
+  }
+}
+
+export async function handleReplacePlanDecks(request, env, user) {
+  let clientRequestId, requestFingerprint
+  try {
+    const url = new URL(request.url)
+    const pathParts = url.pathname.split('/')
+    const planId = pathParts[pathParts.length - 2]
+
+    if (!planId) return errorResponse('VALIDATION_ERROR', 'Plan ID is required.', 400)
+
+    const body = await request.json()
+
+    const deckCheck = validatePlanDecksInput(body)
+    if (!deckCheck.valid) {
+      return errorResponse('VALIDATION_ERROR', deckCheck.errors.map(e => e.message).join('; '), 400)
+    }
+
+    if (!Number.isInteger(body.expectedRevision) || body.expectedRevision < 0) {
+      return errorResponse('VALIDATION_ERROR', 'expectedRevision must be a non-negative integer.', 400)
+    }
+
+    clientRequestId = request.headers.get('Idempotency-Key') ?? body.clientRequestId ?? null
+    if (!clientRequestId || typeof clientRequestId !== 'string' || clientRequestId.trim() === '') {
+      return errorResponse('IDEMPOTENCY_KEY_REQUIRED', 'Idempotency-Key header or clientRequestId body field is required.', 400)
+    }
+
+    const { deckNames, primaryDeckName } = deckCheck.value
+    requestFingerprint = await calculateReplacePlanDecksFingerprint(user.sub, planId, deckNames, primaryDeckName, body.expectedRevision)
+
+    const idemCheck = await checkPlanIdempotency(env, user.sub, clientRequestId)
+    if (idemCheck.status === 'found') {
+      if (idemCheck.existingFingerprint === requestFingerprint) {
+        return json(idemCheck.resultJson)
+      }
+      return errorResponse('IDEMPOTENCY_CONFLICT', 'Same idempotency key with different input.', 409)
+    }
+
+    const planRow = await loadPlanById(env, planId, user.sub)
+    if (!planRow) return errorResponse('PLAN_NOT_FOUND', 'Plan not found.', 404)
+
+    if (planRow.revision !== body.expectedRevision) {
+      return errorResponse('REVISION_CONFLICT', 'Plan revision mismatch. Reload the plan and try again.', 409)
+    }
+
+    if (planRow.status === 'completed') {
+      return errorResponse('PLAN_TERMINAL', 'Completed plans are read-only.', 409)
+    }
+
+    for (const deckName of deckNames) {
+      const exists = await verifyDeckExists(env, user.sub, deckName)
+      if (!exists) {
+        return errorResponse('VALIDATION_ERROR', `Deck not found for this user: ${deckName}`, 404)
+      }
+    }
+
+    const resultingRevision = body.expectedRevision + 1
+    const mutationId = crypto.randomUUID()
+    const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
+
+    // Reuse the current plan snapshot so the stored result_json matches the
+    // loadPlanFromDb shape; the deck replace then overlays the committed row
+    // and the new deck rows.
+    const current = await loadPlanFromDb(env, planId, user.sub)
+    const baseResultJson = JSON.stringify(current)
+
+    const { batchResults } = await replacePlanDecksBatch(env, {
+      planId,
+      userId: user.sub,
+      clientRequestId,
+      requestFingerprint,
+      expectedRevision: body.expectedRevision,
+      resultingRevision,
+      deckNames,
+      primaryDeckName,
+      mutationId,
+      baseResultJson,
+      createdAt: now,
+      timezone: current.plan.settingsJson?.timezone || 'UTC',
+    })
+
+    // CAS: if the claim INSERT affected zero rows the revision moved since the
+    // client read it — return conflict (or the stored replay) instead of a
+    // silent success.
+    if ((batchResults[0]?.meta?.changes ?? 0) === 0) {
+      const recheck = await checkPlanIdempotency(env, user.sub, clientRequestId)
+      if (recheck.status === 'found' && recheck.existingFingerprint === requestFingerprint) {
+        return json(recheck.resultJson)
+      }
+      return errorResponse('REVISION_CONFLICT', 'Plan revision mismatch. Reload the plan and try again.', 409)
+    }
+
+    const plan = await loadPlanFromDb(env, planId, user.sub)
+    return json(plan)
+  } catch (e) {
+    log('rotation_planner:replace_plan_decks:error', {
+      message: e.message,
+      stack: e.stack?.slice(0, 500),
+      userId: user?.sub,
+    })
+    if (clientRequestId && requestFingerprint && e.message && e.message.includes('UNIQUE constraint failed')) {
+      try {
+        const classified = await classifyCreateBatchError(env, user.sub, clientRequestId, requestFingerprint)
+        if (classified.type === 'replay') return json(classified.resultJson)
+        if (classified.type === 'IDEMPOTENCY_CONFLICT') {
+          return errorResponse('IDEMPOTENCY_CONFLICT', 'Same idempotency key with different input.', 409)
+        }
+      } catch (_) {}
+    }
+    return errorResponse('INTERNAL_ERROR', 'Failed to replace plan decks.', 500)
   }
 }
 

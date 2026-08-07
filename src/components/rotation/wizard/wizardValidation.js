@@ -177,6 +177,21 @@ function validateFlashcardSettingsStep(form) {
   return errors
 }
 
+function validateAnkiDecksStep(form) {
+  const errors = []
+  const names = Array.isArray(form.linkedDeckNames) ? form.linkedDeckNames : []
+  if (names.length === 0) {
+    errors.push('At least one Anki deck must be linked.')
+    return errors
+  }
+  if (typeof form.primaryDeckName !== 'string' || form.primaryDeckName.trim() === '') {
+    errors.push('A primary Anki deck must be selected.')
+  } else if (!names.includes(form.primaryDeckName)) {
+    errors.push('primaryDeckName must be one of the linked decks.')
+  }
+  return errors
+}
+
 const VALIDATORS = {
   0: (form) => {
     const errors = []
@@ -200,7 +215,7 @@ const VALIDATORS = {
   8: validateQuestionConfigStep,
   9: validateSchedulingConfigStep,
   10: validateFlashcardSettingsStep,
-  11: () => [],
+  11: validateAnkiDecksStep,
   12: () => [],
 }
 

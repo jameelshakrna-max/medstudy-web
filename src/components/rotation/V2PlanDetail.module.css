@@ -295,3 +295,129 @@
     gap: var(--space-xs);
   }
 }
+
+/* Connected Anki Decks */
+.decksSection {
+  margin-bottom: var(--space-lg);
+  padding: var(--space-md);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+}
+
+.decksSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.decksHeading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.decksManageBtn {
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.decksManageBtn:hover {
+  background: var(--card-border);
+  color: var(--text-primary);
+}
+
+.decksEmpty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--mist);
+}
+
+.decksList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.decksListItem {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+}
+
+.decksName {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.decksPrimary {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--blue);
+  background: var(--blueL);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.decksMeta {
+  font-size: 12px;
+  color: var(--mist);
+  white-space: nowrap;
+}
+
+.decksLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--blue);
+  text-decoration: none;
+}
+
+.decksLink:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .decksListItem {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+    gap: var(--space-xs);
+  }
+
+  .decksSectionHeader {
+    align-items: flex-start;
+  }
+}

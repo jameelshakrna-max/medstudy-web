@@ -1,7 +1,7 @@
 import { useMemo, useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, CircleHelp, MoreHorizontal, Pencil, Trash2, Play, Pause, RotateCcw, CheckCircle2 } from 'lucide-react'
+import { ChevronLeft, CircleHelp, MoreHorizontal, Pencil, Trash2, Play, Pause, RotateCcw, CheckCircle2, ExternalLink } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs/Tabs'
 import Toast from '../ui/Toast/Toast'
 import LoadingScreen from '../LoadingScreen'
@@ -24,7 +24,7 @@ import RecordQuestionsDialog from './today/dialogs/RecordQuestionsDialog'
 import TopicsView from './today/TopicsView'
 import CalendarView from './CalendarView'
 import ProgressView from './ProgressView'
-import { apiGet, apiPatch, apiDelete, apiPost } from '../../lib/api'
+import { apiGet, apiPatch, apiDelete, apiPost, apiPut } from '../../lib/api'
 import { queryKeys } from '../../lib/queryKeys'
 import { getTodayKey, resolvePlannerTimezone, getBrowserTimezone } from './today/todayUtils'
 import ProgressBar from '../ui/ProgressBar/ProgressBar'
@@ -145,6 +145,174 @@ function UWorldReviewGroups({ groups, states }) {
           state={normalizeGroupState(getGroupState(states, group))}
         />
       ))}
+    </section>
+  )
+}
+
+function ConnectedAnkiDecks({ plan, planId, onToast }) {
+  const queryClient = useQueryClient()
+  const linkedDecks = Array.isArray(plan?.linkedDecks) ? plan.linkedDecks : []
+
+  const [decksModalOpen, setDecksModalOpen] = useState(false)
+  const [selectedDeckNames, setSelectedDeckNames] = useState([])
+  const [selectedPrimary, setSelectedPrimary] = useState(null)
+  const [decksError, setDecksError] = useState(null)
+
+  const { data: decksData } = useQuery({
+    queryKey: queryKeys.flashcards.decks(),
+    queryFn: () => apiGet('/api/flashcards/decks'),
+    enabled: decksModalOpen,
+    staleTime: 30_000,
+  })
+  const availableDecks = Array.isArray(decksData) ? decksData : []
+
+  const decksMutation = useMutation({
+    mutationFn: ({ deckNames, primaryDeckName, expectedRevision, clientRequestId }) =>
+      apiPut(`/rotation-planner/plans/${planId}/decks`, { deckNames, primaryDeckName, expectedRevision, clientRequestId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plan(planId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plans() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcards.decks() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all })
+      setDecksModalOpen(false)
+      setDecksError(null)
+      onToast({ open: true, title: 'Anki decks updated', description: 'Your linked decks were saved.', variant: 'default' })
+    },
+    onError: (err) => {
+      if (err?.code === 'REVISION_CONFLICT' || err?.code === 'PLAN_TERMINAL') {
+        queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plan(planId) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plans() })
+      }
+      setDecksError(err?.message || 'Failed to update decks. Please try again.')
+    },
+  })
+
+  const openManageDecks = useCallback(() => {
+    const linked = Array.isArray(plan?.linkedDecks) ? plan.linkedDecks : []
+    setSelectedDeckNames(linked.map(d => d.deckName))
+    setSelectedPrimary(linked.find(d => d.isPrimary)?.deckName ?? null)
+    setDecksError(null)
+    setDecksModalOpen(true)
+  }, [plan?.linkedDecks])
+
+  const handleToggle = useCallback((deckName, checked) => {
+    setSelectedDeckNames(prev => {
+      const next = checked ? [...prev, deckName] : prev.filter(n => n !== deckName)
+      setSelectedPrimary(primary => (primary && next.includes(primary) ? primary : null))
+      return next
+    })
+  }, [])
+
+  const submitDecks = useCallback(() => {
+    if (decksMutation.isPending) return
+    decksMutation.mutate({
+      deckNames: selectedDeckNames,
+      primaryDeckName: selectedPrimary,
+      expectedRevision: plan?.revision,
+      clientRequestId: crypto.randomUUID(),
+    })
+  }, [decksMutation, selectedDeckNames, selectedPrimary, plan?.revision])
+
+  return (
+    <section className={styles.decksSection} aria-label="Connected Anki Decks">
+      <div className={styles.decksSectionHeader}>
+        <h3 className={styles.decksHeading}>Connected Anki Decks</h3>
+        <button type="button" className={styles.decksManageBtn} onClick={openManageDecks}>
+          Manage decks
+        </button>
+      </div>
+
+      {linkedDecks.length === 0 ? (
+        <p className={styles.decksEmpty}>No Anki decks linked to this plan yet.</p>
+      ) : (
+        <ul className={styles.decksList}>
+          {linkedDecks.map(deck => (
+            <li key={deck.deckName || deck.openUrl} className={styles.decksListItem}>
+              <span className={styles.decksName}>
+                {deck.deckName}
+                {deck.isPrimary && <span className={styles.decksPrimary}>Primary</span>}
+              </span>
+              <span className={styles.decksMeta}>
+                {deck.cardCount} card{deck.cardCount !== 1 ? 's' : ''} · {deck.dueCount} due
+              </span>
+              <a
+                href={deck.openUrl || ('/anki?deck=' + encodeURIComponent(deck.deckName))}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.decksLink}
+              >
+                Open <ExternalLink size={12} />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Modal open={decksModalOpen} onOpenChange={(open) => { if (!open && !decksMutation.isPending) setDecksModalOpen(false) }}>
+        <Modal.Title>Manage Anki Decks</Modal.Title>
+        <Modal.Description>Choose which decks are linked to this rotation. Linked decks are organizational only.</Modal.Description>
+        <div style={{ margin: '16px 0' }}>
+          {availableDecks.length === 0 ? (
+            <p style={{ color: 'var(--mist)', fontSize: 13 }}>No Anki decks found. Create decks in the Anki section first.</p>
+          ) : (
+            <>
+              {availableDecks.map(deck => (
+                <label key={deck.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--input-bg)', fontSize: 14, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedDeckNames.includes(deck.name)}
+                    onChange={e => handleToggle(deck.name, e.target.checked)}
+                  />
+                  <span>{deck.name}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--mist)' }}>
+                    {deck.card_count} card{deck.card_count !== 1 ? 's' : ''}
+                  </span>
+                </label>
+              ))}
+              <div style={{ marginTop: 12 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--mist)', marginBottom: 6 }}>Primary deck</p>
+                {selectedDeckNames.length === 0 ? (
+                  <p style={{ color: 'var(--mist)', fontSize: 12 }}>Select at least one deck first.</p>
+                ) : (
+                  availableDecks.filter(deck => selectedDeckNames.includes(deck.name)).map(deck => (
+                    <label key={deck.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 14, cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="modal-primary-deck"
+                        value={deck.name}
+                        checked={selectedPrimary === deck.name}
+                        onChange={() => setSelectedPrimary(deck.name)}
+                      />
+                      <span>{deck.name}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+          {decksError && (
+            <p style={{ color: 'var(--red)', fontSize: 13, marginTop: 8 }} role="alert">{decksError}</p>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            className={styles.backButton}
+            onClick={() => setDecksModalOpen(false)}
+            disabled={decksMutation.isPending}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className={styles.renameBtn}
+            onClick={submitDecks}
+            disabled={decksMutation.isPending || selectedDeckNames.length === 0 || !selectedPrimary}
+          >
+            {decksMutation.isPending ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </Modal>
     </section>
   )
 }
@@ -586,6 +754,7 @@ export default function V2PlanDetail({ planId, onBack }) {
             tasks={tasks}
             todayKey={getTodayKey(new Date(), resolvedTimezone)}
           />
+          <ConnectedAnkiDecks plan={plan} planId={planId} onToast={setToast} />
           <DeckTopicMappings
             planId={planId}
             topics={topics}
