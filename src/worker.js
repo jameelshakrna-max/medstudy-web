@@ -123,6 +123,7 @@ import {
   handlePreviewRotationPlan, handleCreateRotationPlan,
   handleListRotationPlans, handleGetRotationPlan, handleDeleteRotationPlan,
   handleRenameRotationPlan, handleUpdateTask, handleRecalculatePlan, handleGetPlanForecast,
+  handleUpdatePlanStatus,
 } from './handlers/rotationPlannerPlans.js'
 
 import {
@@ -601,6 +602,9 @@ export default {
       if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'GET') return handleGetRotationPlan(request, env, user)
       if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteRotationPlan(request, env, user)
       if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'PATCH') return handleRenameRotationPlan(request, env, user)
+
+      // Plan lifecycle: POST /plans/:planId/status
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/status$/) && request.method === 'POST') return handleUpdatePlanStatus(request, env, user)
 
       // Task update: PATCH /plans/:planId/tasks/:taskId
       if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/tasks\/[^\/]+$/) && request.method === 'PATCH') return handleUpdateTask(request, env, user)

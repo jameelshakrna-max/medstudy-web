@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import V2PlanDetail from '../V2PlanDetail'
 import { queryKeys } from '../../../lib/queryKeys'
 
-const { mockUseRotationPlanDetail, mockUseQuery, mockUsePlannerTaskMutations, mockUseMutation, invalidateQueriesSpy } = vi.hoisted(() => {
+const { mockUseRotationPlanDetail, mockUseQuery, mockUsePlannerTaskMutations, mockUseMutation, invalidateQueriesSpy, mockApiPost } = vi.hoisted(() => {
   const mockUseQueryFn = vi.fn(() => ({ data: null, isLoading: false, error: null }))
   const mockRotationPlanDetailFn = vi.fn(() => ({
     data: { plan: { id: 'p1', revision: 1 }, topics: [], tasks: [], availability: [], sourcePace: null },
@@ -30,7 +30,8 @@ const { mockUseRotationPlanDetail, mockUseQuery, mockUsePlannerTaskMutations, mo
   }))
   const mockUseMutationFn = vi.fn(() => ({ mutate: vi.fn(), isPending: false }))
   const invalidateQueriesSpy = vi.fn()
-  return { mockUseRotationPlanDetail: mockRotationPlanDetailFn, mockUseQuery: mockUseQueryFn, mockUsePlannerTaskMutations: mockMutationsFn, mockUseMutation: mockUseMutationFn, invalidateQueriesSpy }
+  const mockApiPost = vi.fn(() => Promise.resolve({ ok: true }))
+  return { mockUseRotationPlanDetail: mockRotationPlanDetailFn, mockUseQuery: mockUseQueryFn, mockUsePlannerTaskMutations: mockMutationsFn, mockUseMutation: mockUseMutationFn, invalidateQueriesSpy, mockApiPost }
 })
 
 vi.mock('react-router-dom', () => ({
@@ -68,11 +69,19 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
   }
 })
 
+vi.mock('../../../lib/api', () => ({
+  apiGet: vi.fn(() => Promise.resolve(null)),
+  apiPatch: vi.fn(() => Promise.resolve({ ok: true })),
+  apiDelete: vi.fn(() => Promise.resolve({ success: true })),
+  apiPost: mockApiPost,
+}))
+
 vi.mock('../../ui/Dropdown/Dropdown', () => {
   const DropdownMock = ({ children }) => <div data-testid="plan-actions-dropdown">{children}</div>
   DropdownMock.Trigger = ({ children }) => <div>{children}</div>
   DropdownMock.Content = ({ children }) => <div>{children}</div>
   DropdownMock.Item = ({ children, onSelect }) => <button type="button" onClick={onSelect}>{children}</button>
+  DropdownMock.Separator = () => <hr />
   return { default: DropdownMock }
 })
 
@@ -819,6 +828,126 @@ describe('V2PlanDetail', () => {
       mockUsePlannerTaskMutations.mockReturnValue(baseMutations)
       render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
       expect(screen.queryByTestId('toast')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('plan lifecycle', () => {
+    function mockPlanWithStatus(status) {
+      mockUseRotationPlanDetail.mockReturnValue({
+        data: { plan: { id: 'p1', revision: 1, status }, topics: [], tasks: [], availability: [], sourcePace: null },
+        isLoading: false,
+        error: null,
+      })
+    }
+
+    function mockLifecycleMutation({ error = null, isPending = false, mutate } = {}) {
+      mockUseMutation.mockImplementation((config) => {
+        const isLifecycle = typeof config.mutationFn === 'function' && config.mutationFn.toString().includes('/status')
+        if (isLifecycle) {
+          const runMutate = mutate
+            ? (variables) => mutate(variables, config)
+            : (variables) => {
+                if (error) config.onError(error, variables)
+                else config.onSuccess({ ok: true }, variables)
+              }
+          return { mutate: runMutate, isPending }
+        }
+        return { mutate: vi.fn(), isPending: false }
+      })
+    }
+
+    function outstandingError() {
+      const err = new Error('Unfinished work remains')
+      err.code = 'PLAN_HAS_OUTSTANDING_TASKS'
+      err.details = { outstanding: { learningTasks: 3, uworldTasks: 2, incorrectReviewTasks: 1, remainingLearningMinutes: 120, remainingQuestions: 60 } }
+      return err
+    }
+
+    it('exposes lifecycle actions matching the plan status', () => {
+      const cases = [
+        { status: 'draft', present: ['Activate Plan'], absent: ['Pause Plan', 'Resume Plan', 'Complete Plan'] },
+        { status: 'active', present: ['Pause Plan', 'Complete Plan'], absent: ['Activate Plan', 'Resume Plan'] },
+        { status: 'paused', present: ['Resume Plan', 'Complete Plan'], absent: ['Activate Plan', 'Pause Plan'] },
+        { status: 'completed', present: [], absent: ['Activate Plan', 'Pause Plan', 'Resume Plan', 'Complete Plan'] },
+      ]
+      for (const { status, present, absent } of cases) {
+        mockPlanWithStatus(status)
+        const { unmount } = render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+        const dropdown = screen.getByTestId('plan-actions-dropdown')
+        for (const label of present) expect(within(dropdown).getByRole('button', { name: label })).toBeInTheDocument()
+        for (const label of absent) expect(within(dropdown).queryByRole('button', { name: label })).not.toBeInTheDocument()
+        unmount()
+      }
+    })
+
+    it('posts action, expectedRevision, and clientRequestId when activating a draft plan', async () => {
+      const user = userEvent.setup()
+      mockPlanWithStatus('draft')
+      mockLifecycleMutation({ mutate: (variables, config) => config.mutationFn(variables) })
+      mockApiPost.mockClear()
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: 'Plan actions' }))
+      await user.click(screen.getByRole('button', { name: 'Activate Plan' }))
+      expect(mockApiPost).toHaveBeenCalledTimes(1)
+      const [url, body] = mockApiPost.mock.calls[0]
+      expect(url).toBe('/rotation-planner/plans/p1/status')
+      expect(body.action).toBe('activate')
+      expect(body.expectedRevision).toBe(1)
+      expect(typeof body.clientRequestId).toBe('string')
+    })
+
+    it('opens the completion dialog with the outstanding-work summary when completion is guarded', async () => {
+      const user = userEvent.setup()
+      mockPlanWithStatus('active')
+      mockLifecycleMutation({ error: outstandingError() })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: 'Plan actions' }))
+      await user.click(screen.getByRole('button', { name: 'Complete Plan' }))
+      const modal = screen.getByTestId('modal')
+      expect(within(modal).getByRole('heading', { name: 'Complete Rotation' })).toBeInTheDocument()
+      expect(within(modal).getByText('Unfinished work in this plan')).toBeInTheDocument()
+      expect(within(modal).getByText('3 learning tasks')).toBeInTheDocument()
+      expect(within(modal).getByText('2 UWorld tasks')).toBeInTheDocument()
+      expect(within(modal).getByText('1 incorrect-review tasks')).toBeInTheDocument()
+      expect(within(modal).getByText('120 learning minutes remaining')).toBeInTheDocument()
+      expect(within(modal).getByText('60 questions remaining')).toBeInTheDocument()
+    })
+
+    it('posts confirmOutstanding when completion is confirmed from the dialog', async () => {
+      const user = userEvent.setup()
+      mockPlanWithStatus('active')
+      mockLifecycleMutation({
+        mutate: (variables, config) => {
+          if (variables.confirmOutstanding) return config.mutationFn(variables)
+          config.onError(outstandingError(), variables)
+        },
+      })
+      mockApiPost.mockClear()
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: 'Plan actions' }))
+      await user.click(screen.getByRole('button', { name: 'Complete Plan' }))
+      await user.click(within(screen.getByTestId('modal')).getByRole('button', { name: 'Complete Rotation' }))
+      expect(mockApiPost).toHaveBeenCalledTimes(1)
+      const [url, body] = mockApiPost.mock.calls[0]
+      expect(url).toBe('/rotation-planner/plans/p1/status')
+      expect(body.action).toBe('complete')
+      expect(body.confirmOutstanding).toBe(true)
+      expect(body.expectedRevision).toBe(1)
+      expect(typeof body.clientRequestId).toBe('string')
+    })
+
+    it('invalidates caches and toasts when a lifecycle action succeeds', async () => {
+      const user = userEvent.setup()
+      mockPlanWithStatus('active')
+      mockLifecycleMutation()
+      invalidateQueriesSpy.mockClear()
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: 'Plan actions' }))
+      await user.click(screen.getByRole('button', { name: 'Complete Plan' }))
+      expect(screen.getByTestId('toast')).toBeInTheDocument()
+      expect(screen.getByTestId('toast-title')).toHaveTextContent('Plan completed')
+      expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.rotations.plan('p1') })
+      expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.rotations.forecast('p1') })
     })
   })
 })

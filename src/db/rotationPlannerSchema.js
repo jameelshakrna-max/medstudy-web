@@ -69,6 +69,7 @@ export const ALL_PLANNER_COLUMNS = {
     'client_request_id', 'request_fingerprint',
     'settings_json', 'revision', 'last_recalculated_at',
     'stale_at',
+    'activated_at', 'paused_at', 'completed_at',
     'created_at', 'updated_at',
   ],
   availability: [

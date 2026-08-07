@@ -299,7 +299,7 @@ describe('resolveCanonicalTopicForMapping', () => {
     ).bind('plan-a', USER_A, 'rotation-1', 'source-1', '2026-01-01', '2026-02-01', 'cli-req-a', 'fp-a', 'active', 1).run()
     await db.prepare(
       `INSERT INTO rotation_planner_plans (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint, status, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind('plan-b', USER_A, 'rotation-1', 'source-1', '2026-01-01', '2026-02-01', 'cli-req-b', 'fp-b', 'active', 1).run()
+    ).bind('plan-b', USER_A, 'rotation-1', 'source-1', '2026-01-01', '2026-02-01', 'cli-req-b', 'fp-b', 'draft', 1).run()
     await insertPlanTopic(db, TOPIC_ID, 'plan-a', CANONICAL_ID)
     const result = await resolveCanonicalTopicForMapping(env, 'plan-b', TOPIC_ID)
     expect(result).toBeNull()

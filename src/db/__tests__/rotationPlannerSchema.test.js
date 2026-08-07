@@ -54,6 +54,10 @@ function loadMigration23Sql() {
   return readFileSync(resolve(__dirname, '../../../schema-migration23.sql'), 'utf8')
 }
 
+function loadMigration24Sql() {
+  return readFileSync(resolve(__dirname, '../../../schema-migration24.sql'), 'utf8')
+}
+
 const FLASHCARDS_STUB = `
 CREATE TABLE IF NOT EXISTS flashcards (
   id TEXT PRIMARY KEY,
@@ -81,6 +85,7 @@ beforeAll(async () => {
   db.run(loadMigration19Sql())
   db.run(loadMigration20Sql())
   db.run(loadMigration23Sql())
+  db.run(loadMigration24Sql())
 })
 
 function tableExists(name) {

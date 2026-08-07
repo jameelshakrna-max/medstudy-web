@@ -17,7 +17,11 @@ import {
   checkTaskIdempotency, checkPlanIdempotency,
   classifyCreateBatchError, classifyBatchError, buildTaskMutationBatch, executeTaskMutationBatch,
   applyTaskUpdate,   calculateTaskUpdateFingerprint, calculateRecalculationFingerprint, calculateRenameFingerprint,
+  calculateLifecycleFingerprint,
   recalculatePlan, deriveActualTopicStates, deriveActualGroupStates, persistRecalculationBatch,
+  persistPlanLifecycleBatch,
+  LIFECYCLE_ACTIONS, LIFECYCLE_OPERATIONS, LIFECYCLE_TRANSITIONS,
+  isValidLifecycleTransition, computeOutstandingSummary, buildLifecycleTimestamps,
   TERMINAL_STATUSES, VALID_ACTIONS, getFlashcardCapacityOwner,
   parseUnlockCondition, isTaskEffectivelyLocked, validateDisplayName,
 } from '../services/rotationPlannerPlans/index.js'
@@ -564,6 +568,149 @@ export async function handleRenameRotationPlan(request, env, user) {
 }
 
 const SUPPORTED_RESCHEDULE_TYPES = new Set(['learning', 'uworld_questions'])
+
+export async function handleUpdatePlanStatus(request, env, user) {
+  let clientRequestId, requestFingerprint
+  try {
+    const url = new URL(request.url)
+    const pathParts = url.pathname.split('/')
+    const planId = pathParts[pathParts.length - 2]
+
+    if (!planId) return errorResponse('VALIDATION_ERROR', 'Plan ID is required.', 400)
+
+    const body = await request.json()
+
+    const action = body.action
+    if (!LIFECYCLE_ACTIONS.has(action)) {
+      return errorResponse('VALIDATION_ERROR', 'action must be one of activate, pause, resume, complete.', 400)
+    }
+
+    if (!Number.isInteger(body.expectedRevision) || body.expectedRevision < 0) {
+      return errorResponse('VALIDATION_ERROR', 'expectedRevision must be a non-negative integer.', 400)
+    }
+
+    const confirmOutstanding = body.confirmOutstanding === true
+
+    clientRequestId = request.headers.get('Idempotency-Key') ?? body.clientRequestId ?? null
+    if (!clientRequestId || typeof clientRequestId !== 'string' || clientRequestId.trim() === '') {
+      return errorResponse('IDEMPOTENCY_KEY_REQUIRED', 'Idempotency-Key header or clientRequestId body field is required.', 400)
+    }
+
+    requestFingerprint = await calculateLifecycleFingerprint(user.sub, planId, action, confirmOutstanding, body.expectedRevision)
+
+    const idemCheck = await checkPlanIdempotency(env, user.sub, clientRequestId)
+    if (idemCheck.status === 'found') {
+      if (idemCheck.existingFingerprint === requestFingerprint) {
+        return json(idemCheck.resultJson)
+      }
+      return errorResponse('IDEMPOTENCY_CONFLICT', 'Same idempotency key with different input.', 409)
+    }
+
+    const planRow = await loadPlanById(env, planId, user.sub)
+    if (!planRow) return errorResponse('PLAN_NOT_FOUND', 'Plan not found.', 404)
+
+    if (planRow.revision !== body.expectedRevision) {
+      return errorResponse('REVISION_CONFLICT', 'Plan revision mismatch. Reload the plan and try again.', 409)
+    }
+
+    if (planRow.status === 'completed') {
+      return errorResponse('PLAN_TERMINAL', 'Completed plans are read-only.', 409)
+    }
+
+    if (!isValidLifecycleTransition(action, planRow.status)) {
+      return errorResponse('INVALID_TRANSITION', `Cannot ${action} a ${planRow.status} plan.`, 409)
+    }
+
+    // Fast-path for the at-most-one-active-plan invariant. The unique index
+    // idx_rpp_one_active_plan is authoritative against concurrent requests.
+    if (action === 'activate' || action === 'resume') {
+      const active = await env.DB.prepare(
+        `SELECT id FROM ${PLANNER_TABLES.plans} WHERE user_id = ? AND status = 'active' AND id != ? LIMIT 1`
+      ).bind(user.sub, planId).first()
+      if (active) {
+        return errorResponse('ACTIVE_ROTATION_EXISTS', 'You already have an active rotation plan. Pause or complete it first.', 409)
+      }
+    }
+
+    const current = await loadPlanFromDb(env, planId, user.sub)
+
+    let outstanding = null
+    if (action === 'complete') {
+      outstanding = computeOutstandingSummary(current.tasks)
+      if (outstanding.totalTasks > 0 && !confirmOutstanding) {
+        return errorResponse(
+          'PLAN_HAS_OUTSTANDING_TASKS',
+          'This plan still has unfinished work. Confirm to complete it anyway.',
+          409,
+          { outstanding }
+        )
+      }
+    }
+
+    const resultingRevision = body.expectedRevision + 1
+    const now = new Date().toISOString()
+    const operation = LIFECYCLE_OPERATIONS[action]
+    const newStatus = LIFECYCLE_TRANSITIONS[action].to
+
+    const resultPayload = { ...current }
+    if (action === 'complete') resultPayload.outstanding = outstanding
+
+    const { batchResults } = await persistPlanLifecycleBatch(env, {
+      planId,
+      userId: user.sub,
+      clientRequestId,
+      requestFingerprint,
+      operation,
+      expectedRevision: body.expectedRevision,
+      resultingRevision,
+      newStatus,
+      now,
+      timestamps: buildLifecycleTimestamps(action, now),
+      capacityAction: (action === 'activate' || action === 'resume') ? 'claim_if_free' : 'release',
+      resultPayload,
+    })
+
+    // CAS: if the claim INSERT affected zero rows the revision moved since the
+    // client read it — return conflict (or the stored replay) instead of a
+    // silent success.
+    if ((batchResults[0]?.meta?.changes ?? 0) === 0) {
+      const recheck = await checkPlanIdempotency(env, user.sub, clientRequestId)
+      if (recheck.status === 'found' && recheck.existingFingerprint === requestFingerprint) {
+        return json(recheck.resultJson)
+      }
+      return errorResponse('REVISION_CONFLICT', 'Plan revision mismatch. Reload the plan and try again.', 409)
+    }
+
+    const plan = await loadPlanFromDb(env, planId, user.sub)
+    if (action === 'complete') plan.outstanding = outstanding
+    return json(plan)
+  } catch (e) {
+    log('rotation_planner:plan_status:error', {
+      message: e.message,
+      stack: e.stack?.slice(0, 500),
+      userId: user?.sub,
+    })
+    if (clientRequestId && requestFingerprint && e.message && e.message.includes('UNIQUE constraint failed')) {
+      // Concurrent activation race on idx_rpp_one_active_plan — translated to a
+      // clean 409 instead of a raw SQLite error. The pre-check handles the common
+      // case; this catches two requests racing past it.
+      if (e.message.includes('rotation_planner_plans.user_id')) {
+        return errorResponse('ACTIVE_ROTATION_EXISTS', 'You already have an active rotation plan. Pause or complete it first.', 409)
+      }
+      // Duplicate client_request_id race on idx_rppm_idempotency — replay or conflict.
+      if (e.message.includes('rotation_planner_plan_mutations')) {
+        try {
+          const recheck = await checkPlanIdempotency(env, user.sub, clientRequestId)
+          if (recheck.status === 'found' && recheck.existingFingerprint === requestFingerprint) {
+            return json(recheck.resultJson)
+          }
+          return errorResponse('IDEMPOTENCY_CONFLICT', 'Same idempotency key with different input.', 409)
+        } catch (_) {}
+      }
+    }
+    return errorResponse('INTERNAL_ERROR', 'Failed to update plan status.', 500)
+  }
+}
 
 async function handleRescheduleCompound({
   env, user, planId, taskId, plan, taskRow, task, updatedTask, payload,

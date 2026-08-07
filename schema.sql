@@ -1077,9 +1077,15 @@ CREATE TABLE IF NOT EXISTS rotation_planner_plans (
   revision INTEGER NOT NULL DEFAULT 0,
   last_recalculated_at TEXT,
   stale_at TEXT,
+  activated_at TEXT,
+  paused_at TEXT,
+  completed_at TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rpp_one_active_plan
+  ON rotation_planner_plans(user_id)
+  WHERE status = 'active';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_rpp_flashcard_owner
   ON rotation_planner_plans(user_id)
   WHERE uses_flashcard_capacity = 1 AND status IN ('draft', 'active');

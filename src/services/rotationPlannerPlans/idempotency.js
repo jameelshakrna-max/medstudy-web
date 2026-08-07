@@ -135,3 +135,14 @@ export async function calculateRenameFingerprint(userId, planId, displayName, ex
   }, null, 0)
   return sha256Hex(canonical)
 }
+
+export async function calculateLifecycleFingerprint(userId, planId, action, confirmOutstanding, expectedRevision) {
+  const canonical = JSON.stringify({
+    userId,
+    planId,
+    action,
+    confirmOutstanding: confirmOutstanding === true,
+    expectedRevision,
+  }, null, 0)
+  return sha256Hex(canonical)
+}

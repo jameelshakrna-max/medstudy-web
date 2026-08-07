@@ -1,7 +1,7 @@
 import { useMemo, useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, CircleHelp, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { ChevronLeft, CircleHelp, MoreHorizontal, Pencil, Trash2, Play, Pause, RotateCcw, CheckCircle2 } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs/Tabs'
 import Toast from '../ui/Toast/Toast'
 import LoadingScreen from '../LoadingScreen'
@@ -24,7 +24,7 @@ import RecordQuestionsDialog from './today/dialogs/RecordQuestionsDialog'
 import TopicsView from './today/TopicsView'
 import CalendarView from './CalendarView'
 import ProgressView from './ProgressView'
-import { apiGet, apiPatch, apiDelete } from '../../lib/api'
+import { apiGet, apiPatch, apiDelete, apiPost } from '../../lib/api'
 import { queryKeys } from '../../lib/queryKeys'
 import { getTodayKey, resolvePlannerTimezone, getBrowserTimezone } from './today/todayUtils'
 import ProgressBar from '../ui/ProgressBar/ProgressBar'
@@ -36,6 +36,27 @@ const GROUP_STATUS_LABEL = {
   pending: 'Learning',
   completed: 'Completed',
   excluded: 'Excluded',
+}
+
+const LIFECYCLE_META = {
+  activate: { label: 'Activate Plan', icon: Play },
+  pause: { label: 'Pause Plan', icon: Pause },
+  resume: { label: 'Resume Plan', icon: RotateCcw },
+  complete: { label: 'Complete Plan', icon: CheckCircle2 },
+}
+
+const LIFECYCLE_BY_STATUS = {
+  draft: ['activate'],
+  active: ['pause', 'complete'],
+  paused: ['resume', 'complete'],
+  completed: [],
+}
+
+const LIFECYCLE_TOAST = {
+  activate: { title: 'Plan activated', description: 'Your rotation plan is now active.' },
+  pause: { title: 'Plan paused', description: 'Your rotation plan is paused.' },
+  resume: { title: 'Plan resumed', description: 'Your rotation plan is active again.' },
+  complete: { title: 'Plan completed', description: 'Your rotation plan is complete and read-only.' },
 }
 
 function getGroupKey(group) {
@@ -202,6 +223,66 @@ export default function V2PlanDetail({ planId, onBack }) {
     if (deleteMutation.isPending) return
     deleteMutation.mutate()
   }, [deleteMutation])
+
+  const [completionOpen, setCompletionOpen] = useState(false)
+  const [completionOutstanding, setCompletionOutstanding] = useState(null)
+  const [completionError, setCompletionError] = useState(null)
+
+  const lifecycleMutation = useMutation({
+    mutationFn: ({ action, confirmOutstanding = false }) => {
+      const clientRequestId = crypto.randomUUID()
+      return apiPost(`/rotation-planner/plans/${planId}/status`, {
+        action,
+        expectedRevision: data?.plan?.revision,
+        clientRequestId,
+        ...(confirmOutstanding ? { confirmOutstanding: true } : {}),
+      })
+    },
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plans() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plan(planId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.rotations.forecast(planId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.goals.list() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all })
+      if (variables.action === 'complete') {
+        setCompletionOpen(false)
+        setCompletionOutstanding(null)
+        setCompletionError(null)
+      }
+      const toastMeta = LIFECYCLE_TOAST[variables.action]
+      setToast({ open: true, title: toastMeta.title, description: toastMeta.description, variant: 'default' })
+    },
+    onError: (err, variables) => {
+      // Unconfirmed completion with outstanding work opens the confirmation dialog.
+      if (variables.action === 'complete' && !variables.confirmOutstanding && err?.code === 'PLAN_HAS_OUTSTANDING_TASKS') {
+        setCompletionOutstanding(err?.details?.outstanding ?? null)
+        setCompletionError(null)
+        setCompletionOpen(true)
+        return
+      }
+      if (err?.code === 'REVISION_CONFLICT' || err?.code === 'PLAN_TERMINAL') {
+        queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plan(planId) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plans() })
+      }
+      // A confirmed completion that fails keeps the dialog open with the error.
+      if (variables.action === 'complete' && variables.confirmOutstanding) {
+        setCompletionOpen(true)
+        setCompletionError(err?.message || 'Failed to complete plan. Please try again.')
+        return
+      }
+      setToast({ open: true, title: 'Failed to update plan', description: err?.message || 'Please try again.', variant: 'error' })
+    },
+  })
+
+  const runLifecycle = useCallback((action) => {
+    if (lifecycleMutation.isPending) return
+    lifecycleMutation.mutate({ action })
+  }, [lifecycleMutation])
+
+  const confirmCompletion = useCallback(() => {
+    if (lifecycleMutation.isPending) return
+    lifecycleMutation.mutate({ action: 'complete', confirmOutstanding: true })
+  }, [lifecycleMutation])
 
   const { data: forecast, isLoading: forecastLoading, error: forecastError } = useQuery({
     queryKey: queryKeys.rotations.forecast(planId),
@@ -426,6 +507,17 @@ export default function V2PlanDetail({ planId, onBack }) {
             </button>
           </Dropdown.Trigger>
           <Dropdown.Content>
+            {(LIFECYCLE_BY_STATUS[plan.status] || []).map((action) => {
+              const meta = LIFECYCLE_META[action]
+              const Icon = meta.icon
+              return (
+                <Dropdown.Item key={action} onSelect={() => runLifecycle(action)} disabled={lifecycleMutation.isPending}>
+                  <Icon size={14} />
+                  {meta.label}
+                </Dropdown.Item>
+              )
+            })}
+            {(LIFECYCLE_BY_STATUS[plan.status] || []).length > 0 && <Dropdown.Separator />}
             <Dropdown.Item onSelect={openRename}>
               <Pencil size={14} />
               Rename Plan
@@ -628,6 +720,54 @@ export default function V2PlanDetail({ planId, onBack }) {
             disabled={renameMutation.isPending || !renameValue.trim()}
           >
             {renameMutation.isPending ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </Modal>
+
+      <Modal open={completionOpen} onOpenChange={(open) => { if (!open && !lifecycleMutation.isPending) { setCompletionOpen(false); setCompletionError(null); setCompletionOutstanding(null) } }}>
+        <Modal.Title>Complete Rotation</Modal.Title>
+        <Modal.Description>
+          Completing freezes this rotation. Unfinished work will remain unfinished, and this plan becomes read-only.
+        </Modal.Description>
+        {completionOutstanding && (
+          <div
+            style={{
+              margin: '16px 0',
+              padding: 12,
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--card-bg)',
+              border: '1px solid var(--card-border)',
+            }}
+          >
+            <p style={{ marginBottom: 8, fontWeight: 600, fontSize: 14 }}>Unfinished work in this plan</p>
+            <ul style={{ fontSize: 13, display: 'grid', gap: 4, paddingLeft: 18 }}>
+              <li>{completionOutstanding.learningTasks} learning tasks</li>
+              <li>{completionOutstanding.uworldTasks} UWorld tasks</li>
+              <li>{completionOutstanding.incorrectReviewTasks} incorrect-review tasks</li>
+              <li>{completionOutstanding.remainingLearningMinutes} learning minutes remaining</li>
+              <li>{completionOutstanding.remainingQuestions} questions remaining</li>
+            </ul>
+          </div>
+        )}
+        {completionError && (
+          <p style={{ color: 'var(--red)', fontSize: 13, marginTop: 8 }}>{completionError}</p>
+        )}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+          <button
+            type="button"
+            className={styles.backButton}
+            onClick={() => { setCompletionOpen(false); setCompletionError(null); setCompletionOutstanding(null) }}
+            disabled={lifecycleMutation.isPending}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className={styles.dangerBtn}
+            onClick={confirmCompletion}
+            disabled={lifecycleMutation.isPending}
+          >
+            {lifecycleMutation.isPending ? 'Completing...' : 'Complete Rotation'}
           </button>
         </div>
       </Modal>

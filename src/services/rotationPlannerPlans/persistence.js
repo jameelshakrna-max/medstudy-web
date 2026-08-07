@@ -142,6 +142,9 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     revision: 0,
     lastRecalculatedAt: null,
     staleAt: null,
+    activatedAt: null,
+    pausedAt: null,
+    completedAt: null,
     sourceTitle,
   }
 
@@ -611,7 +614,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
 
 export async function loadPlanFromDb(env, planId, userId) {
   const { results: planRows } = await env.DB.prepare(
-    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, uses_flashcard_capacity, uworld_scheduling_mode, settings_json, created_at, updated_at, revision, last_recalculated_at, stale_at, display_name FROM rotation_planner_plans WHERE id = ? AND user_id = ?'
+    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, uses_flashcard_capacity, uworld_scheduling_mode, settings_json, created_at, updated_at, revision, last_recalculated_at, stale_at, display_name, activated_at, paused_at, completed_at FROM rotation_planner_plans WHERE id = ? AND user_id = ?'
   ).bind(planId, userId).all()
 
   if (!planRows.length) return null
@@ -662,7 +665,7 @@ export async function loadQuestionGroupsByPlan(env, planId) {
 
 export async function loadPlanSummaries(env, userId) {
   const { results: planRows } = await env.DB.prepare(
-    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, uses_flashcard_capacity, uworld_scheduling_mode, settings_json, created_at, updated_at, revision, last_recalculated_at, stale_at, display_name FROM rotation_planner_plans WHERE user_id = ? ORDER BY created_at DESC'
+    'SELECT id, user_id, rotation_id, source_id, source_version, start_date, end_date, exam_date, study_style, scheduling_mode, question_start_rule, preferred_questions_per_day, minimum_questions_per_session, maximum_questions_per_day, average_minutes_per_question, buffer_percentage, maximum_active_topics, status, uses_flashcard_capacity, uworld_scheduling_mode, settings_json, created_at, updated_at, revision, last_recalculated_at, stale_at, display_name, activated_at, paused_at, completed_at FROM rotation_planner_plans WHERE user_id = ? ORDER BY created_at DESC'
   ).bind(userId).all()
 
   const summaries = []
@@ -875,4 +878,107 @@ export async function persistRecalculationBatch(env, {
   if (updateSettingsStmt) batch.push(updateSettingsStmt)
   batch.push(updateForecastStmt)
   return env.DB.batch(batch)
+}
+
+// Atomic lifecycle transition: mutation claim (revision CAS) → status/timestamp
+// update → response snapshot. A successful transition increments revision exactly
+// once and writes exactly one idempotency receipt. A stale or forged request
+// claims zero rows and makes zero writes; the caller maps that to REVISION_CONFLICT.
+// The unique index idx_rpp_one_active_plan makes concurrent activation requests
+// fail here; the caller translates that to ACTIVE_ROTATION_EXISTS.
+export async function persistPlanLifecycleBatch(env, {
+  planId,
+  userId,
+  clientRequestId,
+  requestFingerprint,
+  operation,
+  expectedRevision,
+  resultingRevision,
+  newStatus,
+  now,
+  timestamps,
+  capacityAction,
+  resultPayload,
+}) {
+  const T = PLANNER_TABLES
+  const mutationId = crypto.randomUUID()
+
+  const sets = ['status = ?', 'revision = revision + 1', 'updated_at = ?']
+  const binds = [newStatus, now]
+
+  if (timestamps) {
+    for (const entry of [
+      ['activatedAt', 'activated_at'],
+      ['pausedAt', 'paused_at'],
+      ['completedAt', 'completed_at'],
+    ]) {
+      const [key, column] = entry
+      const spec = timestamps[key]
+      if (spec === undefined) continue
+      if (spec.coalesce) {
+        sets.push(`${column} = COALESCE(${column}, ?)`)
+      } else {
+        sets.push(`${column} = ?`)
+      }
+      binds.push(spec.value)
+    }
+  }
+
+  // Flashcard-capacity ownership. 'claim_if_free' preserves an existing owner
+  // (the plan's own ownership is never stolen) and grants capacity only when no
+  // other draft/active plan owns it — same NOT EXISTS rule updatePlanStatus uses.
+  // 'release' clears capacity when the plan leaves the active set (pause/complete).
+  if (capacityAction === 'claim_if_free') {
+    sets.push(`uses_flashcard_capacity = CASE
+      WHEN NOT EXISTS (
+        SELECT 1 FROM ${T.plans}
+        WHERE user_id = ? AND id != ? AND status IN ('draft', 'active') AND uses_flashcard_capacity = 1
+      ) THEN 1 ELSE 0 END`)
+    binds.push(userId, planId)
+  } else if (capacityAction === 'release') {
+    sets.push('uses_flashcard_capacity = 0')
+  }
+
+  const baseResultJson = JSON.stringify(resultPayload)
+
+  const claimStmt = env.DB.prepare(
+    `INSERT INTO ${T.planMutations} (
+      id, plan_id, user_id, client_request_id, request_fingerprint,
+      expected_revision, resulting_revision, operation, result_json
+    ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+    WHERE EXISTS (SELECT 1 FROM ${T.plans} WHERE id = ? AND user_id = ? AND revision = ?)`
+  ).bind(
+    mutationId, planId, userId, clientRequestId, requestFingerprint,
+    expectedRevision, resultingRevision, operation, baseResultJson,
+    planId, userId, expectedRevision
+  )
+
+  const updateStmt = env.DB.prepare(
+    `UPDATE ${T.plans}
+     SET ${sets.join(', ')}
+     WHERE id = ? AND user_id = ? AND revision = ?
+     AND EXISTS (SELECT 1 FROM ${T.planMutations} WHERE id = ?)`
+  ).bind(...binds, planId, userId, expectedRevision, mutationId)
+
+  const resultJsonStmt = env.DB.prepare(
+    `UPDATE ${T.planMutations}
+     SET result_json = (
+       SELECT json_set(
+         ?,
+         '$.plan.status', p.status,
+         '$.plan.revision', p.revision,
+         '$.plan.updatedAt', p.updated_at,
+         '$.plan.usesFlashcardCapacity', p.uses_flashcard_capacity,
+         '$.plan.activatedAt', p.activated_at,
+         '$.plan.pausedAt', p.paused_at,
+         '$.plan.completedAt', p.completed_at
+       )
+       FROM ${T.plans} p
+       WHERE p.id = ? AND p.user_id = ?
+     )
+     WHERE id = ? AND plan_id = ? AND user_id = ?`
+  ).bind(baseResultJson, planId, userId, mutationId, planId, userId)
+
+  const batchResults = await env.DB.batch([claimStmt, updateStmt, resultJsonStmt])
+  return { batchResults, mutationId }
 }
