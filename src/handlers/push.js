@@ -20,7 +20,7 @@ function configureVapid(env) {
   vapidConfigured = true
 }
 
-// ── Subscribe: store browser push subscription (upsert by endpoint) ──
+// ── Subscribe: store browser push subscription (same-user upsert by endpoint) ──
 export async function handleSubscribe(request, env, user) {
   const body = await request.json()
   const { subscription } = body
@@ -30,19 +30,29 @@ export async function handleSubscribe(request, env, user) {
   }
 
   const id = uuid()
-  await env.DB.prepare(
+  // An endpoint uniquely identifies a device/browser and must only ever belong
+  // to the user who first claimed it. Re-sync from the same user updates it in
+  // place (no duplicates); a claim from a different user is rejected so one
+  // user can never overwrite another's subscription.
+  const result = await env.DB.prepare(
     `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, expiration_time)
      VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(endpoint) DO UPDATE SET
-       user_id = excluded.user_id,
        p256dh = excluded.p256dh,
        auth = excluded.auth,
-       expiration_time = excluded.expiration_time`
+       expiration_time = excluded.expiration_time
+     WHERE push_subscriptions.user_id = ?`
   ).bind(
     id, user.sub, subscription.endpoint,
     subscription.keys.p256dh, subscription.keys.auth,
-    subscription.expirationTime || null
+    subscription.expirationTime || null,
+    user.sub
   ).run()
+
+  // A conflict owned by another user leaves the row untouched (0 changes).
+  if (result.meta?.changes === 0) {
+    return json({ error: 'Subscription already registered to another user' }, 409)
+  }
 
   return json({ success: true })
 }
