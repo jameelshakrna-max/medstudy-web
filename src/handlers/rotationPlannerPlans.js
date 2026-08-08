@@ -30,6 +30,7 @@ import {
 import { computeReviewWorkloadMap } from '../services/flashcardWorkload.js'
 import { computeSafeNewCardForecast } from '../services/flashcardForecast.js'
 import { computeExistingReviewBaseline, createEmptyFlashcardForecast } from '../services/rotationPlannerPlans/forecastIntegration.js'
+import { buildTrackingProjection, selectTrackingPlan } from '../services/rotationPlannerPlans/trackingProjection.js'
 import { verifyDeckExists } from '../services/flashcardMappings.js'
 import { addDays } from '../services/rotationPlannerV2/dateUtils.js'
 import { mapPlanSummaryDto, mapPlanDto, mapAvailabilityDto, mapTopicDto, mapTaskDto, mapToSnakeCase } from '../services/rotationPlannerPlans/dtoMappers.js'
@@ -39,6 +40,7 @@ import { generateDateRange } from '../services/rotationPlannerV2/dateUtils.js'
 import { assignStudyBlocks } from '../services/rotationPlannerV2/studyBlockAssignment.js'
 import { buildReservedMinutesMap } from '../services/rotationPlannerPlans/recalculation.js'
 import { findNormalizedTopic } from '../data/studySources/normalizedRegistry.js'
+import { getRotationById } from '../data/studySources/rotationRegistry.js'
 
 function errorResponse(code, message, status = 400, details = null) {
   const body = { error: { code, message } }
@@ -1714,5 +1716,104 @@ export async function handleGetPlanForecast(request, env, user) {
   } catch (e) {
     log('rotation_planner:forecast:error', { message: e.message, stack: e.stack?.slice(0, 500) })
     return errorResponse('INTERNAL_ERROR', 'Failed to compute forecast.', 500)
+  }
+}
+
+export async function handleGetPlanTrackingSchedule(request, env, user) {
+  try {
+    const url = new URL(request.url)
+    const params = url.searchParams
+
+    const rawWindowDays = params.get('windowDays')
+    let windowDays = 14
+    if (rawWindowDays !== null && rawWindowDays !== '') {
+      const parsed = Number(rawWindowDays)
+      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 30) {
+        return errorResponse('VALIDATION_ERROR', 'windowDays must be an integer between 1 and 30.', 400)
+      }
+      windowDays = parsed
+    }
+
+    const tzParam = params.get('timezone')
+    const timezone = isValidTimezone(tzParam) ? tzParam : 'UTC'
+
+    const planIdParam = params.get('planId')
+    const explicit = planIdParam !== null && planIdParam.trim() !== ''
+
+    const nowIso = new Date().toISOString()
+    const todayKey = getDateKeyForTimezone(nowIso, timezone)
+
+    let planId = null
+    let selectionReason = null
+    let planData = null
+
+    if (explicit) {
+      planId = planIdParam.trim()
+      planData = await loadPlanFromDb(env, planId, user.sub)
+      if (!planData) return errorResponse('PLAN_NOT_FOUND', 'Plan not found.', 404)
+      selectionReason = 'explicit'
+    } else {
+      const summaries = await loadPlanSummaries(env, user.sub)
+      const selected = selectTrackingPlan(summaries)
+      if (!selected.plan) {
+        return json({
+          plan: null,
+          selectionReason: null,
+          window: { timezone, startDate: todayKey, endDate: addDays(todayKey, windowDays - 1), windowDays },
+          nextBlock: null,
+          schedule: [],
+          incorrectReview: [],
+          linkedDecks: [],
+        })
+      }
+      planId = selected.plan.id
+      planData = await loadPlanFromDb(env, planId, user.sub)
+      if (!planData) return errorResponse('PLAN_NOT_FOUND', 'Plan not found.', 404)
+      selectionReason = selected.selectionReason
+    }
+
+    const [rawTopics, rawTasks, groupDtos] = await Promise.all([
+      loadTopicsByPlan(env, planId),
+      loadTasksByPlan(env, planId),
+      loadQuestionGroupsByPlan(env, planId),
+    ])
+
+    const topicStates = deriveActualTopicStates(rawTopics, rawTasks, { asOfDate: todayKey })
+    const groupStates = deriveActualGroupStates(groupDtos, rawTopics, rawTasks, { asOfDate: todayKey })
+
+    const projection = buildTrackingProjection({
+      plan: planData.plan,
+      topics: planData.topics,
+      tasks: planData.tasks,
+      questionGroups: planData.questionGroups,
+      topicStates,
+      groupStates,
+      nowIso,
+      timezone,
+      windowDays,
+    })
+
+    const planSubset = {
+      id: planData.plan.id,
+      displayName: planData.plan.displayName,
+      status: planData.plan.status,
+      rotationLabel: getRotationById(planData.plan.rotationId)?.displayLabel || null,
+      startDate: planData.plan.startDate,
+      endDate: planData.plan.endDate,
+      revision: planData.plan.revision,
+    }
+
+    return json({
+      plan: planSubset,
+      selectionReason,
+      window: projection.window,
+      nextBlock: projection.nextBlock,
+      schedule: projection.schedule,
+      incorrectReview: projection.incorrectReview,
+      linkedDecks: planData.linkedDecks,
+    })
+  } catch (e) {
+    log('rotation_planner:tracking_schedule:error', { message: e.message, stack: e.stack?.slice(0, 500) })
+    return errorResponse('INTERNAL_ERROR', 'Failed to get tracking schedule.', 500)
   }
 }

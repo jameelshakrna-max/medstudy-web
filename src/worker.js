@@ -123,7 +123,7 @@ import {
   handlePreviewRotationPlan, handleCreateRotationPlan,
   handleListRotationPlans, handleGetRotationPlan, handleDeleteRotationPlan,
   handleRenameRotationPlan, handleUpdateTask, handleRecalculatePlan, handleGetPlanForecast,
-  handleUpdatePlanStatus, handleGetPlanDecks, handleReplacePlanDecks,
+  handleUpdatePlanStatus, handleGetPlanDecks, handleReplacePlanDecks, handleGetPlanTrackingSchedule,
 } from './handlers/rotationPlannerPlans.js'
 
 import {
@@ -594,6 +594,7 @@ export default {
       if (path.match(/^\/api\/rotation-planner\/sources\/[^\/]+\/rotations$/) && request.method === 'GET') return getPlannerSourceRotations(request, env, user)
       if (path === '/api/rotation-planner/sources' && request.method === 'GET') return getPlannerSources(request, env, user)
       if (path === '/api/rotation-planner/rotations' && request.method === 'GET') return getPlannerRotations(request, env, user)
+      if (path === '/api/rotation-planner/tracking/schedule' && request.method === 'GET') return handleGetPlanTrackingSchedule(request, env, user)
 
       // ── Rotation Planner (plans) ──
       if (path === '/api/rotation-planner/plans/preview' && request.method === 'POST') return handlePreviewRotationPlan(request, env, user)

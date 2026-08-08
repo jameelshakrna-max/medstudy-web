@@ -148,6 +148,7 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
       queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plans() })
       queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plan(result.plan?.id) })
       queryClient.invalidateQueries({ queryKey: queryKeys.flashcards.decks() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.rotations.trackingAll() })
       onCreated?.(result.plan?.id)
       onClose()
     },

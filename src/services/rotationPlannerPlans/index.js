@@ -11,6 +11,7 @@ export { loadTaskById, loadTasksByPlan, loadPlanById, loadTopicById, loadTopicsB
 export { computeSessionValidity, getActivityIdentity, recordSession, calculateSourcePace, updateUserSourcePace } from './sourcePace.js'
 export { recalculatePlan, buildRecalculationResult, deriveActualTopicStates, buildReservedMinutesMap, getCompletionFraction } from './recalculation.js'
 export { deriveActualGroupStates } from './groupState.js'
+export { deriveTaskStatus, buildTrackingProjection, selectTrackingPlan } from './trackingProjection.js'
 export { computeExistingReviewBaseline, createEmptyFlashcardForecast } from './forecastIntegration.js'
 export { parseUnlockCondition, hasCompletedLearning, hasCompletedUworld, isUnlockConditionSatisfied, isTaskEffectivelyLocked } from './unlockRules.js'
 export { assignStudyBlocks } from '../rotationPlannerV2/studyBlockAssignment.js'

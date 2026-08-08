@@ -31,6 +31,7 @@ export default function usePlannerTaskMutations({ planId, initialRevision, getRe
       queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plan(planId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plans() })
       queryClient.invalidateQueries({ queryKey: queryKeys.rotations.forecast(planId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.rotations.trackingAll() })
     }
   }, [queryClient, planId])
 
