@@ -267,6 +267,7 @@ async function run() {
     { name: '14. Cross-user isolation', tests: [testSuite14()] },
     { name: '15. Plan naming, rename, and delete (Phases 1-2)', tests: testSuite15() },
     { name: '16. Grouped UWorld scheduling (R2)', tests: testSuite16() },
+    { name: '17. V2.3 lifecycle, linked decks, tracking schedule', tests: testSuite17() },
   ];
 
   try {
@@ -1545,6 +1546,313 @@ function testSuite16() {
       progressPlanId = null
       perTopicPlanId = null
       console.log('    Suite 16 cleanup complete')
+    }),
+  ]
+}
+
+// ===================================================================
+// SUITE 17 — V2.3 lifecycle, linked decks, tracking schedule
+// ===================================================================
+
+let lifecyclePlanId = null
+let lifecycleActivatedAt = null
+let lifecycleActivateKey = null
+let secondPlanId = null
+let deckPlanId = null
+let smokeDeckA = null
+let smokeDeckB = null
+
+function utcToday() { return new Date().toISOString().slice(0, 10) }
+function utcAddDays(d, n) { const dt = new Date(d + 'T00:00:00Z'); dt.setUTCDate(dt.getUTCDate() + n); return dt.toISOString().slice(0, 10) }
+
+function buildTrackingPayload(overrides = {}) {
+  const start = utcToday()
+  return {
+    sourceId: 'step-up-medicine-6e-2024',
+    rotationId: 'cardiology',
+    displayName: 'V2.3 Tracking Smoke',
+    startDate: start,
+    endDate: utcAddDays(start, 13),
+    studyStyle: 'active',
+    schedulingMode: 'efficient',
+    questionStartRule: 'next_available_day',
+    availability: Array.from({ length: 7 }, (_, i) => ({ weekday: i, availableMinutes: 300, isDayOff: false })),
+    bufferPercentage: 20,
+    preferredQuestionsPerDay: 30,
+    minimumQuestionsPerSession: 10,
+    maximumQuestionsPerDay: 50,
+    averageMinutesPerQuestion: 1.5,
+    maximumActiveTopics: 5,
+    personalSourcePaceMultiplier: 1.0,
+    examReviewWindowDays: 0,
+    mixedReviewQuestionsPerDay: 0,
+    dueReviewMinutesByDate: {},
+    topics: [{ normalizedTopicId: 'step-up-medicine-6e-2024::cardiology.stable-angina-pectoris', uworldRemainingQuestions: 40, alreadyCompletedLearningPercentage: 0, alreadyCompletedQuestionCount: 0, incorrectQuestionsRemaining: 0 }],
+    flashcardSettings: { learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: null },
+    timezone: 'UTC',
+    ...overrides,
+  }
+}
+
+async function lifecycleRequest(token, planId, action, expectedRevision, { confirmOutstanding = false, clientRequestId } = {}) {
+  const key = clientRequestId || `lc-${planId}-${action}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const res = await fetch(`${BASE}/api/rotation-planner/plans/${planId}/status`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Idempotency-Key': key },
+    body: JSON.stringify({ action, expectedRevision, confirmOutstanding, clientRequestId: key }),
+  })
+  const text = await res.text()
+  let body = null
+  try { body = JSON.parse(text) } catch {}
+  return { status: res.status, body, key }
+}
+
+async function putPlanDecks(token, planId, payload, idemKey) {
+  const res = await fetch(`${BASE}/api/rotation-planner/plans/${planId}/decks`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Idempotency-Key': idemKey },
+    body: JSON.stringify(payload),
+  })
+  const text = await res.text()
+  let body = null
+  try { body = JSON.parse(text) } catch {}
+  return { status: res.status, body }
+}
+
+function testSuite17() {
+  return [
+    test('S17.1', 'Activate draft plan; second activation blocked by one-active invariant', 'Suite 17', async () => {
+      const created = await createNamingPlan(tokens.A, 'V2.3 Lifecycle Smoke', false)
+      lifecyclePlanId = created.plan.id
+      lifecycleActivateKey = `lc-activate-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const act = await lifecycleRequest(tokens.A, lifecyclePlanId, 'activate', 0, { clientRequestId: lifecycleActivateKey })
+      if (act.status !== 200) throw new Error(`activate failed: ${act.status}`)
+      if (act.body.plan.status !== 'active') throw new Error(`Expected active, got ${act.body.plan.status}`)
+      if (!act.body.plan.activatedAt) throw new Error('activatedAt not set')
+      if (act.body.plan.revision !== 1) throw new Error(`Expected revision 1, got ${act.body.plan.revision}`)
+      lifecycleActivatedAt = act.body.plan.activatedAt
+
+      const second = await createNamingPlan(tokens.A, 'V2.3 Second Plan', false)
+      secondPlanId = second.plan.id
+      const blocked = await lifecycleRequest(tokens.A, secondPlanId, 'activate', 0)
+      if (blocked.status !== 409) throw new Error(`Expected 409, got ${blocked.status}`)
+      if (blocked.body.error.code !== 'ACTIVE_ROTATION_EXISTS') throw new Error(`Expected ACTIVE_ROTATION_EXISTS, got ${blocked.body.error.code}`)
+      console.log(`    Lifecycle plan active: ${lifecyclePlanId}`)
+    }),
+
+    test('S17.2', 'Pause/resume cycle preserves activatedAt and clears pausedAt', 'Suite 17', async () => {
+      if (!lifecyclePlanId) throw new Error('S17.1 must pass first')
+      const pause = await lifecycleRequest(tokens.A, lifecyclePlanId, 'pause', 1)
+      if (pause.status !== 200) throw new Error(`pause failed: ${pause.status}`)
+      if (pause.body.plan.status !== 'paused') throw new Error(`Expected paused, got ${pause.body.plan.status}`)
+      if (!pause.body.plan.pausedAt) throw new Error('pausedAt not set')
+      if (pause.body.plan.activatedAt !== lifecycleActivatedAt) throw new Error('activatedAt changed on pause')
+
+      const resume = await lifecycleRequest(tokens.A, lifecyclePlanId, 'resume', 2)
+      if (resume.status !== 200) throw new Error(`resume failed: ${resume.status}`)
+      if (resume.body.plan.status !== 'active') throw new Error(`Expected active, got ${resume.body.plan.status}`)
+      if (resume.body.plan.pausedAt !== null) throw new Error('pausedAt not cleared on resume')
+      if (resume.body.plan.activatedAt !== lifecycleActivatedAt) throw new Error('activatedAt changed across pause/resume')
+    }),
+
+    test('S17.3', 'Complete guard: unconfirmed 409 then confirmed completes; plan becomes terminal', 'Suite 17', async () => {
+      if (!lifecyclePlanId) throw new Error('S17.1 must pass first')
+      const unconfirmed = await lifecycleRequest(tokens.A, lifecyclePlanId, 'complete', 3)
+      if (unconfirmed.status !== 409) throw new Error(`Expected 409, got ${unconfirmed.status}`)
+      if (unconfirmed.body.error.code !== 'PLAN_HAS_OUTSTANDING_TASKS') throw new Error(`Expected PLAN_HAS_OUTSTANDING_TASKS, got ${unconfirmed.body.error.code}`)
+      if (!unconfirmed.body.error.details.outstanding || unconfirmed.body.error.details.outstanding.totalTasks <= 0) {
+        throw new Error('Expected outstanding summary with totalTasks > 0')
+      }
+
+      const done = await lifecycleRequest(tokens.A, lifecyclePlanId, 'complete', 3, { confirmOutstanding: true })
+      if (done.status !== 200) throw new Error(`confirmed complete failed: ${done.status}`)
+      if (done.body.plan.status !== 'completed') throw new Error(`Expected completed, got ${done.body.plan.status}`)
+      if (!done.body.plan.completedAt) throw new Error('completedAt not set')
+
+      const terminal = await lifecycleRequest(tokens.A, lifecyclePlanId, 'pause', 4)
+      if (terminal.status !== 409 || terminal.body.error.code !== 'PLAN_TERMINAL') {
+        throw new Error(`Expected PLAN_TERMINAL, got ${terminal.status} ${terminal.body.error && terminal.body.error.code}`)
+      }
+    }),
+
+    test('S17.4', 'Invalid transitions rejected; exact lifecycle replay is idempotent', 'Suite 17', async () => {
+      if (!secondPlanId || !lifecyclePlanId) throw new Error('S17.1 must pass first')
+      const pauseDraft = await lifecycleRequest(tokens.A, secondPlanId, 'pause', 0)
+      if (pauseDraft.status !== 409 || pauseDraft.body.error.code !== 'INVALID_TRANSITION') {
+        throw new Error(`Expected INVALID_TRANSITION for pause, got ${pauseDraft.status} ${pauseDraft.body.error && pauseDraft.body.error.code}`)
+      }
+      const resumeDraft = await lifecycleRequest(tokens.A, secondPlanId, 'resume', 0)
+      if (resumeDraft.status !== 409 || resumeDraft.body.error.code !== 'INVALID_TRANSITION') {
+        throw new Error(`Expected INVALID_TRANSITION for resume, got ${resumeDraft.status}`)
+      }
+      const replay = await lifecycleRequest(tokens.A, lifecyclePlanId, 'activate', 0, { clientRequestId: lifecycleActivateKey })
+      if (replay.status !== 200) throw new Error(`replay failed: ${replay.status}`)
+      if (replay.body.plan.revision !== 1) throw new Error(`Expected replay revision 1, got ${replay.body.plan.revision}`)
+      if (replay.body.plan.activatedAt !== lifecycleActivatedAt) throw new Error('Replay returned different activatedAt')
+    }),
+
+    test('S17.5', 'Create plan with deckNames persists linked decks with primary flag', 'Suite 17', async () => {
+      const payload = { ...buildPreviewPayload(false, 'V2.3 Linked Decks'), deckNames: ['Linked Deck A', 'Linked Deck B'], primaryDeckName: 'Linked Deck A' }
+      const created = await createPlanFromPreview(tokens.A, payload)
+      if (created.status !== 201) throw new Error(`Create with deckNames failed: ${created.status} ${created.text}`)
+      deckPlanId = created.body.plan.id
+      const linked = created.body.linkedDecks
+      if (!Array.isArray(linked) || linked.length !== 2) throw new Error(`Expected 2 linkedDecks, got ${JSON.stringify(linked)}`)
+      const primary = linked.find(d => d.isPrimary)
+      if (!primary || primary.deckName !== 'Linked Deck A') throw new Error(`Expected primary Linked Deck A, got ${JSON.stringify(primary)}`)
+      if (!linked.some(d => d.deckName === 'Linked Deck B' && !d.isPrimary)) throw new Error('Linked Deck B not persisted as non-primary')
+      console.log(`    Deck plan created with 2 linked decks: ${deckPlanId}`)
+    }),
+
+    test('S17.6', 'PUT /decks replaces the deck set atomically; GET returns primary-first counts', 'Suite 17', async () => {
+      if (!deckPlanId) throw new Error('S17.5 must pass first')
+      smokeDeckA = `SmokeDeckA_${Date.now()}`
+      smokeDeckB = `SmokeDeckB_${Date.now()}`
+      for (const name of [smokeDeckA, smokeDeckB]) {
+        const d = await fetch(`${BASE}/api/decks`, { method: 'POST', headers: authHeaders('A'), body: JSON.stringify({ deck_name: name }) })
+        if (d.status !== 200) throw new Error(`Create deck ${name} failed: ${d.status}`)
+        const c = await fetch(`${BASE}/api/flashcards`, {
+          method: 'POST', headers: { ...authHeaders('A'), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cards: [{ deck_name: name, front: `Front ${name}`, back: `Back ${name}` }] }),
+        })
+        if (c.status !== 201) throw new Error(`Create card in ${name} failed: ${c.status}`)
+      }
+
+      const detail = await getPlanDetail(tokens.A, deckPlanId)
+      const rev = detail.body.plan.revision
+      const put = await putPlanDecks(tokens.A, deckPlanId, {
+        deckNames: [smokeDeckA, smokeDeckB], primaryDeckName: smokeDeckB, expectedRevision: rev,
+      }, `dec-replace-${Date.now()}`)
+      if (put.status !== 200) throw new Error(`PUT decks failed: ${put.status}`)
+      if (put.body.plan.revision !== rev + 1) throw new Error(`Expected revision ${rev + 1}, got ${put.body.plan.revision}`)
+      const names = put.body.linkedDecks.map(d => d.deckName).sort()
+      if (JSON.stringify(names) !== JSON.stringify([smokeDeckA, smokeDeckB])) throw new Error(`Unexpected linked decks: ${JSON.stringify(names)}`)
+
+      const getRes = await fetch(`${BASE}/api/rotation-planner/plans/${deckPlanId}/decks`, { headers: authHeaders('A') })
+      if (getRes.status !== 200) throw new Error(`GET decks failed: ${getRes.status}`)
+      const getBody = await getRes.json()
+      if (getBody.linkedDecks[0].deckName !== smokeDeckB) throw new Error(`Expected primary first (${smokeDeckB}), got ${getBody.linkedDecks[0].deckName}`)
+      if (getBody.linkedDecks[0].isPrimary !== true) throw new Error('Expected primary flag on first deck')
+      if (getBody.linkedDecks[0].cardCount < 1) throw new Error('Expected cardCount >= 1')
+      if (typeof getBody.linkedDecks[0].dueCount !== 'number') throw new Error('Expected numeric dueCount')
+      if (typeof getBody.linkedDecks[0].openUrl !== 'string' || !getBody.linkedDecks[0].openUrl.includes(smokeDeckB)) throw new Error('Expected openUrl for primary deck')
+    }),
+
+    test('S17.7', 'PUT /decks: clear on empty, 404 unknown deck, 409 stale, PLAN_TERMINAL, idempotent replay', 'Suite 17', async () => {
+      if (!deckPlanId || !lifecyclePlanId) throw new Error('S17.5 must pass first')
+      let d = await getPlanDetail(tokens.A, deckPlanId)
+      const clear = await putPlanDecks(tokens.A, deckPlanId, { deckNames: [], expectedRevision: d.body.plan.revision }, `dec-clear-${Date.now()}`)
+      if (clear.status !== 200) throw new Error(`Clear decks failed: ${clear.status}`)
+      if (clear.body.linkedDecks.length !== 0) throw new Error('Expected empty linkedDecks after clear')
+      const cleared = await getPlanDetail(tokens.A, deckPlanId)
+      const clearedRev = cleared.body.plan.revision
+
+      const missing = await putPlanDecks(tokens.A, deckPlanId, { deckNames: ['No Such Deck For Smoke'], expectedRevision: clearedRev }, `dec-missing-${Date.now()}`)
+      if (missing.status !== 404) throw new Error(`Expected 404 for unknown deck, got ${missing.status}`)
+
+      const stale = await putPlanDecks(tokens.A, deckPlanId, { deckNames: [smokeDeckA], expectedRevision: clearedRev - 1 }, `dec-stale-${Date.now()}`)
+      if (stale.status !== 409) throw new Error(`Expected 409 stale, got ${stale.status}`)
+      if (stale.body.error.code !== 'REVISION_CONFLICT') throw new Error(`Expected REVISION_CONFLICT, got ${stale.body.error.code}`)
+
+      const terminal = await putPlanDecks(tokens.A, lifecyclePlanId, { deckNames: [smokeDeckA], expectedRevision: 4 }, `dec-term-${Date.now()}`)
+      if (terminal.status !== 409 || terminal.body.error.code !== 'PLAN_TERMINAL') {
+        throw new Error(`Expected PLAN_TERMINAL, got ${terminal.status} ${terminal.body.error && terminal.body.error.code}`)
+      }
+
+      const reAdd = await getPlanDetail(tokens.A, deckPlanId)
+      const idemKey = `dec-idem-${Date.now()}`
+      const payload = { deckNames: [smokeDeckA], primaryDeckName: smokeDeckA, expectedRevision: reAdd.body.plan.revision, clientRequestId: idemKey }
+      const first = await putPlanDecks(tokens.A, deckPlanId, payload, idemKey)
+      if (first.status !== 200) throw new Error(`First PUT failed: ${first.status}`)
+      const second = await putPlanDecks(tokens.A, deckPlanId, payload, idemKey)
+      if (second.status !== 200) throw new Error(`Replay PUT failed: ${second.status}`)
+      if (second.body.plan.revision !== first.body.plan.revision) throw new Error('Idempotent replay changed revision')
+    }),
+
+    test('S17.8', 'Tracking schedule (explicit) returns plan subset, window, uworld schedule, linkedDecks', 'Suite 17', async () => {
+      if (!lifecyclePlanId) throw new Error('S17.1 must pass first')
+      const created = await createPlanFromPreview(tokens.A, buildTrackingPayload({
+        displayName: 'V2.3 Tracking Smoke',
+        deckNames: ['Tracking Deck A'],
+        primaryDeckName: 'Tracking Deck A',
+      }))
+      if (created.status !== 201) throw new Error(`Create tracking plan failed: ${created.status} ${created.text}`)
+      const trackingPlanId = created.body.plan.id
+
+      const res = await fetch(`${BASE}/api/rotation-planner/tracking/schedule?planId=${trackingPlanId}`, { headers: authHeaders('A') })
+      if (res.status !== 200) throw new Error(`Tracking explicit failed: ${res.status}`)
+      const body = await res.json()
+      if (!body.plan || body.plan.id !== trackingPlanId) throw new Error(`Expected plan ${trackingPlanId}, got ${JSON.stringify(body.plan)}`)
+      if (body.selectionReason !== 'explicit') throw new Error(`Expected explicit, got ${body.selectionReason}`)
+      if (!body.window || body.window.windowDays !== 14) throw new Error(`Expected window 14, got ${JSON.stringify(body.window)}`)
+      if (!Array.isArray(body.schedule) || body.schedule.length === 0) throw new Error(`Expected non-empty uworld schedule, got ${JSON.stringify(body.schedule)}`)
+      for (const item of body.schedule) {
+        if (item.taskType !== 'uworld_questions') throw new Error(`Unexpected schedule item type ${item.taskType}`)
+        for (const k of ['taskId', 'plannedDate', 'status', 'targetQuestions', 'completedQuestions']) {
+          if (!(k in item)) throw new Error(`Missing schedule key ${k}`)
+        }
+      }
+      if (!Array.isArray(body.incorrectReview)) throw new Error('Expected incorrectReview array')
+      if (!Array.isArray(body.linkedDecks) || body.linkedDecks.length === 0) throw new Error(`Expected linkedDecks from tracking, got ${JSON.stringify(body.linkedDecks)}`)
+
+      const completedRes = await fetch(`${BASE}/api/rotation-planner/tracking/schedule?planId=${lifecyclePlanId}`, { headers: authHeaders('A') })
+      if (completedRes.status !== 200) throw new Error(`Tracking completed plan failed: ${completedRes.status}`)
+      const completedBody = await completedRes.json()
+      if (completedBody.plan.status !== 'completed') throw new Error(`Expected completed, got ${completedBody.plan.status}`)
+    }),
+
+    test('S17.9', 'Tracking auto-select picks active plan; windowDays validated', 'Suite 17', async () => {
+      if (!secondPlanId) throw new Error('S17.1 must pass first')
+      const act = await lifecycleRequest(tokens.A, secondPlanId, 'activate', 0)
+      if (act.status !== 200) throw new Error(`activate secondPlan failed: ${act.status}`)
+
+      const auto = await fetch(`${BASE}/api/rotation-planner/tracking/schedule`, { headers: authHeaders('A') })
+      if (auto.status !== 200) throw new Error(`Tracking auto-select failed: ${auto.status}`)
+      const autoBody = await auto.json()
+      if (autoBody.selectionReason !== 'active') throw new Error(`Expected active, got ${autoBody.selectionReason}`)
+      if (autoBody.plan.id !== secondPlanId) throw new Error(`Expected ${secondPlanId}, got ${autoBody.plan.id}`)
+
+      for (const bad of [0, 31]) {
+        const res = await fetch(`${BASE}/api/rotation-planner/tracking/schedule?planId=${secondPlanId}&windowDays=${bad}`, { headers: authHeaders('A') })
+        if (res.status !== 400) throw new Error(`Expected 400 for windowDays ${bad}, got ${res.status}`)
+      }
+      const one = await fetch(`${BASE}/api/rotation-planner/tracking/schedule?planId=${secondPlanId}&windowDays=1`, { headers: authHeaders('A') })
+      if (one.status !== 200) throw new Error(`windowDays=1 failed: ${one.status}`)
+      const oneBody = await one.json()
+      if (oneBody.window.windowDays !== 1) throw new Error(`Expected windowDays 1, got ${oneBody.window.windowDays}`)
+    }),
+
+    test('S17.10', 'Tracking auto-select falls back to newest draft; paused plan resolves explicitly', 'Suite 17', async () => {
+      if (!secondPlanId) throw new Error('S17.1 must pass first')
+      const pause = await lifecycleRequest(tokens.A, secondPlanId, 'pause', 1)
+      if (pause.status !== 200) throw new Error(`pause secondPlan failed: ${pause.status}`)
+
+      const auto = await fetch(`${BASE}/api/rotation-planner/tracking/schedule`, { headers: authHeaders('A') })
+      if (auto.status !== 200) throw new Error(`Tracking fallback failed: ${auto.status}`)
+      const autoBody = await auto.json()
+      if (autoBody.selectionReason !== 'newest_draft') throw new Error(`Expected newest_draft, got ${autoBody.selectionReason}`)
+      if (autoBody.plan.status !== 'draft') throw new Error(`Expected a draft plan, got ${autoBody.plan.status} (${autoBody.plan.id})`)
+
+      const paused = await fetch(`${BASE}/api/rotation-planner/tracking/schedule?planId=${secondPlanId}`, { headers: authHeaders('A') })
+      if (paused.status !== 200) throw new Error(`Tracking paused explicit failed: ${paused.status}`)
+      const pausedBody = await paused.json()
+      if (pausedBody.plan.status !== 'paused') throw new Error(`Expected paused, got ${pausedBody.plan.status}`)
+    }),
+
+    test('S17.11', 'Cross-user isolation: status, decks, tracking all return 404 for User B', 'Suite 17', async () => {
+      if (!deckPlanId || !lifecyclePlanId) throw new Error('S17.1/5 must pass first')
+      const xKey = `x-user-${Date.now()}`
+      const statusRes = await fetch(`${BASE}/api/rotation-planner/plans/${lifecyclePlanId}/status`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.B}`, 'Content-Type': 'application/json', 'Idempotency-Key': xKey },
+        body: JSON.stringify({ action: 'activate', expectedRevision: 4, clientRequestId: xKey }),
+      })
+      if (statusRes.status !== 404) throw new Error(`Expected 404 status, got ${statusRes.status}`)
+      const decksRes = await fetch(`${BASE}/api/rotation-planner/plans/${deckPlanId}/decks`, { headers: authHeaders('B') })
+      if (decksRes.status !== 404) throw new Error(`Expected 404 decks, got ${decksRes.status}`)
+      const trackingRes = await fetch(`${BASE}/api/rotation-planner/tracking/schedule?planId=${deckPlanId}`, { headers: authHeaders('B') })
+      if (trackingRes.status !== 404) throw new Error(`Expected 404 tracking, got ${trackingRes.status}`)
+      console.log('    User B blocked from all V2.3 endpoints')
     }),
   ]
 }
