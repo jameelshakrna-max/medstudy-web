@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
-import { usePomodoroSettings } from '../context/PomodoroContext'
+import { usePomodoro, usePomodoroSettings } from '../context/PomodoroContext'
 import { supabase } from '../lib/supabase'
 import { apiGet, apiPost, apiPut, apiDelete } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
@@ -23,6 +23,7 @@ const MONTH_NAMES = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug',
 export default function Settings() {
   const { user, profile, signOut } = useAuth()
   const { focusMins, setFocusMins, shortMins, setShortMins, longMins, setLongMins } = usePomodoroSettings()
+  const { pushPermission, pushBlocked, pushSupported, requestPushPermission } = usePomodoro()
   const queryClient = useQueryClient()
   const [error, setError] = useState(null)
   const [message, setMessage] = useState(null)
@@ -79,7 +80,7 @@ export default function Settings() {
   const [showForgotPassword, setShowForgotPassword] = useState(false)
 
   // Notifications
-  const [pushEnabled, setPushEnabled] = useState(true)
+  const pushEnabled = pushPermission === 'granted'
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [notifPrefsStatus, setNotifPrefsStatus] = useState(null)
 
@@ -103,11 +104,6 @@ export default function Settings() {
       setTheme(saved)
       document.documentElement.setAttribute('data-theme', saved)
     }
-  }, [])
-
-  useEffect(() => {
-    const saved = localStorage.getItem('medstudy-push-enabled')
-    if (saved !== null) setPushEnabled(saved === 'true')
   }, [])
 
   useEffect(() => {
@@ -329,10 +325,8 @@ export default function Settings() {
   }
   // ── Toggle handlers ──
   const handlePushToggle = async (enabled) => {
-    setPushEnabled(enabled)
-    localStorage.setItem('medstudy-push-enabled', String(enabled))
-
     if (!enabled) {
+      localStorage.setItem('medstudy-push-enabled', 'false')
       try {
         const reg = await navigator.serviceWorker.getRegistration()
         if (reg) {
@@ -343,7 +337,7 @@ export default function Settings() {
         console.error('Unsubscribe error:', e)
       }
     } else {
-      localStorage.setItem('medstudy-push-resubscribe', 'true')
+      await requestPushPermission()
     }
   }
 
@@ -1038,11 +1032,40 @@ export default function Settings() {
               <p className={s.toggleLabel}>Push Notifications</p>
               <p className={s.toggleDesc}>Receive timer notifications when the app is in the background</p>
             </div>
-            <label className={s.toggle}>
-              <input type="checkbox" checked={pushEnabled} onChange={e => handlePushToggle(e.target.checked)} />
-              <span className={s.slider} />
-            </label>
+            {pushSupported ? (
+              <label className={s.toggle}>
+                <input type="checkbox" checked={pushEnabled} onChange={e => handlePushToggle(e.target.checked)} />
+                <span className={s.slider} />
+              </label>
+            ) : (
+              <span style={{ fontSize: 13, color: 'var(--mist)' }}>Not supported</span>
+            )}
           </div>
+
+          {pushSupported && pushPermission === 'default' && (
+            <div style={{ marginTop: 10 }}>
+              <button
+                type="button"
+                className={s.btnSecondary}
+                style={{ fontSize: 13, padding: '6px 12px' }}
+                onClick={() => requestPushPermission()}
+              >
+                Enable Notifications
+              </button>
+            </div>
+          )}
+
+          {pushSupported && (pushPermission === 'denied' || pushBlocked) && (
+            <div style={{ marginTop: 10, fontSize: 13, color: 'var(--red, #ef4444)' }}>
+              Notifications are blocked for this site. Enable them in your browser's site permissions.
+            </div>
+          )}
+
+          {pushSupported && pushPermission === 'granted' && (
+            <div style={{ marginTop: 10, fontSize: 13, color: 'var(--emerald, #10b981)' }}>
+              Notifications are enabled.
+            </div>
+          )}
 
           <div className={s.toggleRow}>
             <div className={s.toggleInfo}>
