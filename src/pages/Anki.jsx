@@ -286,6 +286,7 @@ export default function Anki() {
     onSuccess: () => {
       queryClient.invalidateQueries(queryKeys.flashcards.decks())
       queryClient.invalidateQueries(queryKeys.flashcards.list())
+      queryClient.invalidateQueries({ queryKey: queryKeys.rotations.trackingAll() })
     },
   })
 

@@ -69,6 +69,7 @@ export default function PlannerPomodoroSyncBridge() {
       queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plan(planId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plans() })
       queryClient.invalidateQueries({ queryKey: queryKeys.rotations.forecast(planId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.rotations.trackingAll() })
 
       setToastState({ open: true, title: 'Focus synced', description: `${syncPayload.payload.actualMinutes} min recorded.`, variant: 'success' })
       dispatchedRef.current.delete(syncRequestId)

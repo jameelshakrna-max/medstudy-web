@@ -22,15 +22,16 @@ import StepUWorldQuestions from './wizard/StepUWorldQuestions'
 import StepQuestionConfig from './wizard/StepQuestionConfig'
 import StepSchedulingConfig from './wizard/StepSchedulingConfig'
 import StepFlashcardSettings from './wizard/StepFlashcardSettings'
+import StepAnkiDecks from './wizard/StepAnkiDecks'
 import StepPreview from './wizard/StepPreview'
 import StepConfirm from './wizard/StepConfirm'
 
 const STEP_NAMES = [
   'Rotation', 'Dates', 'Plan Name', 'Availability', 'Source', 'Study Style',
-  'Topics', 'UWorld', 'Questions', 'Scheduling', 'Flashcards', 'Preview', 'Confirm',
+  'Topics', 'UWorld', 'Questions', 'Scheduling', 'Flashcards', 'Anki Decks', 'Preview', 'Confirm',
 ]
 
-const TOTAL_STEPS = 13
+const TOTAL_STEPS = 14
 
 export default function PlanCreationForm({ open, onClose, onCreated }) {
   const queryClient = useQueryClient()
@@ -145,6 +146,9 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
       setCreateRequestId(null)
       setOverloadAccepted(false)
       queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plans() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.rotations.plan(result.plan?.id) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcards.decks() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.rotations.trackingAll() })
       onCreated?.(result.plan?.id)
       onClose()
     },
@@ -323,8 +327,9 @@ export default function PlanCreationForm({ open, onClose, onCreated }) {
           {step === 8 && <StepQuestionConfig form={form} onFormChange={handleSchedulingChange} />}
           {step === 9 && <StepSchedulingConfig form={form} onFormChange={handleSchedulingChange} />}
           {step === 10 && <StepFlashcardSettings form={form} onFormChange={handleSchedulingChange} />}
-          {step === 11 && <StepPreview preview={preview} previewLoading={previewMutation.isPending} previewError={previewMutation.error} onRetry={handleRetryPreview} form={form} />}
-          {step === 12 && <StepConfirm form={form} preview={preview} overloadAccepted={overloadAccepted} onOverloadChange={setOverloadAccepted} />}
+          {step === 11 && <StepAnkiDecks form={form} onFormChange={handleSchedulingChange} errors={validationErrors} />}
+          {step === 12 && <StepPreview preview={preview} previewLoading={previewMutation.isPending} previewError={previewMutation.error} onRetry={handleRetryPreview} form={form} />}
+          {step === 13 && <StepConfirm form={form} preview={preview} overloadAccepted={overloadAccepted} onOverloadChange={setOverloadAccepted} />}
         </div>
 
         {/* Validation errors */}

@@ -7,6 +7,7 @@ const PLAN_SUMMARY_COLUMNS = [
   'buffer_percentage', 'maximum_active_topics',
   'status', 'uses_flashcard_capacity', 'uworld_scheduling_mode', 'settings_json', 'created_at', 'updated_at',
   'revision', 'last_recalculated_at', 'stale_at',
+  'activated_at', 'paused_at', 'completed_at',
   'display_name',
 ]
 

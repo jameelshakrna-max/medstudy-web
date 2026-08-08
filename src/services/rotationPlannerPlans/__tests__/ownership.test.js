@@ -218,37 +218,43 @@ describe('Phase 2 — activation ownership claim', () => {
     expect(owner.id).toBe(planId)
   })
 
-  it('9. activating second plan while owner exists stays non-owner', async () => {
+  it('9. activating a second plan while one is active is rejected', async () => {
     const db = await createTestDb()
     const env = { DB: db }
     const { planId: p1 } = await createPlan(env, 'user-a2', { _reqId: 'req-1', _fp: 'fp-1' })
     const { planId: p2 } = await createPlan(env, 'user-a2', { _reqId: 'req-2', _fp: 'fp-2' })
 
     await updatePlanStatus(env, p1, 'user-a2', 'active')
-    await updatePlanStatus(env, p2, 'user-a2', 'active')
+
+    await expect(updatePlanStatus(env, p2, 'user-a2', 'active')).rejects.toThrow(/UNIQUE/)
 
     const plan1 = await getFlag(db, p1)
     const plan2 = await getFlag(db, p2)
+    expect(plan1.status).toBe('active')
     expect(plan1.uses_flashcard_capacity).toBe(1)
+    expect(plan2.status).toBe('draft')
     expect(plan2.uses_flashcard_capacity).toBe(0)
   })
 
-  it('10. two concurrently activated plans produce exactly one owner', async () => {
+  it('10. two concurrently activated plans leave exactly one active', async () => {
     const db = await createTestDb()
     const env = { DB: db }
     const { planId: p1 } = await createPlan(env, 'user-a3', { _reqId: 'req-1', _fp: 'fp-1' })
     const { planId: p2 } = await createPlan(env, 'user-a3', { _reqId: 'req-2', _fp: 'fp-2' })
 
-    await Promise.all([
+    await Promise.allSettled([
       updatePlanStatus(env, p1, 'user-a3', 'active'),
       updatePlanStatus(env, p2, 'user-a3', 'active'),
     ])
 
     const { results } = await db.prepare(
-      'SELECT uses_flashcard_capacity FROM rotation_planner_plans WHERE user_id = ? AND status IN (\'draft\', \'active\')'
-    ).bind('user-a3').all()
+      "SELECT id, status, uses_flashcard_capacity FROM rotation_planner_plans WHERE user_id = 'user-a3' ORDER BY id"
+    ).all()
+    const activePlans = results.filter(r => r.status === 'active')
+    expect(activePlans.length).toBe(1)
     const ownerCount = results.filter(r => r.uses_flashcard_capacity === 1).length
     expect(ownerCount).toBe(1)
+    expect(activePlans[0].uses_flashcard_capacity).toBe(1)
   })
 })
 
@@ -321,7 +327,7 @@ describe('Phase 2 — status lifecycle', () => {
     expect(plan.uses_flashcard_capacity).toBe(0)
   })
 
-  it('15. reactivating with another owner stays non-owner', async () => {
+  it('15. reactivating a paused plan while another is active is rejected', async () => {
     const db = await createTestDb()
     const env = { DB: db }
     const { planId: owner } = await createPlan(env, 'user-react', { _reqId: 'req-o', _fp: 'fp-o' })
@@ -331,10 +337,10 @@ describe('Phase 2 — status lifecycle', () => {
     expect((await getFlag(db, owner)).uses_flashcard_capacity).toBe(1)
 
     await updatePlanStatus(env, nonOwner, 'user-react', 'paused')
-    await updatePlanStatus(env, nonOwner, 'user-react', 'active')
+    await expect(updatePlanStatus(env, nonOwner, 'user-react', 'active')).rejects.toThrow(/UNIQUE/)
 
     const plan = await getFlag(db, nonOwner)
-    expect(plan.status).toBe('active')
+    expect(plan.status).toBe('paused')
     expect(plan.uses_flashcard_capacity).toBe(0)
 
     const ownerPlan = await getFlag(db, owner)
@@ -379,25 +385,28 @@ describe('Phase 2 — deletion', () => {
     expect(ownerAfter).toBeNull()
   })
 
-  it('18. deleting owner does not modify other plans', async () => {
+  it('18. deleting owner does not modify other plans and frees the active slot', async () => {
     const db = await createTestDb()
     const env = { DB: db }
     const { planId: ownerPlan } = await createPlan(env, 'user-del2', { _reqId: 'req-o', _fp: 'fp-o' })
     const { planId: otherPlan } = await createPlan(env, 'user-del2', { _reqId: 'req-n', _fp: 'fp-n' })
 
     await updatePlanStatus(env, ownerPlan, 'user-del2', 'active')
-    await updatePlanStatus(env, otherPlan, 'user-del2', 'active')
 
-    const ownerFlag = (await getFlag(db, ownerPlan)).uses_flashcard_capacity
-    const otherFlagBefore = (await getFlag(db, otherPlan)).uses_flashcard_capacity
-    expect(ownerFlag).toBe(1)
-    expect(otherFlagBefore).toBe(0)
+    const otherBefore = await getFlag(db, otherPlan)
+    expect(otherBefore.status).toBe('draft')
+    expect(otherBefore.uses_flashcard_capacity).toBe(0)
 
     await db.prepare('DELETE FROM rotation_planner_plans WHERE id = ?').bind(ownerPlan).run()
 
     const other = await getFlag(db, otherPlan)
-    expect(other.status).toBe('active')
+    expect(other.status).toBe('draft')
     expect(other.uses_flashcard_capacity).toBe(0)
+
+    await updatePlanStatus(env, otherPlan, 'user-del2', 'active')
+    const activated = await getFlag(db, otherPlan)
+    expect(activated.status).toBe('active')
+    expect(activated.uses_flashcard_capacity).toBe(1)
   })
 })
 

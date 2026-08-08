@@ -107,6 +107,18 @@ describe('buildPreviewPayload', () => {
     const payload = buildPreviewPayload(form)
     expect(payload.flashcardSettings).toEqual({ learningUnlockMode: 'learning_completed', maxProjectedFlashcardReviewMinutesPerDay: null })
   })
+
+  it('includes deckNames and primaryDeckName when linked decks are set', () => {
+    const payload = buildPreviewPayload({ ...form, linkedDeckNames: ['Cardio Deck'], primaryDeckName: 'Cardio Deck' })
+    expect(payload.deckNames).toEqual(['Cardio Deck'])
+    expect(payload.primaryDeckName).toBe('Cardio Deck')
+  })
+
+  it('defaults deckNames to [] and primaryDeckName to null when absent', () => {
+    const payload = buildPreviewPayload(form)
+    expect(payload.deckNames).toEqual([])
+    expect(payload.primaryDeckName).toBeNull()
+  })
 })
 
 describe('buildCreatePayload', () => {
@@ -127,6 +139,18 @@ describe('buildCreatePayload', () => {
   it('defaults acceptOverload to false', () => {
     const payload = buildCreatePayload(form, 'token-abc')
     expect(payload.acceptOverload).toBe(false)
+  })
+
+  it('inherits deckNames and primaryDeckName from the preview payload', () => {
+    const payload = buildCreatePayload({ ...form, linkedDeckNames: ['Cardio Deck'], primaryDeckName: 'Cardio Deck' }, 'token-abc')
+    expect(payload.deckNames).toEqual(['Cardio Deck'])
+    expect(payload.primaryDeckName).toBe('Cardio Deck')
+  })
+
+  it('defaults deckNames to [] and primaryDeckName to null when absent', () => {
+    const payload = buildCreatePayload(form, 'token-abc')
+    expect(payload.deckNames).toEqual([])
+    expect(payload.primaryDeckName).toBeNull()
   })
 })
 

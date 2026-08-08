@@ -99,6 +99,7 @@ vi.mock('../StepUWorldQuestions', () => ({
 vi.mock('../StepQuestionConfig', () => ({ default: () => null }))
 vi.mock('../StepSchedulingConfig', () => ({ default: () => null }))
 vi.mock('../StepFlashcardSettings', () => ({ default: () => null }))
+vi.mock('../StepAnkiDecks', () => ({ default: () => null }))
 vi.mock('../StepPreview', () => ({ default: () => null }))
 vi.mock('../StepConfirm', () => ({ default: () => null }))
 
@@ -129,12 +130,15 @@ function seedDraft({ step = 10, formOverrides = {} } = {}) {
         alreadyCompletedQuestionCount: 0,
         incorrectQuestionsRemaining: 0,
       }],
+      linkedDeckNames: ['Cardio Deck'],
+      primaryDeckName: 'Cardio Deck',
       ...formOverrides,
     },
   }))
 }
 
 async function reachCreateStep(user) {
+  await user.click(screen.getByRole('button', { name: /Next/i }))
   await user.click(screen.getByRole('button', { name: /Next/i }))
   await user.click(screen.getByRole('button', { name: /Next/i }))
 }
@@ -165,6 +169,9 @@ describe('PlanCreationForm', () => {
     render(<PlanCreationForm open onClose={vi.fn()} onCreated={vi.fn()} />)
 
     expect(screen.queryByRole('button', { name: /Create Plan/i })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /Next/i }))
+    expect(screen.getByRole('button', { name: /Next/i })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /Next/i }))
     expect(screen.getByRole('button', { name: /Next/i })).toBeInTheDocument()
@@ -216,7 +223,7 @@ describe('PlanCreationForm', () => {
     render(<PlanCreationForm open onClose={vi.fn()} onCreated={vi.fn()} />)
 
     await user.type(screen.getByRole('textbox', { name: /Plan name/i }), 'My Custom Name')
-    await clickNext(user, 8)
+    await clickNext(user, 9)
     expect(screen.getByRole('button', { name: /Next/i })).toBeInTheDocument()
 
     previewShouldFail.value = true
@@ -236,7 +243,7 @@ describe('PlanCreationForm', () => {
     render(<PlanCreationForm open onClose={vi.fn()} onCreated={vi.fn()} />)
 
     await user.type(screen.getByRole('textbox', { name: /Plan name/i }), 'My Custom Name')
-    await clickNext(user, 8)
+    await clickNext(user, 9)
     await user.click(screen.getByRole('button', { name: /Next/i }))
     await user.click(screen.getByRole('button', { name: /Next/i }))
     await user.click(screen.getByRole('button', { name: /Create Plan/i }))
@@ -253,7 +260,9 @@ describe('PlanCreationForm', () => {
     expect(previewPayloads[0].questionGroupExclusions).toEqual([])
   })
 
-  it('advancing from the flashcards step lands on the preview step, not confirm', async () => {
+  it('advancing from the Anki Decks step lands on the preview step, not confirm', async () => {
+    localStorage.clear()
+    seedDraft({ step: 11 })
     const user = userEvent.setup()
     render(<PlanCreationForm open onClose={vi.fn()} onCreated={vi.fn()} />)
     await user.click(screen.getByRole('button', { name: /Next/i }))
@@ -289,5 +298,18 @@ describe('PlanCreationForm', () => {
     await user.click(screen.getByRole('button', { name: /Create Plan/i }))
     expect(createMutate).toHaveBeenCalledTimes(1)
     expect(createMutate.mock.calls[0][0].payload.questionGroupExclusions).toEqual(['group-1'])
+  })
+
+  it('sends linked deck names and the primary deck in the create payload', async () => {
+    localStorage.clear()
+    seedDraft({ step: 10, formOverrides: { linkedDeckNames: ['Cardio Deck', 'Pharm Deck'], primaryDeckName: 'Cardio Deck' } })
+    const user = userEvent.setup()
+    render(<PlanCreationForm open onClose={vi.fn()} onCreated={vi.fn()} />)
+    await reachCreateStep(user)
+    await user.click(screen.getByRole('button', { name: /Create Plan/i }))
+    expect(createMutate).toHaveBeenCalledTimes(1)
+    const { payload } = createMutate.mock.calls[0][0]
+    expect(payload.deckNames).toEqual(['Cardio Deck', 'Pharm Deck'])
+    expect(payload.primaryDeckName).toBe('Cardio Deck')
   })
 })

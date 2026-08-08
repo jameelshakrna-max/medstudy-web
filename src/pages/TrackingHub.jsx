@@ -11,7 +11,7 @@ import MRCPView from './MRCPView'
 import LocalBoardView from './LocalBoardView'
 import Goals from './Goals'
 import ResourcesModal from '../components/ResourcesModal'
-import RotationSummary from '../components/rotation/RotationSummary'
+import TrackingRotationSection from '../components/rotation/tracking/TrackingRotationSection'
 import { generate } from '../services/PerformanceEngine'
 import styles from './TrackingHub.module.css'
 
@@ -106,7 +106,7 @@ export default function TrackingHub() {
         {activeTab === 'goals' && (
           <Goals />
         )}
-        {activeTab === 'rotation' && <RotationSummary />}
+        {activeTab === 'rotation' && <TrackingRotationSection />}
       </div>
 
       {/* Inline FAB */}

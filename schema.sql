@@ -1077,9 +1077,15 @@ CREATE TABLE IF NOT EXISTS rotation_planner_plans (
   revision INTEGER NOT NULL DEFAULT 0,
   last_recalculated_at TEXT,
   stale_at TEXT,
+  activated_at TEXT,
+  paused_at TEXT,
+  completed_at TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rpp_one_active_plan
+  ON rotation_planner_plans(user_id)
+  WHERE status = 'active';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_rpp_flashcard_owner
   ON rotation_planner_plans(user_id)
   WHERE uses_flashcard_capacity = 1 AND status IN ('draft', 'active');
@@ -1347,3 +1353,32 @@ CREATE TABLE IF NOT EXISTS flashcard_deck_mapping_mutations (
 
 CREATE INDEX IF NOT EXISTS idx_fdmm_user ON flashcard_deck_mapping_mutations(user_id);
 CREATE INDEX IF NOT EXISTS idx_fdmm_created ON flashcard_deck_mapping_mutations(created_at);
+
+-- ════════════════════════════════════════════════════════════
+-- ROTATION PLANNER v2.3 — rotation-specific Anki deck associations
+-- Presentational/organizational only. Has NO FSRS scheduling
+-- meaning and NO flashcard-capacity-owner meaning: linking a deck
+-- to a plan does not move cards, create flashcard_review tasks,
+-- or transfer ownership. One user owns one flashcard workload;
+-- the same deck may be linked to several plans without duplicating
+-- cards or due workload.
+-- deck_name is the user-owned deck name (exact casing preserved).
+-- is_primary is display-only; at most one per plan is enforced by
+-- the partial unique index idx_rppd_one_primary.
+-- ════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS rotation_planner_plan_decks (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL
+    REFERENCES rotation_planner_plans(id) ON DELETE CASCADE,
+  deck_name TEXT NOT NULL,
+  is_primary INTEGER NOT NULL DEFAULT 0
+    CHECK (is_primary IN (0, 1)),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(plan_id, deck_name)
+);
+CREATE INDEX IF NOT EXISTS idx_rppd_plan ON rotation_planner_plan_decks(plan_id);
+CREATE INDEX IF NOT EXISTS idx_rppd_deck ON rotation_planner_plan_decks(deck_name);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rppd_one_primary
+  ON rotation_planner_plan_decks(plan_id)
+  WHERE is_primary = 1;

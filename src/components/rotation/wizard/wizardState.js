@@ -26,9 +26,11 @@ export const INITIAL_FORM = {
     learningUnlockMode: 'learning_completed',
     maxProjectedFlashcardReviewMinutesPerDay: null,
   },
+  linkedDeckNames: [],
+  primaryDeckName: null,
 };
 
-export const PREVIEW_STEP = 11;
+export const PREVIEW_STEP = 12;
 
 export const DRAFT_KEY = 'rotationWizardDraft';
 

@@ -23,6 +23,22 @@ export function mapV1Status(status) {
   return V1_STATUS_MAP[status] || "pending";
 }
 
+export function normalizeLinkedDecks(linkedDecks) {
+  if (!Array.isArray(linkedDecks)) return [];
+  return linkedDecks.map((deck) => ({
+    deckName: deck?.deckName ?? deck?.deck_name ?? null,
+    isPrimary: !!deck?.isPrimary ?? !!deck?.is_primary,
+    cardCount: deck?.cardCount ?? deck?.card_count ?? 0,
+    dueCount: deck?.dueCount ?? deck?.due_count ?? 0,
+    openUrl: deck?.openUrl ?? deck?.open_url ?? null,
+  }));
+}
+
+function normalizePlan(plan) {
+  if (!plan || typeof plan !== "object") return plan;
+  return { ...plan, linkedDecks: normalizeLinkedDecks(plan.linkedDecks) };
+}
+
 export function normalizePlanResponse(response) {
   if (!response || typeof response !== "object") {
     return {
@@ -47,7 +63,7 @@ export function normalizePlanResponse(response) {
     return {
       key: plan.id,
       version: 2,
-      plan,
+      plan: normalizePlan(plan),
       tasks,
       topics,
       schedule: [],
@@ -86,7 +102,7 @@ export function normalizePlanResponse(response) {
   return {
     key: plan.id,
     version: 1,
-    plan,
+    plan: normalizePlan(plan),
     tasks,
     schedule,
     progress: Array.isArray(response.progress) ? response.progress : [],

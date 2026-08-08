@@ -9,6 +9,7 @@ export const PLANNER_TABLES = {
   taskMutations: 'rotation_planner_task_mutations',
   planMutations: 'rotation_planner_plan_mutations',
   flashcardDeckMappings: 'flashcard_deck_mappings',
+  planDecks: 'rotation_planner_plan_decks',
 }
 
 export const PLAN_STATUSES = ['draft', 'active', 'paused', 'completed', 'archived']
@@ -69,6 +70,7 @@ export const ALL_PLANNER_COLUMNS = {
     'client_request_id', 'request_fingerprint',
     'settings_json', 'revision', 'last_recalculated_at',
     'stale_at',
+    'activated_at', 'paused_at', 'completed_at',
     'created_at', 'updated_at',
   ],
   availability: [
@@ -122,5 +124,8 @@ export const ALL_PLANNER_COLUMNS = {
   flashcardDeckMappings: [
     'id', 'user_id', 'deck_name', 'canonical_topic_id',
     'created_at', 'updated_at',
+  ],
+  planDecks: [
+    'id', 'plan_id', 'deck_name', 'is_primary', 'created_at',
   ],
 }

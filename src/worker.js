@@ -123,6 +123,7 @@ import {
   handlePreviewRotationPlan, handleCreateRotationPlan,
   handleListRotationPlans, handleGetRotationPlan, handleDeleteRotationPlan,
   handleRenameRotationPlan, handleUpdateTask, handleRecalculatePlan, handleGetPlanForecast,
+  handleUpdatePlanStatus, handleGetPlanDecks, handleReplacePlanDecks, handleGetPlanTrackingSchedule,
 } from './handlers/rotationPlannerPlans.js'
 
 import {
@@ -593,6 +594,7 @@ export default {
       if (path.match(/^\/api\/rotation-planner\/sources\/[^\/]+\/rotations$/) && request.method === 'GET') return getPlannerSourceRotations(request, env, user)
       if (path === '/api/rotation-planner/sources' && request.method === 'GET') return getPlannerSources(request, env, user)
       if (path === '/api/rotation-planner/rotations' && request.method === 'GET') return getPlannerRotations(request, env, user)
+      if (path === '/api/rotation-planner/tracking/schedule' && request.method === 'GET') return handleGetPlanTrackingSchedule(request, env, user)
 
       // ── Rotation Planner (plans) ──
       if (path === '/api/rotation-planner/plans/preview' && request.method === 'POST') return handlePreviewRotationPlan(request, env, user)
@@ -602,6 +604,9 @@ export default {
       if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteRotationPlan(request, env, user)
       if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'PATCH') return handleRenameRotationPlan(request, env, user)
 
+      // Plan lifecycle: POST /plans/:planId/status
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/status$/) && request.method === 'POST') return handleUpdatePlanStatus(request, env, user)
+
       // Task update: PATCH /plans/:planId/tasks/:taskId
       if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/tasks\/[^\/]+$/) && request.method === 'PATCH') return handleUpdateTask(request, env, user)
 
@@ -610,6 +615,10 @@ export default {
 
       // Forecast: GET /plans/:planId/forecast
       if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/forecast$/) && request.method === 'GET') return handleGetPlanForecast(request, env, user)
+
+      // Linked decks: GET/PUT /plans/:planId/decks
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/decks$/) && request.method === 'GET') return handleGetPlanDecks(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/decks$/) && request.method === 'PUT') return handleReplacePlanDecks(request, env, user)
 
       return json({ error: 'Not found' }, 404)
     } catch (err) {
@@ -728,6 +737,7 @@ async function handleDeleteDeck(request, env, user) {
   const deckName = decodeURIComponent(extractId(request.url))
   await env.DB.prepare('DELETE FROM flashcards WHERE user_id = ? AND deck_name = ?').bind(user.sub, deckName).run()
   await env.DB.prepare('DELETE FROM deck_settings WHERE user_id = ? AND deck_name = ?').bind(user.sub, deckName).run()
+  await env.DB.prepare('DELETE FROM rotation_planner_plan_decks WHERE deck_name = ? AND plan_id IN (SELECT id FROM rotation_planner_plans WHERE user_id = ?)').bind(deckName, user.sub).run()
   await cleanupOrphanMapping(env, user.sub, deckName)
   signalFlashcardMappingsStaleness(env, user.sub, EXISTING_REVIEW_IMPACT).catch(() => {})
   return json({ success: true })

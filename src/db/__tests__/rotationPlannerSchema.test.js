@@ -54,6 +54,10 @@ function loadMigration23Sql() {
   return readFileSync(resolve(__dirname, '../../../schema-migration23.sql'), 'utf8')
 }
 
+function loadMigration24Sql() {
+  return readFileSync(resolve(__dirname, '../../../schema-migration24.sql'), 'utf8')
+}
+
 const FLASHCARDS_STUB = `
 CREATE TABLE IF NOT EXISTS flashcards (
   id TEXT PRIMARY KEY,
@@ -81,6 +85,7 @@ beforeAll(async () => {
   db.run(loadMigration19Sql())
   db.run(loadMigration20Sql())
   db.run(loadMigration23Sql())
+  db.run(loadMigration24Sql())
 })
 
 function tableExists(name) {
@@ -112,9 +117,9 @@ function getCreateTableSql(tableName) {
   return result[0].values[0][0]
 }
 
-function runSafe(sql) {
+function runSafe(sql, params = []) {
   try {
-    db.run(sql)
+    db.run(sql, params)
     return { ok: true }
   } catch (e) {
     return { ok: false, error: e.message }
@@ -1231,6 +1236,186 @@ describe('Migration 23 — plan_question_group_id', () => {
 
     const result = db.exec(
       `SELECT * FROM ${PLANNER_TABLES.dailyTasks} WHERE id = 'task-m23-grouped'`
+    )
+    expect(result.length === 0 || result[0].values.length === 0).toBe(true)
+  })
+})
+
+// ──────────────────────────────────────────────────────────
+// Migration 24 — rotation-specific Anki deck associations
+// ──────────────────────────────────────────────────────────
+describe('Migration 24 — plan decks table', () => {
+  it('creates rotation_planner_plan_decks table', () => {
+    expect(tableExists(PLANNER_TABLES.planDecks)).toBe(true)
+  })
+
+  it('has all expected columns', () => {
+    const columns = getColumns(PLANNER_TABLES.planDecks)
+    for (const col of ALL_PLANNER_COLUMNS.planDecks) {
+      expect(columns).toContain(col)
+    }
+  })
+
+  it('is_primary defaults to 0', () => {
+    const planId = 'plan-m24-default'
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES (?, 'u-m24-default', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-m24-default', 'fp-m24-default')`,
+      [planId]
+    )
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.planDecks} (id, plan_id, deck_name)
+       VALUES ('pdc-default', ?, 'Anatomy')`,
+      [planId]
+    )
+    const result = db.exec(
+      `SELECT is_primary FROM ${PLANNER_TABLES.planDecks} WHERE id = 'pdc-default'`
+    )
+    expect(result[0].values[0][0]).toBe(0)
+  })
+
+  it('creates idx_rppd_plan and idx_rppd_deck indexes', () => {
+    const indexes = getIndexes(PLANNER_TABLES.planDecks)
+    expect(indexes).toContain('idx_rppd_plan')
+    expect(indexes).toContain('idx_rppd_deck')
+  })
+
+  it('plan_decks references plans with CASCADE', () => {
+    const ddl = getCreateTableSql(PLANNER_TABLES.planDecks)
+    expect(ddl).toContain('REFERENCES rotation_planner_plans(id)')
+    expect(ddl).toContain('ON DELETE CASCADE')
+  })
+
+  it('rejects is_primary outside 0/1', () => {
+    const r = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.planDecks} (id, plan_id, deck_name, is_primary)
+       VALUES ('pdc-bad', 'plan-check-1', 'Bad', 2)`
+    )
+    expect(r.ok).toBe(false)
+  })
+
+  it('enforces UNIQUE(plan_id, deck_name)', () => {
+    const planId = 'plan-m24-uniq'
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES (?, 'u-m24-uniq', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-m24-uniq', 'fp-m24-uniq')`,
+      [planId]
+    )
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.planDecks} (id, plan_id, deck_name)
+       VALUES ('pdc-uniq-1', ?, 'Anatomy')`,
+      [planId]
+    )
+    const r = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.planDecks} (id, plan_id, deck_name)
+       VALUES ('pdc-uniq-2', ?, 'Anatomy')`,
+      [planId]
+    )
+    expect(r.ok).toBe(false)
+  })
+
+  it('allows the same deck on different plans', () => {
+    const planA = 'plan-m24-shared-a'
+    const planB = 'plan-m24-shared-b'
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES (?, 'u-m24-shared', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-m24-sa', 'fp-m24-sa')`,
+      [planA]
+    )
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES (?, 'u-m24-shared', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-m24-sb', 'fp-m24-sb')`,
+      [planB]
+    )
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.planDecks} (id, plan_id, deck_name)
+       VALUES ('pdc-shared-a', ?, 'Cardiology')`,
+      [planA]
+    )
+    const r = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.planDecks} (id, plan_id, deck_name)
+       VALUES ('pdc-shared-b', ?, 'Cardiology')`,
+      [planB]
+    )
+    expect(r.ok).toBe(true)
+  })
+
+  it('enforces at most one primary per plan via idx_rppd_one_primary', () => {
+    const indexes = getIndexes(PLANNER_TABLES.planDecks)
+    expect(indexes).toContain('idx_rppd_one_primary')
+    const indexDdl = db.exec(
+      `SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_rppd_one_primary'`
+    )
+    expect(indexDdl.length).toBe(1)
+    expect(indexDdl[0].values[0][0]).toContain('WHERE is_primary = 1')
+
+    const planId = 'plan-m24-primary'
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES (?, 'u-m24-primary', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-m24-pr', 'fp-m24-pr')`,
+      [planId]
+    )
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.planDecks} (id, plan_id, deck_name, is_primary)
+       VALUES ('pdc-pr-1', ?, 'Anatomy', 1)`,
+      [planId]
+    )
+    const r = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.planDecks} (id, plan_id, deck_name, is_primary)
+       VALUES ('pdc-pr-2', ?, 'Physiology', 1)`,
+      [planId]
+    )
+    expect(r.ok).toBe(false)
+
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.planDecks} (id, plan_id, deck_name, is_primary)
+       VALUES ('pdc-pr-3', ?, 'Pathology', 0)`,
+      [planId]
+    )
+  })
+
+  it('allows the same primary deck name on two different plans', () => {
+    const planA = 'plan-m24-primer-a'
+    const planB = 'plan-m24-primer-b'
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES (?, 'u-m24-primer', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-m24-pa', 'fp-m24-pa')`,
+      [planA]
+    )
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES (?, 'u-m24-primer', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-m24-pb', 'fp-m24-pb')`,
+      [planB]
+    )
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.planDecks} (id, plan_id, deck_name, is_primary)
+       VALUES ('pdc-pa', ?, 'Primary Deck', 1)`,
+      [planA]
+    )
+    const r = runSafe(
+      `INSERT INTO ${PLANNER_TABLES.planDecks} (id, plan_id, deck_name, is_primary)
+       VALUES ('pdc-pb', ?, 'Primary Deck', 1)`,
+      [planB]
+    )
+    expect(r.ok).toBe(true)
+  })
+
+  it('deleting a plan cascades to plan_decks', () => {
+    const planId = 'plan-m24-cascade'
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.plans} (id, user_id, rotation_id, source_id, start_date, end_date, client_request_id, request_fingerprint)
+       VALUES (?, 'u-m24-cascade', 'internal-medicine', 'step-up', '2026-01-01', '2026-04-01', 'req-m24-cascade', 'fp-m24-cascade')`,
+      [planId]
+    )
+    db.run(
+      `INSERT INTO ${PLANNER_TABLES.planDecks} (id, plan_id, deck_name, is_primary)
+       VALUES ('pdc-cascade', ?, 'Anatomy', 1)`,
+      [planId]
+    )
+    db.run(`DELETE FROM ${PLANNER_TABLES.plans} WHERE id = ?`, [planId])
+
+    const result = db.exec(
+      `SELECT * FROM ${PLANNER_TABLES.planDecks} WHERE plan_id = '${planId}'`
     )
     expect(result.length === 0 || result[0].values.length === 0).toBe(true)
   })

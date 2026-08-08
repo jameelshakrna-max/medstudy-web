@@ -26,6 +26,15 @@ describe('INITIAL_FORM', () => {
     expect(INITIAL_FORM.questionGroupExclusions).toEqual([])
   })
 
+  it('defaults linkedDeckNames to [] and primaryDeckName to null', () => {
+    expect(INITIAL_FORM.linkedDeckNames).toEqual([])
+    expect(INITIAL_FORM.primaryDeckName).toBeNull()
+  })
+
+  it('sets PREVIEW_STEP to 12', () => {
+    expect(PREVIEW_STEP).toBe(12)
+  })
+
   it('has 7 availability entries', () => {
     expect(INITIAL_FORM.availability).toHaveLength(7)
   })
@@ -101,7 +110,7 @@ describe('saveDraft / loadDraft / clearDraft', () => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify({
       schemaVersion: 1,
       savedAt: Date.now(),
-      step: 10,
+      step: PREVIEW_STEP,
       form: INITIAL_FORM,
     }))
     const draft = loadDraft()

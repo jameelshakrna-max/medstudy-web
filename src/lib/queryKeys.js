@@ -174,5 +174,7 @@ export const queryKeys = {
     sourceTopics: (sourceId, rotationId) => [...queryKeys.rotations.all, 'sourceTopics', sourceId, rotationId],
     legacyPlans: () => [...queryKeys.rotations.all, 'legacyPlans'],
     legacyPlan: (id) => [...queryKeys.rotations.all, 'legacyPlan', id],
+    trackingAll: () => [...queryKeys.rotations.all, 'tracking'],
+    tracking: (planId, timezone, windowDays) => [...queryKeys.rotations.all, 'tracking', planId ?? 'auto', timezone, windowDays],
   },
 }
