@@ -159,18 +159,28 @@ async function showLocalNotification(mode) {
   }
 }
 
-// Subscribe to push and send subscription to server
+// Subscribe to push and send subscription to server.
+// Never requests permission itself — that is the caller's (user-gesture) job.
 async function subscribeToPush(userId) {
-  if (!PUSH_ENABLED) return
-  pushLog('subscribeToPush called for: ' + userId?.substring(0, 8) + '...')
+  if (!PUSH_ENABLED) return { permission: 'default', subscribed: false, blocked: false }
 
-  if (!('serviceWorker' in navigator)) {
-    pushLog('ERROR: Service Worker not supported')
-    return null
+  if (typeof Notification === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    pushLog('Push unsupported in this browser')
+    return { permission: 'unsupported', subscribed: false, blocked: false }
   }
-  if (!('PushManager' in window)) {
-    pushLog('ERROR: PushManager not supported')
-    return null
+
+  pushLog('subscribeToPush called')
+  const permission = Notification.permission
+  pushLog('Current permission: ' + permission)
+
+  if (permission === 'denied') {
+    pushLog('Notifications blocked by browser permission')
+    return { permission: 'denied', subscribed: false, blocked: true }
+  }
+
+  if (permission === 'default') {
+    pushLog('Notification permission not granted — waiting for explicit user action')
+    return { permission: 'default', subscribed: false, blocked: false }
   }
 
   try {
@@ -179,33 +189,24 @@ async function subscribeToPush(userId) {
 
     let subscription = await registration.pushManager.getSubscription()
 
-    if (!subscription) {
-      pushLog('No subscription yet, requesting permission...')
-      const permission = await Notification.requestPermission()
-      pushLog('Permission result: ' + permission)
-
-      if (permission !== 'granted') {
-        pushLog('ERROR: Permission denied')
-        return null
-      }
-
-      pushLog('Creating push subscription...')
+    if (subscription) {
+      pushLog('Existing subscription found — synchronizing')
+    } else {
+      pushLog('Creating PushManager subscription...')
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
       })
-      pushLog('Subscription created OK')
+      pushLog('Subscription created')
 
       navigator.serviceWorker.controller?.postMessage({
         type: 'SET_VAPID_KEY',
         vapidKey: VAPID_PUBLIC_KEY
       })
-    } else {
-      pushLog('Already subscribed')
     }
 
     // Save subscription to server — with JWT auth
-    pushLog('Sending subscription to /api/push/subscribe...')
+    pushLog('Sending subscription to API...')
     const { data: { session } } = await supabase.auth.getSession()
     const subRes = await fetch('/api/push/subscribe', {
       method: 'POST',
@@ -218,18 +219,17 @@ async function subscribeToPush(userId) {
         subscription: subscription.toJSON()
       })
     })
-    const subText = await subRes.text()
-    try {
-      const subData = JSON.parse(subText)
-      pushLog('Subscribe API: ' + subRes.status + ' ' + JSON.stringify(subData))
-    } catch (_) {
-      pushLog('Subscribe API: ' + subRes.status + ' (non-JSON response): ' + subText.substring(0, 200))
+    if (subRes.ok) {
+      pushLog('Subscription saved')
+      return { permission: 'granted', subscribed: true, blocked: false }
     }
-
-    return subscription
+    pushLog('Subscription save failed: HTTP ' + subRes.status)
+    return { permission: 'granted', subscribed: false, blocked: false }
   } catch (err) {
-    pushLog('ERROR: subscribeToPush failed: ' + err.message)
-    return null
+    const errName = err && err.name ? err.name : 'Error'
+    const errMsg = err && err.message ? err.message : 'unknown error'
+    pushLog('Subscription failed: ' + errName + ': ' + errMsg)
+    return { permission: 'granted', subscribed: false, blocked: false }
   }
 }
 
@@ -340,6 +340,59 @@ export function PomodoroProvider({ children }) {
   // ── Focus mode state ──
   const [focusMode, setFocusMode] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+
+  // ── Push notification state ──
+  const [pushPermission, setPushPermission] = useState(() => (
+    typeof Notification !== 'undefined' ? Notification.permission : 'default'
+  ))
+  const [pushBlocked, setPushBlocked] = useState(false)
+  const pushSupported = typeof Notification !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window
+
+  // Request notification permission + subscribe. For explicit user interaction only.
+  // No awaits before Notification.requestPermission() so browser user activation is preserved.
+  const requestPushPermission = useCallback(async () => {
+    if (!pushSupported) {
+      return { permission: 'unsupported', subscribed: false }
+    }
+
+    let permission = Notification.permission
+    setPushPermission(permission)
+
+    if (permission === 'denied') {
+      setPushBlocked(true)
+      return { permission: 'denied', subscribed: false }
+    }
+
+    if (permission === 'default') {
+      pushLog('Requesting notification permission...')
+      const result = await Notification.requestPermission()
+      setPushPermission(result)
+      pushLog('Permission result: ' + result)
+      if (result === 'denied') {
+        setPushBlocked(true)
+        return { permission: 'denied', subscribed: false }
+      }
+      if (result !== 'granted') {
+        return { permission: 'default', subscribed: false }
+      }
+      permission = result
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        pushLog('No user logged in — cannot subscribe')
+        return { permission, subscribed: false }
+      }
+      pushLog('User logged in')
+      const result = await subscribeToPush(user.id)
+      setPushBlocked(!!result.blocked)
+      return { permission: result.permission || permission, subscribed: !!result.subscribed }
+    } catch (err) {
+      pushLog('Auth check failed: ' + (err && err.message ? err.message : 'unknown error'))
+      return { permission, subscribed: false }
+    }
+  }, [pushSupported])
 
   // ── Derived session phase ──
   const sessionPhase = useMemo(() => {
@@ -517,20 +570,21 @@ export function PomodoroProvider({ children }) {
       const onGesture = async () => {
         if (pushSubscribedRef.current) return
         pushSubscribedRef.current = true
-        pushLog('User gesture detected, checking auth...')
+        pushLog('User gesture detected')
+        pushLog('Current permission: ' + (typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'))
 
         try {
-          const { data: { user } } = await supabase.auth.getUser()
-
-          if (user) {
-            pushLog('User logged in: ' + user.id.substring(0, 8) + '...')
-            await subscribeToPush(user.id)
-          } else {
-            pushLog('ERROR: No user logged in! Cannot subscribe.')
+          const result = await requestPushPermission()
+          if (result.permission === 'unsupported') {
+            pushLog('Push not supported — skipping subscription')
             pushSubscribedRef.current = false
+          } else if (result.permission === 'denied') {
+            pushLog('Permission denied — will not prompt again')
+          } else if (result.permission === 'default') {
+            pushLog('Permission deferred — waiting for explicit user action')
           }
         } catch (e) {
-          pushLog('ERROR: Auth check failed: ' + e.message)
+          pushLog('ERROR: Push setup failed: ' + e.message)
           pushSubscribedRef.current = false
         }
 
@@ -555,7 +609,7 @@ export function PomodoroProvider({ children }) {
     document.addEventListener('click', unlock, { once: true })
     document.addEventListener('touchstart', unlock, { once: true })
     document.addEventListener('keydown', unlock, { once: true })
-  }, [])
+  }, [requestPushPermission])
 
   const getDuration = useCallback((m) => {
     return { study: focusMins, break: shortMins, long: longMins }[m] * 60
@@ -1164,6 +1218,10 @@ export function PomodoroProvider({ children }) {
     setIdempotencyConflictStatus,
     discardPendingPlannerSync,
     discardPlannerTaskContext,
+    pushPermission,
+    pushBlocked,
+    pushSupported,
+    requestPushPermission,
   }), [
     mode, running, done, seconds, totalSec,
     displayRemaining, progress,
@@ -1188,6 +1246,10 @@ export function PomodoroProvider({ children }) {
     setIdempotencyConflictStatus,
     discardPendingPlannerSync,
     discardPlannerTaskContext,
+    pushPermission,
+    pushBlocked,
+    pushSupported,
+    requestPushPermission,
   ])
 
   const settingsValue = useMemo(() => ({

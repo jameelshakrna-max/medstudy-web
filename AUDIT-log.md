@@ -100,8 +100,8 @@ with schema applied to confirm the full create flow works end-to-end.
   feasible enables; infeasible disables; create payload carries the exact `previewToken`
   and `acceptOverload:false`; `isPending` disables the button (single-request guard).
 
-Verification: focused suites 245 passed; full `npx vitest run --pool=forks` **2140 passed**
-(82 files); `npm run build -- --mode staging` clean (pre-existing chunk-size warning only).
+Verification: focused suites 245 passed; full`npx vitest run --pool=forks` **2140 passed**
+(82 files);`npm run build -- --mode staging` clean (pre-existing chunk-size warning only).
 
 ## 3. Defect 2 — UWorld counts dropped before scheduling — NOT REPRODUCED ✅ (verified on staging)
 
@@ -262,9 +262,9 @@ suite by default. Staging specs are collected exclusively by the opt-in
 requires `STAGING_PREVIEW_URL` to be a `.medstudy-web.pages.dev` preview URL (never
 production).
 
-- Default command: `npx playwright test` → **0 failed**; only explicitly documented
+- Default command:`npx playwright test` → **0 failed**; only explicitly documented
   environment-gated skips.
-- Local authenticated specs (`community`, `notifications`, `pomodoro`, `profile`,
+- Local authenticated specs (`community`,`notifications`, `pomodoro`, `profile`,
   `rotation`, `overlay-layering`) require a **provisioned local account** via
   `TEST_EMAIL`/`TEST_PASSWORD`; `e2e/helpers.ts` no longer hardcodes any credentials.
   Without them the tests skip before execution with an explicit documented reason.
@@ -287,7 +287,7 @@ production).
    the UWorld feature or `uworld_blocks`; the failure is a pre-existing staging
    Supabase/RLS or schema provisioning issue out of Task 12 scope. Fix requires a staging
    Supabase change, not app code. E2E-4 lives only in the opt-in `staging-integration`
-   project, so the default `npx playwright test` is unaffected. **Follow-up issue (not Task
+   project, so the default`npx playwright test` is unaffected. **Follow-up issue (not Task
    12):** provision RLS/insert policy for `uworld_blocks` on the staging Supabase project,
    then re-run `RUN_STAGING_E2E=1 npx playwright test --project=staging-integration
    --workers=1` and expect E2E-4 to pass (assertions are unchanged and must not be
@@ -314,11 +314,55 @@ production).
 
 | Check | Result |
 |---|---|
-| Vitest | `npx vitest run --pool=forks` — **82 files, 2140 passed** (jsdom nav stderr only) |
-| Production build | `npm run build` passed (24.62s; PWA generateSW 221 entries; pre-existing chunk-size warning only) |
-| Staging build | `npm run build -- --mode staging` passed (24.39s; staging API URL baked into 9 chunk files) |
-| Worker validation | `npx wrangler deploy --dry-run` — clean (bindings: D1 medstudy-db, R2 card-images, 2 DOs, crons, vars) |
+| Vitest |`npx vitest run --pool=forks` — **82 files, 2140 passed** (jsdom nav stderr only) |
+| Production build |`npm run build` passed (24.62s; PWA generateSW 221 entries; pre-existing chunk-size warning only) |
+| Staging build |`npm run build -- --mode staging` passed (24.39s; staging API URL baked into 9 chunk files) |
+| Worker validation |`npx wrangler deploy --dry-run` — clean (bindings: D1 medstudy-db, R2 card-images, 2 DOs, crons, vars) |
 | Schema | `schema.sql` **unchanged** by Task 12 (no diff); local D1 state present; staging D1 remote schema applied |
 | Staging E2E (rotation planner) | `rotation-planning-staging.spec.ts` — **4/4 passed** (§5) |
 | Staging E2E (full staging-integration) | **12 passed / 1 failed (UWorld E2E-4, §7-1) / 3 serial-blocked** with `--workers=1` (§6) |
-| Default E2E | `npx playwright test` — **0 failed**; 28 auth-dependent tests skip (env-gated, no local test account; §6) |
+| Default E2E |`npx playwright test` — **0 failed**; 28 auth-dependent tests skip (env-gated, no local test account; §6) |
+
+## 9. Rotation Planner V2.3 release — lifecycle, linked decks, tracking hub
+
+Release rollout completed 2026-08-08. Scope: plan lifecycle (activate/pause/resume/complete),
+linked Anki decks, and the tracking hub uworld schedule. Status: ✅ released to production.
+
+### Commits
+- 05f3b4 feat(v2 lifecycle) · 41eba8c feat(link anki decks) · 4c1dd5a feat(tracking-hub)
+- 890d42 merge into main (no-ff, verified) -> pushed to origin/main
+- 48f0ac9 test-only: v2.3 smoke coverage
+
+### Verification (on merged main)
+- Vitest: 2727/2727 pass · Playwright: 6 passed / 28 skipped / 0 default failures
+-
+pm run build PASS · wrangler deploy --dry-run PASS · git diff --check clean
+
+### Migration24 (schema-migration24.sql)
+- Adds activated_at/paused_at/completed_at on
+  rotation_planner_plans
+- Adds
+  rotation_planner_plan_decks + indexes (idx_rppd_plan, idx_rppd_deck, unique
+  idx_rppd_one_primary) and unique partial idx_rpp_one_active_plan
+- Staging applied + verified; production applied + verified (8 queries, 957 read / 11 written)
+- Pre/post migration safety on both remotes: duplicate-active violations = 0, PRAGMA foreign_key_check = []
+
+### Deployments
+- Staging Worker medstudy-api-staging version 8e114bb (medstudy-api-staging.medstudy.workers.dev)
+- Staging Pages 04441b5 / alias staging.medstudy-web.pages.dev
+- Production Worker medstudy-api version 2886f89a (medstudy-api.medstudy.workers.dev)
+- Production Pages e4635e0 (branch main) — production bundle confirmed to contain v2.3 code; main alias 200
+
+### Staging smoke (authenticated, disposable users)
+- 68/68 PASS (Suites 1-17). Coverage includes lifecycle transitions, one-active invariant,
+  linked-deck CRUD + stale/terminal/idempotency, and tracking explicit/auto-select/windowDays/
+  cross-user isolation. Cleanup verified: both users back to plans=0.
+
+### Production safe checks (auth-dependent deferred — no prod test credentials exist; do not create)
+- Prod plan state intact (single draft plan, lifecycle columns null as expected)
+- No duplicate active plans; no FK violations post-migration
+
+### Known observations (out of scope, no change)
+- selectTrackingPlan "newest draft" ordering compares mixed-format timestamps (recalc writes
+  ISO T; create/rename/decks write space format), so lexicographic sort can prefer a recalc'd
+  draft over a more-recently-modified one. Pre-existing; deterministic; noted for future.

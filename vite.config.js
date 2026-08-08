@@ -1,9 +1,29 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { resolveApiOrigin, renderWorkerSource } from './config/api-origins.mjs'
 
-export default defineConfig({
+// Emit dist/_worker.js (Pages advanced-mode Function) with the API origin for
+// the current build mode baked in. Staging builds proxy to the staging Worker,
+// production builds to the production Worker — never the other way around.
+// See config/api-origins.mjs for the origin map and regression tests.
+function medstudyPagesWorker(apiOrigin) {
+  return {
+    name: 'medstudy-pages-worker-origin',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: '_worker.js',
+        source: renderWorkerSource(apiOrigin),
+      })
+    },
+  }
+}
+
+export default defineConfig(({ mode }) => ({
   plugins: [
+    medstudyPagesWorker(resolveApiOrigin(mode)),
     react(),
     VitePWA({
       registerType: 'prompt',
@@ -60,7 +80,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'https://medstudy-api.medstudy.workers.dev',
+        target: resolveApiOrigin('production'),
         changeOrigin: true,
         headers: { 'x-dev-mode': 'true' },
       },
@@ -79,4 +99,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))
