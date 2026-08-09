@@ -1,15 +1,10 @@
 import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiGet } from '../../../lib/api'
-import { queryKeys } from '../../../lib/queryKeys'
+import { usePlannerDecks } from '../../../hooks/usePlannerDecks'
 import styles from '../PlanCreationForm.module.css'
 
 export default function StepAnkiDecks({ form, onFormChange, errors }) {
-  const { data: decksData, isLoading: decksLoading } = useQuery({
-    queryKey: queryKeys.flashcards.decks(),
-    queryFn: () => apiGet('/api/flashcards/decks'),
-  })
-  const decks = Array.isArray(decksData) ? decksData : []
+  const { data: decksData, isLoading: decksLoading } = usePlannerDecks()
+  const decks = decksData ?? []
   const linkedNames = Array.isArray(form.linkedDeckNames) ? form.linkedDeckNames : []
   const primaryDeckName = form.primaryDeckName ?? null
 
@@ -51,15 +46,15 @@ export default function StepAnkiDecks({ form, onFormChange, errors }) {
           <div className={styles.formField}>
             <p className={styles.label}>Decks</p>
             {decks.map(deck => (
-              <label key={deck.id} className={styles.checkboxLabel}>
+              <label key={deck.deckName} className={styles.checkboxLabel}>
                 <input
                   type="checkbox"
-                  checked={linkedSet.has(deck.name)}
-                  onChange={e => handleToggle(deck.name, e.target.checked)}
+                  checked={linkedSet.has(deck.deckName)}
+                  onChange={e => handleToggle(deck.deckName, e.target.checked)}
                 />
-                <span>{deck.name}</span>
+                <span>{deck.deckName}</span>
                 <span className={styles.topicCount}>
-                  {deck.card_count} card{deck.card_count !== 1 ? 's' : ''}
+                  {deck.cardCount} card{deck.cardCount !== 1 ? 's' : ''}
                 </span>
               </label>
             ))}
@@ -72,17 +67,17 @@ export default function StepAnkiDecks({ form, onFormChange, errors }) {
               <p className={styles.hint}>Select at least one deck to choose a primary deck.</p>
             ) : (
               <div className={styles.radioGroup}>
-                {decks.filter(deck => linkedSet.has(deck.name)).map(deck => (
-                  <label key={deck.id} className={`${styles.radioCard} ${primaryDeckName === deck.name ? styles.radioCardActive : ''}`}>
+                {decks.filter(deck => linkedSet.has(deck.deckName)).map(deck => (
+                  <label key={deck.deckName} className={`${styles.radioCard} ${primaryDeckName === deck.deckName ? styles.radioCardActive : ''}`}>
                     <input
                       type="radio"
                       name="primaryDeckName"
-                      value={deck.name}
-                      checked={primaryDeckName === deck.name}
-                      onChange={() => handlePrimaryChange(deck.name)}
+                      value={deck.deckName}
+                      checked={primaryDeckName === deck.deckName}
+                      onChange={() => handlePrimaryChange(deck.deckName)}
                       className={styles.radioInput}
                     />
-                    <span className={styles.radioLabel}>{deck.name}</span>
+                    <span className={styles.radioLabel}>{deck.deckName}</span>
                   </label>
                 ))}
               </div>

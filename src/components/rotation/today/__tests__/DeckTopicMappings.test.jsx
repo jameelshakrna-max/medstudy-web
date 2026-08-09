@@ -94,13 +94,60 @@ describe('DeckTopicMappings', () => {
       return { data: { mappings: [] }, isLoading: false }
     })
     renderWithClient(<DeckTopicMappings {...defaultProps} />)
-    expect(screen.getByText('No flashcard decks found.')).toBeInTheDocument()
+    expect(screen.getByText(/Link an Anki deck to this rotation/i)).toBeInTheDocument()
   })
 
   it('renders deck list with unmapped decks', () => {
     renderWithClient(<DeckTopicMappings {...defaultProps} />)
     expect(screen.getByText('Anatomy')).toBeInTheDocument()
     expect(screen.getByText('100 cards')).toBeInTheDocument()
+  })
+
+  it('shows linked-unmapped empty state with Map topics action when decks are linked but unmapped', () => {
+    renderWithClient(<DeckTopicMappings {...defaultProps} hasLinkedDecks />)
+    expect(screen.getByText(/aren't mapped to planner topics yet/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Map topics' })).toBeInTheDocument()
+  })
+
+  it('shows no-linked-decks empty state without a Map topics action', () => {
+    renderWithClient(<DeckTopicMappings {...defaultProps} hasLinkedDecks={false} />)
+    expect(screen.getByText(/Link an Anki deck to this rotation/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Map topics' })).not.toBeInTheDocument()
+  })
+
+  it('shows linked-unmapped empty state when the deck list is empty', () => {
+    useQuery.mockImplementation(({ queryKey }) => {
+      if (queryKey[0] === 'flashcards' && queryKey[1] === 'planner-decks') {
+        return { data: { decks: [] }, isLoading: false }
+      }
+      return { data: { mappings: [] }, isLoading: false }
+    })
+    renderWithClient(<DeckTopicMappings {...defaultProps} hasLinkedDecks />)
+    expect(screen.getByText(/aren't mapped to planner topics yet/i)).toBeInTheDocument()
+    expect(screen.queryByText('No flashcard decks found.')).not.toBeInTheDocument()
+  })
+
+  it('Map topics button scrolls the deck list into view', () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    renderWithClient(<DeckTopicMappings {...defaultProps} hasLinkedDecks />)
+    fireEvent.click(screen.getByRole('button', { name: 'Map topics' }))
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' })
+  })
+
+  it('does not show an empty state when decks are linked and mapped', () => {
+    useQuery.mockImplementation(({ queryKey }) => {
+      if (queryKey[0] === 'flashcards' && queryKey[1] === 'planner-decks') {
+        return { data: { decks: [{ deckName: 'Anatomy', cardCount: 100 }] }, isLoading: false }
+      }
+      if (queryKey[0] === 'deckMappings') {
+        return { data: { mappings: [{ id: 'm1', deckName: 'Anatomy', planTopicId: 'topic-1', canonicalTopicId: 'canon-1' }] }, isLoading: false }
+      }
+      return { data: null, isLoading: false }
+    })
+    renderWithClient(<DeckTopicMappings {...defaultProps} hasLinkedDecks />)
+    expect(screen.queryByText(/mapped to planner topics/i)).not.toBeInTheDocument()
+    expect(screen.getByText('Cardiology')).toBeInTheDocument()
   })
 
   it('shows mapped deck with topic badge', () => {
