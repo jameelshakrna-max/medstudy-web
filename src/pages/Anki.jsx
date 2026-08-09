@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { queryKeys } from '../lib/queryKeys'
+import { invalidateFlashcardProgressQueries } from '../lib/flashcardProgressInvalidation'
 import { FSRS, Card as FSRSCard, State as FSRSState, Rating as FSRSRating } from 'fsrs.js'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
@@ -284,9 +285,7 @@ export default function Anki() {
       return r
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(queryKeys.flashcards.decks())
-      queryClient.invalidateQueries(queryKeys.flashcards.list())
-      queryClient.invalidateQueries({ queryKey: queryKeys.rotations.trackingAll() })
+      invalidateFlashcardProgressQueries(queryClient)
     },
   })
 
@@ -305,7 +304,7 @@ export default function Anki() {
       if (r.error) throw new Error(r.error)
       return r
     },
-    onSuccess: () => queryClient.invalidateQueries(queryKeys.flashcards.list()),
+    onSuccess: () => invalidateFlashcardProgressQueries(queryClient),
   })
 
   const reviewMutation = useMutation({
@@ -314,7 +313,7 @@ export default function Anki() {
       if (r.error) throw new Error(r.error)
       return r
     },
-    onSuccess: () => queryClient.invalidateQueries(queryKeys.flashcards.list()),
+    onSuccess: () => invalidateFlashcardProgressQueries(queryClient),
   })
 
   // keep nowRef current for isDue checks
