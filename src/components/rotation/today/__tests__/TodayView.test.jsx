@@ -1,13 +1,22 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import TodayView from '../TodayView'
 
-vi.mock('../../../../lib/api', () => ({ apiGet: vi.fn() }))
+vi.mock('../../../../lib/api', () => ({ apiGet: vi.fn(), apiPost: vi.fn() }))
 
+import { apiPost } from '../../../../lib/api'
 import { getTodayKey, getBrowserTimezone } from '../todayUtils'
 
 const TODAY = getTodayKey(new Date(), getBrowserTimezone())
+
+const DEFAULT_WIZARD_AVAILABILITY = Array.from({ length: 7 }, (_, weekday) => ({
+  weekday,
+  availableMinutes: weekday === 0 || weekday === 6 ? 0 : 120,
+  isDayOff: weekday === 0 || weekday === 6,
+}))
 
 const makeTask = (overrides = {}) => ({
   id: 'task-1',
@@ -40,8 +49,18 @@ const defaultCallbacks = {
   onStudyPomodoro: noop,
 }
 
+function makeClient() {
+  return new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+}
+
+function wrap(ui) {
+  return <QueryClientProvider client={makeClient()}>{ui}</QueryClientProvider>
+}
+
 function renderTodayView(tasks = [], planOverrides = {}, extraProps = {}) {
-  return render(
+  return render(wrap(
     <TodayView
       planId="plan-1"
       tasks={tasks}
@@ -51,8 +70,12 @@ function renderTodayView(tasks = [], planOverrides = {}, extraProps = {}) {
       {...defaultCallbacks}
       {...extraProps}
     />
-  )
+  ))
 }
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe('TodayView', () => {
   it('renders daily progress header with task counts', () => {
@@ -91,7 +114,7 @@ describe('TodayView', () => {
     const futureTasks = [
       { id: 't1', taskDate: '2099-01-10', status: 'locked', taskType: 'learning', estimatedMinutes: 60 },
     ]
-    render(<TodayView planId="plan-1" tasks={futureTasks} topicsById={new Map()} plan={futurePlan} isMutating={false} {...defaultCallbacks} />)
+    render(wrap(<TodayView planId="plan-1" tasks={futureTasks} topicsById={new Map()} plan={futurePlan} isMutating={false} {...defaultCallbacks} />))
     expect(screen.getByText(/Your rotation starts/)).toBeInTheDocument()
     expect(screen.queryByText('All done for today!')).not.toBeInTheDocument()
     expect(screen.queryByText('1/1 tasks')).not.toBeInTheDocument()
@@ -103,17 +126,17 @@ describe('TodayView', () => {
       { id: 't1', taskDate: '2099-01-10', status: 'locked', taskType: 'learning', estimatedMinutes: 60 },
       { id: 't2', taskDate: '2099-01-11', status: 'locked', taskType: 'uworld_questions', estimatedMinutes: 30 },
     ]
-    render(<TodayView planId="plan-1" tasks={futureTasks} topicsById={new Map()} plan={futurePlan} isMutating={false} {...defaultCallbacks} />)
+    render(wrap(<TodayView planId="plan-1" tasks={futureTasks} topicsById={new Map()} plan={futurePlan} isMutating={false} {...defaultCallbacks} />))
     expect(screen.getByText('2 upcoming tasks')).toBeInTheDocument()
   })
 
-  it('shows EMPTY_TODAY when plan active but no tasks today', () => {
+  it('shows EMPTY_TODAY next-task reason when plan active but no tasks today', () => {
     const plan = { id: 'plan-1', revision: 1, startDate: '2026-07-20' }
     const futureTasks = [
       { id: 't1', taskDate: '2099-01-10', status: 'locked', taskType: 'learning', estimatedMinutes: 60 },
     ]
-    render(<TodayView planId="plan-1" tasks={futureTasks} topicsById={new Map()} plan={plan} isMutating={false} {...defaultCallbacks} />)
-    expect(screen.getByText('Nothing scheduled for today')).toBeInTheDocument()
+    render(wrap(<TodayView planId="plan-1" tasks={futureTasks} topicsById={new Map()} plan={plan} isMutating={false} {...defaultCallbacks} />))
+    expect(screen.getByText('Nothing is scheduled for today.')).toBeInTheDocument()
     expect(screen.queryByText('All done for today!')).not.toBeInTheDocument()
   })
 
@@ -124,6 +147,47 @@ describe('TodayView', () => {
       makeTask({ id: 't2', status: 'locked', taskDate: '2099-01-10', estimatedMinutes: 60 }),
     ], plan)
     expect(screen.getByText(/1 of 1 task completed/)).toBeInTheDocument()
+  })
+
+  it('shows the day-off reason for a Saturday day-off (Aug 8 2026) and the next study day', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-08T12:00:00Z'))
+    renderTodayView([], {
+      startDate: '2026-08-08',
+      endDate: '2026-09-30',
+      status: 'active',
+      settingsJson: {
+        timezone: 'UTC',
+        blockedDates: [],
+        availability: DEFAULT_WIZARD_AVAILABILITY,
+      },
+    })
+    expect(screen.getByText('No study time is scheduled for today.')).toBeInTheDocument()
+    expect(screen.getByText('Next study day: Monday, Aug 10 2026')).toBeInTheDocument()
+  })
+
+  it('shows the day-off reason when availability is passed as a prop', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-08T12:00:00Z'))
+    renderTodayView([], {
+      startDate: '2026-08-08',
+      endDate: '2026-09-30',
+      status: 'active',
+    }, { availability: DEFAULT_WIZARD_AVAILABILITY })
+    expect(screen.getByText('No study time is scheduled for today.')).toBeInTheDocument()
+    expect(screen.getByText('Next study day: Monday, Aug 10 2026')).toBeInTheDocument()
+  })
+
+  it('shows the draft reason with an Activate action wired to the lifecycle endpoint', async () => {
+    const user = userEvent.setup()
+    apiPost.mockResolvedValue({ plan: { id: 'plan-1', status: 'active', revision: 2 } })
+    renderTodayView([], { status: 'draft', revision: 1, startDate: '2026-08-01' })
+    expect(screen.getByText("This rotation starts today, but it isn't active yet.")).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Activate plan/ }))
+    expect(apiPost).toHaveBeenCalledWith(
+      '/rotation-planner/plans/plan-1/status',
+      expect.objectContaining({ action: 'activate', expectedRevision: 1 })
+    )
   })
 
   describe('grouped UWorld tasks', () => {

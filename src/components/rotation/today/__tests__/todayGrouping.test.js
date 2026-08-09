@@ -7,6 +7,12 @@ import {
   calculateSectionProgress,
   calculateDayProgress,
   classifyTodayState,
+  classifyTodayReason,
+  buildAvailabilityByWeekday,
+  getDayAvailabilityEntry,
+  findNextStudyDay,
+  findNextFutureTask,
+  getPrerequisiteName,
   getTodayRelevantTasks,
   groupTasksByDate,
 } from '../todayGrouping';
@@ -652,5 +658,277 @@ describe('claimActiveBlockSiblings', () => {
     const sections = makeSections(tasks)
     const result = claimActiveBlockSiblings(sections)
     expect(result.find(s => s.key === 'learn')).toBeUndefined()
+  })
+})
+
+describe('classifyTodayReason', () => {
+  const DEFAULT_WIZARD_AVAILABILITY = Array.from({ length: 7 }, (_, weekday) => ({
+    weekday,
+    availableMinutes: weekday === 0 || weekday === 6 ? 0 : 120,
+    isDayOff: weekday === 0 || weekday === 6,
+  }))
+
+  // Aug 8 2026 is a Saturday (weekday 6), a day-off under the default wizard availability.
+  const defaultAvailabilityByWeekday = buildAvailabilityByWeekday(DEFAULT_WIZARD_AVAILABILITY)
+
+  function saturdayAvailable(overrides = {}) {
+    return buildAvailabilityByWeekday(DEFAULT_WIZARD_AVAILABILITY.map(entry =>
+      entry.weekday === 6 ? { ...entry, availableMinutes: 60, isDayOff: false, ...overrides } : entry
+    ))
+  }
+
+  it('A: draft plan beats a day-off/zero-minutes day', () => {
+    const result = classifyTodayReason({
+      planStatus: 'draft',
+      todayKey: '2026-08-08',
+      dayAvailability: getDayAvailabilityEntry('2026-08-08', defaultAvailabilityByWeekday),
+      availabilityByWeekday: defaultAvailabilityByWeekday,
+      tasksToday: [],
+      nextTask: null,
+    })
+    expect(result.reason).toBe('DRAFT')
+    expect(result.title).toBe("This rotation starts today, but it isn't active yet.")
+  })
+
+  it('A: draft beats availability even when tasks exist', () => {
+    const result = classifyTodayReason({
+      planStatus: 'draft',
+      todayKey: '2026-08-08',
+      dayAvailability: getDayAvailabilityEntry('2026-08-08', saturdayAvailable()),
+      availabilityByWeekday: saturdayAvailable(),
+      tasksToday: [{ id: 't1', status: 'pending' }],
+      nextTask: null,
+    })
+    expect(result.reason).toBe('DRAFT')
+  })
+
+  it('B: Saturday Aug 8 2026 day-off yields next study day Monday, Aug 10 2026', () => {
+    const result = classifyTodayReason({
+      planStatus: 'active',
+      todayKey: '2026-08-08',
+      dayAvailability: getDayAvailabilityEntry('2026-08-08', defaultAvailabilityByWeekday),
+      availabilityByWeekday: defaultAvailabilityByWeekday,
+      tasksToday: [],
+      nextTask: null,
+      endDate: '2026-09-30',
+    })
+    expect(result.reason).toBe('DAY_OFF')
+    expect(result.title).toBe('No study time is scheduled for today.')
+    expect(result.nextStudyDayKey).toBe('2026-08-10')
+    expect(result.nextStudyDayLabel).toBe('Monday, Aug 10 2026')
+  })
+
+  it('B: zero available minutes counts as unavailable', () => {
+    const zeroMin = saturdayAvailable({ availableMinutes: 0, isDayOff: false })
+    const result = classifyTodayReason({
+      planStatus: 'active',
+      todayKey: '2026-08-08',
+      dayAvailability: getDayAvailabilityEntry('2026-08-08', zeroMin),
+      availabilityByWeekday: zeroMin,
+      tasksToday: [],
+      nextTask: null,
+      endDate: '2026-09-30',
+    })
+    expect(result.reason).toBe('DAY_OFF')
+  })
+
+  it('B: omits the next study day line when no eligible day remains in the plan range', () => {
+    const result = classifyTodayReason({
+      planStatus: 'active',
+      todayKey: '2026-08-08',
+      dayAvailability: getDayAvailabilityEntry('2026-08-08', defaultAvailabilityByWeekday),
+      availabilityByWeekday: defaultAvailabilityByWeekday,
+      tasksToday: [],
+      nextTask: null,
+      endDate: '2026-08-09',
+    })
+    expect(result.reason).toBe('DAY_OFF')
+    expect(result.nextStudyDayKey).toBeNull()
+    expect(result.nextStudyDayLabel).toBeNull()
+  })
+
+  it('B: skips blocked dates when looking for the next study day', () => {
+    const result = classifyTodayReason({
+      planStatus: 'active',
+      todayKey: '2026-08-08',
+      dayAvailability: getDayAvailabilityEntry('2026-08-08', defaultAvailabilityByWeekday),
+      availabilityByWeekday: defaultAvailabilityByWeekday,
+      tasksToday: [],
+      nextTask: null,
+      blockedDates: ['2026-08-10', '2026-08-11', '2026-08-12'],
+      endDate: '2026-09-30',
+    })
+    expect(result.nextStudyDayKey).toBe('2026-08-13')
+  })
+
+  it('C: all of today\'s tasks completed → ALL_DONE with recap', () => {
+    const availableSat = saturdayAvailable()
+    const result = classifyTodayReason({
+      planStatus: 'active',
+      todayKey: '2026-08-08',
+      dayAvailability: getDayAvailabilityEntry('2026-08-08', availableSat),
+      availabilityByWeekday: availableSat,
+      tasksToday: [
+        { id: 't1', status: 'completed' },
+        { id: 't2', status: 'partial' },
+        { id: 't3', status: 'skipped' },
+      ],
+      nextTask: null,
+    })
+    expect(result.reason).toBe('ALL_DONE')
+    expect(result.title).toBe("You're done for today.")
+    expect(result.doneCount).toBe(1)
+  })
+
+  it('D: all of today\'s tasks locked behind prerequisites → LOCKED with readable prereq names', () => {
+    const availableSat = saturdayAvailable()
+    const topicsById = new Map([
+      ['topic-1', { canonicalTopicId: 'topic-1', topicTitle: 'Heart Failure' }],
+      ['topic-2', { canonicalTopicId: 'topic-2', topicTitle: 'Renal' }],
+    ])
+    const result = classifyTodayReason({
+      planStatus: 'active',
+      todayKey: '2026-08-08',
+      dayAvailability: getDayAvailabilityEntry('2026-08-08', availableSat),
+      availabilityByWeekday: availableSat,
+      tasksToday: [
+        { id: 't1', status: 'locked', unlockCondition: 'learning_completed:topic-1' },
+        { id: 't2', status: 'locked', unlockCondition: 'uworld_completed:topic-2' },
+      ],
+      nextTask: null,
+      topicsById,
+    })
+    expect(result.reason).toBe('LOCKED')
+    expect(result.prereqNames).toContain('Heart Failure')
+    expect(result.prereqNames).toContain('Renal')
+  })
+
+  it('D: falls back to the condition key when a prereq title is unknown', () => {
+    const availableSat = saturdayAvailable()
+    const result = classifyTodayReason({
+      planStatus: 'active',
+      todayKey: '2026-08-08',
+      dayAvailability: getDayAvailabilityEntry('2026-08-08', availableSat),
+      availabilityByWeekday: availableSat,
+      tasksToday: [
+        { id: 't1', status: 'locked', unlockCondition: 'learning_completed:missing-topic' },
+      ],
+      nextTask: null,
+      topicsById: new Map(),
+    })
+    expect(result.reason).toBe('LOCKED')
+    expect(result.prereqNames).toEqual(['missing-topic'])
+  })
+
+  it('E: nothing today but a future task exists → NEXT_TASK with Next task line', () => {
+    const availableSat = saturdayAvailable()
+    const result = classifyTodayReason({
+      planStatus: 'active',
+      todayKey: '2026-08-08',
+      dayAvailability: getDayAvailabilityEntry('2026-08-08', availableSat),
+      availabilityByWeekday: availableSat,
+      tasksToday: [],
+      nextTask: { title: 'Cardiology Lecture', dateKey: '2026-08-10', dateLabel: 'Monday, Aug 10 2026' },
+    })
+    expect(result.reason).toBe('NEXT_TASK')
+    expect(result.title).toBe('Nothing is scheduled for today.')
+    expect(result.nextTask.title).toBe('Cardiology Lecture')
+    expect(result.nextTask.dateLabel).toBe('Monday, Aug 10 2026')
+  })
+
+  it('F: truly nothing in the plan → NONE generic message', () => {
+    const availableSat = saturdayAvailable()
+    const result = classifyTodayReason({
+      planStatus: 'active',
+      todayKey: '2026-08-08',
+      dayAvailability: getDayAvailabilityEntry('2026-08-08', availableSat),
+      availabilityByWeekday: availableSat,
+      tasksToday: [],
+      nextTask: null,
+    })
+    expect(result.reason).toBe('NONE')
+    expect(result.title).toBe('Nothing scheduled for today')
+  })
+
+  it('timezone: a plan timezone different from the browser does not shift the day-off classification', () => {
+    const base = {
+      planStatus: 'active',
+      todayKey: '2026-08-08',
+      dayAvailability: getDayAvailabilityEntry('2026-08-08', defaultAvailabilityByWeekday),
+      availabilityByWeekday: defaultAvailabilityByWeekday,
+      tasksToday: [],
+      nextTask: null,
+      endDate: '2026-09-30',
+    }
+    const browserResult = classifyTodayReason(base)
+    const nairobiResult = classifyTodayReason({ ...base, planTimezone: 'Africa/Nairobi' })
+    expect(nairobiResult).toEqual(browserResult)
+    expect(nairobiResult.reason).toBe('DAY_OFF')
+    expect(nairobiResult.nextStudyDayKey).toBe('2026-08-10')
+    expect(nairobiResult.nextStudyDayLabel).toBe('Monday, Aug 10 2026')
+  })
+})
+
+describe('findNextFutureTask', () => {
+  it('picks the earliest future non-terminal task and formats its date', () => {
+    const tasks = [
+      { id: 't1', taskType: 'learning', status: 'locked', taskDate: '2026-08-11', topicTitle: 'Renal' },
+      { id: 't2', taskType: 'learning', status: 'pending', taskDate: '2026-08-10', topicTitle: 'Heart Failure', displayOrder: 1 },
+      { id: 't3', taskType: 'learning', status: 'completed', taskDate: '2026-08-09', topicTitle: 'Already Done' },
+    ]
+    const result = findNextFutureTask(tasks, '2026-08-08')
+    expect(result.title).toBe('Heart Failure')
+    expect(result.dateKey).toBe('2026-08-10')
+    expect(result.dateLabel).toBe('Monday, Aug 10 2026')
+  })
+
+  it('returns null when every future task is terminal', () => {
+    const tasks = [
+      { id: 't1', status: 'completed', taskDate: '2026-08-10' },
+      { id: 't2', status: 'skipped', taskDate: '2026-08-11' },
+    ]
+    expect(findNextFutureTask(tasks, '2026-08-08')).toBeNull()
+  })
+
+  it('returns null for empty input', () => {
+    expect(findNextFutureTask([], '2026-08-08')).toBeNull()
+  })
+})
+
+describe('findNextStudyDay / availability helpers', () => {
+  const avail = buildAvailabilityByWeekday([
+    { weekday: 0, availableMinutes: 0, isDayOff: true },
+    { weekday: 1, availableMinutes: 120, isDayOff: false },
+    { weekday: 2, availableMinutes: 120, isDayOff: false },
+    { weekday: 3, availableMinutes: 120, isDayOff: false },
+    { weekday: 4, availableMinutes: 120, isDayOff: false },
+    { weekday: 5, availableMinutes: 120, isDayOff: false },
+    { weekday: 6, availableMinutes: 0, isDayOff: true },
+  ])
+
+  it('getDayAvailabilityEntry resolves by weekday of the date key', () => {
+    expect(getDayAvailabilityEntry('2026-08-08', avail)).toEqual({ weekday: 6, availableMinutes: 0, isDayOff: true })
+    expect(getDayAvailabilityEntry('2026-08-10', avail)).toEqual({ weekday: 1, availableMinutes: 120, isDayOff: false })
+  })
+
+  it('getDayAvailabilityEntry returns null when no availability map is provided', () => {
+    expect(getDayAvailabilityEntry('2026-08-08', null)).toBeNull()
+    expect(getDayAvailabilityEntry('2026-08-08', new Map())).toBeNull()
+  })
+
+  it('findNextStudyDay returns the next eligible day strictly after today', () => {
+    expect(findNextStudyDay({ todayKey: '2026-08-08', availabilityByWeekday: avail })).toBe('2026-08-10')
+    expect(findNextStudyDay({ todayKey: '2026-08-14', availabilityByWeekday: avail })).toBe('2026-08-17')
+  })
+
+  it('findNextStudyDay returns null without availability data', () => {
+    expect(findNextStudyDay({ todayKey: '2026-08-08', availabilityByWeekday: new Map() })).toBeNull()
+  })
+
+  it('getPrerequisiteName resolves readable topic titles from canonical ids', () => {
+    const topicsById = new Map([['topic-1', { canonicalTopicId: 'topic-1', topicTitle: 'Heart Failure' }]])
+    expect(getPrerequisiteName({ unlockCondition: 'learning_completed:topic-1' }, topicsById)).toBe('Heart Failure')
+    expect(getPrerequisiteName({ unlockCondition: 'learning_completed:missing' }, topicsById)).toBe('missing')
+    expect(getPrerequisiteName({ unlockCondition: null }, topicsById)).toBeNull()
   })
 })

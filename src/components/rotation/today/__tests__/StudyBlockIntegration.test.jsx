@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import TodayView from '../TodayView'
 
-vi.mock('../../../../lib/api', () => ({ apiGet: vi.fn() }))
+vi.mock('../../../../lib/api', () => ({ apiGet: vi.fn(), apiPost: vi.fn() }))
 
 vi.mock('../TaskCard', () => ({
   default: function MockTaskCard({ task }) {
@@ -52,27 +53,32 @@ function makeRawTask(overrides = {}) {
 }
 
 function renderToday(tasks, extraProps = {}) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
   return render(
-    <TodayView
-      planId="plan-1"
-      tasks={tasks}
-      topics={[]}
-      topicsById={new Map()}
-      plan={defaultPlan}
-      sourceTitle="Step-Up to Medicine"
-      isMutating={false}
-      isOrphaned={false}
-      hasUnsyncedData={false}
-      discardOrphanedPlannerContext={noop}
-      onStart={noop}
-      onComplete={noop}
-      onPartial={noop}
-      onRecordTime={noop}
-      onRecordQuestions={noop}
-      onSkip={noop}
-      onStudyPomodoro={noop}
-      {...extraProps}
-    />
+    <QueryClientProvider client={client}>
+      <TodayView
+        planId="plan-1"
+        tasks={tasks}
+        topics={[]}
+        topicsById={new Map()}
+        plan={defaultPlan}
+        sourceTitle="Step-Up to Medicine"
+        isMutating={false}
+        isOrphaned={false}
+        hasUnsyncedData={false}
+        discardOrphanedPlannerContext={noop}
+        onStart={noop}
+        onComplete={noop}
+        onPartial={noop}
+        onRecordTime={noop}
+        onRecordQuestions={noop}
+        onSkip={noop}
+        onStudyPomodoro={noop}
+        {...extraProps}
+      />
+    </QueryClientProvider>
   )
 }
 
