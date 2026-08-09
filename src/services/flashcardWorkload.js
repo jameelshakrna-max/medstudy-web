@@ -232,6 +232,7 @@ export async function computeReviewWorkloadMap({
       if (!existing.deckNames.includes(card.deck_name)) {
         existing.deckNames.push(card.deck_name)
       }
+      existing.cardIds.push(card.id)
     } else {
       topicCardsByDate[assignedDate].push({
         _groupKey: groupKey,
@@ -239,6 +240,7 @@ export async function computeReviewWorkloadMap({
         canonicalTopicId: canonicalTopicId,
         dueCardCount: 1,
         deckNames: [card.deck_name],
+        cardIds: [card.id],
         displayOrder: planTopic ? (planTopic.displayOrder ?? Infinity) : Infinity,
       })
     }
@@ -267,6 +269,7 @@ export async function computeReviewWorkloadMap({
         canonicalTopicId: g.canonicalTopicId,
         dueCardCount: g.dueCardCount,
         deckNames: [...new Set(g.deckNames)].sort(),
+        cardIds: g.cardIds,
         displayOrder: g.displayOrder ?? Infinity,
       }))
 

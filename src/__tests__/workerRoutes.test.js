@@ -136,6 +136,37 @@ describe('Worker route dispatch — rotation planner', () => {
       expect(res.status).toBe(401)
     })
   })
+
+  describe('PUT/GET /api/rotation-planner/plans/:planId/decks', () => {
+    it('PUT route matches and reaches handleReplacePlanDecks', async () => {
+      const res = await putFetch('/api/rotation-planner/plans/nope/decks', {
+        deckNames: ['X'],
+        primaryDeckName: 'X',
+        expectedRevision: 1,
+        clientRequestId: 'rt-1',
+      })
+      expect(res.status).toBe(404)
+      const body = await res.json()
+      expect(body.error.code).toBe('PLAN_NOT_FOUND')
+    })
+
+    it('GET route matches and reaches handleGetPlanDecks', async () => {
+      const res = await fetch('/api/rotation-planner/plans/nope/decks')
+      expect(res.status).toBe(404)
+      const body = await res.json()
+      expect(body.error.code).toBe('PLAN_NOT_FOUND')
+    })
+
+    it('PUT without an idempotency key returns 400 IDEMPOTENCY_KEY_REQUIRED before plan lookup', async () => {
+      const res = await putFetch('/api/rotation-planner/plans/nope/decks', {
+        deckNames: [],
+        expectedRevision: 0,
+      })
+      expect(res.status).toBe(400)
+      const body = await res.json()
+      expect(body.error.code).toBe('IDEMPOTENCY_KEY_REQUIRED')
+    })
+  })
 })
 
 function makePostRequest(path, body, { headers = {} } = {}) {
@@ -164,6 +195,18 @@ function makePatchRequest(path, body, { headers = {} } = {}) {
 
 async function patchFetch(path, body, { headers = {} } = {}) {
   return worker.fetch(makePatchRequest(path, body, { headers }), makeEnv(), {})
+}
+
+function makePutRequest(path, body, { headers = {} } = {}) {
+  return new Request(`https://medstudy.app${path}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-test-user-id': 'test-user', ...headers },
+    body: JSON.stringify(body),
+  })
+}
+
+async function putFetch(path, body, { headers = {} } = {}) {
+  return worker.fetch(makePutRequest(path, body, { headers }), makeEnv(), {})
 }
 
 describe('CORS headers', () => {

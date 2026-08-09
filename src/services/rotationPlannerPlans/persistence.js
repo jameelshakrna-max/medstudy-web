@@ -85,7 +85,8 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
 
   const mutationId = crypto.randomUUID()
 
-  const createdAt = new Date().toISOString().replace('T', ' ').slice(0, 19)
+  const createdAtIso = new Date().toISOString()
+  const createdAt = createdAtIso.replace('T', ' ').slice(0, 19)
   const parsedSettingsJson = JSON.parse(settingsJson)
 
   const deckNames = validatedInput.deckNames || []
@@ -379,6 +380,7 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     if (task.normalizedTopicId) {
       planTopicId = topicIdByNormalized.get(task.normalizedTopicId) || null
     }
+    const filteredMeta = filterMetadata(task.taskType, task.metadata)
     return {
       id: taskIds[i],
       planTopicId: planTopicId ?? null,
@@ -393,7 +395,10 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
       status: 'pending',
       unlockCondition: task.unlockCondition ?? null,
       displayOrder: task.displayOrder,
-      metadataJson: JSON.stringify(filterMetadata(task.taskType, task.metadata)),
+      metadataJson: JSON.stringify(filteredMeta),
+      snapshotCardIds: task.snapshotCardIds,
+      canonicalTopicId: task.canonicalTopicId ?? null,
+      deckNames: filteredMeta.deckNames,
     }
   })
   const tasksJson = JSON.stringify(taskRows)
@@ -418,6 +423,37 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
     FROM json_each(?)
     WHERE EXISTS (SELECT 1 FROM ${PLANNER_TABLES.planMutations} WHERE id = ?)`
   ).bind(planId, createdAt, createdAt, tasksJson, mutationId)
+
+  // S5c: Persist per-task flashcard card snapshots. One row per card the
+  // flashcard_review task is responsible for. deck_name is snapshot metadata:
+  // the single deck when the task spans exactly one deck, else the first
+  // sorted deck name (deck_name is NOT NULL). canonical_topic_id is also a
+  // snapshot captured at creation time — never looked up live.
+  const snapshotRows = []
+  for (const row of taskRows) {
+    if (!Array.isArray(row.snapshotCardIds) || row.snapshotCardIds.length === 0) continue
+    const deckNames = Array.isArray(row.deckNames) ? row.deckNames : []
+    for (const cardId of row.snapshotCardIds) {
+      snapshotRows.push({
+        taskId: row.id,
+        userId,
+        cardId,
+        deckName: deckNames.length === 1 ? deckNames[0] : (deckNames[0] || ''),
+        canonicalTopicId: row.canonicalTopicId,
+      })
+    }
+  }
+  const snapshotRowsJson = JSON.stringify(snapshotRows)
+  const snapshotStmt = env.DB.prepare(
+    `INSERT INTO rotation_planner_flashcard_task_cards (
+       task_id, user_id, card_id, deck_name, canonical_topic_id, snapshot_at, satisfied_at
+     ) SELECT
+       json_extract(value,'$.taskId'), ?, json_extract(value,'$.cardId'),
+       json_extract(value,'$.deckName'), json_extract(value,'$.canonicalTopicId'),
+       ?, NULL
+     FROM json_each(?)
+     WHERE EXISTS (SELECT 1 FROM ${PLANNER_TABLES.planMutations} WHERE id = ?)`
+  ).bind(userId, createdAtIso, snapshotRowsJson, mutationId)
 
   // S6: Claim flashcard capacity ownership.
   // The partial unique index idx_rpp_flashcard_owner enforces one owner per user
@@ -457,11 +493,15 @@ export async function persistPlanBatch(env, userId, validatedInput, resolvedTopi
   ).bind(resultJsonPayload, planId, userId, mutationId, planId, userId)
 
   try {
-    const batchResults = await env.DB.batch([planStmt, claimStmt, planDecksStmt, availStmt, topicsStmt, groupsStmt, tasksStmt, ownershipStmt, resultJsonStmt])
+    const batchStatements = [planStmt, claimStmt, planDecksStmt, availStmt, topicsStmt, groupsStmt, tasksStmt]
+    if (snapshotRows.length > 0) batchStatements.push(snapshotStmt)
+    batchStatements.push(ownershipStmt, resultJsonStmt)
+    const batchResults = await env.DB.batch(batchStatements)
     // Defensive: if S6 (index 7) affected zero rows, ownership claim failed silently.
     // This should no longer happen after removing NOT EXISTS (the unique index fires),
     // but guard against it to prevent silent invariant violations.
-    const s6Changes = batchResults[7]?.meta?.changes
+    const ownershipIndex = batchStatements.indexOf(ownershipStmt)
+    const s6Changes = batchResults[ownershipIndex]?.meta?.changes
     if (s6Changes === 0) {
       const { results: blockers } = await env.DB.prepare(
         `SELECT 1 FROM ${PLANNER_TABLES.plans}
@@ -848,6 +888,9 @@ export async function persistRecalculationBatch(env, {
     unlockCondition: task.unlockCondition || null,
     displayOrder: task.displayOrder || 0,
     metadataJson: JSON.stringify(filterMetadata(task.taskType, task.metadata)),
+    snapshotCardIds: task.snapshotCardIds,
+    canonicalTopicId: task.canonicalTopicId ?? null,
+    deckNames: (task.metadata && Array.isArray(task.metadata.deckNames)) ? task.metadata.deckNames : [],
   })))
 
   const insertTasksStmt = env.DB.prepare(
@@ -907,6 +950,48 @@ export async function persistRecalculationBatch(env, {
       ).bind(JSON.stringify(workloadSnapshot), planId, recalculationMutationId)
     : null
 
+  // Snapshot rows for the mutable tasks about to be deleted cascade via the FK,
+  // but delete defensively so the atomic batch never leaves orphaned rows if a
+  // task survives the mutable-task delete for any reason.
+  const snapshotDeleteStmt = env.DB.prepare(
+    `DELETE FROM rotation_planner_flashcard_task_cards
+     WHERE task_id IN (
+       SELECT id FROM ${T.dailyTasks}
+       WHERE plan_id = ? AND status IN ('pending', 'locked') AND is_pinned = 0
+     ) AND EXISTS (
+       SELECT 1 FROM ${T.planMutations} WHERE id = ?
+     )`
+  ).bind(planId, recalculationMutationId)
+
+  const snapshotRows = []
+  for (const task of regeneratedTasks) {
+    if (!Array.isArray(task.snapshotCardIds) || task.snapshotCardIds.length === 0) continue
+    const deckNames = (task.metadata && Array.isArray(task.metadata.deckNames)) ? task.metadata.deckNames : []
+    for (const cardId of task.snapshotCardIds) {
+      snapshotRows.push({
+        taskId: task.id,
+        userId,
+        cardId,
+        deckName: deckNames.length === 1 ? deckNames[0] : (deckNames[0] || ''),
+        canonicalTopicId: task.canonicalTopicId ?? null,
+      })
+    }
+  }
+  const snapshotInsertStmt = snapshotRows.length > 0
+    ? env.DB.prepare(
+        `INSERT INTO rotation_planner_flashcard_task_cards (
+           task_id, user_id, card_id, deck_name, canonical_topic_id, snapshot_at, satisfied_at
+         ) SELECT
+           json_extract(value,'$.taskId'), ?, json_extract(value,'$.cardId'),
+           json_extract(value,'$.deckName'), json_extract(value,'$.canonicalTopicId'),
+           ?, NULL
+         FROM json_each(?)
+         WHERE EXISTS (
+           SELECT 1 FROM ${T.planMutations} WHERE id = ?
+         )`
+      ).bind(userId, recalculatedAt, JSON.stringify(snapshotRows), recalculationMutationId)
+    : null
+
   const updateForecastStmt = env.DB.prepare(
     `UPDATE ${T.plans}
      SET settings_json = json_set(settings_json, '$.forecast', json(?))
@@ -917,9 +1002,10 @@ export async function persistRecalculationBatch(env, {
 
   const batch = [claimStmt, revisionStmt]
   if (unpinExpiredStmt) batch.push(unpinExpiredStmt)
-  batch.push(deleteStmt, insertTasksStmt, updateTopicsStmt)
+  batch.push(deleteStmt, snapshotDeleteStmt, insertTasksStmt, updateTopicsStmt)
   if (updateSettingsStmt) batch.push(updateSettingsStmt)
   batch.push(updateForecastStmt)
+  if (snapshotInsertStmt) batch.push(snapshotInsertStmt)
   return env.DB.batch(batch)
 }
 

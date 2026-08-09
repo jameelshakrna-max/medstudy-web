@@ -3734,6 +3734,10 @@ describe('linked decks', () => {
     ).run()
   }
 
+  async function insertEmptyDeck(userId, deckName) {
+    await db.prepare('INSERT INTO deck_settings (user_id, deck_name, settings) VALUES (?, ?, ?)').bind(userId, deckName, '{}').run()
+  }
+
   it('create plan with deckNames persists linked decks and returns them', async () => {
     const res = await createPlan(makeBody({
       deckNames: ['Cardio Deck', 'Neuro Deck'],
@@ -3979,5 +3983,108 @@ describe('linked decks', () => {
     expect(putRes.status).toBe(400)
     const body = await putRes.json()
     expect(body.error.message).toContain('primaryDeckName must be one of deckNames')
+  })
+
+  it('PUT /decks accepts an empty deck that exists only in deck_settings', async () => {
+    await insertEmptyDeck(USER_A.sub, 'Empty Step 2 Deck')
+    const res = await createPlan()
+    const { plan } = await res.json()
+    const putRes = await replacePlanDecks(plan.id, {
+      deckNames: ['Empty Step 2 Deck'],
+      primaryDeckName: 'Empty Step 2 Deck',
+      expectedRevision: plan.revision,
+      clientRequestId: 'dec-empty-1',
+    })
+    expect(putRes.status).toBe(200)
+    const result = await putRes.json()
+    expect(result.linkedDecks[0].deckName).toBe('Empty Step 2 Deck')
+    expect(result.linkedDecks[0].isPrimary).toBe(true)
+    expect(result.linkedDecks[0].cardCount).toBe(0)
+    expect(result.plan.revision).toBe(plan.revision + 1)
+  })
+
+  it('PUT /decks accepts a populated deck and increments revision exactly once', async () => {
+    await insertCard(USER_A.sub, 'Populated Deck')
+    const res = await createPlan()
+    const { plan } = await res.json()
+    const putRes = await replacePlanDecks(plan.id, {
+      deckNames: ['Populated Deck'],
+      primaryDeckName: 'Populated Deck',
+      expectedRevision: plan.revision,
+      clientRequestId: 'dec-populated-1',
+    })
+    expect(putRes.status).toBe(200)
+    const result = await putRes.json()
+    expect(result.plan.revision).toBe(plan.revision + 1)
+
+    const decksRes = await getPlanDecks(plan.id)
+    expect(decksRes.status).toBe(200)
+    const { linkedDecks } = await decksRes.json()
+    expect(linkedDecks).toHaveLength(1)
+    expect(linkedDecks[0].deckName).toBe('Populated Deck')
+    expect(linkedDecks[0].cardCount).toBe(1)
+  })
+
+  it('PUT /decks preserves exact deck names with internal spaces', async () => {
+    await insertEmptyDeck(USER_A.sub, 'Cardiology Step 2')
+    const res = await createPlan()
+    const { plan } = await res.json()
+    const putRes = await replacePlanDecks(plan.id, {
+      deckNames: ['Cardiology Step 2'],
+      primaryDeckName: 'Cardiology Step 2',
+      expectedRevision: plan.revision,
+      clientRequestId: 'dec-spaces-1',
+    })
+    expect(putRes.status).toBe(200)
+    const result = await putRes.json()
+    expect(result.linkedDecks[0].deckName).toBe('Cardiology Step 2')
+
+    const { results: rows } = await db.prepare(
+      'SELECT deck_name FROM rotation_planner_plan_decks WHERE plan_id = ?'
+    ).bind(plan.id).all()
+    expect(rows.map(r => r.deck_name)).toEqual(['Cardiology Step 2'])
+  })
+
+  it('PUT /decks rejects a deck_settings deck owned by another user', async () => {
+    await insertEmptyDeck(USER_B.sub, 'B Only Deck')
+    const res = await createPlan()
+    const { plan } = await res.json()
+    const putRes = await replacePlanDecks(plan.id, {
+      deckNames: ['B Only Deck'],
+      primaryDeckName: 'B Only Deck',
+      expectedRevision: plan.revision,
+      clientRequestId: 'dec-other-user-1',
+    })
+    expect(putRes.status).toBe(404)
+    const body = await putRes.json()
+    expect(body.error.message).toContain('Deck not found for this user')
+  })
+
+  it('PUT /decks preserves existing links when a request is rejected', async () => {
+    await insertCard(USER_A.sub, 'Cardio Deck')
+    const res = await createPlan(makeBody({
+      deckNames: ['Cardio Deck'],
+      primaryDeckName: 'Cardio Deck',
+    }))
+    const { plan } = await res.json()
+
+    const putRes = await replacePlanDecks(plan.id, {
+      deckNames: ['Cardio Deck'],
+      primaryDeckName: 'Nope Deck',
+      expectedRevision: plan.revision,
+      clientRequestId: 'dec-reject-1',
+    })
+    expect(putRes.status).toBe(400)
+
+    const decksRes = await getPlanDecks(plan.id)
+    expect(decksRes.status).toBe(200)
+    const { linkedDecks } = await decksRes.json()
+    expect(linkedDecks).toHaveLength(1)
+    expect(linkedDecks[0].deckName).toBe('Cardio Deck')
+
+    const { results: rows } = await db.prepare(
+      'SELECT revision FROM rotation_planner_plans WHERE id = ?'
+    ).bind(plan.id).all()
+    expect(rows[0].revision).toBe(plan.revision)
   })
 })

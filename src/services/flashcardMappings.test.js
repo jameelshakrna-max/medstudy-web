@@ -329,6 +329,34 @@ describe('verifyDeckExists', () => {
     await insertCard(db, USER_B, { id: 'c1', deckName: 'Cardiology' })
     expect(await verifyDeckExists(env, USER_A, 'Cardiology')).toBe(false)
   })
+
+  it('returns true when deck exists only in deck_settings (empty deck)', async () => {
+    await db.prepare(
+      `INSERT INTO deck_settings (user_id, deck_name, settings) VALUES (?, ?, '{}')`
+    ).bind(USER_A, 'Empty Cardiology').run()
+    expect(await verifyDeckExists(env, USER_A, 'Empty Cardiology')).toBe(true)
+  })
+
+  it('returns true when deck exists in both flashcards and deck_settings', async () => {
+    await insertCard(db, USER_A, { id: 'c1', deckName: 'Cardiology' })
+    await db.prepare(
+      `INSERT INTO deck_settings (user_id, deck_name, settings) VALUES (?, ?, '{}')`
+    ).bind(USER_A, 'Cardiology').run()
+    expect(await verifyDeckExists(env, USER_A, 'Cardiology')).toBe(true)
+  })
+
+  it('returns false for another users deck_settings-only deck', async () => {
+    await db.prepare(
+      `INSERT INTO deck_settings (user_id, deck_name, settings) VALUES (?, ?, '{}')`
+    ).bind(USER_B, 'B Only').run()
+    expect(await verifyDeckExists(env, USER_A, 'B Only')).toBe(false)
+  })
+
+  it('matches exact deck names (does not trim or lower internal characters)', async () => {
+    await insertCard(db, USER_A, { id: 'c1', deckName: 'Cardiology Step 2' })
+    expect(await verifyDeckExists(env, USER_A, 'Cardiology Step 2')).toBe(true)
+    expect(await verifyDeckExists(env, USER_A, 'Cardiology  Step 2')).toBe(false)
+  })
 })
 
 describe('cleanupOrphanMapping', () => {

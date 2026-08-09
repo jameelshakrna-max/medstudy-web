@@ -142,6 +142,8 @@ import {
   EXISTING_REVIEW_IMPACT,
 } from './services/flashcardMappings.js'
 
+import { buildFlashcardReconciliationStatements } from './services/rotationPlannerPlans/flashcardReconciliation.js'
+
 function ensureCORS(response) {
   const h = response.headers
   if (!h.get('access-control-allow-origin')) {
@@ -680,7 +682,7 @@ async function handleUpdateFlashcard(request, env, user) {
   const id = extractId(request.url)
   const body = await request.json()
 
-  await env.DB.prepare(
+  const flashcardUpdateStmt = env.DB.prepare(
     `UPDATE flashcards SET difficulty = ?, stability = ?, state = ?, interval = ?,
      next_review = ?, last_review = ?, image_url = ?, updated_at = datetime('now')
      WHERE id = ? AND user_id = ?`
@@ -688,7 +690,16 @@ async function handleUpdateFlashcard(request, env, user) {
     body.difficulty ?? 0, body.stability ?? 0, body.state ?? 0, body.interval ?? 0,
     body.next_review || null, body.last_review || null, body.image_url || null,
     id, user.sub
-  ).run()
+  )
+
+  if (typeof body.last_review === 'string' && body.last_review.length > 0) {
+    await env.DB.batch([
+      flashcardUpdateStmt,
+      ...buildFlashcardReconciliationStatements({ env, userId: user.sub, cardId: id, reviewedAt: body.last_review }),
+    ])
+  } else {
+    await flashcardUpdateStmt.run()
+  }
   signalFlashcardMappingsStaleness(env, user.sub, EXISTING_REVIEW_IMPACT).catch(() => {})
   return json({ success: true })
 }

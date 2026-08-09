@@ -50,7 +50,7 @@ export function buildReviewTaskFromGroup(group, dateStr, sortOrder) {
   if (!group || !group.dueCardCount || group.dueCardCount <= 0) return null
   if (!group.estimatedMinutes || group.estimatedMinutes <= 0) return null
 
-  return {
+  const task = {
     taskDate: dateStr,
     taskType: 'flashcard_review',
     normalizedTopicId: null,
@@ -73,4 +73,8 @@ export function buildReviewTaskFromGroup(group, dateStr, sortOrder) {
     isNew: true,
     planTopicId: group.planTopicId || null,
   }
+  if (group.cardIds && group.cardIds.length > 0) {
+    task.snapshotCardIds = group.cardIds
+  }
+  return task
 }

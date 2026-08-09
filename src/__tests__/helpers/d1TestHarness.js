@@ -49,15 +49,28 @@ function loadMigration24Sql() {
   return readFileSync(resolve(__dirname, '../../../schema-migration24.sql'), 'utf8')
 }
 
+function loadMigration25Sql() {
+  return readFileSync(resolve(__dirname, '../../../schema-migration25.sql'), 'utf8')
+}
+
 const FLASHCARDS_STUB = `
 CREATE TABLE IF NOT EXISTS flashcards (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   deck_name TEXT NOT NULL DEFAULT '',
+  front TEXT NOT NULL DEFAULT '',
+  back TEXT NOT NULL DEFAULT '',
+  image_url TEXT,
+  tags TEXT,
+  difficulty REAL DEFAULT 0,
+  stability REAL DEFAULT 0,
   state INTEGER NOT NULL DEFAULT 0,
+  interval REAL DEFAULT 0,
+  repetitions INTEGER DEFAULT 0,
   last_review TEXT,
   next_review TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
 );
 `
 
@@ -173,7 +186,8 @@ export async function createTestDb() {
   sqlJsDb.run(loadMigration22Sql())
   sqlJsDb.run(loadMigration23Sql())
   sqlJsDb.run(loadMigration24Sql())
+  sqlJsDb.run(loadMigration25Sql())
   return new D1Database(sqlJsDb)
 }
 
-export { D1Database, D1PreparedStatement, loadMigration20Sql, loadMigration21Sql, loadMigration22Sql, loadMigration23Sql, loadMigration24Sql }
+export { D1Database, D1PreparedStatement, loadMigration20Sql, loadMigration21Sql, loadMigration22Sql, loadMigration23Sql, loadMigration24Sql, loadMigration25Sql }
