@@ -1,0 +1,56 @@
+.empty {
+  color: var(--mist);
+  font-size: 14px;
+  padding: var(--space-2xl) var(--space-lg);
+  text-align: center;
+  background: var(--card-bg);
+  border: 1px dashed var(--card-border);
+  border-radius: var(--radius-lg);
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-xs);
+}
+
+.desc {
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.error {
+  font-size: 13px;
+  color: var(--danger, var(--red));
+  margin-top: var(--space-sm);
+}
+
+.actionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.actionBtn:hover:not(:disabled) {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.actionBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

@@ -54,11 +54,42 @@
   to { transform: rotate(360deg); }
 }
 
-.empty {
+.emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.emptyStateText {
   font-size: 13px;
-  color: var(--mist);
-  padding: 12px;
-  text-align: center;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.mapTopicsBtn {
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  font-family: 'DM Sans', sans-serif;
+  flex-shrink: 0;
+}
+
+.mapTopicsBtn:hover {
+  background: var(--card-border);
+  color: var(--text-primary);
 }
 
 .deckList {

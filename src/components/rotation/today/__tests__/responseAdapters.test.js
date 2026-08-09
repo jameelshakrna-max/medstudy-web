@@ -3,6 +3,7 @@ import {
   isV2Plan,
   mapActivityType,
   mapV1Status,
+  normalizeAvailability,
   normalizePlanResponse,
 } from "../responseAdapters";
 
@@ -398,6 +399,36 @@ describe("normalizePlanResponse", () => {
       const result = normalizePlanResponse({ plan: { id: "p", version: 2 }, tasks: [] });
       expect(result.questionGroups).toEqual([]);
       expect(result.questionGroupStates).toEqual([]);
+    });
+  });
+
+  describe("normalizeAvailability", () => {
+    it("converts numeric isDayOff to a boolean", () => {
+      const input = [{ weekday: 0, availableMinutes: 120, isDayOff: 1 }];
+      const result = normalizeAvailability(input);
+      expect(result[0].isDayOff).toBe(true);
+    });
+
+    it("converts falsy numeric isDayOff to false", () => {
+      const input = [{ weekday: 1, availableMinutes: 120, isDayOff: 0 }];
+      const result = normalizeAvailability(input);
+      expect(result[0].isDayOff).toBe(false);
+    });
+
+    it("handles snake_case is_day_off", () => {
+      const input = [{ weekday: 2, is_day_off: 1 }];
+      const result = normalizeAvailability(input);
+      expect(result[0].isDayOff).toBe(true);
+    });
+
+    it("returns [] for non-array input", () => {
+      expect(normalizeAvailability(null)).toEqual([]);
+      expect(normalizeAvailability(undefined)).toEqual([]);
+    });
+
+    it("leaves entries without a day-off field unchanged", () => {
+      const input = [{ date: "2025-07-15", available: false }];
+      expect(normalizeAvailability(input)).toEqual(input);
     });
   });
 });

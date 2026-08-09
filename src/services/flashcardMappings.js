@@ -74,9 +74,11 @@ export async function resolveCanonicalTopicForMapping(env, planId, planTopicId) 
 
 export async function verifyDeckExists(env, userId, deckName) {
   const row = await env.DB.prepare(
-    'SELECT COUNT(*) as count FROM flashcards WHERE user_id = ? AND deck_name = ?'
-  ).bind(userId, deckName).first()
-  return row && row.count > 0
+    `SELECT
+       (SELECT COUNT(*) FROM flashcards WHERE user_id = ? AND deck_name = ?) +
+       (SELECT COUNT(*) FROM deck_settings WHERE user_id = ? AND deck_name = ?) AS total`
+  ).bind(userId, deckName, userId, deckName).first()
+  return !!row && Number(row.total) > 0
 }
 
 export async function cleanupOrphanMapping(env, userId, deckName) {

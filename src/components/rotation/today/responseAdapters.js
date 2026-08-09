@@ -34,6 +34,15 @@ export function normalizeLinkedDecks(linkedDecks) {
   }));
 }
 
+export function normalizeAvailability(availability) {
+  if (!Array.isArray(availability)) return [];
+  return availability.map((entry) => {
+    if (!entry || typeof entry !== "object") return entry;
+    if (entry.isDayOff == null && entry.is_day_off == null) return entry;
+    return { ...entry, isDayOff: !!(entry.isDayOff ?? entry.is_day_off) };
+  });
+}
+
 function normalizePlan(plan) {
   if (!plan || typeof plan !== "object") return plan;
   return { ...plan, linkedDecks: normalizeLinkedDecks(plan.linkedDecks) };
@@ -68,7 +77,7 @@ export function normalizePlanResponse(response) {
       topics,
       schedule: [],
       progress: Array.isArray(response.progress) ? response.progress : [],
-      availability: Array.isArray(response.availability) ? response.availability : [],
+      availability: normalizeAvailability(response.availability),
       sourcePace: response.sourcePace || null,
       questionGroups: Array.isArray(response.questionGroups) ? response.questionGroups : [],
       questionGroupStates: Array.isArray(response.questionGroupStates) ? response.questionGroupStates : [],
@@ -106,7 +115,7 @@ export function normalizePlanResponse(response) {
     tasks,
     schedule,
     progress: Array.isArray(response.progress) ? response.progress : [],
-    availability: Array.isArray(response.availability) ? response.availability : [],
+    availability: normalizeAvailability(response.availability),
     questionGroups: [],
     questionGroupStates: [],
   };

@@ -133,8 +133,8 @@ vi.mock('../today/RecalculationBanner', () => ({
 }))
 
 vi.mock('../today/DeckTopicMappings', () => ({
-  default: ({ onRecalculationRequired }) => (
-    <div data-testid="deck-mappings">
+  default: ({ onRecalculationRequired, hasLinkedDecks }) => (
+    <div data-testid="deck-mappings" data-has-linked-decks={hasLinkedDecks}>
       Deck-Topic Mappings
       <button data-testid="btn-recalc-required" onClick={onRecalculationRequired} />
     </div>
@@ -984,8 +984,22 @@ describe('V2PlanDetail', () => {
     it('shows an empty state when no decks are linked', () => {
       mockPlanWithDecks([])
       render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
-      expect(screen.getByText('No Anki decks linked to this plan yet.')).toBeInTheDocument()
+      expect(screen.getByText('No Anki decks linked to this rotation.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Manage decks/i })).toBeInTheDocument()
+    })
+
+    it('passes hasLinkedDecks to DeckTopicMappings based on the plan linkedDecks', () => {
+      mockPlanWithDecks([
+        { deckName: 'Cardio Deck', isPrimary: true, cardCount: 120, dueCount: 8, openUrl: null },
+      ])
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByTestId('deck-mappings').getAttribute('data-has-linked-decks')).toBe('true')
+    })
+
+    it('passes hasLinkedDecks=false when no decks are linked', () => {
+      mockPlanWithDecks([])
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByTestId('deck-mappings').getAttribute('data-has-linked-decks')).toBe('false')
     })
 
     it('renders linked decks with primary badge, counts, and open links', () => {
@@ -1067,6 +1081,35 @@ describe('V2PlanDetail', () => {
       expect(body.deckNames).toEqual(['Pharm Deck'])
       expect(body.primaryDeckName).toBe('Pharm Deck')
       expect(body.expectedRevision).toBe(3)
+    })
+
+    it('renders available decks and their card counts in the Manage Decks modal', async () => {
+      const user = userEvent.setup()
+      mockPlanWithDecks([{ deckName: 'Cardio Deck', isPrimary: true, cardCount: 120, dueCount: 8, openUrl: null }])
+      mockUseQuery.mockReturnValue({
+        data: [
+          { id: 'd1', name: 'Cardio Deck', card_count: 120 },
+          { id: 'd2', name: 'Pharm Deck', card_count: 200 },
+        ],
+        isLoading: false,
+        error: null,
+      })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: /Manage decks/i }))
+      expect(screen.getByRole('checkbox', { name: /Cardio Deck/ })).toBeInTheDocument()
+      expect(screen.getByRole('checkbox', { name: /Pharm Deck/ })).toBeInTheDocument()
+      expect(screen.getByText('120 cards')).toBeInTheDocument()
+      expect(screen.getByText('200 cards')).toBeInTheDocument()
+      expect(screen.getByRole('radio', { name: /Cardio Deck/ })).toBeInTheDocument()
+    })
+
+    it('shows the no-decks empty state only when the deck list is genuinely empty', async () => {
+      const user = userEvent.setup()
+      mockPlanWithDecks([])
+      mockUseQuery.mockReturnValue({ data: [], isLoading: false, error: null })
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('button', { name: /Manage decks/i }))
+      expect(screen.getByText(/No Anki decks found/)).toBeInTheDocument()
     })
   })
 })

@@ -72,4 +72,13 @@ describe('StepAnkiDecks', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /Cardio Deck/ }))
     expect(onFormChange).toHaveBeenCalledWith({ linkedDeckNames: ['Pharm Deck'], primaryDeckName: null })
   })
+
+  it('renders decks when the source returns the legacy { decks } object shape', () => {
+    decksHolder.data = { decks: DECKS }
+    render(<StepAnkiDecks form={baseForm} onFormChange={vi.fn()} errors={[]} />)
+    expect(screen.getByRole('checkbox', { name: /Cardio Deck/ })).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /Pharm Deck/ })).toBeInTheDocument()
+    expect(screen.getByText('120 cards')).toBeInTheDocument()
+    expect(screen.getByText('200 cards')).toBeInTheDocument()
+  })
 })

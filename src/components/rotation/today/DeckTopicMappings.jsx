@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiDelete } from '../../../lib/api'
 import { queryKeys } from '../../../lib/queryKeys'
+import { getMappingEmptyState } from '../../../lib/plannerDeckMappings'
 import { X, Loader2, AlertTriangle } from 'lucide-react'
 import styles from './DeckTopicMappings.module.css'
 
@@ -13,7 +14,11 @@ function buildTopicsByCanonicalId(topics) {
   return map
 }
 
-export default function DeckTopicMappings({ planId, topics, usesFlashcardCapacity, onRecalculationRequired }) {
+function scrollToDeckList() {
+  document.getElementById('deck-mapping-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+export default function DeckTopicMappings({ planId, topics, usesFlashcardCapacity, hasLinkedDecks = false, onRecalculationRequired }) {
   const queryClient = useQueryClient()
   const [pendingMap, setPendingMap] = useState({})
   const [error, setError] = useState(null)
@@ -39,6 +44,22 @@ export default function DeckTopicMappings({ planId, topics, usesFlashcardCapacit
     }
     return map
   }, [mappings])
+
+  const planCanonicalTopicIds = useMemo(() => {
+    const ids = new Set()
+    for (const t of topics) {
+      if (t.canonicalTopicId) ids.add(t.canonicalTopicId)
+    }
+    return ids
+  }, [topics])
+
+  const hasMappings = useMemo(() => {
+    return mappings.some(m => m.canonicalTopicId && planCanonicalTopicIds.has(m.canonicalTopicId))
+  }, [mappings, planCanonicalTopicIds])
+
+  const mappingEmptyState = useMemo(() => {
+    return getMappingEmptyState({ hasLinkedDecks, hasMappings })
+  }, [hasLinkedDecks, hasMappings])
 
   const topicsByCanonicalId = useMemo(() => buildTopicsByCanonicalId(topics), [topics])
   const planTopicOptions = useMemo(() => topics.map(t => ({
@@ -141,67 +162,88 @@ export default function DeckTopicMappings({ planId, topics, usesFlashcardCapacit
           <Loader2 size={16} className={styles.spin} /> Loading decks...
         </div>
       ) : mergedDecks.length === 0 ? (
-        <div className={styles.empty}>No flashcard decks found.</div>
+        mappingEmptyState && (
+          <div className={styles.emptyState}>
+            <span className={styles.emptyStateText}>{mappingEmptyState.copy}</span>
+            {mappingEmptyState.action && (
+              <button type="button" className={styles.mapTopicsBtn} onClick={scrollToDeckList}>
+                {mappingEmptyState.action}
+              </button>
+            )}
+          </div>
+        )
       ) : (
-        <div className={styles.deckList}>
-          {mergedDecks.map(deck => {
-            const mapping = deck.mapping
-            const topic = mapping ? topicsByCanonicalId.get(mapping.canonicalTopicId) : null
-            const isPending = pendingMap[deck.deckName]
+        <>
+          {mappingEmptyState && (
+            <div className={styles.emptyState}>
+              <span className={styles.emptyStateText}>{mappingEmptyState.copy}</span>
+              {mappingEmptyState.action && (
+                <button type="button" className={styles.mapTopicsBtn} onClick={scrollToDeckList}>
+                  {mappingEmptyState.action}
+                </button>
+              )}
+            </div>
+          )}
+          <div className={styles.deckList} id="deck-mapping-list">
+            {mergedDecks.map(deck => {
+              const mapping = deck.mapping
+              const topic = mapping ? topicsByCanonicalId.get(mapping.canonicalTopicId) : null
+              const isPending = pendingMap[deck.deckName]
 
-            return (
-              <div key={deck.deckName} className={styles.deckRow}>
-                <div className={styles.deckInfo}>
-                  <span className={styles.deckName}>{deck.deckName}</span>
-                  <span className={styles.cardCount}>{deck.cardCount} card{deck.cardCount !== 1 ? 's' : ''}</span>
+              return (
+                <div key={deck.deckName} className={styles.deckRow}>
+                  <div className={styles.deckInfo}>
+                    <span className={styles.deckName}>{deck.deckName}</span>
+                    <span className={styles.cardCount}>{deck.cardCount} card{deck.cardCount !== 1 ? 's' : ''}</span>
+                  </div>
+                  {mapping && topic ? (
+                    <div className={styles.mappedInfo}>
+                      <span className={styles.topicBadge}>{topic.topicTitle || topic.normalizedTopicId}</span>
+                      <button
+                        className={styles.unmapBtn}
+                        onClick={() => handleUnmap(deck.deckName, mapping.id)}
+                        disabled={isPending}
+                        aria-label={`Remove mapping for ${deck.deckName}`}
+                      >
+                        {isPending ? <Loader2 size={12} className={styles.spin} /> : <X size={12} />}
+                      </button>
+                    </div>
+                  ) : mapping && !topic ? (
+                    <div className={styles.mappedInfo}>
+                      <span className={styles.unmatchedTopic}>Unknown topic</span>
+                      <button
+                        className={styles.unmapBtn}
+                        onClick={() => handleUnmap(deck.deckName, mapping.id)}
+                        disabled={isPending}
+                        aria-label={`Remove mapping for ${deck.deckName}`}
+                      >
+                        {isPending ? <Loader2 size={12} className={styles.spin} /> : <X size={12} />}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className={styles.mapControls}>
+                      <select
+                        className={styles.topicSelect}
+                        value=""
+                        onChange={e => {
+                          if (e.target.value) handleMap(deck.deckName, e.target.value)
+                        }}
+                        disabled={isPending || planTopicOptions.length === 0}
+                        aria-label={`Select topic for ${deck.deckName}`}
+                      >
+                        <option value="">Map to topic...</option>
+                        {planTopicOptions.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                      {isPending && <Loader2 size={14} className={styles.spin} />}
+                    </div>
+                  )}
                 </div>
-                {mapping && topic ? (
-                  <div className={styles.mappedInfo}>
-                    <span className={styles.topicBadge}>{topic.topicTitle || topic.normalizedTopicId}</span>
-                    <button
-                      className={styles.unmapBtn}
-                      onClick={() => handleUnmap(deck.deckName, mapping.id)}
-                      disabled={isPending}
-                      aria-label={`Remove mapping for ${deck.deckName}`}
-                    >
-                      {isPending ? <Loader2 size={12} className={styles.spin} /> : <X size={12} />}
-                    </button>
-                  </div>
-                ) : mapping && !topic ? (
-                  <div className={styles.mappedInfo}>
-                    <span className={styles.unmatchedTopic}>Unknown topic</span>
-                    <button
-                      className={styles.unmapBtn}
-                      onClick={() => handleUnmap(deck.deckName, mapping.id)}
-                      disabled={isPending}
-                      aria-label={`Remove mapping for ${deck.deckName}`}
-                    >
-                      {isPending ? <Loader2 size={12} className={styles.spin} /> : <X size={12} />}
-                    </button>
-                  </div>
-                ) : (
-                  <div className={styles.mapControls}>
-                    <select
-                      className={styles.topicSelect}
-                      value=""
-                      onChange={e => {
-                        if (e.target.value) handleMap(deck.deckName, e.target.value)
-                      }}
-                      disabled={isPending || planTopicOptions.length === 0}
-                      aria-label={`Select topic for ${deck.deckName}`}
-                    >
-                      <option value="">Map to topic...</option>
-                      {planTopicOptions.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                    {isPending && <Loader2 size={14} className={styles.spin} />}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        </>
       )}
     </div>
   )

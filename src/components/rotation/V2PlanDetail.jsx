@@ -11,7 +11,6 @@ import useRotationPlanDetail from './today/useRotationPlanDetail'
 import usePlannerTaskMutations from './today/usePlannerTaskMutations'
 import useTaskAttachment from './today/useTaskAttachment'
 import TodayView from './today/TodayView'
-import AnkiStatus from './today/AnkiStatus'
 import RecalculationBanner from './today/RecalculationBanner'
 import DeckTopicMappings from './today/DeckTopicMappings'
 import FlashcardForecastRecommendations from './today/FlashcardForecastRecommendations'
@@ -26,6 +25,7 @@ import CalendarView from './CalendarView'
 import ProgressView from './ProgressView'
 import { apiGet, apiPatch, apiDelete, apiPost, apiPut } from '../../lib/api'
 import { queryKeys } from '../../lib/queryKeys'
+import { usePlannerDecks } from '../../hooks/usePlannerDecks'
 import { getTodayKey, resolvePlannerTimezone, getBrowserTimezone } from './today/todayUtils'
 import ProgressBar from '../ui/ProgressBar/ProgressBar'
 import styles from './V2PlanDetail.module.css'
@@ -158,13 +158,8 @@ function ConnectedAnkiDecks({ plan, planId, onToast }) {
   const [selectedPrimary, setSelectedPrimary] = useState(null)
   const [decksError, setDecksError] = useState(null)
 
-  const { data: decksData } = useQuery({
-    queryKey: queryKeys.flashcards.decks(),
-    queryFn: () => apiGet('/api/flashcards/decks'),
-    enabled: decksModalOpen,
-    staleTime: 30_000,
-  })
-  const availableDecks = Array.isArray(decksData) ? decksData : []
+  const { data: decksData } = usePlannerDecks({ enabled: decksModalOpen, staleTime: 30_000 })
+  const availableDecks = decksData ?? []
 
   const decksMutation = useMutation({
     mutationFn: ({ deckNames, primaryDeckName, expectedRevision, clientRequestId }) =>
@@ -224,7 +219,7 @@ function ConnectedAnkiDecks({ plan, planId, onToast }) {
       </div>
 
       {linkedDecks.length === 0 ? (
-        <p className={styles.decksEmpty}>No Anki decks linked to this plan yet.</p>
+        <p className={styles.decksEmpty}>No Anki decks linked to this rotation.</p>
       ) : (
         <ul className={styles.decksList}>
           {linkedDecks.map(deck => (
@@ -258,15 +253,15 @@ function ConnectedAnkiDecks({ plan, planId, onToast }) {
           ) : (
             <>
               {availableDecks.map(deck => (
-                <label key={deck.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--input-bg)', fontSize: 14, cursor: 'pointer' }}>
+                <label key={deck.deckName} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--input-bg)', fontSize: 14, cursor: 'pointer' }}>
                   <input
                     type="checkbox"
-                    checked={selectedDeckNames.includes(deck.name)}
-                    onChange={e => handleToggle(deck.name, e.target.checked)}
+                    checked={selectedDeckNames.includes(deck.deckName)}
+                    onChange={e => handleToggle(deck.deckName, e.target.checked)}
                   />
-                  <span>{deck.name}</span>
+                  <span>{deck.deckName}</span>
                   <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--mist)' }}>
-                    {deck.card_count} card{deck.card_count !== 1 ? 's' : ''}
+                    {deck.cardCount} card{deck.cardCount !== 1 ? 's' : ''}
                   </span>
                 </label>
               ))}
@@ -275,16 +270,16 @@ function ConnectedAnkiDecks({ plan, planId, onToast }) {
                 {selectedDeckNames.length === 0 ? (
                   <p style={{ color: 'var(--mist)', fontSize: 12 }}>Select at least one deck first.</p>
                 ) : (
-                  availableDecks.filter(deck => selectedDeckNames.includes(deck.name)).map(deck => (
-                    <label key={deck.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 14, cursor: 'pointer' }}>
+                  availableDecks.filter(deck => selectedDeckNames.includes(deck.deckName)).map(deck => (
+                    <label key={deck.deckName} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 14, cursor: 'pointer' }}>
                       <input
                         type="radio"
                         name="modal-primary-deck"
-                        value={deck.name}
-                        checked={selectedPrimary === deck.name}
-                        onChange={() => setSelectedPrimary(deck.name)}
+                        value={deck.deckName}
+                        checked={selectedPrimary === deck.deckName}
+                        onChange={() => setSelectedPrimary(deck.deckName)}
                       />
-                      <span>{deck.name}</span>
+                      <span>{deck.deckName}</span>
                     </label>
                   ))
                 )}
@@ -325,6 +320,7 @@ export default function V2PlanDetail({ planId, onBack }) {
 
   const [dialogState, setDialogState] = useState({ type: null, task: null })
   const [toast, setToast] = useState({ open: false, title: '', description: '', variant: 'default' })
+  const [activeTab, setActiveTab] = useState('today')
   const [helpOpen, setHelpOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameValue, setRenameValue] = useState('')
@@ -723,7 +719,7 @@ export default function V2PlanDetail({ planId, onBack }) {
         onReset={mutations.reset}
       />
 
-      <Tabs defaultValue="today">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="today">Today</TabsTrigger>
           <TabsTrigger value="calendar">Calendar</TabsTrigger>
@@ -738,6 +734,8 @@ export default function V2PlanDetail({ planId, onBack }) {
             topicsById={topicsById}
             plan={plan}
             sourceTitle={plan.sourceTitle}
+            availability={data.availability}
+            onOpenAvailability={() => setActiveTab('calendar')}
             isMutating={mutations.isPending}
             isOrphaned={taskAttachment.isOrphaned}
             hasUnsyncedData={taskAttachment.hasUnsyncedData}
@@ -752,17 +750,12 @@ export default function V2PlanDetail({ planId, onBack }) {
             onSkip={handleSkip}
             onStudyPomodoro={handleStudyPomodoro}
           />
-          <AnkiStatus
-            plan={plan}
-            topics={topics}
-            tasks={tasks}
-            todayKey={getTodayKey(new Date(), resolvedTimezone)}
-          />
           <ConnectedAnkiDecks plan={plan} planId={planId} onToast={setToast} />
           <DeckTopicMappings
             planId={planId}
             topics={topics}
             usesFlashcardCapacity={plan.usesFlashcardCapacity}
+            hasLinkedDecks={Array.isArray(plan.linkedDecks) && plan.linkedDecks.length > 0}
             onRecalculationRequired={handleRecalculationRequired}
           />
           <FlashcardForecastRecommendations

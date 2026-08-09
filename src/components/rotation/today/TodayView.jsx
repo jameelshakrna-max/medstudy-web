@@ -1,8 +1,20 @@
 import { useMemo } from 'react'
 import { getTodayKey, getBrowserTimezone, resolvePlannerTimezone } from './todayUtils'
-import { groupTasksBySection, calculateDayProgress, classifyTodayState, getTodayRelevantTasks, claimActiveBlockSiblings } from './todayGrouping'
+import {
+  groupTasksBySection,
+  calculateDayProgress,
+  classifyTodayState,
+  classifyTodayReason,
+  getTodayRelevantTasks,
+  claimActiveBlockSiblings,
+  buildAvailabilityByWeekday,
+  getDayAvailabilityEntry,
+  findNextFutureTask,
+} from './todayGrouping'
 import { getTaskDisplayModel } from './taskDisplayModel'
 import TodaySection from './TodaySection'
+import TodayEmptyReason from './TodayEmptyReason'
+import usePlanActivation from './usePlanActivation'
 import ProgressBar from '../../ui/ProgressBar/ProgressBar'
 import { Banner, BannerAction } from '../../ui/Banner/Banner'
 import styles from './TodayView.module.css'
@@ -14,6 +26,8 @@ export default function TodayView({
   topicsById,
   plan,
   sourceTitle,
+  availability,
+  onOpenAvailability,
   isMutating,
   isOrphaned,
   hasUnsyncedData,
@@ -32,6 +46,16 @@ export default function TodayView({
     const tz = resolvePlannerTimezone({ browserTimezone: getBrowserTimezone() })
     return getTodayKey(new Date(), tz)
   }, [])
+
+  const activatePlan = usePlanActivation({
+    planId,
+    revision: plan?.revision,
+  })
+
+  const availabilityByWeekday = useMemo(() => {
+    const source = availability ?? plan?.settingsJson?.availability
+    return buildAvailabilityByWeekday(source)
+  }, [availability, plan])
 
   const groupByKey = useMemo(() => {
     const map = new Map()
@@ -86,6 +110,23 @@ export default function TodayView({
     [displayTasks, todayKey, todayRelevantTasks]
   )
 
+  const emptyReason = useMemo(() => {
+    if (todayState.state !== 'EMPTY_TODAY') return null
+    const tasksToday = displayTasks.filter(t => t.taskDate === todayKey)
+    const nextTask = findNextFutureTask(displayTasks, todayKey)
+    return classifyTodayReason({
+      planStatus: plan?.status,
+      todayKey,
+      dayAvailability: getDayAvailabilityEntry(todayKey, availabilityByWeekday),
+      tasksToday,
+      nextTask,
+      availabilityByWeekday,
+      blockedDates: plan?.settingsJson?.blockedDates || [],
+      endDate: plan?.endDate,
+      topicsById,
+    })
+  }, [todayState, displayTasks, todayKey, plan, availabilityByWeekday, topicsById])
+
   if (todayState.state === 'PRE_START') {
     const startDate = todayState.startDate
     const dateDisplay = startDate ? formatDateShort(startDate) : 'soon'
@@ -96,6 +137,17 @@ export default function TodayView({
           {tasks.length > 0 && `${tasks.length} upcoming task${tasks.length === 1 ? '' : 's'}`}
         </div>
       </div>
+    )
+  }
+
+  if (plan?.status === 'draft') {
+    return (
+      <TodayEmptyReason
+        reason={{ reason: 'DRAFT', title: "This rotation starts today, but it isn't active yet." }}
+        isActivating={activatePlan.isPending}
+        activationError={activatePlan.error?.message || null}
+        onActivate={() => activatePlan.mutate()}
+      />
     )
   }
 
@@ -132,12 +184,13 @@ export default function TodayView({
 
   if (todayState.state === 'EMPTY_TODAY') {
     return (
-      <div className={styles.empty}>
-        <div className={styles.emptyTitle}>Nothing scheduled for today</div>
-        <div className={styles.emptyDesc}>
-          Check the Schedule tab for upcoming tasks.
-        </div>
-      </div>
+      <TodayEmptyReason
+        reason={emptyReason}
+        isActivating={activatePlan.isPending}
+        activationError={activatePlan.error?.message || null}
+        onActivate={() => activatePlan.mutate()}
+        onOpenAvailability={onOpenAvailability}
+      />
     )
   }
 
