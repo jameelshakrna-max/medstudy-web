@@ -1,3 +1,4 @@
+import { BrandLogo } from './ui'
 import styles from './LoadingScreen.module.css'
 
 export default function LoadingScreen({ message, fullPage = true }) {
@@ -5,7 +6,7 @@ export default function LoadingScreen({ message, fullPage = true }) {
     <div className={`${styles.loader} ${fullPage ? styles.fullPage : styles.inline}`}>
       <div className={styles.pulse}>
         <div className={styles.ring} />
-        <img src="/icon.svg" alt="MedStudy OS" className={styles.icon} />
+        <BrandLogo variant="symbol" size={44} className={styles.icon} />
       </div>
       <div className={styles.dots}>
         <span className={styles.dot} />

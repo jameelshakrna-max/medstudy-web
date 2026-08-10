@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import TopBar from './TopBar'
 import BottomNav from './BottomNav'
+import { BrandLogo } from './ui'
 import styles from './Layout.module.css'
 
 const NAV = [
@@ -67,8 +68,7 @@ export default function Layout() {
       <aside className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ''} ${sidebarCollapsed ? styles.sidebarCollapsed : ''}`}>
         <div className={styles.sidebarTop}>
           <div className={styles.logo}>
-            <img src="/icon.svg" alt="MedStudy" className={styles.logoIcon} />
-            <span className={styles.logoText}>MedStudy OS</span>
+            <BrandLogo variant="horizontal" size={180} linkToHome />
           </div>
 
         </div>
@@ -107,6 +107,7 @@ export default function Layout() {
           <button className={styles.menuBtn} onClick={() => setMobileOpen(!mobileOpen)}>
             <Menu size={20} strokeWidth={1.5} />
           </button>
+          <BrandLogo variant="horizontal" size={150} linkToHome />
         </div>
         <TopBar sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
         <div className={styles.content}>

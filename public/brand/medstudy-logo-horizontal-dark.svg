@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 310 72" role="img" aria-labelledby="title desc">
+  <title id="title">MedStudy OS</title>
+  <desc id="desc">MedStudy OS horizontal logo for dark backgrounds.</desc>
+  <g transform="translate(4 4)">
+    <g fill="none" stroke-linecap="round" stroke-width="4.5">
+      <path d="M17.2 7.9A27 27 0 0 1 46.8 7.9" stroke="#F7FAFC"/>
+      <path d="M54.4 18.8A27 27 0 0 1 54.4 45.2" stroke="#2DD4BF"/>
+      <path d="M46.8 56.1A27 27 0 0 1 17.2 56.1" stroke="#2DD4BF"/>
+      <path d="M9.6 45.2A27 27 0 0 1 9.6 18.8" stroke="#F7FAFC"/>
+    </g>
+    <path d="M14 17.3c6.7.8 12.5 3.2 18 8.2V53c-5.1-4.5-10.9-6.4-18-6.7z" fill="#F7FAFC"/>
+    <path d="M50 17.3c-6.7.8-12.5 3.2-18 8.2V53c5.1-4.5 10.9-6.4 18-6.7z" fill="#2DD4BF"/>
+    <path d="m19.4 38.6 5.3-5.4h4.8l3.2 4.8 6.1-10.8 5.8-4.7" fill="none" stroke="#081A38" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.2"/>
+  </g>
+  <text x="78" y="46" fill="#F7FAFC" font-family="'Nimbus Sans', Arial, sans-serif" font-size="31" font-weight="700" letter-spacing="-.7">MedStudy</text>
+  <text x="226" y="46" fill="#2DD4BF" font-family="'Nimbus Sans', Arial, sans-serif" font-size="31" font-weight="700" letter-spacing="-.7">OS</text>
+</svg>

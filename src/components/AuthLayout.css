@@ -7,10 +7,10 @@
 .auth-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 .auth-blob1 { position: absolute; top: -20%; left: -10%; width: 60%; height: 60%; background: radial-gradient(ellipse, rgba(79,140,255,0.06) 0%, transparent 60%); border-radius: 50%; }
 .auth-blob2 { position: absolute; bottom: -10%; right: -10%; width: 50%; height: 50%; background: radial-gradient(ellipse, rgba(129,140,248,0.04) 0%, transparent 60%); border-radius: 50%; }
-.auth-back { position: fixed; top: 24px; left: 24px; z-index: var(--z-sticky, 100); font-size: 14px; color: var(--mist); background: var(--card-bg); border: 1px solid var(--card-border); padding: 8px 16px; border-radius: 100px; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
-.auth-back:hover { color: var(--text-primary); }
+.auth-back { position: fixed; top: 24px; left: 24px; z-index: var(--z-sticky, 100); display: flex; align-items: center; opacity: 0.9; transition: opacity 0.2s; }
+.auth-back:hover { opacity: 1; }
 .auth-card { position: relative; z-index: 1; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 24px; padding: 44px 40px; width: 100%; max-width: 440px; }
-.auth-icon { display: flex; justify-content: center; margin-bottom: 16px; color: var(--blue); }
+.auth-icon { display: flex; justify-content: center; margin-bottom: 16px; }
 .auth-title { font-family: 'DM Serif Display', serif; font-size: 26px; color: var(--text-primary); text-align: center; margin-bottom: 6px; }
 .auth-sub { font-size: 14px; color: var(--mist); text-align: center; margin-bottom: 28px; }
 .field { margin-bottom: 16px; }
@@ -36,15 +36,12 @@
   .auth-card { padding: 24px 18px; border-radius: 20px; }
   .auth-title { font-size: 22px; }
   .auth-btn { padding: 12px; font-size: 14px; }
-  .auth-icon svg { width: 28px; height: 28px; }
 }
 
 @media (hover: none) and (pointer: coarse) {
   .auth-btn { min-height: 48px; }
-  .auth-back { min-height: 38px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .auth-btn:hover { transform: none; }
-  .auth-back:hover { color: var(--mist); }
 }

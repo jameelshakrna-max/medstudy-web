@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">MedStudy OS monochrome symbol</title>
+  <desc id="desc">An open book forming an M, crossed by a rising progress line and surrounded by an orbit.</desc>
+  <g fill="none" stroke="#111827" stroke-linecap="round" stroke-width="4.5">
+    <path d="M17.2 7.9A27 27 0 0 1 46.8 7.9"/>
+    <path d="M54.4 18.8A27 27 0 0 1 54.4 45.2"/>
+    <path d="M46.8 56.1A27 27 0 0 1 17.2 56.1"/>
+    <path d="M9.6 45.2A27 27 0 0 1 9.6 18.8"/>
+  </g>
+  <path d="M14 17.3c6.7.8 12.5 3.2 18 8.2V53c-5.1-4.5-10.9-6.4-18-6.7zM50 17.3c-6.7.8-12.5 3.2-18 8.2V53c5.1-4.5 10.9-6.4 18-6.7z" fill="#111827"/>
+  <path d="m19.4 38.6 5.3-5.4h4.8l3.2 4.8 6.1-10.8 5.8-4.7" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.2"/>
+</svg>

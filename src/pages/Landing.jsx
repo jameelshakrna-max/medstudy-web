@@ -3,8 +3,9 @@ import {
   BookOpen, TrendingUp, BrainCircuit,
   BarChart3, Timer, Target,
   Check, ArrowRight, Layers,
-  GraduationCap, Sparkles
+  Sparkles
 } from 'lucide-react'
+import { BrandLogo } from '../components/ui'
 import styles from './Landing.module.css'
 
 const features = [
@@ -40,10 +41,7 @@ export default function Landing() {
       </div>
 
       <nav className={styles.nav}>
-        <div className={styles.logo}>
-          <GraduationCap size={22} strokeWidth={1.5} className={styles.logoIcon} />
-          <span>MedStudy OS</span>
-        </div>
+        <BrandLogo variant="horizontal" size={185} linkToHome className={styles.logo} />
         <div className={styles.navLinks}>
           <Link to="/login" className={styles.navBtn}>Sign In</Link>
           <Link to="/signup" className={`${styles.navBtn} ${styles.navBtnPrimary}`}>Get Started Free</Link>
@@ -175,8 +173,7 @@ export default function Landing() {
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
           <div className={styles.footerLogo}>
-            <GraduationCap size={16} strokeWidth={1.5} />
-            MedStudy OS
+            <BrandLogo variant="horizontal" size={150} />
           </div>
           <div className={styles.footerSub}>Built for the physician you are becoming.</div>
         </div>

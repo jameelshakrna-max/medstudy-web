@@ -130,8 +130,8 @@ export async function handlePushCron(env) {
       const payload = JSON.stringify({
         title: push.title,
         body: push.body,
-        icon: '/icon.svg',
-        badge: '/icon.svg',
+        icon: '/brand/symbol-128.png',
+        badge: '/brand/symbol-128.png',
         tag: push.type,
         renotify: false,
         vibrate: [200, 100, 200],

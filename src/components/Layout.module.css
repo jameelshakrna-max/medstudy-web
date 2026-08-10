@@ -45,40 +45,8 @@
 @media (max-width: 480px) {
   .content { padding: 20px 16px; }
 }
-/* ── Logo with icon ── */
+/* ── Logo ── */
 .logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.logoIcon {
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  border-radius: 8px;
-  transition: transform 0.2s ease;
-}
-
-.logoIcon:hover {
-  transform: scale(1.08) rotate(-2deg);
-}
-
-.logoText {
-  font-family: 'DM Serif Display', serif;
-  font-size: 18px;
-  color: var(--text-primary);
-  letter-spacing: -0.02em;
-  white-space: nowrap;
-}
-
-/* ── Responsive ── */
-@media (max-width: 480px) {
-  .logoIcon {
-    width: 28px;
-    height: 28px;
-  }
-  .logoText {
-    font-size: 16px;
-  }
 }

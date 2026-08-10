@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { GraduationCap, ArrowLeft } from 'lucide-react'
+import { BrandLogo } from './ui'
 import './AuthLayout.css'
 
 export default function AuthLayout({ title, sub, children }) {
@@ -9,13 +9,12 @@ export default function AuthLayout({ title, sub, children }) {
         <div className="auth-blob1" />
         <div className="auth-blob2" />
       </div>
-      <Link to="/" className="auth-back">
-        <ArrowLeft size={14} strokeWidth={1.5} />
-        MedStudy OS
+      <Link to="/" className="auth-back" aria-label="Back to MedStudy OS home">
+        <BrandLogo variant="horizontal" size={150} />
       </Link>
       <div className="auth-card">
         <div className="auth-icon">
-          <GraduationCap size={36} strokeWidth={1.5} />
+          <BrandLogo variant="symbol" size={52} />
         </div>
         <h1 className="auth-title">{title}</h1>
         {sub && <p className="auth-sub">{sub}</p>}

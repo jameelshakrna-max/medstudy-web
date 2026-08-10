@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useNavigate, Link } from 'react-router-dom'
 import { AlertCircle, CheckCircle } from 'lucide-react'
+import { BrandLogo } from '../components/ui'
 import styles from './ResetPassword.module.css'
 
 export default function ResetPassword() {
@@ -54,6 +55,9 @@ export default function ResetPassword() {
     return (
       <div className={styles.container}>
         <div className={styles.card}>
+          <div className={styles.brand}>
+            <BrandLogo variant="symbol" size={52} />
+          </div>
           <AlertCircle size={28} strokeWidth={1.5} className={styles.errorIcon} />
           <h2>Invalid Link</h2>
           <p className={styles.subtitle}>{error}</p>
@@ -66,6 +70,9 @@ export default function ResetPassword() {
   return (
     <div className={styles.container}>
       <div className={styles.card}>
+        <div className={styles.brand}>
+          <BrandLogo variant="symbol" size={52} />
+        </div>
         <h2>Reset Your Password</h2>
         <p className={styles.subtitle}>Enter your new password below</p>
 

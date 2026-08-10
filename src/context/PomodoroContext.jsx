@@ -128,8 +128,8 @@ async function showLocalNotification(mode) {
         reg.showNotification(label + ' Complete', {
           body,
           tag: 'pomodoro-timer',
-          icon: '/icon.svg',
-          badge: '/icon.svg',
+          icon: '/brand/symbol-128.png',
+          badge: '/brand/symbol-128.png',
           requireInteraction: true,
           silent: false,
           vibrate: [200, 100, 200, 100, 200],
@@ -148,8 +148,8 @@ async function showLocalNotification(mode) {
       new Notification(label + ' Complete', {
         body,
         tag: 'pomodoro-timer',
-        icon: '/icon.svg',
-        badge: '/icon.svg'
+        icon: '/brand/symbol-128.png',
+        badge: '/brand/symbol-128.png'
       })
     } else {
       pushLog('Cannot show notification: permission=' + Notification.permission)
