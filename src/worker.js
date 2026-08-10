@@ -175,7 +175,7 @@ export default {
 
     if (path.match(/^\/api\/communities\/[^\/]+\/ws$/) && request.method === 'GET') {
       try {
-        return handleWebSocketUpgrade(request, env)
+        return await handleWebSocketUpgrade(request, env)
       } catch (err) {
         console.error(`[${requestId}] ws:`, err)
         return ensureCORS(json({ error: err.message, requestId }, 500))
@@ -184,7 +184,7 @@ export default {
 
     if (path.match(/^\/api\/dm\/[^\/]+\/ws$/) && request.method === 'GET') {
       try {
-        return handleDMWebSocketUpgrade(request, env)
+        return await handleDMWebSocketUpgrade(request, env)
       } catch (err) {
         console.error(`[${requestId}] dm-ws:`, err)
         return ensureCORS(json({ error: err.message, requestId }, 500))
@@ -239,158 +239,158 @@ export default {
       }
 
       if (path === '/api/flashcards' && request.method === 'GET') {
-        return handleGetFlashcards(request, env, user)
+        return await handleGetFlashcards(request, env, user)
       }
       if (path === '/api/flashcards' && request.method === 'POST') {
-        return handleCreateFlashcards(request, env, user)
+        return await handleCreateFlashcards(request, env, user)
       }
       if (path === '/api/flashcards/due-count' && request.method === 'GET') {
-        return handleDueCount(request, env, user)
+        return await handleDueCount(request, env, user)
       }
       if (path.match(/^\/api\/flashcards\/[^\/]+$/) && request.method === 'PUT') {
-        return handleUpdateFlashcard(request, env, user)
+        return await handleUpdateFlashcard(request, env, user)
       }
       if (path.match(/^\/api\/flashcards\/[^\/]+$/) && request.method === 'DELETE') {
-        return handleDeleteFlashcard(request, env, user)
+        return await handleDeleteFlashcard(request, env, user)
       }
 
       if (path === '/api/decks' && request.method === 'GET') {
-        return handleGetDecks(request, env, user)
+        return await handleGetDecks(request, env, user)
       }
       if (path === '/api/decks' && request.method === 'POST') {
-        return handleCreateDeck(request, env, user)
+        return await handleCreateDeck(request, env, user)
       }
       if (path.match(/^\/api\/decks\/[^\/]+$/) && request.method === 'DELETE') {
-        return handleDeleteDeck(request, env, user)
+        return await handleDeleteDeck(request, env, user)
       }
 
       if (path === '/api/flashcards/decks' && request.method === 'GET') {
-        return handleListDecks(request, env, user)
+        return await handleListDecks(request, env, user)
       }
 
       if (path === '/api/deck-mappings' && request.method === 'GET') {
-        return handleListDeckMappings(request, env, user)
+        return await handleListDeckMappings(request, env, user)
       }
       if (path === '/api/deck-mappings' && request.method === 'POST') {
-        return handleCreateDeckMapping(request, env, user)
+        return await handleCreateDeckMapping(request, env, user)
       }
       if (path.match(/^\/api\/deck-mappings\/[^\/]+$/) && request.method === 'DELETE') {
-        return handleDeleteDeckMapping(request, env, user)
+        return await handleDeleteDeckMapping(request, env, user)
       }
 
       if (path === '/api/upload-image' && request.method === 'POST') {
-        return handleUploadImage(request, env, user)
+        return await handleUploadImage(request, env, user)
       }
 
       if (path === '/api/fsrs/get' && request.method === 'GET') {
-        return handleGetFsrs(request, env, user)
+        return await handleGetFsrs(request, env, user)
       }
       if (path === '/api/fsrs/save' && request.method === 'POST') {
-        return handleSaveFsrs(request, env, user)
+        return await handleSaveFsrs(request, env, user)
       }
 
       if (path === '/api/categories' && request.method === 'GET') {
-        return handleGetCategories(request, env)
+        return await handleGetCategories(request, env)
       }
       if (path === '/api/categories' && request.method === 'POST') {
-        return handleCreateCategory(request, env, user)
+        return await handleCreateCategory(request, env, user)
       }
 
       if (path === '/api/resources' && request.method === 'GET') {
-        return handleGetResources(request, env)
+        return await handleGetResources(request, env)
       }
       if (path === '/api/resources' && request.method === 'POST') {
-        return handleCreateResource(request, env, user)
+        return await handleCreateResource(request, env, user)
       }
       if (path.match(/^\/api\/resources\/[^\/]+$/) && request.method === 'GET') {
-        return handleGetResource(request, env)
+        return await handleGetResource(request, env)
       }
       if (path.match(/^\/api\/resources\/[^\/]+$/) && request.method === 'PUT') {
-        return handleUpdateResource(request, env, user)
+        return await handleUpdateResource(request, env, user)
       }
       if (path.match(/^\/api\/resources\/[^\/]+$/) && request.method === 'DELETE') {
-        return handleDeleteResource(request, env, user)
+        return await handleDeleteResource(request, env, user)
       }
 
       if (path.match(/^\/api\/resources\/[^\/]+\/file$/) && request.method === 'GET') {
-        return handleGetResourceFile(request, env)
+        return await handleGetResourceFile(request, env)
       }
       if (path.match(/^\/api\/resources\/[^\/]+\/image$/) && request.method === 'GET') {
-        return handleGetResourceImage(request, env)
+        return await handleGetResourceImage(request, env)
       }
       if (path.match(/^\/api\/resources\/[^\/]+\/download$/) && request.method === 'GET') {
-        return handleDownloadResourceFile(request, env)
+        return await handleDownloadResourceFile(request, env)
       }
 
       if (path.match(/^\/api\/resources\/[^\/]+\/comments$/) && request.method === 'GET') {
-        return handleGetComments(request, env)
+        return await handleGetComments(request, env)
       }
       if (path.match(/^\/api\/resources\/[^\/]+\/comments$/) && request.method === 'POST') {
-        return handleCreateComment(request, env, user)
+        return await handleCreateComment(request, env, user)
       }
 
       if (path.match(/^\/api\/comments\/[^\/]+$/) && request.method === 'DELETE') {
-        return handleDeleteComment(request, env, user)
+        return await handleDeleteComment(request, env, user)
       }
       if (path.match(/^\/api\/comments\/[^\/]+\/vote$/) && request.method === 'POST') {
-        return handleVoteComment(request, env, user)
+        return await handleVoteComment(request, env, user)
       }
 
-      if (path === '/api/notifications/unread-counts' && request.method === 'GET') return handleGetUnreadCounts(request, env, user)
-      if (path === '/api/notifications/preferences' && request.method === 'GET') return handleGetNotificationPreferences(request, env, user)
-      if (path === '/api/notifications/preferences' && request.method === 'PUT') return handleUpdateNotificationPreferences(request, env, user)
-      if (path === '/api/notifications' && request.method === 'GET') return handleListNotifications(request, env, user)
-      if (path === '/api/notifications' && request.method === 'POST') return handleCreateNotification(request, env, user)
-      if (path === '/api/notifications/read-all' && request.method === 'POST') return handleMarkAllRead(request, env, user)
-      if (path === '/api/notifications/cleanup' && request.method === 'POST') return handleCleanupNotifications(request, env, user)
-      if (path.match(/^\/api\/notifications\/([^\/]+)\/read$/) && request.method === 'POST') return handleMarkNotificationRead(request, env, user)
-      if (path === '/api/communities' && request.method === 'GET') return handleListCommunities(request, env, user)
-      if (path === '/api/communities' && request.method === 'POST') return handleCreateCommunity(request, env, user)
-      if (path === '/api/communities/from-template' && request.method === 'POST') return handleCreateCommunityFromTemplate(request, env, user)
-      if (path === '/api/communities/join-by-code' && request.method === 'POST') return handleJoinByCode(request, env, user)
-      if (path.match(/^\/api\/communities\/join\/[^\/]+$/) && request.method === 'GET') return handleResolveInviteCode(request, env)
-      if (path.match(/^\/api\/communities\/[^\/]+\/join-requests\/[^\/]+$/) && request.method === 'PUT') return handleUpdateJoinRequest(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/join-requests$/) && request.method === 'GET') return handleListJoinRequests(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/[^\/]+\/reactions$/) && request.method === 'POST') return handleToggleReaction(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/[^\/]+$/) && request.method === 'PUT') return handleEditMessage(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteMessage(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/file$/) && request.method === 'POST') return handleSendFileMessage(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/files$/) && request.method === 'GET') return handleListCommunityFiles(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/files\/[^\/]+$/) && request.method === 'GET') return handleGetMessageFile(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/flashcard$/) && request.method === 'POST') return handleSendFlashcardMessage(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/history$/) && request.method === 'GET') return handleGetMessageHistory(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/messages$/) && request.method === 'GET') return handleGetMessages(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/messages$/) && request.method === 'POST') return handleSendMessage(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/audit-log$/) && request.method === 'GET') return handleListAuditLog(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/bans\/[^\/]+\/restore$/) && request.method === 'POST') return handleRestoreBan(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/bans\/[^\/]+$/) && request.method === 'DELETE') return handleRemoveBan(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/bans$/) && request.method === 'GET') return handleListBans(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/bans$/) && request.method === 'POST') return handleBanMember(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/pins\/[^\/]+$/) && request.method === 'DELETE') return handleUnpinMessage(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/pins$/) && request.method === 'GET') return handleListPins(request, env)
-      if (path.match(/^\/api\/communities\/[^\/]+\/pins$/) && request.method === 'POST') return handlePinMessage(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/avatar$/) && request.method === 'POST') return handleUploadCommunityAvatar(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/banner$/) && request.method === 'POST') return handleUploadCommunityBanner(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/announcements\/[^\/]+$/) && request.method === 'PUT') return handleUpdateAnnouncement(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/announcements\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteAnnouncement(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/announcements$/) && request.method === 'GET') return handleListAnnouncements(request, env)
-      if (path.match(/^\/api\/communities\/[^\/]+\/announcements$/) && request.method === 'POST') return handleCreateAnnouncement(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/rules\/[^\/]+$/) && request.method === 'DELETE') return handleRemoveRule(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/rules$/) && request.method === 'GET') return handleListRules(request, env)
-      if (path.match(/^\/api\/communities\/[^\/]+\/rules$/) && request.method === 'POST') return handleAddRule(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/settings$/) && request.method === 'GET') return handleGetSettings(request, env)
-      if (path.match(/^\/api\/communities\/[^\/]+\/settings$/) && request.method === 'PUT') return handleUpdateSettings(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/levels\/[^\/]+$/) && request.method === 'PUT') return handleUpdateLevel(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/levels\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteLevel(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/levels$/) && request.method === 'GET') return handleListLevels(request, env)
-      if (path.match(/^\/api\/communities\/[^\/]+\/levels$/) && request.method === 'POST') return handleCreateLevel(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/competitions$/) && request.method === 'GET') return handleListCompetitions(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/competitions$/) && request.method === 'POST') return handleCreateCompetition(request, env, user, ctx)
-      if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+\/read-state$/) && request.method === 'PUT') return handleUpdateReadState(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+\/role$/) && request.method === 'PUT') return handleChangeMemberRole(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+\/level$/) && request.method === 'PUT') return handleAssignLevel(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+$/) && request.method === 'DELETE') return handleRemoveMember(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/members$/) && request.method === 'GET') return handleListMembers(request, env)
+      if (path === '/api/notifications/unread-counts' && request.method === 'GET') return await handleGetUnreadCounts(request, env, user)
+      if (path === '/api/notifications/preferences' && request.method === 'GET') return await handleGetNotificationPreferences(request, env, user)
+      if (path === '/api/notifications/preferences' && request.method === 'PUT') return await handleUpdateNotificationPreferences(request, env, user)
+      if (path === '/api/notifications' && request.method === 'GET') return await handleListNotifications(request, env, user)
+      if (path === '/api/notifications' && request.method === 'POST') return await handleCreateNotification(request, env, user)
+      if (path === '/api/notifications/read-all' && request.method === 'POST') return await handleMarkAllRead(request, env, user)
+      if (path === '/api/notifications/cleanup' && request.method === 'POST') return await handleCleanupNotifications(request, env, user)
+      if (path.match(/^\/api\/notifications\/([^\/]+)\/read$/) && request.method === 'POST') return await handleMarkNotificationRead(request, env, user)
+      if (path === '/api/communities' && request.method === 'GET') return await handleListCommunities(request, env, user)
+      if (path === '/api/communities' && request.method === 'POST') return await handleCreateCommunity(request, env, user)
+      if (path === '/api/communities/from-template' && request.method === 'POST') return await handleCreateCommunityFromTemplate(request, env, user)
+      if (path === '/api/communities/join-by-code' && request.method === 'POST') return await handleJoinByCode(request, env, user)
+      if (path.match(/^\/api\/communities\/join\/[^\/]+$/) && request.method === 'GET') return await handleResolveInviteCode(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+\/join-requests\/[^\/]+$/) && request.method === 'PUT') return await handleUpdateJoinRequest(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/join-requests$/) && request.method === 'GET') return await handleListJoinRequests(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/[^\/]+\/reactions$/) && request.method === 'POST') return await handleToggleReaction(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/[^\/]+$/) && request.method === 'PUT') return await handleEditMessage(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/[^\/]+$/) && request.method === 'DELETE') return await handleDeleteMessage(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/file$/) && request.method === 'POST') return await handleSendFileMessage(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/files$/) && request.method === 'GET') return await handleListCommunityFiles(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/files\/[^\/]+$/) && request.method === 'GET') return await handleGetMessageFile(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/flashcard$/) && request.method === 'POST') return await handleSendFlashcardMessage(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/messages\/history$/) && request.method === 'GET') return await handleGetMessageHistory(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/messages$/) && request.method === 'GET') return await handleGetMessages(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/messages$/) && request.method === 'POST') return await handleSendMessage(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/audit-log$/) && request.method === 'GET') return await handleListAuditLog(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/bans\/[^\/]+\/restore$/) && request.method === 'POST') return await handleRestoreBan(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/bans\/[^\/]+$/) && request.method === 'DELETE') return await handleRemoveBan(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/bans$/) && request.method === 'GET') return await handleListBans(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/bans$/) && request.method === 'POST') return await handleBanMember(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/pins\/[^\/]+$/) && request.method === 'DELETE') return await handleUnpinMessage(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/pins$/) && request.method === 'GET') return await handleListPins(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+\/pins$/) && request.method === 'POST') return await handlePinMessage(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/avatar$/) && request.method === 'POST') return await handleUploadCommunityAvatar(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/banner$/) && request.method === 'POST') return await handleUploadCommunityBanner(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/announcements\/[^\/]+$/) && request.method === 'PUT') return await handleUpdateAnnouncement(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/announcements\/[^\/]+$/) && request.method === 'DELETE') return await handleDeleteAnnouncement(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/announcements$/) && request.method === 'GET') return await handleListAnnouncements(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+\/announcements$/) && request.method === 'POST') return await handleCreateAnnouncement(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rules\/[^\/]+$/) && request.method === 'DELETE') return await handleRemoveRule(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rules$/) && request.method === 'GET') return await handleListRules(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rules$/) && request.method === 'POST') return await handleAddRule(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/settings$/) && request.method === 'GET') return await handleGetSettings(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+\/settings$/) && request.method === 'PUT') return await handleUpdateSettings(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/levels\/[^\/]+$/) && request.method === 'PUT') return await handleUpdateLevel(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/levels\/[^\/]+$/) && request.method === 'DELETE') return await handleDeleteLevel(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/levels$/) && request.method === 'GET') return await handleListLevels(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+\/levels$/) && request.method === 'POST') return await handleCreateLevel(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/competitions$/) && request.method === 'GET') return await handleListCompetitions(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/competitions$/) && request.method === 'POST') return await handleCreateCompetition(request, env, user, ctx)
+      if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+\/read-state$/) && request.method === 'PUT') return await handleUpdateReadState(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+\/role$/) && request.method === 'PUT') return await handleChangeMemberRole(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+\/level$/) && request.method === 'PUT') return await handleAssignLevel(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+$/) && request.method === 'DELETE') return await handleRemoveMember(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/members$/) && request.method === 'GET') return await handleListMembers(request, env)
       if (path.match(/^\/api\/communities\/[^\/]+\/join$/) && request.method === 'POST') {
         const res = await handleJoinCommunity(request, env, user, ctx)
         if (res.status === 200 || res.status === undefined) {
@@ -400,17 +400,17 @@ export default {
         }
         return res
       }
-      if (path.match(/^\/api\/communities\/[^\/]+\/leave$/) && request.method === 'POST') return handleLeaveCommunity(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/invite-code$/) && request.method === 'POST') return handleRegenerateInviteCode(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/mod-dashboard$/) && request.method === 'GET') return handleGetModDashboard(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/full$/) && request.method === 'GET') return handleGetCommunityFull(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+$/) && request.method === 'GET') return handleGetCommunity(request, env)
-      if (path.match(/^\/api\/communities\/[^\/]+$/) && request.method === 'PUT') return handleUpdateCommunity(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteCommunity(request, env, user)
-      if (path === '/api/community/suggested-rules' && request.method === 'GET') return handleSuggestedRules()
-      if (path.match(/^\/api\/community\/messages\/[^\/]+\/add-to-deck$/) && request.method === 'POST') return handleAddFlashcardToDeck(request, env, user)
-      if (path.match(/^\/api\/competitions\/[^\/]+\/approve$/) && request.method === 'PUT') return handleApproveCompetition(request, env, user)
-      if (path.match(/^\/api\/competitions\/[^\/]+\/reject$/) && request.method === 'PUT') return handleRejectCompetition(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/leave$/) && request.method === 'POST') return await handleLeaveCommunity(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/invite-code$/) && request.method === 'POST') return await handleRegenerateInviteCode(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/mod-dashboard$/) && request.method === 'GET') return await handleGetModDashboard(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/full$/) && request.method === 'GET') return await handleGetCommunityFull(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+$/) && request.method === 'GET') return await handleGetCommunity(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+$/) && request.method === 'PUT') return await handleUpdateCommunity(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+$/) && request.method === 'DELETE') return await handleDeleteCommunity(request, env, user)
+      if (path === '/api/community/suggested-rules' && request.method === 'GET') return await handleSuggestedRules()
+      if (path.match(/^\/api\/community\/messages\/[^\/]+\/add-to-deck$/) && request.method === 'POST') return await handleAddFlashcardToDeck(request, env, user)
+      if (path.match(/^\/api\/competitions\/[^\/]+\/approve$/) && request.method === 'PUT') return await handleApproveCompetition(request, env, user)
+      if (path.match(/^\/api\/competitions\/[^\/]+\/reject$/) && request.method === 'PUT') return await handleRejectCompetition(request, env, user)
       if (path.match(/^\/api\/competitions\/[^\/]+\/join$/) && (request.method === 'POST' || request.method === 'PUT')) {
         const res = await handleJoinCompetition(request, env, user)
         if (res.status === 200 || res.status === undefined) {
@@ -420,76 +420,76 @@ export default {
         }
         return res
       }
-      if (path.match(/^\/api\/competitions\/[^\/]+\/leave$/) && (request.method === 'POST' || request.method === 'DELETE')) return handleLeaveCompetition(request, env, user)
-      if (path.match(/^\/api\/competitions\/[^\/]+\/leaderboard$/) && request.method === 'GET') return handleGetCompetitionLeaderboard(request, env, user)
-      if (path.match(/^\/api\/competitions\/[^\/]+\/end$/) && request.method === 'PUT') return handleEndCompetition(request, env, user)
+      if (path.match(/^\/api\/competitions\/[^\/]+\/leave$/) && (request.method === 'POST' || request.method === 'DELETE')) return await handleLeaveCompetition(request, env, user)
+      if (path.match(/^\/api\/competitions\/[^\/]+\/leaderboard$/) && request.method === 'GET') return await handleGetCompetitionLeaderboard(request, env, user)
+      if (path.match(/^\/api\/competitions\/[^\/]+\/end$/) && request.method === 'PUT') return await handleEndCompetition(request, env, user)
       if (path === '/api/study-hours/sync' && request.method === 'POST') {
         const res = await handleSyncStudyHours(request, env, user)
         logUserActivity(env, user.sub, 'studied', null, 'session', {}).catch(() => {})
         refreshUserStatsAndNotify(env, user.sub).catch(() => {})
         return res
       }
-      if (path.match(/^\/api\/communities\/[^\/]+\/leaderboard\/monthly$/) && request.method === 'GET') return handleMonthlyLeaderboard(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/leaderboard\/position$/) && request.method === 'GET') return handleLeaderboardPosition(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/leaderboard\/title$/) && request.method === 'PUT') return handleSetLeaderboardTitle(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/leaderboard\/all-time$/) && request.method === 'GET') return handleAllTimeLeaderboard(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/badges$/) && request.method === 'GET') return handleUserBadges(request, env)
-      if (path.match(/^\/api\/communities\/[^\/]+\/stats\/heatmap$/) && request.method === 'GET') return handleHeatmap(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+\/title$/) && request.method === 'PUT') return handleSetMemberTitle(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/mutes$/) && request.method === 'POST') return handleMuteMember(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/mutes$/) && request.method === 'GET') return handleGetMutes(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/mutes\/[^\/]+$/) && request.method === 'DELETE') return handleUnmuteMember(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/rooms$/) && request.method === 'GET') return handleListRooms(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/rooms$/) && request.method === 'POST') return handleCreateRoom(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/join$/) && request.method === 'POST') return handleJoinRoom(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/leave$/) && request.method === 'POST') return handleLeaveRoom(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/end$/) && request.method === 'POST') return handleEndRoom(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timer$/) && request.method === 'GET') return handleGetTimer(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timer\/start$/) && request.method === 'POST') return handleStartTimer(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timer\/pause$/) && request.method === 'POST') return handlePauseTimer(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timer\/resume$/) && request.method === 'POST') return handleResumeTimer(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timer\/stop$/) && request.method === 'POST') return handleStopTimer(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/status$/) && (request.method === 'PUT' || request.method === 'POST')) return handleUpdateFocusStatus(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/stats$/) && request.method === 'GET') return handleRoomStats(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timeline$/) && request.method === 'GET') return handleSessionTimeline(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/profile$/) && request.method === 'GET') return handleUserProfile(request, env, user, ctx)
-      if (path.match(/^\/api\/users\/[^\/]+\/profile$/) && request.method === 'PUT') return handleUpdateUserProfile(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/avatar$/) && request.method === 'POST') return handleUploadUserAvatar(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/banner$/) && request.method === 'POST') return handleUploadUserBanner(request, env, user)
-      if (path.match(/^\/api\/users\/username\/[^\/]+$/) && request.method === 'GET') return handleGetUserByUsername(request, env)
-      if (path.match(/^\/api\/users\/check-username\/[^\/]+$/) && request.method === 'GET') return handleCheckUsername(request, env)
-      if (path.match(/^\/api\/users\/[^\/]+\/activity$/) && request.method === 'GET') return handleGetUserActivity(request, env)
-      if (path.match(/^\/api\/users\/[^\/]+\/follow$/) && request.method === 'POST') return handleFollowUser(request, env, user, ctx)
-      if (path.match(/^\/api\/users\/[^\/]+\/follow$/) && request.method === 'DELETE') return handleUnfollowUser(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/follow-status$/) && request.method === 'GET') return handleFollowStatus(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/leaderboard\/monthly$/) && request.method === 'GET') return await handleMonthlyLeaderboard(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/leaderboard\/position$/) && request.method === 'GET') return await handleLeaderboardPosition(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/leaderboard\/title$/) && request.method === 'PUT') return await handleSetLeaderboardTitle(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/leaderboard\/all-time$/) && request.method === 'GET') return await handleAllTimeLeaderboard(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/badges$/) && request.method === 'GET') return await handleUserBadges(request, env)
+      if (path.match(/^\/api\/communities\/[^\/]+\/stats\/heatmap$/) && request.method === 'GET') return await handleHeatmap(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/members\/[^\/]+\/title$/) && request.method === 'PUT') return await handleSetMemberTitle(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/mutes$/) && request.method === 'POST') return await handleMuteMember(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/mutes$/) && request.method === 'GET') return await handleGetMutes(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/mutes\/[^\/]+$/) && request.method === 'DELETE') return await handleUnmuteMember(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms$/) && request.method === 'GET') return await handleListRooms(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms$/) && request.method === 'POST') return await handleCreateRoom(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/join$/) && request.method === 'POST') return await handleJoinRoom(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/leave$/) && request.method === 'POST') return await handleLeaveRoom(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/end$/) && request.method === 'POST') return await handleEndRoom(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timer$/) && request.method === 'GET') return await handleGetTimer(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timer\/start$/) && request.method === 'POST') return await handleStartTimer(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timer\/pause$/) && request.method === 'POST') return await handlePauseTimer(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timer\/resume$/) && request.method === 'POST') return await handleResumeTimer(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timer\/stop$/) && request.method === 'POST') return await handleStopTimer(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/status$/) && (request.method === 'PUT' || request.method === 'POST')) return await handleUpdateFocusStatus(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/stats$/) && request.method === 'GET') return await handleRoomStats(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/rooms\/[^\/]+\/timeline$/) && request.method === 'GET') return await handleSessionTimeline(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/profile$/) && request.method === 'GET') return await handleUserProfile(request, env, user, ctx)
+      if (path.match(/^\/api\/users\/[^\/]+\/profile$/) && request.method === 'PUT') return await handleUpdateUserProfile(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/avatar$/) && request.method === 'POST') return await handleUploadUserAvatar(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/banner$/) && request.method === 'POST') return await handleUploadUserBanner(request, env, user)
+      if (path.match(/^\/api\/users\/username\/[^\/]+$/) && request.method === 'GET') return await handleGetUserByUsername(request, env)
+      if (path.match(/^\/api\/users\/check-username\/[^\/]+$/) && request.method === 'GET') return await handleCheckUsername(request, env)
+      if (path.match(/^\/api\/users\/[^\/]+\/activity$/) && request.method === 'GET') return await handleGetUserActivity(request, env)
+      if (path.match(/^\/api\/users\/[^\/]+\/follow$/) && request.method === 'POST') return await handleFollowUser(request, env, user, ctx)
+      if (path.match(/^\/api\/users\/[^\/]+\/follow$/) && request.method === 'DELETE') return await handleUnfollowUser(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/follow-status$/) && request.method === 'GET') return await handleFollowStatus(request, env, user)
 
       // ── DM Routes ──
-      if (path === '/api/dm/conversations' && request.method === 'GET') return handleListConversations(request, env, user)
-      if (path === '/api/dm/conversations' && request.method === 'POST') return handleCreateConversation(request, env, user)
-      if (path.match(/^\/api\/dm\/[^\/]+\/messages$/) && request.method === 'GET') return handleGetDMMessages(request, env, user)
-      if (path.match(/^\/api\/dm\/[^\/]+\/messages$/) && request.method === 'POST') return handleSendDM(request, env, user)
-      if (path.match(/^\/api\/dm\/[^\/]+\/messages\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteDM(request, env, user)
-      if (path.match(/^\/api\/dm\/[^\/]+\/read$/) && request.method === 'POST') return handleMarkDMRead(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/dm$/) && request.method === 'POST') return handleStartDMWithUser(request, env, user)
+      if (path === '/api/dm/conversations' && request.method === 'GET') return await handleListConversations(request, env, user)
+      if (path === '/api/dm/conversations' && request.method === 'POST') return await handleCreateConversation(request, env, user)
+      if (path.match(/^\/api\/dm\/[^\/]+\/messages$/) && request.method === 'GET') return await handleGetDMMessages(request, env, user)
+      if (path.match(/^\/api\/dm\/[^\/]+\/messages$/) && request.method === 'POST') return await handleSendDM(request, env, user)
+      if (path.match(/^\/api\/dm\/[^\/]+\/messages\/[^\/]+$/) && request.method === 'DELETE') return await handleDeleteDM(request, env, user)
+      if (path.match(/^\/api\/dm\/[^\/]+\/read$/) && request.method === 'POST') return await handleMarkDMRead(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/dm$/) && request.method === 'POST') return await handleStartDMWithUser(request, env, user)
 
       // ── Presence Routes ──
-      if (path === '/api/presence/status' && request.method === 'POST') return handleUpdatePresence(request, env, user)
-      if (path === '/api/presence/bulk' && request.method === 'POST') return handleGetBulkPresence(request, env, user)
-      if (path.match(/^\/api\/presence\/[^\/]+$/) && request.method === 'GET') return handleGetPresence(request, env, user)
+      if (path === '/api/presence/status' && request.method === 'POST') return await handleUpdatePresence(request, env, user)
+      if (path === '/api/presence/bulk' && request.method === 'POST') return await handleGetBulkPresence(request, env, user)
+      if (path.match(/^\/api\/presence\/[^\/]+$/) && request.method === 'GET') return await handleGetPresence(request, env, user)
 
       // ── Heatmap ──
-      if (path.match(/^\/api\/users\/[^\/]+\/heatmap$/) && request.method === 'GET') return handleUserHeatmap(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/heatmap$/) && request.method === 'GET') return await handleUserHeatmap(request, env, user)
 
       // ── User Card ──
-      if (path.match(/^\/api\/users\/[^\/]+\/card$/) && request.method === 'GET') return handleUserCard(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/card$/) && request.method === 'GET') return await handleUserCard(request, env, user)
 
       // ── Mention Search ──
-      if (path === '/api/users/mention/search' && request.method === 'GET') return handleMentionSearch(request, env, user)
+      if (path === '/api/users/mention/search' && request.method === 'GET') return await handleMentionSearch(request, env, user)
 
       // ── Pinned Resources ──
-      if (path.match(/^\/api\/users\/[^\/]+\/pins$/) && request.method === 'GET') return handleGetPins(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/pins$/) && request.method === 'POST') return handlePinResource(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/pins\/[^\/]+$/) && request.method === 'DELETE') return handleUnpinResource(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/pins$/) && request.method === 'GET') return await handleGetPins(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/pins$/) && request.method === 'POST') return await handlePinResource(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/pins\/[^\/]+$/) && request.method === 'DELETE') return await handleUnpinResource(request, env, user)
 
       // ── Goal Completion Notification ──
       if (path === '/api/goals/complete' && request.method === 'POST') {
@@ -508,119 +508,119 @@ export default {
       }
 
       // ── Achievements ──
-      if (path === '/api/achievements/check' && request.method === 'POST') return handleCheckAchievements(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/achievements$/) && request.method === 'GET') return handleGetUserAchievements(request, env)
+      if (path === '/api/achievements/check' && request.method === 'POST') return await handleCheckAchievements(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/achievements$/) && request.method === 'GET') return await handleGetUserAchievements(request, env)
 
       // ── Global Leaderboard ──
-      if (path === '/api/leaderboard/global' && request.method === 'GET') return handleGlobalLeaderboard(request, env, user)
+      if (path === '/api/leaderboard/global' && request.method === 'GET') return await handleGlobalLeaderboard(request, env, user)
 
       // ── Leaderboard Rankings ──
-      if (path === '/api/leaderboard/users/monthly' && request.method === 'GET') return handleGlobalMonthlyLeaderboard(request, env, user)
-      if (path === '/api/leaderboard/communities/monthly' && request.method === 'GET') return handleCommunitiesMonthlyLeaderboard(request, env, user)
-      if (path === '/api/leaderboard/stats' && request.method === 'GET') return handleGlobalLeaderboardStats(request, env, user)
-      if (path === '/api/leaderboard/search' && request.method === 'GET') return handleLeaderboardSearch(request, env, user)
+      if (path === '/api/leaderboard/users/monthly' && request.method === 'GET') return await handleGlobalMonthlyLeaderboard(request, env, user)
+      if (path === '/api/leaderboard/communities/monthly' && request.method === 'GET') return await handleCommunitiesMonthlyLeaderboard(request, env, user)
+      if (path === '/api/leaderboard/stats' && request.method === 'GET') return await handleGlobalLeaderboardStats(request, env, user)
+      if (path === '/api/leaderboard/search' && request.method === 'GET') return await handleLeaderboardSearch(request, env, user)
 
       // ── Invitations ──
-      if (path === '/api/invitations' && request.method === 'GET') return handleGetMyInvitations(request, env, user)
-      if (path.match(/^\/api\/communities\/[^\/]+\/invite-user$/) && request.method === 'POST') return handleInviteUser(request, env, user)
-      if (path.match(/^\/api\/invitations\/[^\/]+\/accept$/) && request.method === 'POST') return handleAcceptCommunityInvitation(request, env, user)
-      if (path.match(/^\/api\/invitations\/[^\/]+\/decline$/) && request.method === 'POST') return handleDeclineCommunityInvitation(request, env, user)
+      if (path === '/api/invitations' && request.method === 'GET') return await handleGetMyInvitations(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/invite-user$/) && request.method === 'POST') return await handleInviteUser(request, env, user)
+      if (path.match(/^\/api\/invitations\/[^\/]+\/accept$/) && request.method === 'POST') return await handleAcceptCommunityInvitation(request, env, user)
+      if (path.match(/^\/api\/invitations\/[^\/]+\/decline$/) && request.method === 'POST') return await handleDeclineCommunityInvitation(request, env, user)
 
       // ── Hall of Fame ──
-      if (path.match(/^\/api\/communities\/[^\/]+\/hall-of-fame$/) && request.method === 'GET') return handleCommunityHallOfFame(request, env, user)
+      if (path.match(/^\/api\/communities\/[^\/]+\/hall-of-fame$/) && request.method === 'GET') return await handleCommunityHallOfFame(request, env, user)
 
       // ── People Search & Discovery ──
-      if (path === '/api/users/search' && request.method === 'GET') return handleSearchUsers(request, env, user)
-      if (path === '/api/users/suggested' && request.method === 'GET') return handleSuggestedConnections(request, env, user)
+      if (path === '/api/users/search' && request.method === 'GET') return await handleSearchUsers(request, env, user)
+      if (path === '/api/users/suggested' && request.method === 'GET') return await handleSuggestedConnections(request, env, user)
 
       // ── Research Hub ──
-      if (path === '/api/research' && request.method === 'GET') return handleListResearchPosts(request, env, user)
-      if (path === '/api/research' && request.method === 'POST') return handleCreateResearchPost(request, env, user)
-      if (path === '/api/research/bookmarks' && request.method === 'GET') return handleGetBookmarks(request, env, user)
-      if (path === '/api/research/skills/predefined' && request.method === 'GET') return handleGetPredefinedSkills(request, env, user)
-      if (path.match(/^\/api\/research\/[^\/]+\/vote$/) && request.method === 'POST') return handleVoteOnPost(request, env, user)
-      if (path.match(/^\/api\/research\/[^\/]+\/comments$/) && request.method === 'GET') return handleGetResearchComments(request, env, user)
-      if (path.match(/^\/api\/research\/[^\/]+\/comments$/) && request.method === 'POST') return handleAddResearchComment(request, env, user)
-      if (path.match(/^\/api\/research\/[^\/]+\/comments\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteResearchComment(request, env, user)
-      if (path.match(/^\/api\/research\/[^\/]+\/help$/) && request.method === 'POST') return handleMarkHelped(request, env, user)
-      if (path.match(/^\/api\/research\/[^\/]+\/helped$/) && request.method === 'GET') return handleGetHelpedMarks(request, env, user)
-      if (path.match(/^\/api\/research\/[^\/]+\/bookmark$/) && request.method === 'POST') return handleToggleBookmark(request, env, user)
-      if (path.match(/^\/api\/research\/[^\/]+\/report$/) && request.method === 'POST') return handleReportPost(request, env, user)
-      if (path.match(/^\/api\/research\/[^\/]+$/) && request.method === 'GET') return handleGetResearchPost(request, env, user)
-      if (path.match(/^\/api\/research\/[^\/]+$/) && request.method === 'PUT') return handleUpdateResearchPost(request, env, user)
-      if (path.match(/^\/api\/research\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteResearchPost(request, env, user)
+      if (path === '/api/research' && request.method === 'GET') return await handleListResearchPosts(request, env, user)
+      if (path === '/api/research' && request.method === 'POST') return await handleCreateResearchPost(request, env, user)
+      if (path === '/api/research/bookmarks' && request.method === 'GET') return await handleGetBookmarks(request, env, user)
+      if (path === '/api/research/skills/predefined' && request.method === 'GET') return await handleGetPredefinedSkills(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+\/vote$/) && request.method === 'POST') return await handleVoteOnPost(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+\/comments$/) && request.method === 'GET') return await handleGetResearchComments(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+\/comments$/) && request.method === 'POST') return await handleAddResearchComment(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+\/comments\/[^\/]+$/) && request.method === 'DELETE') return await handleDeleteResearchComment(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+\/help$/) && request.method === 'POST') return await handleMarkHelped(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+\/helped$/) && request.method === 'GET') return await handleGetHelpedMarks(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+\/bookmark$/) && request.method === 'POST') return await handleToggleBookmark(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+\/report$/) && request.method === 'POST') return await handleReportPost(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+$/) && request.method === 'GET') return await handleGetResearchPost(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+$/) && request.method === 'PUT') return await handleUpdateResearchPost(request, env, user)
+      if (path.match(/^\/api\/research\/[^\/]+$/) && request.method === 'DELETE') return await handleDeleteResearchPost(request, env, user)
 
       // ── Research Profile & Skills ──
-      if (path.match(/^\/api\/users\/[^\/]+\/research-profile$/) && request.method === 'GET') return handleGetResearchProfile(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/research-profile$/) && request.method === 'PUT') return handleUpdateResearchProfile(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/research-skills$/) && request.method === 'GET') return handleGetResearchSkills(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/research-skills$/) && request.method === 'POST') return handleAddResearchSkill(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/research-skills\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteResearchSkill(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/research-stats$/) && request.method === 'GET') return handleGetResearchStats(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/research-events$/) && request.method === 'GET') return handleGetResearchEvents(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/research-profile$/) && request.method === 'GET') return await handleGetResearchProfile(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/research-profile$/) && request.method === 'PUT') return await handleUpdateResearchProfile(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/research-skills$/) && request.method === 'GET') return await handleGetResearchSkills(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/research-skills$/) && request.method === 'POST') return await handleAddResearchSkill(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/research-skills\/[^\/]+$/) && request.method === 'DELETE') return await handleDeleteResearchSkill(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/research-stats$/) && request.method === 'GET') return await handleGetResearchStats(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/research-events$/) && request.method === 'GET') return await handleGetResearchEvents(request, env, user)
 
       // ── Research Portfolio ──
-      if (path.match(/^\/api\/users\/[^\/]+\/portfolio$/) && request.method === 'GET') return handleGetPortfolio(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/portfolio$/) && request.method === 'POST') return handleAddPortfolioEntry(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/portfolio\/[^\/]+$/) && request.method === 'PUT') return handleUpdatePortfolioEntry(request, env, user)
-      if (path.match(/^\/api\/users\/[^\/]+\/portfolio\/[^\/]+$/) && request.method === 'DELETE') return handleDeletePortfolioEntry(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/portfolio$/) && request.method === 'GET') return await handleGetPortfolio(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/portfolio$/) && request.method === 'POST') return await handleAddPortfolioEntry(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/portfolio\/[^\/]+$/) && request.method === 'PUT') return await handleUpdatePortfolioEntry(request, env, user)
+      if (path.match(/^\/api\/users\/[^\/]+\/portfolio\/[^\/]+$/) && request.method === 'DELETE') return await handleDeletePortfolioEntry(request, env, user)
 
       // ── Forest Timer ──
-      if (path === '/api/forest/inventory' && request.method === 'GET') return handleGetForestInventory(request, env, user)
-      if (path === '/api/forest/selected-tree' && request.method === 'PUT') return handleUpdateSelectedTree(request, env, user)
-      if (path === '/api/forest/earn-coins' && request.method === 'POST') return handleEarnCoins(request, env, user)
-      if (path === '/api/forest/purchase-tree' && request.method === 'POST') return handlePurchaseTree(request, env, user)
-      if (path === '/api/forest/stats' && request.method === 'GET') return handleGetForestStats(request, env, user)
+      if (path === '/api/forest/inventory' && request.method === 'GET') return await handleGetForestInventory(request, env, user)
+      if (path === '/api/forest/selected-tree' && request.method === 'PUT') return await handleUpdateSelectedTree(request, env, user)
+      if (path === '/api/forest/earn-coins' && request.method === 'POST') return await handleEarnCoins(request, env, user)
+      if (path === '/api/forest/purchase-tree' && request.method === 'POST') return await handlePurchaseTree(request, env, user)
+      if (path === '/api/forest/stats' && request.method === 'GET') return await handleGetForestStats(request, env, user)
 
       // ── Push Notifications ──
-      if (path === '/api/push/subscribe' && request.method === 'POST') return handleSubscribe(request, env, user)
-      if (path === '/api/push/schedule' && request.method === 'POST') return handleSchedulePush(request, env, user)
-      if (path === '/api/push/cancel' && request.method === 'POST') return handleCancelPushes(request, env, user)
+      if (path === '/api/push/subscribe' && request.method === 'POST') return await handleSubscribe(request, env, user)
+      if (path === '/api/push/schedule' && request.method === 'POST') return await handleSchedulePush(request, env, user)
+      if (path === '/api/push/cancel' && request.method === 'POST') return await handleCancelPushes(request, env, user)
 
 
       // ── Rotation Planner ──
-      if (path === '/api/rotations/plans' && request.method === 'GET') return handleGetPlans(request, env, user)
-      if (path === '/api/rotations/plans' && request.method === 'POST') return handleCreatePlan(request, env, user)
-      if (path.match(/^\/api\/rotations\/plans\/[^\/]+$/) && request.method === 'GET') return handleGetPlan(request, env, user)
-      if (path.match(/^\/api\/rotations\/plans\/[^\/]+$/) && request.method === 'PUT') return handleUpdatePlan(request, env, user)
-      if (path.match(/^\/api\/rotations\/plans\/[^\/]+$/) && request.method === 'DELETE') return handleDeletePlan(request, env, user)
-      if (path.match(/^\/api\/rotations\/plans\/[^\/]+\/generate$/) && request.method === 'POST') return handleGenerateSchedule(request, env, user)
-      if (path.match(/^\/api\/rotations\/plans\/[^\/]+\/activate$/) && request.method === 'POST') return handleActivatePlan(request, env, user)
-      if (path.match(/^\/api\/rotations\/plans\/[^\/]+\/progress$/) && request.method === 'GET') return handleGetProgress(request, env, user)
-      if (path.match(/^\/api\/rotations\/schedule\/[^\/]+$/) && request.method === 'PUT') return handleUpdateEntry(request, env, user)
-      if (path.match(/^\/api\/rotations\/progress\/[^\/]+$/) && request.method === 'PUT') return handleUpdateProgress(request, env, user)
-      if (path === '/api/rotations/flashcard-summary' && request.method === 'GET') return handleFlashcardSummary(request, env, user)
+      if (path === '/api/rotations/plans' && request.method === 'GET') return await handleGetPlans(request, env, user)
+      if (path === '/api/rotations/plans' && request.method === 'POST') return await handleCreatePlan(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+$/) && request.method === 'GET') return await handleGetPlan(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+$/) && request.method === 'PUT') return await handleUpdatePlan(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+$/) && request.method === 'DELETE') return await handleDeletePlan(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+\/generate$/) && request.method === 'POST') return await handleGenerateSchedule(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+\/activate$/) && request.method === 'POST') return await handleActivatePlan(request, env, user)
+      if (path.match(/^\/api\/rotations\/plans\/[^\/]+\/progress$/) && request.method === 'GET') return await handleGetProgress(request, env, user)
+      if (path.match(/^\/api\/rotations\/schedule\/[^\/]+$/) && request.method === 'PUT') return await handleUpdateEntry(request, env, user)
+      if (path.match(/^\/api\/rotations\/progress\/[^\/]+$/) && request.method === 'PUT') return await handleUpdateProgress(request, env, user)
+      if (path === '/api/rotations/flashcard-summary' && request.method === 'GET') return await handleFlashcardSummary(request, env, user)
 
       // ── Rotation Planner (read-only) ──
-      if (path.match(/^\/api\/rotation-planner\/sources\/[^\/]+\/rotations\/[^\/]+\/topics$/) && request.method === 'GET') return getPlannerSourceRotationTopics(request, env, user)
-      if (path.match(/^\/api\/rotation-planner\/sources\/[^\/]+\/rotations$/) && request.method === 'GET') return getPlannerSourceRotations(request, env, user)
-      if (path === '/api/rotation-planner/sources' && request.method === 'GET') return getPlannerSources(request, env, user)
-      if (path === '/api/rotation-planner/rotations' && request.method === 'GET') return getPlannerRotations(request, env, user)
-      if (path === '/api/rotation-planner/tracking/schedule' && request.method === 'GET') return handleGetPlanTrackingSchedule(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/sources\/[^\/]+\/rotations\/[^\/]+\/topics$/) && request.method === 'GET') return await getPlannerSourceRotationTopics(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/sources\/[^\/]+\/rotations$/) && request.method === 'GET') return await getPlannerSourceRotations(request, env, user)
+      if (path === '/api/rotation-planner/sources' && request.method === 'GET') return await getPlannerSources(request, env, user)
+      if (path === '/api/rotation-planner/rotations' && request.method === 'GET') return await getPlannerRotations(request, env, user)
+      if (path === '/api/rotation-planner/tracking/schedule' && request.method === 'GET') return await handleGetPlanTrackingSchedule(request, env, user)
 
       // ── Rotation Planner (plans) ──
-      if (path === '/api/rotation-planner/plans/preview' && request.method === 'POST') return handlePreviewRotationPlan(request, env, user)
-      if (path === '/api/rotation-planner/plans' && request.method === 'POST') return handleCreateRotationPlan(request, env, user)
-      if (path === '/api/rotation-planner/plans' && request.method === 'GET') return handleListRotationPlans(request, env, user)
-      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'GET') return handleGetRotationPlan(request, env, user)
-      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'DELETE') return handleDeleteRotationPlan(request, env, user)
-      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'PATCH') return handleRenameRotationPlan(request, env, user)
+      if (path === '/api/rotation-planner/plans/preview' && request.method === 'POST') return await handlePreviewRotationPlan(request, env, user)
+      if (path === '/api/rotation-planner/plans' && request.method === 'POST') return await handleCreateRotationPlan(request, env, user)
+      if (path === '/api/rotation-planner/plans' && request.method === 'GET') return await handleListRotationPlans(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'GET') return await handleGetRotationPlan(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'DELETE') return await handleDeleteRotationPlan(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+$/) && request.method === 'PATCH') return await handleRenameRotationPlan(request, env, user)
 
       // Plan lifecycle: POST /plans/:planId/status
-      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/status$/) && request.method === 'POST') return handleUpdatePlanStatus(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/status$/) && request.method === 'POST') return await handleUpdatePlanStatus(request, env, user)
 
       // Task update: PATCH /plans/:planId/tasks/:taskId
-      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/tasks\/[^\/]+$/) && request.method === 'PATCH') return handleUpdateTask(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/tasks\/[^\/]+$/) && request.method === 'PATCH') return await handleUpdateTask(request, env, user)
 
       // Recalculate: POST /plans/:planId/recalculate
-      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/recalculate$/) && request.method === 'POST') return handleRecalculatePlan(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/recalculate$/) && request.method === 'POST') return await handleRecalculatePlan(request, env, user)
 
       // Forecast: GET /plans/:planId/forecast
-      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/forecast$/) && request.method === 'GET') return handleGetPlanForecast(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/forecast$/) && request.method === 'GET') return await handleGetPlanForecast(request, env, user)
 
       // Linked decks: GET/PUT /plans/:planId/decks
-      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/decks$/) && request.method === 'GET') return handleGetPlanDecks(request, env, user)
-      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/decks$/) && request.method === 'PUT') return handleReplacePlanDecks(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/decks$/) && request.method === 'GET') return await handleGetPlanDecks(request, env, user)
+      if (path.match(/^\/api\/rotation-planner\/plans\/[^\/]+\/decks$/) && request.method === 'PUT') return await handleReplacePlanDecks(request, env, user)
 
       return json({ error: 'Not found' }, 404)
     } catch (err) {
@@ -1068,7 +1068,7 @@ async function handleGetResourceImage(request, env) {
 }
 
 async function handleDownloadResourceFile(request, env) {
-  return handleGetResourceFile(request, env)
+  return await handleGetResourceFile(request, env)
 }
 
 async function handleGetComments(request, env) {

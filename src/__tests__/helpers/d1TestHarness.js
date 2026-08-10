@@ -146,8 +146,15 @@ class D1Database {
           this._db.run('BEGIN')
           const results = []
           for (const stmt of statements) {
-            const result = await stmt.run()
-            results.push(result)
+            const result = await stmt.all()
+            results.push({
+              ...result,
+              meta: {
+                changed_db: this._db.getRowsModified() > 0,
+                changes: this._db.getRowsModified(),
+                last_row_id: this._db.exec('SELECT last_insert_rowid()')[0]?.values[0][0] ?? 0,
+              },
+            })
           }
           this._db.run('COMMIT')
           resolve(results)
