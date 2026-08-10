@@ -46,4 +46,65 @@
   /* Overlay */
   --overlay-bg: rgba(0, 0, 0, 0.5);
   --overlay-bg-soft: rgba(0, 0, 0, 0.3);
+
+  /* Fonts */
+  --font-sans: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, 'SFMono-Regular', monospace;
+  --font-serif: 'DM Serif Display', Georgia, serif;
+
+  /* Typography scale */
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+  --text-4xl: 3rem;
+
+  /* Line heights */
+  --leading-tight: 1.2;
+  --leading-snug: 1.4;
+  --leading-normal: 1.55;
+  --leading-relaxed: 1.75;
+
+  /* Font weights */
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Focus ring */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring-color: #12B8B0;
+
+  /* Brand (teal) */
+  --color-brand: #12B8B0;
+  --color-brand-hover: #0E9F98;
+  --color-brand-strong: #087F7A;
+  --color-brand-soft: rgba(18, 184, 176, 0.12);
+  --color-brand-soft-strong: rgba(18, 184, 176, 0.2);
+  --color-brand-ink: #0B1120;
+  --color-brand-on: #FFFFFF;
+  --color-brand-text: #12B8B0;
+
+  /* Semantic status colors (success/warning/info/error are distinct roles) */
+  --color-success: #10B981;
+  --color-success-soft: rgba(16, 185, 129, 0.12);
+  --color-warning: #F59E0B;
+  --color-warning-soft: rgba(245, 158, 11, 0.12);
+  --color-info: #4F8CFF;
+  --color-info-soft: rgba(79, 140, 255, 0.12);
+  --color-error: #EF4444;
+  --color-error-soft: rgba(239, 68, 68, 0.12);
+
+  /* Button variants */
+  --btn-primary-bg: #087F7A;
+  --btn-primary-hover: #066B68;
+  --btn-primary-color: #FFFFFF;
+  --btn-secondary-hover-bg: rgba(255, 255, 255, 0.08);
+  --btn-ghost-hover-bg: rgba(255, 255, 255, 0.06);
+  --btn-danger-bg: #EF4444;
+  --btn-danger-hover: #C93030;
+  --btn-danger-color: #FFFFFF;
 }

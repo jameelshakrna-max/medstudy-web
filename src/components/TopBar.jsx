@@ -4,10 +4,12 @@ import { ChevronDown, LogOut, Settings, User, LayoutDashboard, MessageCircle, Pa
 import { useQuery } from '@tanstack/react-query'
 import { apiGet } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
+import { getProfilePath } from '../lib/nav'
 import NotificationCenter from './NotificationCenter'
 import StatusIndicator from './StatusIndicator'
 import { usePresence } from '../context/PresenceContext'
 import Dropdown from './ui/Dropdown/Dropdown'
+import { IconButton, Badge } from './ui'
 import styles from './TopBar.module.css'
 
 export default function TopBar({ sidebarCollapsed, onToggleSidebar }) {
@@ -33,17 +35,28 @@ export default function TopBar({ sidebarCollapsed, onToggleSidebar }) {
 
   const displayName = profile?.full_name || profile?.email?.split('@')[0] || 'Student'
 
+  const goToProfile = () => {
+    const path = getProfilePath(userProfile, user)
+    if (path) navigate(path)
+  }
+
   return (
     <div className={styles.topBar}>
-      <button className={styles.toggleBtn} onClick={onToggleSidebar} title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}>
+      <IconButton
+        label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+        className={styles.toggleBtn}
+        onClick={onToggleSidebar}
+      >
         {sidebarCollapsed ? <PanelLeftOpen size={18} strokeWidth={1.5} /> : <PanelLeftClose size={18} strokeWidth={1.5} />}
-      </button>
+      </IconButton>
       <div className={styles.spacer} />
       <div className={styles.right}>
         <NotificationCenter user={user} />
-        <Link to="/messages" className={styles.navItem} style={{ position: 'relative' }}>
-          <MessageCircle size={20} />
-          {dmUnread > 0 && <span style={{ position: 'absolute', top: -4, right: -4, background: '#ef4444', color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600 }}>{dmUnread}</span>}
+        <Link to="/messages" className={styles.iconLink} aria-label={dmUnread > 0 ? `Messages (${dmUnread} unread)` : 'Messages'}>
+          <MessageCircle size={20} strokeWidth={1.5} />
+          {dmUnread > 0 && (
+            <Badge tone="danger" size="sm" className={styles.unreadBadge}>{dmUnread}</Badge>
+          )}
         </Link>
         <div className={styles.userMenu}>
           <Dropdown>
@@ -71,7 +84,7 @@ export default function TopBar({ sidebarCollapsed, onToggleSidebar }) {
               </button>
             </Dropdown.Trigger>
             <Dropdown.Content>
-              <Dropdown.Item onSelect={() => navigate(userProfile?.username ? `/u/${userProfile.username}` : `/profile/${user?.id}`)}>
+              <Dropdown.Item onSelect={goToProfile}>
                 <User size={15} /> Profile
               </Dropdown.Item>
               <Dropdown.Item onSelect={() => navigate('/dashboard')}>

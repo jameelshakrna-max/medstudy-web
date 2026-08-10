@@ -17,16 +17,20 @@
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 6px 12px;
+  padding: 6px 8px;
   border-radius: 8px;
+  border: none;
+  background: transparent;
   color: var(--mist);
   text-decoration: none;
   font-size: 10px;
   font-weight: 500;
+  font-family: inherit;
   transition: color 0.2s;
   -webkit-tap-highlight-color: transparent;
   min-width: 0;
   flex: 1;
+  cursor: pointer;
 }
 
 .tab:active {
@@ -39,7 +43,43 @@
 }
 
 .active {
-  color: var(--blue);
+  color: var(--color-brand-text, #12B8B0);
+  font-weight: 600;
+}
+
+.sheetList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sheetItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  border-radius: var(--radius-md, 10px);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-base, 15px);
+  font-weight: 500;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast, 120ms) ease, color var(--duration-fast, 120ms) ease;
+  min-width: 0;
+}
+
+.sheetItem:hover {
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+
+.sheetIcon {
+  flex-shrink: 0;
+  opacity: 0.75;
 }
 
 @media (max-width: 768px) {

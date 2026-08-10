@@ -1,0 +1,59 @@
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--duration-fast, 120ms) ease, color var(--duration-fast, 120ms) ease, border-color var(--duration-fast, 120ms) ease, transform var(--duration-fast, 120ms) ease;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.iconBtn:hover {
+  background: var(--btn-ghost-hover-bg, var(--input-bg));
+  color: var(--text-primary);
+}
+
+.iconBtn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.iconBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Variants */
+.ghost {
+  background: transparent;
+}
+
+.solid {
+  background: var(--color-brand-soft, rgba(18, 184, 176, 0.12));
+  color: var(--color-brand, #12B8B0);
+}
+
+.solid:hover {
+  background: var(--color-brand-soft-strong, rgba(18, 184, 176, 0.2));
+  color: var(--color-brand, #12B8B0);
+}
+
+/* Sizes */
+.sm {
+  width: 32px;
+  height: 32px;
+}
+
+.md {
+  width: 40px;
+  height: 40px;
+}
+
+.lg {
+  width: 48px;
+  height: 48px;
+}

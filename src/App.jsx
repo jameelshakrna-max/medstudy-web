@@ -15,6 +15,7 @@ import ProfilePanel from './components/ProfilePanel'
 import { CommunityPanelProvider } from './context/CommunityPanelContext'
 import CommunityPanel from './components/CommunityPanel/CommunityPanel'
 import FloatingTimer from './components/FloatingTimer'
+import { isFocusPath } from './lib/nav'
 import Layout from './components/Layout'
 import LoadingScreen from './components/LoadingScreen'
 
@@ -73,11 +74,12 @@ function PublicRoute({ children }) {
   return children
 }
 
-/* Shows floating timer when running AND not on the /pomodoro page */
+/* Shows floating timer when running AND not on a full timer/focus experience
+   (/focus and its compatibility routes /pomodoro and /forest) */
 function FloatingTimerWrapper() {
   const location = useLocation()
   const { running } = usePomodoro()
-  if (!running || location.pathname === '/pomodoro') return null
+  if (!running || isFocusPath(location.pathname)) return null
   return <FloatingTimer />
 }
 
@@ -95,6 +97,8 @@ function AppRoutes() {
           <Route path="anki"       element={<Anki />} />
           <Route path="uworld"     element={<TrackingHub />} />
           <Route path="pomodoro"   element={<Pomodoro />} />
+          <Route path="focus"      element={<Pomodoro />} />
+          <Route path="progress"   element={<TrackingHub />} />
           <Route path="resources" element={<Resources />} />
           <Route path="resources/:id" element={<ResourceDetail />} />
           <Route path="sessions"   element={<Sessions />} />

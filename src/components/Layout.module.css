@@ -1,52 +1,158 @@
-.layout { display: flex; min-height: 100vh; }
+.layout { display: flex; min-height: 100vh; min-width: 0; }
 .sidebar {
-  width: 260px; flex-shrink: 0;
+  width: 240px; flex-shrink: 0;
   background: var(--card-bg);
   border-right: 1px solid var(--card-border);
   display: flex; flex-direction: column;
-  position: fixed; left: 0; top: 0; bottom: 0; z-index: var(--z-sidebar, 300);
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: fixed; left: 0; top: 0; bottom: 0;
+  z-index: var(--z-sidebar, 300);
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   backdrop-filter: blur(20px);
 }
-.sidebarTop { padding: 24px 20px 16px; border-bottom: 1px solid var(--card-border); }
-.nav { flex: 1; padding: 10px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
-.navItem { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; font-size: 14px; font-weight: 500; color: var(--mist); transition: all 0.2s; position: relative; }
-.navItem:hover { background: var(--input-bg); color: var(--text-primary); }
-.navActive { background: var(--blueL) !important; color: var(--blue) !important; }
-.navIcon { flex-shrink: 0; opacity: 0.7; }
-.navActive .navIcon { opacity: 1; }
-.navLabel { flex: 1; }
-.navChevron { opacity: 0; transition: opacity 0.2s, transform 0.2s; }
-.navItem:hover .navChevron { opacity: 0.4; }
-.navActive .navChevron { opacity: 0.6; transform: translateX(2px); }
-.sidebarBottom { padding: 16px 20px; border-top: 1px solid var(--card-border); }
-.planBadge { font-size: 11px; font-weight: 600; color: var(--blue); margin-bottom: 10px; letter-spacing: 0.05em; text-transform: uppercase; }
-.signOutBtn { width: 100%; padding: 9px 12px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 10px; color: var(--mist); font-size: 13px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 8px; justify-content: center; }
-.signOutBtn:hover { border-color: var(--red); color: var(--red); background: var(--redL); }
-.main { flex: 1; margin-left: 260px; min-height: 100vh; display: flex; flex-direction: column; }
-.mobileHeader { display: none; align-items: center; gap: 14px; padding: 12px 20px; border-bottom: 1px solid var(--card-border); background: var(--page-bg); position: sticky; top: 0; z-index: var(--z-header, 200); backdrop-filter: blur(16px); }
-.menuBtn { background: none; border: none; color: var(--text-secondary); font-size: 22px; cursor: pointer; padding: 4px; }
-.content { padding: 36px 40px; max-width: 1200px; flex: 1; transition: max-width 0.3s ease, padding 0.3s ease; }
-.overlay { display: none; }
-
-/* ── Desktop collapsed sidebar ── */
-.sidebarCollapsed { transform: translateX(-100%); pointer-events: none; }
-.mainCollapsed { margin-left: 0; }
-.mainCollapsed .content { max-width: none; padding: 36px 60px; }
-
-@media (max-width: 768px) {
-  .sidebar { transform: translateX(-100%); border-right: none; }
-  .sidebarOpen { transform: translateX(0); }
-  .main { margin-left: 0; }
-  .mobileHeader { display: flex; }
-  .content { padding: 24px 20px 80px; }
-  .overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: var(--z-modal, 1500); backdrop-filter: blur(4px); }
-}
-@media (max-width: 480px) {
-  .content { padding: 20px 16px; }
-}
-/* ── Logo ── */
-.logo {
+.sidebarTop {
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--card-border);
   display: flex;
   align-items: center;
+  min-height: 72px;
+  overflow: hidden;
+}
+.nav { flex: 1; padding: 12px 10px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; overflow-x: hidden; }
+.navGroup { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.groupLabel {
+  font-size: var(--text-xs, 11px);
+  font-weight: var(--weight-semibold, 600);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 0 12px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+.navItem {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md, 10px);
+  font-size: 14px; font-weight: 500;
+  color: var(--text-secondary);
+  transition: background var(--duration-fast, 120ms) ease, color var(--duration-fast, 120ms) ease;
+  position: relative;
+  min-width: 0;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.navItem:hover { background: var(--input-bg); color: var(--text-primary); }
+.navActive {
+  background: var(--color-brand-soft) !important;
+  color: var(--color-brand-text) !important;
+  font-weight: var(--weight-semibold, 600);
+}
+.navActive::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 50%;
+  transform: translateY(-50%);
+  width: 3px; height: 60%;
+  border-radius: 0 2px 2px 0;
+  background: var(--color-brand, #12B8B0);
+}
+.navIcon { flex-shrink: 0; opacity: 0.7; }
+.navActive .navIcon { opacity: 1; color: var(--color-brand-text); }
+.navLabel { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.sidebarBottom {
+  padding: 12px 10px;
+  border-top: 1px solid var(--card-border);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.bottomLinks { display: flex; flex-direction: column; gap: 2px; }
+.profileItem { width: 100%; border-radius: var(--radius-md, 10px); }
+.profileItem:hover { background: var(--input-bg); }
+.signOutBtn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md, 10px);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color var(--duration-fast, 120ms) ease, color var(--duration-fast, 120ms) ease, background var(--duration-fast, 120ms) ease;
+  white-space: nowrap;
+}
+.signOutBtn:hover {
+  border-color: var(--color-error, #EF4444);
+  color: var(--color-error, #EF4444);
+  background: var(--color-error-soft, rgba(239, 68, 68, 0.1));
+}
+.main {
+  flex: 1; margin-left: 240px;
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  min-width: 0;
+  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.mobileHeader {
+  display: none; align-items: center; gap: 14px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--card-border);
+  background: var(--page-bg);
+  position: sticky; top: 0;
+  z-index: var(--z-header, 200);
+  backdrop-filter: blur(16px);
+}
+.menuBtn {
+  background: none; border: none;
+  color: var(--text-secondary);
+  font-size: 22px; cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+}
+.content { padding: 36px 40px; max-width: 1200px; flex: 1; min-width: 0; transition: max-width 0.3s ease, padding 0.3s ease; }
+.overlay { display: none; }
+
+/* ── Collapsed rail (desktop) ── */
+.sidebarCollapsed { width: 72px; }
+.sidebarCollapsed .sidebarTop { padding: 16px 8px; justify-content: center; }
+.sidebarCollapsed .nav { padding: 12px 8px; }
+.sidebarCollapsed .navGroup { align-items: center; }
+.sidebarCollapsed .groupLabel { display: none; }
+.sidebarCollapsed .navItem { justify-content: center; padding: 10px; gap: 0; }
+.sidebarCollapsed .navLabel { display: none; }
+.sidebarCollapsed .navActive::before { left: 0; }
+.sidebarCollapsed .profileItem { justify-content: center; padding: 10px; }
+.sidebarCollapsed .signOutLabel { display: none; }
+.sidebarCollapsed .signOutBtn { padding: 9px; justify-content: center; }
+.sidebarCollapsed .signOutIcon { margin: 0; }
+.mainCollapsed { margin-left: 72px; }
+
+@media (max-width: 768px) {
+  .sidebar { width: 240px; transform: translateX(-100%); border-right: none; }
+  .sidebarOpen { transform: translateX(0); }
+  .sidebarCollapsed { width: 240px; }
+  .sidebarCollapsed .sidebarTop { justify-content: flex-start; padding: 20px 20px 16px; }
+  .sidebarCollapsed .navGroup { align-items: stretch; }
+  .sidebarCollapsed .groupLabel { display: block; }
+  .sidebarCollapsed .navItem { justify-content: flex-start; padding: 10px 12px; gap: 12px; }
+  .sidebarCollapsed .navLabel { display: block; }
+  .sidebarCollapsed .profileItem { justify-content: flex-start; padding: 2px 4px; }
+  .sidebarCollapsed .signOutLabel { display: block; }
+  .sidebarCollapsed .signOutBtn { padding: 9px 12px; justify-content: center; }
+  .main { margin-left: 0; }
+  .mainCollapsed { margin-left: 0; }
+  .mobileHeader { display: flex; }
+  .content { padding: 24px 20px 96px; }
+  .overlay {
+    display: block; position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: var(--z-modal, 1500);
+    backdrop-filter: blur(4px);
+  }
+}
+@media (max-width: 480px) {
+  .content { padding: 20px 16px 88px; }
 }

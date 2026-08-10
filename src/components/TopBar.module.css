@@ -82,24 +82,42 @@
   background: var(--redL);
 }
 
-.toggleBtn {
-  display: flex;
+.iconLink {
+  position: relative;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  background: transparent;
-  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md, 10px);
   color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s;
+  transition: background var(--duration-fast, 120ms) ease, color var(--duration-fast, 120ms) ease;
   flex-shrink: 0;
 }
 
-.toggleBtn:hover {
-  background: var(--input-bg);
+.iconLink:hover {
+  background: var(--btn-ghost-hover-bg, var(--input-bg));
   color: var(--text-primary);
+}
+
+.unreadBadge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-full, 9999px);
+  font-size: 10px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toggleBtn {
+  width: 40px;
+  height: 40px;
 }
 
 @media (max-width: 768px) {

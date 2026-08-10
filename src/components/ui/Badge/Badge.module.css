@@ -1,0 +1,62 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-full, 9999px);
+  font-weight: var(--weight-semibold, 600);
+  line-height: var(--leading-tight, 1.2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Tones */
+.neutral {
+  background: var(--input-bg);
+  color: var(--text-secondary);
+}
+
+.brand {
+  background: var(--color-brand-soft, rgba(18, 184, 176, 0.12));
+  color: var(--color-brand-strong, #087F7A);
+}
+
+.success {
+  background: var(--color-success-soft, rgba(16, 185, 129, 0.12));
+  color: var(--color-success, #10B981);
+}
+
+.warning {
+  background: var(--color-warning-soft, rgba(245, 158, 11, 0.12));
+  color: var(--color-warning, #F59E0B);
+}
+
+.info {
+  background: var(--color-info-soft, rgba(79, 140, 255, 0.12));
+  color: var(--color-info, #4F8CFF);
+}
+
+.danger {
+  background: var(--color-error-soft, rgba(239, 68, 68, 0.12));
+  color: var(--color-error, #EF4444);
+}
+
+/* Sizes */
+.sm {
+  padding: 2px 8px;
+  font-size: var(--text-xs, 12px);
+}
+
+.md {
+  padding: 3px 10px;
+  font-size: var(--text-sm, 13px);
+}
+
+.lg {
+  padding: 5px 12px;
+  font-size: var(--text-base, 15px);
+}
+
+.brand-solid {
+  background: var(--color-brand, #12B8B0);
+  color: var(--color-brand-ink, #0B1120);
+}

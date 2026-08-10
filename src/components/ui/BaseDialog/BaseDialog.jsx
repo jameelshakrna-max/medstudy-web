@@ -1,4 +1,4 @@
-import { forwardRef, useId } from 'react'
+import { forwardRef, useId, useRef, useEffect } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import useScrollLock from '../../../hooks/useScrollLock'
@@ -23,6 +23,13 @@ const BaseDialog = forwardRef(function BaseDialog({
 }, ref) {
   const id = useId()
   const { openOverlay, closeOverlay, isTopOverlay } = useLayer()
+  const previouslyFocusedRef = useRef(null)
+
+  useEffect(() => {
+    if (open) {
+      previouslyFocusedRef.current = document.activeElement
+    }
+  }, [open])
   
   const handleOpenChange = (nextOpen) => {
     if (nextOpen) {
@@ -63,10 +70,18 @@ const BaseDialog = forwardRef(function BaseDialog({
         </Dialog.Overlay>
         <Dialog.Content
           ref={ref}
+          aria-modal="true"
           className={`${styles.content} ${animationClass} ${contentClassName || ''}`}
           style={{ zIndex: layerStyle }}
           onEscapeKeyDown={(e) => {
             if (onEscape) onEscape()
+          }}
+          onCloseAutoFocus={(e) => {
+            const previous = previouslyFocusedRef.current
+            if (previous && previous.isConnected && typeof previous.focus === 'function') {
+              e.preventDefault()
+              previous.focus()
+            }
           }}
           {...props}
         >
