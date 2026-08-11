@@ -1,14 +1,48 @@
 import { memo } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
+import { usePomodoro } from '../context/PomodoroContext'
 import { supabase } from '../lib/supabase'
 import { queryKeys } from '../lib/queryKeys'
-import { Timer, BookOpen, BrainCircuit, Target, Lightbulb, ArrowRight, Check, ChevronRight } from 'lucide-react'
+import { getDashboardShortcuts, sumDueCounts } from '../lib/dashboardShortcuts'
+import { Timer, BookOpen, BrainCircuit, Target, Lightbulb, ArrowRight, Check, ChevronRight, Play, RotateCcw, BookOpenCheck } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
 import { calculateGoalProgress } from '../services/goalProgress'
 import styles from './Dashboard.module.css'
 
 const STAT_ICONS = [Timer, BookOpen, BrainCircuit, Target]
+
+function ContextualShortcuts({ sessionPhase, sessionOutcome, cardsDue }) {
+  const { startFocus, continueStudy, reviewAnki } = getDashboardShortcuts({
+    sessionPhase,
+    sessionOutcome,
+    cardsDue,
+  })
+
+  return (
+    <div className={styles.shortcuts} aria-label="Quick actions">
+      {startFocus && (
+        <Link to="/focus" className={styles.shortcut}>
+          <Play size={16} strokeWidth={2} className={styles.shortcutIcon} />
+          Start Focus
+        </Link>
+      )}
+      {continueStudy && (
+        <Link to="/focus" className={styles.shortcut}>
+          <RotateCcw size={16} strokeWidth={2} className={styles.shortcutIcon} />
+          Continue Study
+        </Link>
+      )}
+      {reviewAnki && (
+        <Link to="/anki" className={styles.shortcut}>
+          <BookOpenCheck size={16} strokeWidth={2} className={styles.shortcutIcon} />
+          Review Anki
+        </Link>
+      )}
+    </div>
+  )
+}
 
 const DashStatCards = memo(function DashStatCards({ stats }) {
   return (
@@ -25,7 +59,7 @@ const DashStatCards = memo(function DashStatCards({ stats }) {
             <div className={styles.statIconWrap}>
               <Icon size={22} strokeWidth={1.5} />
             </div>
-            <div className={styles.statNum}>{s.n}</div>
+            <div className={styles.statNum}>{s.n === null ? '–' : s.n}</div>
             <div className={styles.statLabel}>{s.l}</div>
           </div>
         )
@@ -36,6 +70,7 @@ const DashStatCards = memo(function DashStatCards({ stats }) {
 
 export default function Dashboard() {
   const { profile, user } = useAuth()
+  const { sessionPhase, sessionOutcome } = usePomodoro()
 
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.dashboard.stats(user?.id),
@@ -58,14 +93,15 @@ export default function Dashboard() {
       if (p.error) console.error('Dashboard pomodoros error:', p.error)
       if (t.error) console.error('Dashboard topics error:', t.error)
 
-      let cardsdue = 0
+      let cardsdue = null
       try {
         const { data: { session } } = await supabase.auth.getSession()
         const res = await fetch('/api/flashcards/due-count', {
           headers: { Authorization: 'Bearer ' + session.access_token }
         })
+        if (!res.ok) throw new Error(`due-count request failed: ${res.status}`)
         const data = await res.json()
-        cardsdue = data.count ?? 0
+        cardsdue = sumDueCounts(data)
       } catch (e) {
         console.error('Dashboard due-count fetch error:', e)
       }
@@ -127,7 +163,7 @@ export default function Dashboard() {
     },
   })
 
-  const stats = data?.stats ?? { sessions: 0, pomodoros: 0, topicsInProgress: 0, cardsdue: 0 }
+  const stats = data?.stats ?? { sessions: 0, pomodoros: 0, topicsInProgress: 0, cardsdue: null }
   const goalSummaries = data?.goalSummaries ?? []
 
   const greeting = () => {
@@ -146,6 +182,12 @@ export default function Dashboard() {
         <h1 className={styles.name}>{profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'Doctor'}</h1>
         <p className={styles.sub}>Here is your study command centre for today.</p>
       </div>
+
+      <ContextualShortcuts
+        sessionPhase={sessionPhase}
+        sessionOutcome={sessionOutcome}
+        cardsDue={stats.cardsdue}
+      />
 
       <DashStatCards stats={stats} />
 

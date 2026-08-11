@@ -106,7 +106,7 @@ export const PROFILE_ROW = {
   email: VALIDATION_USER.email,
 }
 
-function apiStub(path: string, method: string): { status: number; body: unknown } {
+function apiStub(path: string, method: string, opts: StubOptions = {}): { status: number; body: unknown } {
   const p = path.replace(/^\/api/, '') || '/'
 
   if (method === 'GET') {
@@ -130,7 +130,10 @@ function apiStub(path: string, method: string): { status: number; body: unknown 
     if (/^\/notifications/.test(p)) return { status: 200, body: { notifications: [] } }
     if (/^\/dm\/conversations/.test(p)) return { status: 200, body: [] }
     if (/^\/dm\//.test(p)) return { status: 200, body: [] }
-    if (/^\/flashcards\/due-count/.test(p)) return { status: 200, body: { dueCount: 0 } }
+    if (/^\/flashcards\/due-count/.test(p)) {
+      if (opts.failCardsDue) return { status: 500, body: { error: 'stubbed due-count failure' } }
+      return { status: 200, body: [{ deck_name: 'Validation Deck', count: opts.cardsDue ?? 0 }] }
+    }
     if (/^\/flashcards/.test(p)) return { status: 200, body: [] }
     if (/^\/decks/.test(p)) return { status: 200, body: [] }
     if (/^\/deck-mappings/.test(p)) return { status: 200, body: [] }
@@ -164,17 +167,24 @@ function apiStub(path: string, method: string): { status: number; body: unknown 
   return { status: 200, body: {} }
 }
 
+export interface StubOptions {
+  /** Total due flashcards the stubbed /api/flashcards/due-count reports. */
+  cardsDue?: number
+  /** Force the due-count request to fail (500) to exercise unavailable states. */
+  failCardsDue?: boolean
+}
+
 /** Intercepts Worker-API, dev-proxy /api, PostgREST, and GoTrue traffic. */
-export async function stubApi(page: Page): Promise<void> {
+export async function stubApi(page: Page, opts: StubOptions = {}): Promise<void> {
   await page.route(`${API_ORIGIN}/api/**`, async (route) => {
     const { pathname } = new URL(route.request().url())
-    const { status, body } = apiStub(pathname, route.request().method())
+    const { status, body } = apiStub(pathname, route.request().method(), opts)
     await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
   })
 
   await page.route(`${APP_ORIGIN}/api/**`, async (route) => {
     const { pathname } = new URL(route.request().url())
-    const { status, body } = apiStub(pathname, route.request().method())
+    const { status, body } = apiStub(pathname, route.request().method(), opts)
     await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
   })
 
@@ -225,4 +235,24 @@ export async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   })
   expect(geo.scrollWidth, `horizontal overflow detected (scrollWidth=${geo.scrollWidth})`).toBeLessThanOrEqual(geo.innerWidth + 1)
   expect(geo.clientWidth, `document wider than viewport (clientWidth=${geo.clientWidth})`).toBeLessThanOrEqual(geo.innerWidth + 1)
+}
+
+/**
+ * Seeds (or clears) the app's pomodoro localStorage state BEFORE the app
+ * loads, so the PomodoroContext hydration path runs against a known payload.
+ *
+ * Pass `null` to guarantee an empty state. Installed per-page via
+ * addInitScript — it is page-scoped, so it can never leak between tests or
+ * parallel workers (every test opens a fresh BrowserContext).
+ */
+export async function seedPomodoroState(page: Page, state: Record<string, unknown> | null): Promise<void> {
+  if (state === null) {
+    await page.addInitScript(() => {
+      try { localStorage.removeItem('pomodoro_state') } catch { /* opaque origin */ }
+    })
+    return
+  }
+  await page.addInitScript((s) => {
+    try { localStorage.setItem('pomodoro_state', JSON.stringify(s)) } catch { /* opaque origin */ }
+  }, state)
 }

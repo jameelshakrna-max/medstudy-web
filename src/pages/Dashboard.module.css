@@ -20,6 +20,41 @@
   color: var(--mist);
 }
 
+/* Mobile-only contextual quick actions (Start Focus / Continue Study / Review Anki) */
+.shortcuts { display: none; }
+
+@media (max-width: 768px) {
+  .shortcuts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 28px;
+    position: relative;
+    z-index: 1;
+  }
+  .shortcut {
+    flex: 1 1 0;
+    min-width: 120px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: var(--radius-md, 12px);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background var(--duration-fast, 120ms) ease, border-color var(--duration-fast, 120ms) ease, transform var(--duration-fast, 120ms) ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .shortcut:hover { background: var(--card-bg-solid, rgba(255, 255, 255, 0.08)); }
+  .shortcut:active { transform: translateY(1px); }
+  .shortcutIcon { color: var(--color-brand); flex-shrink: 0; }
+}
+
 .statsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -273,8 +308,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .statCard, .routineCard { transition: none; }
+  .statCard, .routineCard, .shortcut { transition: none; }
   .statCard:hover, .routineCard:hover { transform: none; }
+  .shortcut:active { transform: none; }
   .routineCta { transition: none; }
   .routineCard:hover .routineCta { gap: 6px; }
 }
