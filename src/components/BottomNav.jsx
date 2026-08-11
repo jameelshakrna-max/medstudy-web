@@ -1,8 +1,8 @@
-import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import {
   LayoutDashboard, CalendarRange, Timer, MoreHorizontal,
-  BookOpen, BrainCircuit, FolderOpen, BarChart3, Target, Users, FlaskConical, Settings,
+  BookOpen, BrainCircuit, FolderOpen, BarChart3, Target, Users, FlaskConical, Settings, LogOut,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import MobileSheet from './ui/MobileSheet/MobileSheet'
@@ -28,7 +28,7 @@ const MORE_ITEMS = [
 ]
 
 export default function BottomNav() {
-  const { user, profile, userProfile } = useAuth()
+  const { user, profile, userProfile, signOut } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -50,20 +50,29 @@ export default function BottomNav() {
     setOpen(false)
   }
 
+  async function handleSignOut() {
+    setOpen(false)
+    await signOut()
+    navigate('/')
+  }
+
   return (
     <>
       <nav className={s.bar} aria-label="Bottom navigation">
-        {TABS.map(({ to, icon: Icon, label, isActive }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive: active }) => `${s.tab} ${active ? s.active : ''}`}
-            isActive={(match, loc) => isActive(loc.pathname)}
-          >
-            <Icon size={20} strokeWidth={1.5} />
-            <span className={s.label}>{label}</span>
-          </NavLink>
-        ))}
+        {TABS.map(({ to, icon: Icon, label, isActive }) => {
+          const active = isActive(pathname)
+          return (
+            <Link
+              key={to}
+              to={to}
+              aria-current={active ? 'page' : undefined}
+              className={`${s.tab} ${active ? s.active : ''}`}
+            >
+              <Icon size={20} strokeWidth={1.5} />
+              <span className={s.label}>{label}</span>
+            </Link>
+          )
+        })}
         <button
           type="button"
           className={`${s.tab} ${isMoreActive ? s.active : ''}`}
@@ -96,6 +105,12 @@ export default function BottomNav() {
               className={s.sheetItem}
               onClick={goToProfile}
             />
+          )}
+          {user && (
+            <button type="button" className={`${s.sheetItem} ${s.sheetSignOut}`} onClick={handleSignOut}>
+              <LogOut size={18} strokeWidth={1.5} className={s.sheetIcon} />
+              <span>Sign Out</span>
+            </button>
           )}
         </div>
       </MobileSheet>

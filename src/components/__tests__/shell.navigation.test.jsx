@@ -51,6 +51,7 @@ vi.mock('react-swipeable', () => ({ useSwipeable: () => ({}) }))
 import Layout from '../Layout'
 import BottomNav from '../BottomNav'
 import MobileSheet from '../ui/MobileSheet/MobileSheet'
+import bottomNavStyles from '../BottomNav.module.css'
 import { getProfilePath, isFocusPath, isProgressPath, matchesPath } from '../../lib/nav'
 
 function LocationProbe() {
@@ -144,6 +145,40 @@ describe('Layout shell', () => {
     await user.click(screen.getByRole('button', { name: 'Sign Out' }))
     expect(authMock.signOut).toHaveBeenCalled()
   })
+
+  it('marks the Focus link active on legacy /pomodoro', () => {
+    renderShell('/pomodoro')
+    const nav = screen.getAllByRole('navigation', { name: 'Primary' })[0]
+    expect(within(nav).getByRole('link', { name: 'Focus' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('marks the Focus link active on legacy /forest', () => {
+    renderShell('/forest')
+    const nav = screen.getAllByRole('navigation', { name: 'Primary' })[0]
+    expect(within(nav).getByRole('link', { name: 'Focus' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('marks the Progress link active on legacy /uworld', () => {
+    renderShell('/uworld')
+    const nav = screen.getAllByRole('navigation', { name: 'Primary' })[0]
+    expect(within(nav).getByRole('link', { name: 'Progress' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('marks the Progress link active on legacy /sessions', () => {
+    renderShell('/sessions')
+    const nav = screen.getAllByRole('navigation', { name: 'Primary' })[0]
+    expect(within(nav).getByRole('link', { name: 'Progress' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('marks only the Home link active on /dashboard', () => {
+    renderShell('/dashboard')
+    const nav = screen.getAllByRole('navigation', { name: 'Primary' })[0]
+    const activeLinks = within(nav)
+      .getAllByRole('link')
+      .filter(link => link.getAttribute('aria-current') === 'page')
+    expect(activeLinks).toHaveLength(1)
+    expect(within(nav).getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
+  })
 })
 
 describe('BottomNav', () => {
@@ -174,6 +209,22 @@ describe('BottomNav', () => {
     expect(more).toHaveAttribute('aria-expanded', 'false')
   })
 
+  it('marks the Focus tab active on /pomodoro but not More', () => {
+    renderNav('/pomodoro')
+    const nav = screen.getByRole('navigation', { name: 'Bottom navigation' })
+    expect(within(nav).getByRole('link', { name: 'Focus' })).toHaveAttribute('aria-current', 'page')
+    const more = screen.getByRole('button', { name: 'More menu' })
+    expect(more.classList.contains(bottomNavStyles.active)).toBe(false)
+  })
+
+  it('marks the Focus tab inactive and More active on /uworld', () => {
+    renderNav('/uworld')
+    const nav = screen.getByRole('navigation', { name: 'Bottom navigation' })
+    expect(within(nav).getByRole('link', { name: 'Focus' })).not.toHaveAttribute('aria-current')
+    const more = screen.getByRole('button', { name: 'More menu' })
+    expect(more.classList.contains(bottomNavStyles.active)).toBe(true)
+  })
+
   it('opens the More sheet with all destinations and profile entry', async () => {
     const user = userEvent.setup()
     renderNav('/dashboard')
@@ -186,6 +237,15 @@ describe('BottomNav', () => {
     }
     expect(within(dialog).getByText('Jane Doe')).toBeInTheDocument()
     expect(within(dialog).getByText('Core')).toBeInTheDocument()
+    expect(within(dialog).getByText('Sign Out')).toBeInTheDocument()
+  })
+
+  it('signs out from the More sheet Sign Out action', async () => {
+    const user = userEvent.setup()
+    renderNav('/dashboard')
+    await user.click(screen.getByRole('button', { name: 'More menu' }))
+    await user.click(screen.getByRole('button', { name: 'Sign Out' }))
+    expect(authMock.signOut).toHaveBeenCalled()
   })
 
   it('closes the sheet on Escape and restores focus to the More button', async () => {

@@ -82,6 +82,11 @@
   opacity: 0.75;
 }
 
+.sheetSignOut:hover {
+  background: var(--color-error-soft, rgba(239, 68, 68, 0.1));
+  color: var(--color-error, #EF4444);
+}
+
 @media (max-width: 768px) {
   .bar {
     display: flex;

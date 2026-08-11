@@ -1,13 +1,12 @@
-import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useState } from 'react'
-import { useSwipeable } from 'react-swipeable'
 import {
   LayoutDashboard, Timer, CalendarRange,
   BookOpen, BrainCircuit, FolderOpen,
   BarChart3, Target,
   Users, FlaskConical,
-  Settings, LogOut, Menu,
+  Settings, LogOut,
 } from 'lucide-react'
 import TopBar from './TopBar'
 import BottomNav from './BottomNav'
@@ -58,7 +57,6 @@ export default function Layout() {
   const { user, profile, userProfile, signOut } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  const [mobileOpen, setMobileOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('sidebarCollapsed') === 'true' } catch { return false }
   })
@@ -76,15 +74,6 @@ export default function Layout() {
     })
   }
 
-  const sidebarSwipe = useSwipeable({
-    onSwipedRight: () => { if (window.innerWidth <= 768 && !mobileOpen) setMobileOpen(true) },
-    onSwipedLeft: () => { if (window.innerWidth <= 768 && mobileOpen) setMobileOpen(false) },
-    delta: 40,
-    trackTouch: true,
-    trackMouse: false,
-    preventScrollOnSwipe: false,
-  })
-
   async function handleSignOut() {
     await signOut()
     navigate('/')
@@ -92,17 +81,17 @@ export default function Layout() {
 
   function renderNavItem(item) {
     const { to, icon: Icon, label } = item
+    const active = isActiveFor(to, location.pathname)
     const link = (
-      <NavLink
+      <Link
         key={to}
         to={to}
-        className={({ isActive }) => `${styles.navItem} ${isActive ? styles.navActive : ''}`}
-        onClick={() => setMobileOpen(false)}
-        isActive={(match, loc) => isActiveFor(to, loc.pathname)}
+        aria-current={active ? 'page' : undefined}
+        className={`${styles.navItem} ${active ? styles.navActive : ''}`}
       >
         <Icon size={18} strokeWidth={1.5} className={styles.navIcon} />
         <span className={styles.navLabel}>{label}</span>
-      </NavLink>
+      </Link>
     )
     if (!sidebarCollapsed) return link
     return (
@@ -118,7 +107,7 @@ export default function Layout() {
   return (
     <div className={styles.layout}>
       {/* Sidebar */}
-      <aside className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ''} ${sidebarCollapsed ? styles.sidebarCollapsed : ''}`}>
+      <aside className={`${styles.sidebar} ${sidebarCollapsed ? styles.sidebarCollapsed : ''}`}>
         <div className={styles.sidebarTop}>
           {sidebarCollapsed
             ? <BrandLogo variant="symbol" size={36} linkToHome className={styles.logoSymbol} />
@@ -141,7 +130,6 @@ export default function Layout() {
             <NavLink
               to="/settings"
               className={({ isActive }) => `${styles.navItem} ${isActive ? styles.navActive : ''}`}
-              onClick={() => setMobileOpen(false)}
               isActive={(match, loc) => matchesPath(loc.pathname, '/settings')}
             >
               <Settings size={18} strokeWidth={1.5} className={styles.navIcon} />
@@ -167,15 +155,9 @@ export default function Layout() {
         </div>
       </aside>
 
-      {/* Mobile overlay */}
-      {mobileOpen && <div className={styles.overlay} onClick={() => setMobileOpen(false)} />}
-
       {/* Main */}
-      <main className={`${styles.main} ${sidebarCollapsed ? styles.mainCollapsed : ''}`} {...sidebarSwipe}>
+      <main className={`${styles.main} ${sidebarCollapsed ? styles.mainCollapsed : ''}`}>
         <div className={styles.mobileHeader}>
-          <button className={styles.menuBtn} onClick={() => setMobileOpen(!mobileOpen)} aria-label="Toggle navigation menu">
-            <Menu size={20} strokeWidth={1.5} />
-          </button>
           <BrandLogo variant="horizontal" size={150} linkToHome />
         </div>
         <TopBar sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
