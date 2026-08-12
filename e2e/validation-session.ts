@@ -106,6 +106,27 @@ export const PROFILE_ROW = {
   email: VALIDATION_USER.email,
 }
 
+export interface AnkiSeedDeck {
+  id: string
+  name: string
+  card_count: number
+}
+
+export interface AnkiSeedCard {
+  id: string
+  deck_id: string
+  state: number
+  front: string
+  back: string
+  last_review?: string | null
+  next_review?: string | null
+}
+
+export interface AnkiSeed {
+  decks: AnkiSeedDeck[]
+  cards: AnkiSeedCard[]
+}
+
 function apiStub(path: string, method: string, opts: StubOptions = {}): { status: number; body: unknown } {
   const p = path.replace(/^\/api/, '') || '/'
 
@@ -134,8 +155,8 @@ function apiStub(path: string, method: string, opts: StubOptions = {}): { status
       if (opts.failCardsDue) return { status: 500, body: { error: 'stubbed due-count failure' } }
       return { status: 200, body: [{ deck_name: 'Validation Deck', count: opts.cardsDue ?? 0 }] }
     }
-    if (/^\/flashcards/.test(p)) return { status: 200, body: [] }
-    if (/^\/decks/.test(p)) return { status: 200, body: [] }
+    if (/^\/flashcards/.test(p)) return { status: 200, body: opts.ankiSeed ? opts.ankiSeed.cards : [] }
+    if (/^\/decks/.test(p)) return { status: 200, body: opts.ankiSeed ? opts.ankiSeed.decks : [] }
     if (/^\/deck-mappings/.test(p)) return { status: 200, body: [] }
     if (/^\/rotation-planner\/tracking\/schedule/.test(p)) return { status: 200, body: { schedule: [], incorrectReview: [], linkedDecks: [] } }
     if (/^\/rotation-planner\/sources/.test(p)) return { status: 200, body: [] }
@@ -160,6 +181,7 @@ function apiStub(path: string, method: string, opts: StubOptions = {}): { status
     if (/^\/presence\/bulk/.test(p)) return { status: 200, body: { users: {} } }
     if (/^\/users\/[^/]+\/dm/.test(p)) return { status: 200, body: { conversation_id: 'conv-validation' } }
     if (/^\/communities$/.test(p)) return { status: 200, body: { id: 'community-created' } }
+    if (/^\/decks\/?$/.test(p)) return { status: 200, body: { success: true, deck_name: 'stubbed' } }
     return { status: 200, body: {} }
   }
 
@@ -172,6 +194,8 @@ export interface StubOptions {
   cardsDue?: number
   /** Force the due-count request to fail (500) to exercise unavailable states. */
   failCardsDue?: boolean
+  /** Seed decks + cards returned by /api/decks and /api/flashcards. */
+  ankiSeed?: AnkiSeed
 }
 
 /** Intercepts Worker-API, dev-proxy /api, PostgREST, and GoTrue traffic. */

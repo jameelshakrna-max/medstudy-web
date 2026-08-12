@@ -16,6 +16,17 @@
   flex-wrap: wrap;
   gap: 12px;
 }
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.quickActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .headerLeft {}
 .title {
   font-family: 'DM Serif Display', serif;
@@ -56,6 +67,7 @@
   transition: all 0.2s;
 }
 .viewToggle:hover { border-color: var(--blue); color: var(--blue); }
+.pillDue strong { color: var(--red); }
 
 /* ─── Error Screen ─── */
 .errorBox {
@@ -187,16 +199,21 @@
   font-weight: 600;
   color: var(--text-primary);
 }
-.deckMeta {
+.deckCounts {
   display: flex;
   gap: 14px;
   font-size: 12px;
   color: var(--mist);
   margin-bottom: 12px;
+  flex-wrap: wrap;
 }
-.deckMeta strong {
+.deckCount strong {
   font-family: 'DM Mono', monospace;
   color: var(--text-secondary);
+}
+.deckCountDue strong {
+  color: var(--red);
+  font-weight: 700;
 }
 .deckDelBtn {
   position: absolute;
@@ -219,14 +236,10 @@
 .deckCard:hover .deckDelBtn { opacity: 1; }
 .deckDelBtn:hover { background: rgba(239,68,68,0.2); }
 
-/* Create deck row */
-.createDeckRow {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 18px;
-}
+/* Create deck (modal) */
 .createDeckInput {
-  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
   background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -254,22 +267,37 @@
 .createDeckBtn:hover { background: var(--blue2); }
 .createDeckBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* Review all button */
-.reviewAllBtn {
-  width: 100%;
-  padding: 14px;
-  background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(245,158,11,0.12));
-  border: 1px solid rgba(239,68,68,0.2);
-  border-radius: 12px;
-  color: var(--text-secondary);
-  font-size: 15px;
+/* New Deck modal */
+.modalTitle {
+  font-family: 'DM Serif Display', serif;
+  font-size: 20px;
+  color: var(--text-primary);
+}
+.modalBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Review Now button */
+.reviewNowBtn {
+  padding: 10px 18px;
+  background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(245,158,11,0.15));
+  border: 1px solid rgba(239,68,68,0.35);
+  color: var(--red);
+  border-radius: 100px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
-  margin-bottom: 18px;
-  text-align: center;
+  white-space: nowrap;
 }
-.reviewAllBtn:hover { transform: translateY(-1px); border-color: rgba(239,68,68,0.35); }
+.reviewNowBtn:hover { background: rgba(239,68,68,0.2); border-color: var(--red); transform: translateY(-1px); }
 
 /* Progress bar */
 .progBar {
@@ -870,13 +898,14 @@
 
 /* ─── Responsive ─── */
 @media (max-width: 768px) {
+  .quickActions { display: none; }
+  .deckGrid { grid-template-columns: 1fr; }
   .cardExpanded.reviewCard { max-width: 100%; margin: 0; border-radius: 12px; }
   .cardExpanded .reviewContent { font-size: 18px; }
 }
 @media (max-width: 480px) {
   .header { flex-direction: column; align-items: flex-start; }
   .pills { width: 100%; }
-  .deckGrid { grid-template-columns: 1fr; }
   .reviewBtns { flex-direction: column; }
   .revBtn { width: 100%; text-align: center; }
   .uploadActions { flex-direction: column; }

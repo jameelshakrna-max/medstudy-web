@@ -8,40 +8,31 @@ import { queryKeys } from '../lib/queryKeys'
 import { getDashboardShortcuts, sumDueCounts } from '../lib/dashboardShortcuts'
 import { Timer, BookOpen, BrainCircuit, Target, Lightbulb, ArrowRight, Check, ChevronRight, Play, RotateCcw, BookOpenCheck } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
+import { ContextualShortcuts } from '../components/ui'
 import { calculateGoalProgress } from '../services/goalProgress'
 import styles from './Dashboard.module.css'
 
 const STAT_ICONS = [Timer, BookOpen, BrainCircuit, Target]
 
-function ContextualShortcuts({ sessionPhase, sessionOutcome, cardsDue }) {
+function DashboardShortcuts({ sessionPhase, sessionOutcome, cardsDue }) {
   const { startFocus, continueStudy, reviewAnki } = getDashboardShortcuts({
     sessionPhase,
     sessionOutcome,
     cardsDue,
   })
 
-  return (
-    <div className={styles.shortcuts} aria-label="Quick actions">
-      {startFocus && (
-        <Link to="/focus" className={styles.shortcut}>
-          <Play size={16} strokeWidth={2} className={styles.shortcutIcon} />
-          Start Focus
-        </Link>
-      )}
-      {continueStudy && (
-        <Link to="/focus" className={styles.shortcut}>
-          <RotateCcw size={16} strokeWidth={2} className={styles.shortcutIcon} />
-          Continue Study
-        </Link>
-      )}
-      {reviewAnki && (
-        <Link to="/anki" className={styles.shortcut}>
-          <BookOpenCheck size={16} strokeWidth={2} className={styles.shortcutIcon} />
-          Review Anki
-        </Link>
-      )}
-    </div>
-  )
+  const items = []
+  if (startFocus) {
+    items.push({ key: 'startFocus', icon: <Play size={16} strokeWidth={2} />, label: 'Start Focus', to: '/focus' })
+  }
+  if (continueStudy) {
+    items.push({ key: 'continueStudy', icon: <RotateCcw size={16} strokeWidth={2} />, label: 'Continue Study', to: '/focus' })
+  }
+  if (reviewAnki) {
+    items.push({ key: 'reviewAnki', icon: <BookOpenCheck size={16} strokeWidth={2} />, label: 'Review Anki', to: '/anki' })
+  }
+
+  return <ContextualShortcuts items={items} />
 }
 
 const DashStatCards = memo(function DashStatCards({ stats }) {
@@ -183,7 +174,7 @@ export default function Dashboard() {
         <p className={styles.sub}>Here is your study command centre for today.</p>
       </div>
 
-      <ContextualShortcuts
+      <DashboardShortcuts
         sessionPhase={sessionPhase}
         sessionOutcome={sessionOutcome}
         cardsDue={stats.cardsdue}

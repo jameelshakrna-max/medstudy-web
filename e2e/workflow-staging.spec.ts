@@ -52,7 +52,7 @@ test('E2E 3 Anki: review due cards through an FSRS session (Show Answer → rate
   // NOTE: deck creation is broken in this working tree (frontend sends { name },
   // worker expects { deck_name } → POST /api/decks always 400s). We exercise the
   // working core of the workflow instead: the FSRS review session over due cards.
-  const dueBtn = page.getByRole('button', { name: /Review \d+ Due Cards?/ })
+  const dueBtn = page.getByRole('button', { name: /Review Now/ })
   await expect(dueBtn).toBeVisible({ timeout: 15_000 })
   await dueBtn.click()
 

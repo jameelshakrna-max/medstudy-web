@@ -32,7 +32,18 @@ vi.mock('../../components/ui/Toast/Toast', () => {
 vi.mock('lucide-react', () => ({
   Maximize2: () => null,
   Minimize2: () => null,
+  Plus: () => null,
+  BookOpenCheck: () => null,
 }))
+
+vi.mock('../../components/ui/Modal/Modal', () => {
+  const MockModal = ({ open, children }) => (open ? <div role="dialog">{children}</div> : null)
+  MockModal.Title = ({ children }) => <div>{children}</div>
+  MockModal.Description = ({ children }) => <div>{children}</div>
+  MockModal.Close = ({ children }) => <div>{children}</div>
+  MockModal.Trigger = ({ children }) => <div>{children}</div>
+  return { default: MockModal }
+})
 
 vi.mock('fsrs.js', () => ({
   FSRS: vi.fn().mockImplementation(() => ({

@@ -1,13 +1,16 @@
 import { useEffect, useState, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { apiGet, apiPost } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
+import EmptyState from '../components/ui/EmptyState/EmptyState'
+import Skeleton from '../components/ui/Skeleton/Skeleton'
 import {
   Upload, Search, ArrowUpDown, X, FileText, Image,
-  Download, Eye, Plus, Loader2, FolderOpen
+  Download, Eye, Plus, FolderOpen, AlertTriangle
 } from 'lucide-react'
 import Modal from '../components/ui/Modal/Modal'
 import UserLink from '../components/ui/UserLink/UserLink'
@@ -89,6 +92,17 @@ const CATEGORY_COLORS = {
   other: 'var(--indigo)',
 }
 
+const RESOURCES_PAGE_SIZE = 50
+
+function selectResources(data) {
+  const seen = new Set()
+  return data.pages.flat().filter((r) => {
+    if (seen.has(r.id)) return false
+    seen.add(r.id)
+    return true
+  })
+}
+
 export default function Resources() {
   const navigate = useNavigate()
   const { profile } = useAuth()
@@ -102,6 +116,8 @@ export default function Resources() {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [sessionToken, setSessionToken] = useState('')
+
+  const debouncedSearch = useDebouncedValue(searchQuery)
 
   const [formTitle, setFormTitle] = useState('')
   const [formCategory, setFormCategory] = useState('')
@@ -124,18 +140,43 @@ export default function Resources() {
     staleTime: 60_000,
   })
 
-  const { data: resources = [], isLoading: resourcesLoading } = useQuery({
-    queryKey: queryKeys.resources.list(selectedCategory, selectedType, searchQuery, sort),
-    queryFn: () => {
+  const {
+    data: resources = [],
+    isPending,
+    isError,
+    isFetching,
+    error,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+  } = useInfiniteQuery({
+    queryKey: queryKeys.resources.list(selectedCategory, selectedType, debouncedSearch, sort),
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => {
       const params = new URLSearchParams()
       if (selectedCategory) params.set('category', selectedCategory)
       if (selectedType) params.set('type', selectedType)
-      if (searchQuery) params.set('search', searchQuery)
+      if (debouncedSearch) params.set('search', debouncedSearch)
       params.set('sort', sort)
+      params.set('limit', String(RESOURCES_PAGE_SIZE))
+      params.set('offset', String(pageParam))
       return apiGet('/resources?' + params)
     },
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length === RESOURCES_PAGE_SIZE
+        ? allPages.reduce((total, page) => total + page.length, 0)
+        : undefined,
+    select: selectResources,
     staleTime: 15_000,
   })
+
+  const clearFilters = () => {
+    setSearchQuery('')
+    setSelectedCategory('')
+    setSelectedType('')
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -188,7 +229,7 @@ export default function Resources() {
       })
       setUploadOpen(false)
       resetForm()
-      queryClient.invalidateQueries({ queryKey: queryKeys.resources.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.resources.list(selectedCategory, selectedType, debouncedSearch, sort) })
     } catch (err) {
       alert('Upload failed: ' + err.message)
     } finally {
@@ -221,6 +262,7 @@ export default function Resources() {
   }
 
   const sizeWarning = formFile && formFile.size > 90 * 1024 * 1024
+  const hasFilters = Boolean(selectedCategory || selectedType || debouncedSearch)
 
   return (
     <div className={s.page}>
@@ -289,63 +331,110 @@ export default function Resources() {
         ))}
       </div>
 
-      {resourcesLoading ? (
-        <div className={s.loading}><Loader2 size={24} className={s.spinner} /> Loading...</div>
-      ) : resources.length === 0 ? (
-        <div className={s.empty}>
-          <FolderOpen size={40} strokeWidth={1} />
-          <p>No resources found</p>
-          <button className={s.emptyUpload} onClick={() => setUploadOpen(true)}>Upload your first resource</button>
-        </div>
-      ) : (
-        <div className={s.grid}>
-          {resources.map(r => (
-            <div
-              key={r.id}
-              className={s.card}
-              style={{ '--card-accent': CATEGORY_COLORS[r.category] || 'var(--blue)' }}
-              onClick={() => navigate('/resources/' + r.id)}
-            >
-              {r.image_key ? (
-                <div className={s.cardImageWrap}>
-                  <img src={API + '/resources/' + r.id + '/image?token=' + sessionToken} alt="" className={s.cardImage} loading="lazy" />
-                </div>
-              ) : (
-                <div className={s.cardImagePlaceholder} style={{ background: CATEGORY_COLORS[r.category] || 'var(--blue)' }}>
-                  <span className={s.cardEmoji}>{fileIcon(r.mime_type, r.file_name)}</span>
-                </div>
-              )}
-              <div className={s.cardBody}>
-                <h3 className={s.cardTitle}>{r.title}</h3>
-                <div className={s.cardMeta}>
-                  <span className={s.cardCategory} style={{ color: CATEGORY_COLORS[r.category] || 'var(--blue)' }}>
-                    {categories.find(c => c.id === r.category)?.name || r.category}
-                  </span>
-                  {r.type && <span className={s.cardType}>{TYPE_LABELS[r.type] || r.type}</span>}
-                  <span className={s.cardSize}>{formatSize(r.file_size)}</span>
-                  <span className={s.cardDate}>{formatDate(r.created_at)}</span>
-                </div>
-                {r.tags?.length > 0 && (
-                  <div className={s.cardTags}>
-                    {r.tags.slice(0, 3).map(t => <span key={t} className={s.tag}>{t}</span>)}
-                    {r.tags.length > 3 && <span className={s.tagMore}>+{r.tags.length - 3}</span>}
-                  </div>
-                )}
-                <div className={s.cardActions}>
-                  <UserLink userId={r.user_id} displayName={r.user_name} size="sm" showAvatar={false} />
-                  <div className={s.cardActionBtns} onClick={e => e.stopPropagation()}>
-                    <a href={API + '/resources/' + r.id + '/download?token=' + sessionToken} className={s.actionBtn} title="Download" download>
-                      <Download size={14} strokeWidth={1.5} />
-                    </a>
-                    <Link to={'/resources/' + r.id} className={s.actionBtn} title="View">
-                      <Eye size={14} strokeWidth={1.5} />
-                    </Link>
-                  </div>
-                </div>
+      {isPending && !isError ? (
+        <div className={s.skeletonGrid} aria-label="Loading resources">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className={s.skeletonCard}>
+              <Skeleton height={120} variant="text" />
+              <div className={s.skeletonBody}>
+                <Skeleton width="70%" height={16} />
+                <Skeleton width="45%" height={12} />
               </div>
             </div>
           ))}
         </div>
+      ) : isError && resources.length === 0 ? (
+        <div className={s.errorState} role="alert">
+          <AlertTriangle size={40} strokeWidth={1} />
+          <h3 className={s.errorTitle}>Couldn't load resources</h3>
+          <p className={s.errorText}>{error?.message || 'Something went wrong while loading resources.'}</p>
+          <button className={s.errorRetry} onClick={() => refetch()} disabled={isFetching}>
+            {isFetching ? 'Retrying...' : 'Retry'}
+          </button>
+        </div>
+      ) : resources.length === 0 ? (
+        hasFilters ? (
+          <EmptyState
+            icon={Search}
+            title="No resources match your search"
+            description="Try a different search term or clear your filters."
+            action={
+              <button className={s.emptyUpload} onClick={clearFilters}>Clear filters</button>
+            }
+          />
+        ) : (
+          <EmptyState
+            icon={FolderOpen}
+            title="No resources yet"
+            description="Be the first to share a study resource with your community."
+            action={
+              <button className={s.emptyUpload} onClick={() => setUploadOpen(true)}>Upload your first resource</button>
+            }
+          />
+        )
+      ) : (
+        <>
+          <div className={s.grid}>
+            {resources.map(r => (
+              <div
+                key={r.id}
+                className={s.card}
+                style={{ '--card-accent': CATEGORY_COLORS[r.category] || 'var(--blue)' }}
+                onClick={() => navigate('/resources/' + r.id)}
+              >
+                {r.image_key ? (
+                  <div className={s.cardImageWrap}>
+                    <img src={API + '/resources/' + r.id + '/image?token=' + sessionToken} alt="" className={s.cardImage} loading="lazy" />
+                  </div>
+                ) : (
+                  <div className={s.cardImagePlaceholder} style={{ background: CATEGORY_COLORS[r.category] || 'var(--blue)' }}>
+                    <span className={s.cardEmoji}>{fileIcon(r.mime_type, r.file_name)}</span>
+                  </div>
+                )}
+                <div className={s.cardBody}>
+                  <h3 className={s.cardTitle}>{r.title}</h3>
+                  <div className={s.cardMeta}>
+                    <span className={s.cardCategory} style={{ color: CATEGORY_COLORS[r.category] || 'var(--blue)' }}>
+                      {categories.find(c => c.id === r.category)?.name || r.category}
+                    </span>
+                    {r.type && <span className={s.cardType}>{TYPE_LABELS[r.type] || r.type}</span>}
+                    <span className={s.cardSize}>{formatSize(r.file_size)}</span>
+                    <span className={s.cardDate}>{formatDate(r.created_at)}</span>
+                  </div>
+                  {r.tags?.length > 0 && (
+                    <div className={s.cardTags}>
+                      {r.tags.slice(0, 3).map(t => <span key={t} className={s.tag}>{t}</span>)}
+                      {r.tags.length > 3 && <span className={s.tagMore}>+{r.tags.length - 3}</span>}
+                    </div>
+                  )}
+                  <div className={s.cardActions}>
+                    <UserLink userId={r.user_id} displayName={r.user_name} size="sm" showAvatar={false} />
+                    <div className={s.cardActionBtns} onClick={e => e.stopPropagation()}>
+                      <a href={API + '/resources/' + r.id + '/download?token=' + sessionToken} className={s.actionBtn} title="Download" download>
+                        <Download size={14} strokeWidth={1.5} />
+                      </a>
+                      <Link to={'/resources/' + r.id} className={s.actionBtn} title="View">
+                        <Eye size={14} strokeWidth={1.5} />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {isFetchNextPageError ? (
+            <div className={s.loadMoreError} role="alert">
+              <span>Couldn't load more resources.</span>
+              <button className={s.loadMoreRetry} onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>Retry</button>
+            </div>
+          ) : hasNextPage ? (
+            <div className={s.loadMoreWrap}>
+              <button className={s.loadMoreBtn} onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
+                {isFetchingNextPage ? 'Loading more...' : 'Load more'}
+              </button>
+            </div>
+          ) : null}
+        </>
       )}
 
       {uploadOpen && (

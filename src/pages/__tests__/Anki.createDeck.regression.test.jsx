@@ -29,7 +29,18 @@ vi.mock('../../components/ui/Toast/Toast', () => {
 vi.mock('lucide-react', () => ({
   Maximize2: () => null,
   Minimize2: () => null,
+  Plus: () => null,
+  BookOpenCheck: () => null,
 }))
+
+vi.mock('../../components/ui/Modal/Modal', () => {
+  const MockModal = ({ open, children }) => (open ? <div role="dialog">{children}</div> : null)
+  MockModal.Title = ({ children }) => <div>{children}</div>
+  MockModal.Description = ({ children }) => <div>{children}</div>
+  MockModal.Close = ({ children }) => <div>{children}</div>
+  MockModal.Trigger = ({ children }) => <div>{children}</div>
+  return { default: MockModal }
+})
 
 vi.mock('fsrs.js', () => ({
   FSRS: vi.fn().mockImplementation(() => ({
@@ -93,9 +104,10 @@ function renderAnki() {
 }
 
 async function createDeck(name) {
+  fireEvent.click(await screen.findByRole('button', { name: '+ Deck' }))
   const input = await screen.findByPlaceholderText('New deck name...')
   fireEvent.change(input, { target: { value: name } })
-  fireEvent.click(screen.getByRole('button', { name: '+ Deck' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Create Deck' }))
 }
 
 describe('Anki create deck — release regression scenarios', () => {
@@ -128,7 +140,8 @@ describe('Anki create deck — release regression scenarios', () => {
     await waitFor(() => {
       expect(screen.getByText('Deck created.')).toBeTruthy()
       expect(screen.getByText('Release Test Deck')).toBeTruthy()
-      expect(screen.getByPlaceholderText('New deck name...').value).toBe('')
+      expect(screen.queryByPlaceholderText('New deck name...')).toBeNull()
+      expect(screen.queryByRole('dialog')).toBeNull()
     })
     await waitFor(() => {
       const gets = calls.filter((c) => !c.opts?.method && c.url.endsWith('/api/decks'))
@@ -182,7 +195,7 @@ describe('Anki create deck — release regression scenarios', () => {
     await waitFor(() => {
       expect(screen.getByTestId('toast').textContent).toMatch(/Failed to fetch/)
     })
-    expect(screen.getByRole('button', { name: '+ Deck' }).disabled).toBe(false)
+    expect(screen.getByRole('button', { name: 'Create Deck' }).disabled).toBe(false)
 
     await createDeck('Release Test Deck')
     await waitFor(() => {
@@ -196,9 +209,10 @@ describe('Anki create deck — release regression scenarios', () => {
     const { calls } = makeFetchStub({ deck: { id: 'Release Test Deck', name: 'Release Test Deck', card_count: 0 } })
     renderAnki()
 
+    fireEvent.click(await screen.findByRole('button', { name: '+ Deck' }))
     const input = await screen.findByPlaceholderText('New deck name...')
     fireEvent.change(input, { target: { value: 'Release Test Deck' } })
-    const button = screen.getByRole('button', { name: '+ Deck' })
+    const button = screen.getByRole('button', { name: 'Create Deck' })
     fireEvent.click(button)
     fireEvent.click(button)
 
@@ -254,7 +268,7 @@ describe('Anki create deck — release regression scenarios', () => {
       .map((c) => JSON.stringify(c))
     expect(after).toEqual(snapshot)
     expect(screen.getByText('Existing')).toBeTruthy()
-    expect(screen.queryByText('New Deck')).toBeNull()
+    expect(screen.queryByText('New Deck', { selector: '.deckName' })).toBeNull()
     setDecks([{ id: 'Existing', name: 'Existing', card_count: 2 }])
   })
 })

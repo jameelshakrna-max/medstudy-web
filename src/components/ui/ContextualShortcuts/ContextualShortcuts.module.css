@@ -1,0 +1,41 @@
+.shortcuts { display: none; }
+
+@media (max-width: 768px) {
+  .shortcuts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 28px;
+    position: relative;
+    z-index: 1;
+  }
+  .shortcut {
+    flex: 1 1 0;
+    min-width: 120px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: var(--radius-md, 12px);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    color: var(--text-primary);
+    text-decoration: none;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--duration-fast, 120ms) ease, border-color var(--duration-fast, 120ms) ease, transform var(--duration-fast, 120ms) ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .shortcut:hover { background: var(--card-bg-solid, rgba(255, 255, 255, 0.08)); }
+  .shortcut:active { transform: translateY(1px); }
+  .shortcut:disabled { opacity: 0.5; cursor: not-allowed; }
+  .shortcutIcon { color: var(--color-brand); flex-shrink: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shortcut { transition: none; }
+  .shortcut:active { transform: none; }
+}

@@ -900,19 +900,34 @@ async function handleCreateCategory(request, env, user) {
 
 /* ── Resources ── */
 
+const RESOURCE_SORT_CLAUSES = {
+  created_at: 'created_at DESC, id ASC',
+  newest: 'created_at DESC, id ASC',
+  oldest: 'created_at ASC, id ASC',
+  name: 'title COLLATE NOCASE ASC, id ASC',
+  largest: 'file_size DESC, id ASC',
+  smallest: 'file_size ASC, id ASC',
+}
+
 async function handleGetResources(request, env) {
   const url = new URL(request.url)
   const cat = url.searchParams.get('category')
   const tag = url.searchParams.get('tag')
-  const q = url.searchParams.get('q')
+  const type = url.searchParams.get('type')
+  const search = (url.searchParams.get('search') || '').trim()
+  const q = (url.searchParams.get('q') || '').trim()
+  const query = search || q
   const { offset, limit } = pageParams(request.url)
+  const sortKey = (url.searchParams.get('sort') || '').trim().toLowerCase()
+  const orderBy = RESOURCE_SORT_CLAUSES[sortKey] || RESOURCE_SORT_CLAUSES.created_at
 
   let sql = 'SELECT * FROM resources WHERE 1=1'
   const binds = []
   if (cat) { sql += ' AND category = ?'; binds.push(cat) }
   if (tag) { sql += ' AND tags LIKE ?'; binds.push(`%"${tag}"%`) }
-  if (q) { sql += ' AND (title LIKE ? OR description LIKE ?)'; binds.push(`%${q}%`, `%${q}%`) }
-  sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?'
+  if (type) { sql += ' AND type = ?'; binds.push(type) }
+  if (query) { sql += ' AND (title LIKE ? OR description LIKE ?)'; binds.push(`%${query}%`, `%${query}%`) }
+  sql += ` ORDER BY ${orderBy} LIMIT ? OFFSET ?`
   binds.push(limit, offset)
 
   const { results } = await env.DB.prepare(sql).bind(...binds).all()

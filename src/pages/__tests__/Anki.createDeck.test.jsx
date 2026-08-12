@@ -29,7 +29,18 @@ vi.mock('../../components/ui/Toast/Toast', () => {
 vi.mock('lucide-react', () => ({
   Maximize2: () => null,
   Minimize2: () => null,
+  Plus: () => null,
+  BookOpenCheck: () => null,
 }))
+
+vi.mock('../../components/ui/Modal/Modal', () => {
+  const MockModal = ({ open, children }) => (open ? <div role="dialog">{children}</div> : null)
+  MockModal.Title = ({ children }) => <div>{children}</div>
+  MockModal.Description = ({ children }) => <div>{children}</div>
+  MockModal.Close = ({ children }) => <div>{children}</div>
+  MockModal.Trigger = ({ children }) => <div>{children}</div>
+  return { default: MockModal }
+})
 
 vi.mock('fsrs.js', () => ({
   FSRS: vi.fn().mockImplementation(() => ({
@@ -87,6 +98,13 @@ function renderAnki() {
   return queryClient
 }
 
+async function createDeck(name) {
+  fireEvent.click(await screen.findByRole('button', { name: '+ Deck' }))
+  const input = await screen.findByPlaceholderText('New deck name...')
+  fireEvent.change(input, { target: { value: name } })
+  fireEvent.click(screen.getByRole('button', { name: 'Create Deck' }))
+}
+
 describe('Anki create deck', () => {
   beforeEach(() => {
     for (const key of [...mockUrlParams.keys()]) {
@@ -98,9 +116,7 @@ describe('Anki create deck', () => {
     const calls = makeFetchStub()
     renderAnki()
 
-    const input = await screen.findByPlaceholderText('New deck name...')
-    fireEvent.change(input, { target: { value: 'new' } })
-    fireEvent.click(screen.getByRole('button', { name: '+ Deck' }))
+    await createDeck('new')
 
     await waitFor(() => {
       const post = calls.find((c) => c.opts?.method === 'POST')
@@ -114,9 +130,7 @@ describe('Anki create deck', () => {
     const calls = makeFetchStub()
     renderAnki()
 
-    const input = await screen.findByPlaceholderText('New deck name...')
-    fireEvent.change(input, { target: { value: '  new  ' } })
-    fireEvent.click(screen.getByRole('button', { name: '+ Deck' }))
+    await createDeck('  new  ')
 
     await waitFor(() => {
       const post = calls.find((c) => c.opts?.method === 'POST')
@@ -129,9 +143,10 @@ describe('Anki create deck', () => {
     const calls = makeFetchStub()
     renderAnki()
 
+    fireEvent.click(await screen.findByRole('button', { name: '+ Deck' }))
     const input = await screen.findByPlaceholderText('New deck name...')
     fireEvent.change(input, { target: { value: 'new' } })
-    const button = screen.getByRole('button', { name: '+ Deck' })
+    const button = screen.getByRole('button', { name: 'Create Deck' })
     fireEvent.click(button)
     fireEvent.click(button)
 
@@ -141,16 +156,15 @@ describe('Anki create deck', () => {
     })
   })
 
-  it('clears the input after a successful creation', async () => {
+  it('closes the modal after a successful creation', async () => {
     makeFetchStub()
     renderAnki()
 
-    const input = await screen.findByPlaceholderText('New deck name...')
-    fireEvent.change(input, { target: { value: 'new' } })
-    fireEvent.click(screen.getByRole('button', { name: '+ Deck' }))
+    await createDeck('new')
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('New deck name...').value).toBe('')
+      expect(screen.queryByPlaceholderText('New deck name...')).toBeNull()
+      expect(screen.queryByRole('dialog')).toBeNull()
     })
   })
 
@@ -160,9 +174,7 @@ describe('Anki create deck', () => {
 
     const initialGets = calls.filter((c) => !c.opts?.method && c.url.endsWith('/api/decks')).length
 
-    const input = await screen.findByPlaceholderText('New deck name...')
-    fireEvent.change(input, { target: { value: 'new' } })
-    fireEvent.click(screen.getByRole('button', { name: '+ Deck' }))
+    await createDeck('new')
 
     await waitFor(() => {
       const gets = calls.filter((c) => !c.opts?.method && c.url.endsWith('/api/decks'))
@@ -179,9 +191,7 @@ describe('Anki create deck', () => {
     })
     renderAnki()
 
-    const input = await screen.findByPlaceholderText('New deck name...')
-    fireEvent.change(input, { target: { value: 'new' } })
-    fireEvent.click(screen.getByRole('button', { name: '+ Deck' }))
+    await createDeck('new')
 
     await waitFor(() => {
       expect(screen.getByTestId('toast').textContent).toBe('Deck name required (max 100 chars)')
@@ -193,11 +203,12 @@ describe('Anki create deck', () => {
     const calls = makeFetchStub()
     renderAnki()
 
+    fireEvent.click(await screen.findByRole('button', { name: '+ Deck' }))
     const input = await screen.findByPlaceholderText('New deck name...')
     fireEvent.change(input, { target: { value: '   ' } })
 
-    expect(screen.getByRole('button', { name: '+ Deck' }).disabled).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: '+ Deck' }))
+    expect(screen.getByRole('button', { name: 'Create Deck' }).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Create Deck' }))
     expect(calls.filter((c) => c.opts?.method === 'POST')).toHaveLength(0)
   })
 })

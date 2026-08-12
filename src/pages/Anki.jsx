@@ -6,9 +6,11 @@ import { supabase } from '../lib/supabase'
 import { queryKeys } from '../lib/queryKeys'
 import { invalidateFlashcardProgressQueries } from '../lib/flashcardProgressInvalidation'
 import { FSRS, Card as FSRSCard, State as FSRSState, Rating as FSRSRating } from 'fsrs.js'
-import { Maximize2, Minimize2 } from 'lucide-react'
+import { Maximize2, Minimize2, Plus, BookOpenCheck } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
+import { Modal, ContextualShortcuts } from '../components/ui'
 import Toast from '../components/ui/Toast/Toast'
+import useMediaQuery from '../hooks/useMediaQuery'
 import s from './Anki.module.css'
 
 const fsrsInstance = new FSRS()
@@ -211,6 +213,7 @@ export default function Anki() {
   // create-deck form
   const [deckName, setDeckName] = useState('')
   const [savingDeck, setSavingDeck] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   // file upload / import
   const [parsed, setParsed] = useState([])
@@ -224,6 +227,8 @@ export default function Anki() {
   const [dragOver, setDragOver] = useState(false)
   const [apkgFile, setApkgFile] = useState(null)
   const fileRef = useRef(null)
+
+  const isMobile = useMediaQuery('(max-width: 768px)')
 
   // review session
   const [queue, setQueue] = useState([])
@@ -335,9 +340,44 @@ export default function Anki() {
   }, [cards])
 
   const all = useMemo(() => activeDeckId ? cards.filter(c => c.deck_id === activeDeckId) : cards, [cards, activeDeckId])
-  const due = useMemo(() => all.filter(c => isDue(c)), [all])
+
+  // Single source of truth for the reviewable set. The Due count, Review Now
+  // visibility, and the startReview() queue all use exactly this collection —
+  // no divergent "due" formula anywhere.
+  const reviewable = useMemo(() => all.filter(c => isDue(c)), [all])
+
+  // Truthful state counts for the current scope (New = state 0, Learning = states 1 + 3).
+  const counts = useMemo(() => {
+    let New = 0
+    let Learning = 0
+    for (const c of all) {
+      const st = Number(c.state) || 0
+      if (st === 0) New++
+      else if (st === 1 || st === 3) Learning++
+    }
+    return { New, Learning }
+  }, [all])
+
+  // Per-deck counts computed from deckCardsMap with the SAME state rules.
+  const deckCountsMap = useMemo(() => {
+    const map = new Map()
+    for (const [deckId, list] of deckCardsMap) {
+      let New = 0
+      let Learning = 0
+      let Due = 0
+      for (const c of list) {
+        const st = Number(c.state) || 0
+        if (st === 0) New++
+        else if (st === 1 || st === 3) Learning++
+        if (isDue(c)) Due++
+      }
+      map.set(deckId, { New, Learning, Due, total: list.length })
+    }
+    return map
+  }, [deckCardsMap])
+
   const nw = useMemo(() => all.filter(c => isNew(c)), [all])
-  const vis = useMemo(() => filter === 'due' ? due : filter === 'new' ? nw : all, [filter, due, nw, all])
+  const vis = useMemo(() => filter === 'due' ? reviewable : filter === 'new' ? nw : all, [filter, reviewable, nw, all])
   const dn = useCallback(id => dm(decks, id), [decks])
 
   /* ── deck actions ────────────────────────────────────── */
@@ -349,6 +389,7 @@ export default function Anki() {
       await createDeckMutation.mutateAsync(deckName.trim())
       setDeckName('')
       setToast({ msg: 'Deck created.', type: 'success' })
+      setShowCreateModal(false)
     } catch (e) { setToast({ msg: e.message || 'Failed to create deck', type: 'error' }) }
     setSavingDeck(false)
   }
@@ -397,8 +438,8 @@ export default function Anki() {
   /* ── review (queued session) ─────────────────────────── */
 
   function startReview() {
-    if (due.length) {
-      setQueue(due)
+    if (reviewable.length) {
+      setQueue(reviewable)
       setQIdx(0)
       setShowAns(false)
       setView('review')
@@ -686,17 +727,30 @@ export default function Anki() {
           <h1 className={s.title}>Anki</h1>
           <p className={s.sub}>Spaced repetition — FSRS{submitting && <span className={s.savingDot} />}</p>
         </div>
-        <div className={s.pills}>
-          {[
-            { n: decks.length, l: 'decks' },
-            { n: cards.length, l: 'cards' },
-            { n: due.length, l: 'due' },
-            { n: nw.length, l: 'new' }
-          ].map(t => (
-            <span key={t.l} className={s.pill}>
-              <strong>{t.n}</strong> {t.l}
+        <div className={s.headerActions}>
+          <div className={s.pills}>
+            <span className={`${s.pill} ${s.pillDue}`}>
+              <strong>{reviewable.length}</strong> due
             </span>
-          ))}
+            <span className={s.pill}>
+              <strong>{counts.New}</strong> new
+            </span>
+            <span className={s.pill}>
+              <strong>{counts.Learning}</strong> learning
+            </span>
+          </div>
+          <div className={s.quickActions}>
+            {!isMobile && reviewable.length > 0 && (
+              <button className={s.reviewNowBtn} onClick={startReview}>
+                Review Now ({reviewable.length})
+              </button>
+            )}
+            {!isMobile && (
+              <button className={s.createDeckBtn} onClick={() => setShowCreateModal(true)}>
+                + Deck
+              </button>
+            )}
+          </div>
           <button className={s.viewToggle} onClick={() => setCompact(v => !v)} title={compact ? 'Expand view' : 'Compact view'}>
             {compact ? <Maximize2 size={16} strokeWidth={1.5} /> : <Minimize2 size={16} strokeWidth={1.5} />}
           </button>
@@ -706,28 +760,15 @@ export default function Anki() {
       {/* ── decks view ──────────────────────────────────── */}
       {view === 'decks' && (
         <>
-          <div className={s.createDeckRow}>
-            <input
-              className={s.createDeckInput}
-              value={deckName}
-              onChange={e => setDeckName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && createDeck()}
-              placeholder="New deck name..."
-              maxLength={80}
+          {isMobile && (
+            <ContextualShortcuts
+              items={[
+                ...(reviewable.length > 0
+                  ? [{ key: 'review', icon: <BookOpenCheck size={16} strokeWidth={2} />, label: 'Review Now', onClick: startReview }]
+                  : []),
+                { key: 'create', icon: <Plus size={16} strokeWidth={2} />, label: 'Create', onClick: () => setShowCreateModal(true) },
+              ]}
             />
-            <button
-              className={s.createDeckBtn}
-              onClick={createDeck}
-              disabled={savingDeck || !deckName.trim()}
-            >
-              {savingDeck ? '...' : '+ Deck'}
-            </button>
-          </div>
-
-          {due.length > 0 && (
-            <button className={s.reviewAllBtn} onClick={startReview}>
-              Review {due.length} Due Card{due.length > 1 ? 's' : ''}
-            </button>
           )}
 
           <div className={s.deckGrid}>
@@ -739,17 +780,17 @@ export default function Anki() {
               <div className={s.deckTop}>
                 <span className={s.deckName}>All Cards</span>
               </div>
-              <div className={s.deckMeta}>
-                <span><strong>{cards.length}</strong> total</span>
-                <span><strong>{due.length}</strong> due</span>
-                <span><strong>{nw.length}</strong> new</span>
+              <div className={s.deckCounts}>
+                <span className={`${s.deckCount} ${s.deckCountDue}`}><strong>{reviewable.length}</strong> due</span>
+                <span className={s.deckCount}><strong>{counts.New}</strong> new</span>
+                <span className={s.deckCount}><strong>{counts.Learning}</strong> learning</span>
               </div>
               {cards.length > 0 && (
                 <div className={s.progBar}>
                   <div
                     className={s.progFill}
                     style={{
-                      width: Math.round(due.length / cards.length * 100) + '%',
+                      width: Math.round(reviewable.length / cards.length * 100) + '%',
                       background: 'var(--blue)'
                     }}
                   />
@@ -764,8 +805,7 @@ export default function Anki() {
             )}
 
             {decks.map(d => {
-              const dc = deckCardsMap.get(d.id) || []
-              const dd = dc.filter(c => isDue(c))
+              const dc = deckCountsMap.get(d.id) || { New: 0, Learning: 0, Due: 0, total: 0 }
               return (
                 <div
                   key={d.id}
@@ -782,16 +822,17 @@ export default function Anki() {
                   <div className={s.deckTop}>
                     <span className={s.deckName}>{d.name}</span>
                   </div>
-                  <div className={s.deckMeta}>
-                    <span><strong>{dc.length}</strong> total</span>
-                    <span><strong>{dd.length}</strong> due</span>
+                  <div className={s.deckCounts}>
+                    <span className={`${s.deckCount} ${s.deckCountDue}`}><strong>{dc.Due}</strong> due</span>
+                    <span className={s.deckCount}><strong>{dc.New}</strong> new</span>
+                    <span className={s.deckCount}><strong>{dc.Learning}</strong> learning</span>
                   </div>
-                  {dc.length > 0 && (
+                  {dc.total > 0 && (
                     <div className={s.progBar}>
                       <div
                         className={s.progFill}
                         style={{
-                          width: Math.round(dd.length / dc.length * 100) + '%',
+                          width: Math.round(dc.Due / dc.total * 100) + '%',
                           background: 'var(--indigo)'
                         }}
                       />
@@ -820,12 +861,12 @@ export default function Anki() {
               All ({all.length})
             </button>
             <button className={`${s.tab} ${filter === 'due' ? s.tabOn : ''}`} onClick={() => setFilter('due')}>
-              Due ({due.length})
+              Due ({reviewable.length})
             </button>
             <button className={`${s.tab} ${filter === 'new' ? s.tabOn : ''}`} onClick={() => setFilter('new')}>
               New ({nw.length})
             </button>
-            {due.length > 0 && (
+            {reviewable.length > 0 && (
               <button className={s.tabReview} onClick={startReview}>Review</button>
             )}
             <div style={{ flex: 1 }} />
@@ -1213,6 +1254,31 @@ export default function Anki() {
           </div>
         </>
       )}
+
+      {/* ── new deck modal ── */}
+      <Modal open={showCreateModal} onOpenChange={(v) => { if (!v && !savingDeck) setShowCreateModal(false) }} size="md">
+        <Modal.Title className={s.modalTitle}>New Deck</Modal.Title>
+        <div className={s.modalBody}>
+          <input
+            className={s.createDeckInput}
+            value={deckName}
+            onChange={e => setDeckName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !savingDeck) createDeck() }}
+            placeholder="New deck name..."
+            maxLength={80}
+            autoFocus
+          />
+          <div className={s.modalActions}>
+            <button
+              className={s.createDeckBtn}
+              onClick={createDeck}
+              disabled={savingDeck || !deckName.trim()}
+            >
+              {savingDeck ? '...' : 'Create Deck'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ── toast notification ── */}
       <Toast

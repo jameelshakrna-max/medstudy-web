@@ -74,6 +74,39 @@ CREATE TABLE IF NOT EXISTS flashcards (
 );
 `
 
+const RESOURCES_STUB = `
+CREATE TABLE IF NOT EXISTS categories (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  user_id TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+INSERT OR IGNORE INTO categories (id, name) VALUES
+  ('internal_medicine', 'Internal Medicine'),
+  ('surgery', 'Surgery'),
+  ('pharmacology', 'Pharmacology'),
+  ('other', 'Other');
+CREATE TABLE IF NOT EXISTS resources (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  tags TEXT DEFAULT '[]',
+  type TEXT NOT NULL DEFAULT '',
+  file_name TEXT NOT NULL,
+  file_key TEXT NOT NULL,
+  file_size INTEGER NOT NULL,
+  mime_type TEXT DEFAULT '',
+  image_key TEXT,
+  user_id TEXT NOT NULL,
+  user_name TEXT NOT NULL DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_resources_category ON resources(category);
+CREATE INDEX IF NOT EXISTS idx_resources_user ON resources(user_id);
+`
+
 class D1PreparedStatement {
   constructor(db, sql, bindings) {
     this._db = db
@@ -184,6 +217,7 @@ export async function createTestDb() {
   sqlJsDb.run('PRAGMA foreign_keys = ON')
   sqlJsDb.run(loadMigrationSql())
   sqlJsDb.run(FLASHCARDS_STUB)
+  sqlJsDb.run(RESOURCES_STUB)
   sqlJsDb.run(loadMigration16Sql())
   sqlJsDb.run(loadMigration17Sql())
   sqlJsDb.run(loadMigration18Sql())
