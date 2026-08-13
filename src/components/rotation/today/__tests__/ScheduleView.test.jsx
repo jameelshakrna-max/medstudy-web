@@ -211,6 +211,38 @@ describe('ScheduleView', () => {
     expect(screen.getByText(/Jul 20/)).toBeInTheDocument()
   })
 
+  describe('external todayKey re-sync', () => {
+    it('rebases the current week when today moves within the same week', () => {
+      const { rerender } = render(<ScheduleView tasks={[]} topicsById={TOPICS} todayKey={TODAY} />)
+      expect(screen.getByText(/Jul 20/)).toBeInTheDocument()
+      expect(screen.getByText('TODAY')).toBeInTheDocument()
+
+      rerender(<ScheduleView tasks={[]} topicsById={TOPICS} todayKey="2026-07-25" />)
+      expect(screen.getByText(/Jul 20/)).toBeInTheDocument()
+      expect(screen.getByText('TODAY')).toBeInTheDocument()
+    })
+
+    it('does not move the user off a different week when today changes', () => {
+      const { rerender } = render(<ScheduleView tasks={[]} topicsById={TOPICS} todayKey={TODAY} />)
+      fireEvent.click(screen.getByLabelText('Next week'))
+      expect(screen.getByText(/Jul 27/)).toBeInTheDocument()
+
+      rerender(<ScheduleView tasks={[]} topicsById={TOPICS} todayKey="2026-07-25" />)
+      expect(screen.getByText(/Jul 27/)).toBeInTheDocument()
+      expect(screen.queryByText(/Jul 20/)).not.toBeInTheDocument()
+      expect(screen.getByText('Today')).toBeInTheDocument()
+    })
+
+    it('keeps an intentionally selected day when today changes', () => {
+      const { rerender } = render(<ScheduleView tasks={[]} topicsById={TOPICS} todayKey={TODAY} />)
+      fireEvent.click(screen.getByText('22'))
+      expect(screen.getByText(/Wednesday, Jul 22/)).toBeInTheDocument()
+
+      rerender(<ScheduleView tasks={[]} topicsById={TOPICS} todayKey="2026-07-25" />)
+      expect(screen.getByText(/Wednesday, Jul 22/)).toBeInTheDocument()
+    })
+  })
+
   it('renders without topicsById', () => {
     render(<ScheduleView tasks={[learningTask]} topicsById={null} todayKey={TODAY} />)
     expect(screen.getAllByText('Learning').length).toBeGreaterThan(0)

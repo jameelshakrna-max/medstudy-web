@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import V2PlanDetail from '../V2PlanDetail'
 import { queryKeys } from '../../../lib/queryKeys'
 
-const { mockUseRotationPlanDetail, mockUseQuery, mockUsePlannerTaskMutations, mockUseMutation, invalidateQueriesSpy, mockApiPost, mockApiPut } = vi.hoisted(() => {
+const { mockUseRotationPlanDetail, mockUseQuery, mockUsePlannerTaskMutations, mockUseMutation, invalidateQueriesSpy, mockApiPost, mockApiPut, mockRouter, tabsMock } = vi.hoisted(() => {
   const mockUseQueryFn = vi.fn(() => ({ data: null, isLoading: false, error: null }))
   const mockRotationPlanDetailFn = vi.fn(() => ({
     data: { plan: { id: 'p1', revision: 1 }, topics: [], tasks: [], availability: [], sourcePace: null },
@@ -32,11 +32,22 @@ const { mockUseRotationPlanDetail, mockUseQuery, mockUsePlannerTaskMutations, mo
   const invalidateQueriesSpy = vi.fn()
   const mockApiPost = vi.fn(() => Promise.resolve({ ok: true }))
   const mockApiPut = vi.fn(() => Promise.resolve({ ok: true }))
-  return { mockUseRotationPlanDetail: mockRotationPlanDetailFn, mockUseQuery: mockUseQueryFn, mockUsePlannerTaskMutations: mockMutationsFn, mockUseMutation: mockUseMutationFn, invalidateQueriesSpy, mockApiPost, mockApiPut }
+  const mockRouter = { search: '' }
+  const tabsMock = { onChange: null, defaultValue: null }
+  return { mockUseRotationPlanDetail: mockRotationPlanDetailFn, mockUseQuery: mockUseQueryFn, mockUsePlannerTaskMutations: mockMutationsFn, mockUseMutation: mockUseMutationFn, invalidateQueriesSpy, mockApiPost, mockApiPut, mockRouter, tabsMock }
 })
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
+  useSearchParams: () => {
+    const params = new URLSearchParams(mockRouter.search)
+    const setSearchParams = (updater) => {
+      const current = new URLSearchParams(mockRouter.search)
+      const next = typeof updater === 'function' ? updater(current) : updater
+      mockRouter.search = next.toString()
+    }
+    return [params, setSearchParams]
+  },
 }))
 
 vi.mock('../V2PlanDetail.module.css', () => ({
@@ -97,7 +108,7 @@ vi.mock('../../ui/Modal/Modal', () => {
 })
 
 vi.mock('../today/TodayView', () => ({
-  default: ({ onStart, onComplete, onPartial, onRecordTime, onRecordQuestions, onSkip, questionGroups = [], questionGroupStates = [] }) => (
+  default: ({ onStart, onComplete, onPartial, onRecordTime, onRecordQuestions, onSkip, onOpenAvailability, questionGroups = [], questionGroupStates = [] }) => (
     <div data-testid="today-view" data-question-groups={questionGroups.length} data-question-group-states={questionGroupStates.length}>
       <button data-testid="btn-start" onClick={() => onStart({ id: 't1' })} />
       <button data-testid="btn-complete" onClick={() => onComplete({ id: 't1' })} />
@@ -105,12 +116,17 @@ vi.mock('../today/TodayView', () => ({
       <button data-testid="btn-record-time" onClick={() => onRecordTime({ id: 't1' })} />
       <button data-testid="btn-record-questions" onClick={() => onRecordQuestions({ id: 't1', taskType: 'uworld_questions' })} />
       <button data-testid="btn-skip" onClick={() => onSkip({ id: 't1' })} />
+      <button data-testid="btn-open-availability" onClick={onOpenAvailability} />
     </div>
   ),
 }))
 
 vi.mock('../CalendarView', () => ({
   default: () => <div data-testid="calendar-view" />,
+}))
+
+vi.mock('../RotationView', () => ({
+  default: () => <div data-testid="rotation-view" />,
 }))
 
 vi.mock('../today/TopicsView', () => ({
@@ -166,9 +182,17 @@ vi.mock('../../LoadingScreen', () => ({
 }))
 
 vi.mock('../../ui/Tabs/Tabs', () => ({
-  Tabs: ({ children, ...props }) => <div data-testid="tabs" {...props}>{children}</div>,
+  Tabs: ({ value, defaultValue, onValueChange, children }) => {
+    tabsMock.onChange = onValueChange
+    tabsMock.defaultValue = defaultValue
+    return <div data-testid="tabs" data-value={value}>{children}</div>
+  },
   TabsList: ({ children }) => <div role="tablist">{children}</div>,
-  TabsTrigger: ({ value, children }) => <button role="tab" data-value={value}>{children}</button>,
+  TabsTrigger: ({ value, children }) => (
+    <button role="tab" data-value={value} onClick={() => tabsMock.onChange?.(value)}>
+      {children}
+    </button>
+  ),
   TabsContent: ({ value, children }) => <div data-content={value}>{children}</div>,
 }))
 
@@ -194,6 +218,7 @@ vi.mock('../today/dialogs/RecordQuestionsDialog', () => ({
 
 describe('V2PlanDetail', () => {
   beforeEach(() => {
+    mockRouter.search = ''
     mockUseRotationPlanDetail.mockReturnValue({
       data: { plan: { id: 'p1', revision: 1 }, topics: [], tasks: [], availability: [], sourcePace: null },
       isLoading: false,
@@ -274,12 +299,12 @@ describe('V2PlanDetail', () => {
   })
 
   describe('tabs rendering', () => {
-    it('renders exactly 4 top-level tabs: Today, Calendar, Topics, Progress', () => {
+    it('renders exactly 3 top-level tabs: Today, Week, Rotation', () => {
       render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
       const tabTriggers = screen.getAllByRole('tab')
-      expect(tabTriggers).toHaveLength(4)
+      expect(tabTriggers).toHaveLength(3)
       const labels = tabTriggers.map(t => t.textContent)
-      expect(labels).toEqual(['Today', 'Calendar', 'Topics', 'Progress'])
+      expect(labels).toEqual(['Today', 'Week', 'Rotation'])
     })
 
     it('does not include a standalone Schedule tab', () => {
@@ -287,6 +312,11 @@ describe('V2PlanDetail', () => {
       const tabTriggers = screen.getAllByRole('tab')
       const labels = tabTriggers.map(t => t.textContent)
       expect(labels).not.toContain('Schedule')
+    })
+
+    it('renders RotationView inside the rotation tab', () => {
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByTestId('rotation-view')).toBeInTheDocument()
     })
 
     it('renders DeckTopicMappings component', () => {
@@ -297,6 +327,39 @@ describe('V2PlanDetail', () => {
     it('renders FlashcardForecastRecommendations component', () => {
       render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
       expect(screen.getByTestId('forecast-recs')).toBeInTheDocument()
+    })
+  })
+
+  describe('view param (URL-driven tabs)', () => {
+    it('defaults to the today view when no view param is present', () => {
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByTestId('tabs').getAttribute('data-value')).toBe('today')
+    })
+
+    it('opens on the requested view from the URL', () => {
+      mockRouter.search = 'plan=p1&view=week'
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByTestId('tabs').getAttribute('data-value')).toBe('week')
+    })
+
+    it('falls back to today for an unknown view param', () => {
+      mockRouter.search = 'plan=p1&view=unknown'
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      expect(screen.getByTestId('tabs').getAttribute('data-value')).toBe('today')
+    })
+
+    it('updates the URL view param when a tab is selected', async () => {
+      const user = userEvent.setup()
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByRole('tab', { name: 'Week' }))
+      expect(mockRouter.search).toContain('view=week')
+    })
+
+    it('switches to week when the availability shortcut fires', async () => {
+      const user = userEvent.setup()
+      render(<V2PlanDetail planId="p1" onBack={vi.fn()} />)
+      await user.click(screen.getByTestId('btn-open-availability'))
+      expect(mockRouter.search).toContain('view=week')
     })
   })
 

@@ -37,10 +37,11 @@ export default function CalendarView({
   todayKey,
   onReschedule,
   isMutating,
+  initialViewMode = 'month',
 }) {
   const parsed = useMemo(() => parseTodayKey(todayKey), [todayKey])
 
-  const [viewMode, setViewMode] = useState('month')
+  const [viewMode, setViewMode] = useState(initialViewMode)
   const [currentYear, setCurrentYear] = useState(parsed?.year ?? new Date().getFullYear())
   const [currentMonth, setCurrentMonth] = useState(parsed?.month ?? new Date().getMonth())
   const [selectedDate, setSelectedDate] = useState(null)

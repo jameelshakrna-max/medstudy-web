@@ -93,18 +93,216 @@ describe('Tabs', () => {
     expect(screen.getByText('Tab B')).toBeDisabled()
   })
 
-  it('provides correct ARIA attributes for panels', () => {
+  it('wires tabpanel id, aria-labelledby and trigger aria-controls to matching ids', () => {
     render(
       <Tabs defaultValue="a">
         <TabsList>
           <TabsTrigger value="a">Tab A</TabsTrigger>
+          <TabsTrigger value="b">Tab B</TabsTrigger>
+        </TabsList>
+        <TabsContent value="a">Content A</TabsContent>
+        <TabsContent value="b">Content B</TabsContent>
+      </Tabs>
+    )
+
+    const tabA = screen.getByText('Tab A')
+    const tabB = screen.getByText('Tab B')
+    const panelA = screen.getByRole('tabpanel')
+
+    expect(tabA).toHaveAttribute('aria-controls', panelA.id)
+    expect(panelA).toHaveAttribute('aria-labelledby', tabA.id)
+
+    // Every trigger carries an aria-controls target, even inactive ones.
+    expect(tabB).toHaveAttribute('aria-controls')
+  })
+
+  it('only keeps the active tab in the tab order', () => {
+    render(
+      <Tabs defaultValue="a">
+        <TabsList>
+          <TabsTrigger value="a">Tab A</TabsTrigger>
+          <TabsTrigger value="b">Tab B</TabsTrigger>
+        </TabsList>
+        <TabsContent value="a">Content A</TabsContent>
+        <TabsContent value="b">Content B</TabsContent>
+      </Tabs>
+    )
+
+    expect(screen.getByText('Tab A')).toHaveAttribute('tabindex', '0')
+    expect(screen.getByText('Tab B')).toHaveAttribute('tabindex', '-1')
+  })
+
+  it('uses instance-scoped ids so multiple Tabs do not collide', () => {
+    render(
+      <>
+        <Tabs defaultValue="a">
+          <TabsList>
+            <TabsTrigger value="a">Tab A</TabsTrigger>
+          </TabsList>
+          <TabsContent value="a">Content A</TabsContent>
+        </Tabs>
+        <Tabs defaultValue="a">
+          <TabsList>
+            <TabsTrigger value="a">Tab A</TabsTrigger>
+          </TabsList>
+          <TabsContent value="a">Content A</TabsContent>
+        </Tabs>
+      </>
+    )
+
+    const triggers = screen.getAllByText('Tab A')
+    const panels = screen.getAllByRole('tabpanel')
+
+    expect(triggers[0].id).not.toBe(triggers[1].id)
+    expect(panels[0].id).not.toBe(panels[1].id)
+    expect(panels[0]).toHaveAttribute('aria-labelledby', triggers[0].id)
+    expect(panels[1]).toHaveAttribute('aria-labelledby', triggers[1].id)
+  })
+
+  it('moves focus with ArrowRight and ArrowLeft without activating', () => {
+    render(
+      <Tabs defaultValue="a">
+        <TabsList>
+          <TabsTrigger value="a">Tab A</TabsTrigger>
+          <TabsTrigger value="b">Tab B</TabsTrigger>
+          <TabsTrigger value="c">Tab C</TabsTrigger>
+        </TabsList>
+        <TabsContent value="a">Content A</TabsContent>
+        <TabsContent value="b">Content B</TabsContent>
+        <TabsContent value="c">Content C</TabsContent>
+      </Tabs>
+    )
+
+    screen.getByText('Tab A').focus()
+
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' })
+    expect(document.activeElement).toHaveTextContent('Tab B')
+    expect(screen.getByText('Content A')).toBeInTheDocument()
+
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' })
+    expect(document.activeElement).toHaveTextContent('Tab C')
+
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowLeft' })
+    expect(document.activeElement).toHaveTextContent('Tab B')
+  })
+
+  it('ArrowRight with no tab focused moves to the first tab', () => {
+    render(
+      <Tabs defaultValue="a">
+        <TabsList>
+          <TabsTrigger value="a">Tab A</TabsTrigger>
+          <TabsTrigger value="b">Tab B</TabsTrigger>
         </TabsList>
         <TabsContent value="a">Content A</TabsContent>
       </Tabs>
     )
 
-    expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'panel-a')
-    expect(screen.getByText('Tab A')).toHaveAttribute('aria-controls', 'panel-a')
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' })
+    expect(document.activeElement).toHaveTextContent('Tab A')
+    expect(screen.getByText('Content A')).toBeInTheDocument()
+  })
+
+  it('wraps around when arrow navigation reaches the edges', () => {
+    render(
+      <Tabs defaultValue="a">
+        <TabsList>
+          <TabsTrigger value="a">Tab A</TabsTrigger>
+          <TabsTrigger value="b">Tab B</TabsTrigger>
+        </TabsList>
+        <TabsContent value="a">Content A</TabsContent>
+        <TabsContent value="b">Content B</TabsContent>
+      </Tabs>
+    )
+
+    // Start focus on the first tab.
+    screen.getByText('Tab A').focus()
+
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowLeft' })
+    expect(document.activeElement).toHaveTextContent('Tab B')
+
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' })
+    expect(document.activeElement).toHaveTextContent('Tab A')
+  })
+
+  it('Home moves focus to the first tab and End to the last', () => {
+    render(
+      <Tabs defaultValue="a">
+        <TabsList>
+          <TabsTrigger value="a">Tab A</TabsTrigger>
+          <TabsTrigger value="b">Tab B</TabsTrigger>
+          <TabsTrigger value="c">Tab C</TabsTrigger>
+        </TabsList>
+        <TabsContent value="a">Content A</TabsContent>
+      </Tabs>
+    )
+
+    screen.getByText('Tab C').focus()
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'Home' })
+    expect(document.activeElement).toHaveTextContent('Tab A')
+
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'End' })
+    expect(document.activeElement).toHaveTextContent('Tab C')
+  })
+
+  it('Enter activates the focused tab', () => {
+    const onChange = vi.fn()
+    render(
+      <Tabs defaultValue="a" onValueChange={onChange}>
+        <TabsList>
+          <TabsTrigger value="a">Tab A</TabsTrigger>
+          <TabsTrigger value="b">Tab B</TabsTrigger>
+        </TabsList>
+        <TabsContent value="a">Content A</TabsContent>
+        <TabsContent value="b">Content B</TabsContent>
+      </Tabs>
+    )
+
+    screen.getByText('Tab A').focus()
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' })
+    expect(document.activeElement).toHaveTextContent('Tab B')
+
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'Enter' })
+    expect(onChange).toHaveBeenCalledWith('b')
+    expect(screen.getByText('Content B')).toBeInTheDocument()
+  })
+
+  it('Space activates the focused tab', () => {
+    const onChange = vi.fn()
+    render(
+      <Tabs defaultValue="a" onValueChange={onChange}>
+        <TabsList>
+          <TabsTrigger value="a">Tab A</TabsTrigger>
+          <TabsTrigger value="b">Tab B</TabsTrigger>
+        </TabsList>
+        <TabsContent value="a">Content A</TabsContent>
+        <TabsContent value="b">Content B</TabsContent>
+      </Tabs>
+    )
+
+    screen.getByText('Tab A').focus()
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' })
+    expect(document.activeElement).toHaveTextContent('Tab B')
+
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: ' ' })
+    expect(onChange).toHaveBeenCalledWith('b')
+    expect(screen.getByText('Content B')).toBeInTheDocument()
+  })
+
+  it('skips disabled tabs when navigating with arrows', () => {
+    render(
+      <Tabs defaultValue="a">
+        <TabsList>
+          <TabsTrigger value="a">Tab A</TabsTrigger>
+          <TabsTrigger value="b" disabled>Tab B</TabsTrigger>
+          <TabsTrigger value="c">Tab C</TabsTrigger>
+        </TabsList>
+        <TabsContent value="a">Content A</TabsContent>
+      </Tabs>
+    )
+
+    screen.getByText('Tab A').focus()
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' })
+    expect(document.activeElement).toHaveTextContent('Tab C')
   })
 
   it('throws when compound components used outside Tabs', () => {

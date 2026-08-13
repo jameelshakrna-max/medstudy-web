@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, CircleHelp, MoreHorizontal, Pencil, Trash2, Play, Pause, RotateCcw, CheckCircle2, ExternalLink } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs/Tabs'
@@ -23,6 +23,7 @@ import RecordQuestionsDialog from './today/dialogs/RecordQuestionsDialog'
 import TopicsView from './today/TopicsView'
 import CalendarView from './CalendarView'
 import ProgressView from './ProgressView'
+import RotationView from './RotationView'
 import { apiGet, apiPatch, apiDelete, apiPost, apiPut } from '../../lib/api'
 import { queryKeys } from '../../lib/queryKeys'
 import { usePlannerDecks } from '../../hooks/usePlannerDecks'
@@ -58,6 +59,8 @@ const LIFECYCLE_TOAST = {
   resume: { title: 'Plan resumed', description: 'Your rotation plan is active again.' },
   complete: { title: 'Plan completed', description: 'Your rotation plan is complete and read-only.' },
 }
+
+const PLAN_VIEWS = ['today', 'week', 'rotation']
 
 function getGroupKey(group) {
   return group?.key ?? group?.groupKey ?? null
@@ -320,11 +323,22 @@ export default function V2PlanDetail({ planId, onBack }) {
 
   const [dialogState, setDialogState] = useState({ type: null, task: null })
   const [toast, setToast] = useState({ open: false, title: '', description: '', variant: 'default' })
-  const [activeTab, setActiveTab] = useState('today')
   const [helpOpen, setHelpOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const [renameError, setRenameError] = useState(null)
+
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedView = searchParams.get('view')
+  const activeView = PLAN_VIEWS.includes(requestedView) ? requestedView : 'today'
+  const handleViewChange = useCallback((view) => {
+    if (!PLAN_VIEWS.includes(view)) return
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('view', view)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
 
   const renameMutation = useMutation({
     mutationFn: ({ displayName, expectedRevision, clientRequestId }) =>
@@ -544,6 +558,27 @@ export default function V2PlanDetail({ planId, onBack }) {
     planId,
   })
 
+  // A hydrated, valid paused Pomodoro session attached to a planner task:
+  // plannerTaskContext is recovered (and validated) by PomodoroContext, and the
+  // session is "paused" only when the timer is stopped mid-session. This is what
+  // "Resume Today's Plan" may act on — nothing else.
+  const pausedSession = useMemo(() => {
+    if (!taskAttachment.isAttached) return null
+    if (taskAttachment.isTimerRunning) return null
+    if (!(taskAttachment.seconds > 0 && taskAttachment.seconds < taskAttachment.totalSec)) return null
+    return {
+      taskId: taskAttachment.attachedTaskId,
+      planId: taskAttachment.attachedPlanId,
+    }
+  }, [
+    taskAttachment.isAttached,
+    taskAttachment.isTimerRunning,
+    taskAttachment.seconds,
+    taskAttachment.totalSec,
+    taskAttachment.attachedTaskId,
+    taskAttachment.attachedPlanId,
+  ])
+
   const handleStart = useCallback(async (task) => {
     try {
       await mutations.startTask(task.id)
@@ -719,12 +754,11 @@ export default function V2PlanDetail({ planId, onBack }) {
         onReset={mutations.reset}
       />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeView} onValueChange={handleViewChange}>
         <TabsList>
           <TabsTrigger value="today">Today</TabsTrigger>
-          <TabsTrigger value="calendar">Calendar</TabsTrigger>
-          <TabsTrigger value="topics">Topics</TabsTrigger>
-          <TabsTrigger value="progress">Progress</TabsTrigger>
+          <TabsTrigger value="week">Week</TabsTrigger>
+          <TabsTrigger value="rotation">Rotation</TabsTrigger>
         </TabsList>
         <TabsContent value="today">
           <TodayView
@@ -735,11 +769,12 @@ export default function V2PlanDetail({ planId, onBack }) {
             plan={plan}
             sourceTitle={plan.sourceTitle}
             availability={data.availability}
-            onOpenAvailability={() => setActiveTab('calendar')}
+            onOpenAvailability={() => handleViewChange('week')}
             isMutating={mutations.isPending}
             isOrphaned={taskAttachment.isOrphaned}
             hasUnsyncedData={taskAttachment.hasUnsyncedData}
             discardOrphanedPlannerContext={taskAttachment.discardOrphanedPlannerContext}
+            pausedSession={pausedSession}
             questionGroups={questionGroups}
             questionGroupStates={questionGroupStates}
             onStart={handleStart}
@@ -749,6 +784,30 @@ export default function V2PlanDetail({ planId, onBack }) {
             onRecordQuestions={handleRecordQuestions}
             onSkip={handleSkip}
             onStudyPomodoro={handleStudyPomodoro}
+          />
+        </TabsContent>
+        <TabsContent value="week">
+          <CalendarView
+            tasks={tasks}
+            topics={topics}
+            topicsById={topicsById}
+            plan={plan}
+            availability={data.availability}
+            sourceTitle={plan.sourceTitle}
+            todayKey={getTodayKey(new Date(), resolvedTimezone)}
+            onReschedule={handleReschedule}
+            isMutating={mutations.isPending}
+            initialViewMode="week"
+          />
+        </TabsContent>
+        <TabsContent value="rotation">
+          <RotationView
+            plan={plan}
+            forecast={forecast}
+            forecastLoading={forecastLoading}
+            forecastError={forecastError}
+            topicsById={topicsById}
+            usesFlashcardCapacity={plan.usesFlashcardCapacity}
           />
           <ConnectedAnkiDecks plan={plan} planId={planId} onToast={setToast} />
           <DeckTopicMappings
@@ -764,27 +823,10 @@ export default function V2PlanDetail({ planId, onBack }) {
             topicsById={topicsById}
             topics={topics}
           />
-        </TabsContent>
-        <TabsContent value="calendar">
-          <CalendarView
-            tasks={tasks}
-            topics={topics}
-            topicsById={topicsById}
-            plan={plan}
-            availability={data.availability}
-            sourceTitle={plan.sourceTitle}
-            todayKey={getTodayKey(new Date(), resolvedTimezone)}
-            onReschedule={handleReschedule}
-            isMutating={mutations.isPending}
-          />
-        </TabsContent>
-        <TabsContent value="topics">
           {plan.uworldSchedulingMode === 'grouped' && Array.isArray(questionGroups) && questionGroups.length > 0 && (
             <UWorldReviewGroups groups={questionGroups} states={questionGroupStates} />
           )}
           <TopicsView topics={topics} sourceTitle={plan.sourceTitle} />
-        </TabsContent>
-        <TabsContent value="progress">
           <ProgressView
             plan={plan}
             topics={topics}

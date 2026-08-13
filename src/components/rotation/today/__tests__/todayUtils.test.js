@@ -5,6 +5,7 @@ import {
   resolvePlannerTimezone,
   getDateKeyInTimezone,
   getTodayKey,
+  getNextDateKey,
   getDateKeyForTimezone,
   isOverdue,
   secondsToPlannerMinutes,
@@ -217,6 +218,26 @@ describe("secondsToPlannerMinutes", () => {
   });
 });
 
+describe("getNextDateKey", () => {
+  it("returns the following calendar day", () => {
+    expect(getNextDateKey("2026-08-13")).toBe("2026-08-14");
+  });
+
+  it("handles month boundaries", () => {
+    expect(getNextDateKey("2026-08-31")).toBe("2026-09-01");
+  });
+
+  it("handles year boundaries", () => {
+    expect(getNextDateKey("2025-12-31")).toBe("2026-01-01");
+  });
+
+  it("handles leap day", () => {
+    expect(getNextDateKey("2028-02-28")).toBe("2028-02-29");
+    expect(getNextDateKey("2028-02-29")).toBe("2028-03-01");
+    expect(getNextDateKey("2026-02-28")).toBe("2026-03-01");
+  });
+});
+
 describe("default export", () => {
   it("contains all functions", () => {
     import("../todayUtils").then((mod) => {
@@ -225,6 +246,7 @@ describe("default export", () => {
       expect(typeof mod.default.resolvePlannerTimezone).toBe("function");
       expect(typeof mod.default.getDateKeyInTimezone).toBe("function");
       expect(typeof mod.default.getTodayKey).toBe("function");
+      expect(typeof mod.default.getNextDateKey).toBe("function");
       expect(typeof mod.default.getDateKeyForTimezone).toBe("function");
       expect(typeof mod.default.isOverdue).toBe("function");
       expect(typeof mod.default.secondsToPlannerMinutes).toBe("function");

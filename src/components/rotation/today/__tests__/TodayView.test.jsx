@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import TodayView from '../TodayView'
@@ -8,7 +8,8 @@ import TodayView from '../TodayView'
 vi.mock('../../../../lib/api', () => ({ apiGet: vi.fn(), apiPost: vi.fn() }))
 
 import { apiPost } from '../../../../lib/api'
-import { getTodayKey, getBrowserTimezone } from '../todayUtils'
+import { getTodayKey, getBrowserTimezone, getNextDateKey } from '../todayUtils'
+import { toStartOfDayUTC } from '../../../../lib/dateUtils'
 
 const TODAY = getTodayKey(new Date(), getBrowserTimezone())
 
@@ -178,6 +179,22 @@ describe('TodayView', () => {
     expect(screen.getByText('Next study day: Monday, Aug 10 2026')).toBeInTheDocument()
   })
 
+  it('rolls the today view over at local midnight', () => {
+    vi.useFakeTimers()
+    const tz = getBrowserTimezone()
+    const baseDate = '2026-08-13'
+    const nextMidnightUtc = toStartOfDayUTC(getNextDateKey(baseDate), tz).getTime()
+    vi.setSystemTime(new Date(nextMidnightUtc - 30_000))
+    renderTodayView(
+      [makeTask({ id: 't1', taskDate: baseDate, status: 'pending' })],
+      { startDate: '2026-08-01', endDate: '2026-08-31', status: 'active' }
+    )
+    expect(screen.getByText('Learn')).toBeInTheDocument()
+
+    act(() => vi.advanceTimersByTime(31_000))
+    expect(screen.queryByText('Learn')).not.toBeInTheDocument()
+  })
+
   it('shows the draft reason with an Activate action wired to the lifecycle endpoint', async () => {
     const user = userEvent.setup()
     apiPost.mockResolvedValue({ plan: { id: 'plan-1', status: 'active', revision: 2 } })
@@ -247,6 +264,80 @@ describe('TodayView', () => {
       })
       expect(screen.getByText('UWorld Questions')).toBeInTheDocument()
       expect(screen.queryByText('UWorld review block · 40 questions')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('Start Today\'s Plan action', () => {
+    const activePlan = { id: 'plan-1', revision: 1, status: 'active', startDate: '2026-08-01', endDate: '2026-09-30' }
+
+    const actionButtons = (name) => screen.queryAllByRole('button', { name })
+
+    it('renders desktop button and mobile shortcut when a startable task exists', async () => {
+      const user = userEvent.setup()
+      const onStudyPomodoro = vi.fn()
+      renderTodayView([makeTask({ id: 't1', status: 'pending' })], activePlan, { onStudyPomodoro })
+
+      expect(actionButtons("Start Today's Plan").length).toBeGreaterThanOrEqual(1)
+
+      await user.click(actionButtons("Start Today's Plan")[0])
+      expect(onStudyPomodoro).toHaveBeenCalledWith(expect.objectContaining({ id: 't1', status: 'pending' }))
+    })
+
+    it('labels the action Resume Today\'s Plan when a hydrated paused session exists for this task', () => {
+      renderTodayView([makeTask({ id: 't1', status: 'in_progress' })], activePlan, {
+        pausedSession: { taskId: 't1', planId: 'plan-1' },
+      })
+      expect(actionButtons("Resume Today's Plan").length).toBeGreaterThanOrEqual(1)
+      expect(actionButtons("Start Today's Plan")).toHaveLength(0)
+    })
+
+    it('does not offer Resume for an in_progress task without a paused session', () => {
+      renderTodayView([
+        makeTask({ id: 't1', status: 'in_progress', displayOrder: 0 }),
+        makeTask({ id: 't2', status: 'pending', displayOrder: 1 }),
+      ], activePlan)
+      expect(actionButtons("Resume Today's Plan")).toHaveLength(0)
+      expect(actionButtons("Start Today's Plan").length).toBeGreaterThanOrEqual(1)
+    })
+
+    it('ignores a paused session belonging to another plan', () => {
+      renderTodayView([
+        makeTask({ id: 't1', status: 'in_progress', displayOrder: 0 }),
+        makeTask({ id: 't2', status: 'pending', displayOrder: 1 }),
+      ], activePlan, {
+        pausedSession: { taskId: 't1', planId: 'other-plan' },
+      })
+      expect(actionButtons("Resume Today's Plan")).toHaveLength(0)
+      expect(actionButtons("Start Today's Plan").length).toBeGreaterThanOrEqual(1)
+    })
+
+    it('hides the action when all work for today is complete', () => {
+      renderTodayView([makeTask({ id: 't1', status: 'completed' })], activePlan)
+      expect(actionButtons("Start Today's Plan")).toHaveLength(0)
+      expect(actionButtons("Resume Today's Plan")).toHaveLength(0)
+    })
+
+    it('hides the action when nothing is scheduled for today', () => {
+      renderTodayView([makeTask({ id: 't1', taskDate: '2099-01-10', status: 'locked' })], activePlan)
+      expect(actionButtons("Start Today's Plan")).toHaveLength(0)
+      expect(actionButtons("Resume Today's Plan")).toHaveLength(0)
+    })
+
+    it('hides the action for a draft plan', () => {
+      renderTodayView([], { status: 'draft', revision: 1, startDate: '2026-08-01' })
+      expect(actionButtons("Start Today's Plan")).toHaveLength(0)
+      expect(actionButtons("Resume Today's Plan")).toHaveLength(0)
+    })
+
+    it('hides the action for a locked-only day', () => {
+      renderTodayView([makeTask({ id: 't1', status: 'locked' })], activePlan)
+      expect(actionButtons("Start Today's Plan")).toHaveLength(0)
+      expect(actionButtons("Resume Today's Plan")).toHaveLength(0)
+    })
+
+    it('does not offer a plan action for a flashcard-review-only day', () => {
+      renderTodayView([makeTask({ id: 't1', taskType: 'flashcard_review', status: 'pending' })], activePlan)
+      expect(actionButtons("Start Today's Plan")).toHaveLength(0)
     })
   })
 })

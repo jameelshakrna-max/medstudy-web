@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
-import { getTodayKey, getBrowserTimezone, resolvePlannerTimezone } from './todayUtils'
+import { Play, RotateCcw } from 'lucide-react'
+import { getBrowserTimezone, resolvePlannerTimezone } from './todayUtils'
+import { useTodayKey } from './useTodayKey'
 import {
   groupTasksBySection,
   calculateDayProgress,
@@ -12,11 +14,13 @@ import {
   findNextFutureTask,
 } from './todayGrouping'
 import { getTaskDisplayModel } from './taskDisplayModel'
+import { getPlanTodayAction, PLAN_TODAY_ACTION_LABELS } from './planTodayAction'
 import TodaySection from './TodaySection'
 import TodayEmptyReason from './TodayEmptyReason'
 import usePlanActivation from './usePlanActivation'
 import ProgressBar from '../../ui/ProgressBar/ProgressBar'
 import { Banner, BannerAction } from '../../ui/Banner/Banner'
+import { ContextualShortcuts } from '../../ui'
 import styles from './TodayView.module.css'
 
 export default function TodayView({
@@ -32,6 +36,7 @@ export default function TodayView({
   isOrphaned,
   hasUnsyncedData,
   discardOrphanedPlannerContext,
+  pausedSession,
   questionGroups = [],
   questionGroupStates = [],
   onStart,
@@ -42,10 +47,9 @@ export default function TodayView({
   onSkip,
   onStudyPomodoro,
 }) {
-  const todayKey = useMemo(() => {
-    const tz = resolvePlannerTimezone({ browserTimezone: getBrowserTimezone() })
-    return getTodayKey(new Date(), tz)
-  }, [])
+  const todayKey = useTodayKey(
+    resolvePlannerTimezone({ browserTimezone: getBrowserTimezone() })
+  )
 
   const activatePlan = usePlanActivation({
     planId,
@@ -78,6 +82,11 @@ export default function TodayView({
   }, [questionGroupStates])
 
   const lockContext = useMemo(() => ({ questionGroupStates: groupStateByKey }), [groupStateByKey])
+
+  const planTodayAction = useMemo(
+    () => getPlanTodayAction({ plan, todayKey, tasks, topicsById, lockContext, pausedSession }),
+    [plan, todayKey, tasks, topicsById, lockContext, pausedSession]
+  )
 
   const displayTasks = useMemo(
     () => tasks.map(t => {
@@ -212,6 +221,19 @@ export default function TodayView({
         </Banner>
       )}
 
+      {planTodayAction && (
+        <ContextualShortcuts
+          items={[{
+            key: planTodayAction.action,
+            icon: planTodayAction.action === 'resume'
+              ? <RotateCcw size={16} strokeWidth={2} />
+              : <Play size={16} strokeWidth={2} />,
+            label: PLAN_TODAY_ACTION_LABELS[planTodayAction.action],
+            onClick: () => onStudyPomodoro(planTodayAction.task),
+          }]}
+        />
+      )}
+
       <div className={styles.progressHeader}>
         <div className={styles.heading}>Today's progress</div>
         <div className={styles.progressStats}>
@@ -231,6 +253,17 @@ export default function TodayView({
         </div>
         {remainingMinutes > 0 && (
           <div className={styles.remaining}>{remainingMinutes} min remaining</div>
+        )}
+        {planTodayAction && (
+          <button
+            type="button"
+            className={`${styles.actionBtn} ${styles.planActionDesktop}`}
+            onClick={() => onStudyPomodoro(planTodayAction.task)}
+          >
+            {planTodayAction.action === 'resume'
+              ? <><RotateCcw size={14} /> {PLAN_TODAY_ACTION_LABELS.resume}</>
+              : <><Play size={14} /> {PLAN_TODAY_ACTION_LABELS.start}</>}
+          </button>
         )}
       </div>
 

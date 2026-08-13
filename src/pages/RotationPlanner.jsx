@@ -85,14 +85,19 @@ export default function RotationPlanner() {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev)
       next.delete('plan')
+      next.delete('view')
       return next
     })
   }
 
   // ── Fetch single plan details (V1 only — V2 has its own hook) ──
+  // Only run once the plan lists have resolved: until then `selectedVersion`
+  // falls back to 'v1', which would fire a V1 fetch for a V2 plan and cache its
+  // result under the same query key V2PlanDetail reads (queryKeys.rotations.plan),
+  // so V2PlanDetail would never fetch its own endpoint.
   const { data: planDetail, isLoading: detailLoading } = useQuery({
     queryKey: queryKeys.rotations.plan(selectedPlanId),
-    enabled: !!selectedPlanId && selectedVersion === 'v1',
+    enabled: !!selectedPlanId && selectedVersion === 'v1' && !plansLoading,
     queryFn: () => apiGet(`/rotations/plans/${selectedPlanId}`),
   })
 

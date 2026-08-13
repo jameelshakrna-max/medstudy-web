@@ -1,4 +1,4 @@
-import { isValidTimezone, getDateKeyInTimezone, getDateKeyForTimezone } from '../../../lib/dateUtils.js'
+import { isValidTimezone, getDateKeyInTimezone, getDateKeyForTimezone, addDays } from '../../../lib/dateUtils.js'
 
 export { isValidTimezone, getDateKeyInTimezone, getDateKeyForTimezone }
 
@@ -22,6 +22,10 @@ export function getTodayKey(now, timezone) {
   return getDateKeyInTimezone(now, timezone);
 }
 
+export function getNextDateKey(dateKey) {
+  return addDays(dateKey, 1);
+}
+
 export function isOverdue(taskDateKey, todayKey) {
   return taskDateKey < todayKey;
 }
@@ -36,6 +40,7 @@ export default {
   resolvePlannerTimezone,
   getDateKeyInTimezone,
   getTodayKey,
+  getNextDateKey,
   getDateKeyForTimezone,
   isOverdue,
   secondsToPlannerMinutes,

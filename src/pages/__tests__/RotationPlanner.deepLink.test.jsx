@@ -170,6 +170,13 @@ describe('RotationPlanner deep linking (URL plan param)', () => {
     expect(currentSearch()).not.toContain('plan')
   })
 
+  it('19b. closing a plan clears both the plan and view params', async () => {
+    renderAt('/rotations?plan=does-not-exist&view=week')
+    fireEvent.click(await screen.findByRole('button', { name: /Back to plans/i }))
+    await screen.findByRole('heading', { name: 'Rotation Planner' })
+    expect(currentSearch()).toBe('')
+  })
+
   it('20. closing detail removes only the plan param', async () => {
     renderAt('/rotations?plan=p1&tab=weekly')
     fireEvent.click(await screen.findByRole('button', { name: 'Back' }))
@@ -213,6 +220,22 @@ describe('RotationPlanner deep linking (URL plan param)', () => {
     expect(screen.queryByText('No rotation plans yet')).not.toBeInTheDocument()
     expect(await screen.findByTestId('v2-plan-detail')).toBeInTheDocument()
     expect(currentSearch()).toBe('?plan=p3')
+  })
+
+  it('24b. deep-linked V2 plan does not fetch the legacy V1 detail endpoint', async () => {
+    // Regression: before the plan lists resolve, `selectedVersion` falls back
+    // to 'v1', which used to fire a V1 fetch for a V2 plan and cache its result
+    // under the shared `queryKeys.rotations.plan` key — so V2PlanDetail read
+    // stale V1 data instead of fetching its own endpoint.
+    renderAt('/rotations?plan=p3')
+    await screen.findByTestId('v2-plan-detail')
+    expect(apiGet).not.toHaveBeenCalledWith('/rotations/plans/p3')
+  })
+
+  it('24c. deep-linked V1 plan still fetches the legacy detail endpoint', async () => {
+    renderAt('/rotations?plan=p1')
+    await screen.findByRole('heading', { name: 'Cardiology' })
+    expect(apiGet).toHaveBeenCalledWith('/rotations/plans/p1')
   })
 
   it('12b. plan card click still opens detail and updates the URL', async () => {

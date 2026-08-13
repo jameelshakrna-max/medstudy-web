@@ -148,6 +148,8 @@ export function toEndOfDayUTC(dateStr, timezone) {
   return new Date(toStartOfDayUTC(nextDateStr, timezone).getTime() - 1);
 }
 
+export { addDays };
+
 export default {
   isValidTimezone,
   getDateKeyInTimezone,
@@ -155,4 +157,5 @@ export default {
   wallClockToUTC,
   toStartOfDayUTC,
   toEndOfDayUTC,
+  addDays,
 };

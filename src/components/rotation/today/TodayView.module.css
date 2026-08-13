@@ -53,6 +53,38 @@
   color: var(--text-secondary);
 }
 
+.actionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--blue);
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-md);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease;
+}
+
+.actionBtn:hover {
+  background: rgba(79, 140, 255, 0.85);
+  border-color: rgba(79, 140, 255, 0.85);
+}
+
+.planActionDesktop {
+  display: none;
+}
+
+@media (min-width: 769px) {
+  .planActionDesktop {
+    display: inline-flex;
+    margin-top: var(--space-sm);
+  }
+}
+
 .empty {
   color: var(--mist);
   font-size: 14px;

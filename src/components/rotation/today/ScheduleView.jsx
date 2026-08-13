@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, Check, Clock, AlertTriangle, Lock, Minus } from 'lucide-react'
 import { getTodayKey, getBrowserTimezone, resolvePlannerTimezone } from './todayUtils'
 import { groupTasksByDate } from './todayGrouping'
@@ -53,6 +53,20 @@ function formatFullDate(dateStr) {
 
 function getDayOfWeek(dateStr) {
   return parseDate(dateStr).getDay()
+}
+
+function getWeekStart(dateKey) {
+  const d = parseDate(dateKey)
+  const dayOfWeek = d.getDay()
+  const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+  d.setDate(d.getDate() + diff)
+  return formatDate(d)
+}
+
+function addWeeks(dateStr, weeks) {
+  const d = parseDate(dateStr)
+  d.setDate(d.getDate() + weeks * 7)
+  return formatDate(d)
 }
 
 function isOverdue(taskDate, todayKey, status) {
@@ -127,8 +141,21 @@ export default function ScheduleView({
   })
   const todayKey = externalTodayKey || getTodayKey(new Date(), timezone)
 
-  const [weekOffset, setWeekOffset] = useState(0)
+  const [weekStart, setWeekStart] = useState(() => getWeekStart(todayKey))
   const [selectedDate, setSelectedDate] = useState(todayKey)
+
+  // When the external "today" changes (e.g. local midnight rollover), update
+  // the today highlight and Today control without moving the user off a
+  // week they intentionally navigated to. Only the week that contains the
+  // previous "today" rebases onto the new one.
+  const prevTodayKeyRef = useRef(todayKey)
+  useEffect(() => {
+    if (todayKey === prevTodayKeyRef.current) return
+    const prev = prevTodayKeyRef.current
+    prevTodayKeyRef.current = todayKey
+    setSelectedDate((date) => (date === prev ? todayKey : date))
+    setWeekStart((start) => (start === getWeekStart(prev) ? getWeekStart(todayKey) : start))
+  }, [todayKey])
 
   const tasksByDate = useMemo(() => groupTasksByDate(tasks), [tasks])
 
@@ -140,14 +167,6 @@ export default function ScheduleView({
     }
     return map
   }, [availability])
-
-  const weekStart = useMemo(() => {
-    const d = parseDate(todayKey)
-    const dayOfWeek = d.getDay()
-    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
-    d.setDate(d.getDate() + diff + weekOffset * 7)
-    return formatDate(d)
-  }, [weekOffset, todayKey])
 
   const weekDays = useMemo(() => {
     const start = parseDate(weekStart)
@@ -196,14 +215,14 @@ export default function ScheduleView({
     }
   }, [selectedTasks])
 
-  const handlePrevWeek = useCallback(() => setWeekOffset(o => o - 1), [])
-  const handleNextWeek = useCallback(() => setWeekOffset(o => o + 1), [])
+  const handlePrevWeek = useCallback(() => setWeekStart((start) => addWeeks(start, -1)), [])
+  const handleNextWeek = useCallback(() => setWeekStart((start) => addWeeks(start, 1)), [])
   const handleToday = useCallback(() => {
-    setWeekOffset(0)
+    setWeekStart(getWeekStart(todayKey))
     setSelectedDate(todayKey)
   }, [todayKey])
 
-  const goTodayDisabled = weekOffset === 0 && selectedDate === todayKey
+  const goTodayDisabled = weekStart === getWeekStart(todayKey) && selectedDate === todayKey
 
   return (
     <div className={styles.container}>
