@@ -808,6 +808,8 @@ export default function V2PlanDetail({ planId, onBack }) {
             forecastError={forecastError}
             topicsById={topicsById}
             usesFlashcardCapacity={plan.usesFlashcardCapacity}
+            tasks={tasks}
+            todayKey={getTodayKey(new Date(), resolvedTimezone)}
           />
           <ConnectedAnkiDecks plan={plan} planId={planId} onToast={setToast} />
           <DeckTopicMappings

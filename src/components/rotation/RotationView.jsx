@@ -1,12 +1,13 @@
 import { useMemo } from 'react'
 import { TrendingUp, CalendarClock, Clock, Gauge, AlertTriangle } from 'lucide-react'
 import { formatMinutes } from './today/taskDisplayModel'
+import { getNextActionableBlock } from './today/nextActionableBlock'
 import styles from './RotationView.module.css'
 
 const STATUS_META = {
   on_track: { label: 'On Track', className: styles.statusOnTrack },
   at_risk: { label: 'At Risk', className: styles.statusAtRisk },
-  impossible: { label: 'Impossible', className: styles.statusImpossible },
+  impossible: { label: 'Cannot fit', className: styles.statusImpossible },
 }
 
 function formatDate(dateKey) {
@@ -32,6 +33,8 @@ export default function RotationView({
   forecastError,
   topicsById,
   usesFlashcardCapacity,
+  tasks,
+  todayKey,
 }) {
   const unscheduledTopics = useMemo(() => {
     const ids = Array.isArray(forecast?.unscheduledTopics) ? forecast.unscheduledTopics : []
@@ -42,6 +45,11 @@ export default function RotationView({
 
   const statusMeta = STATUS_META[forecast?.status]
   const completionDate = formatDate(forecast?.estimatedCompletionDate)
+
+  const nextBlock = useMemo(
+    () => getNextActionableBlock({ tasks, todayKey, topicsById }),
+    [tasks, todayKey, topicsById]
+  )
 
   return (
     <div className={styles.container}>
@@ -134,6 +142,27 @@ export default function RotationView({
           </>
         ) : (
           <div className={styles.emptyState}>No forecast data available</div>
+        )}
+      </section>
+
+      <section className={styles.nextBlockCard} aria-label="Next scheduled block">
+        <h3 className={styles.nextBlockHeading}>Next scheduled block</h3>
+        {nextBlock ? (
+          <>
+            <div className={styles.nextBlockTitle}>{nextBlock.title}</div>
+            <div className={styles.nextBlockMeta}>
+              <span>{formatDate(nextBlock.dateKey)}</span>
+              {nextBlock.typeLabel && <span>{nextBlock.typeLabel}</span>}
+              {nextBlock.estimatedMinutes > 0 && (
+                <span>{formatMinutes(nextBlock.estimatedMinutes)}</span>
+              )}
+              {nextBlock.questionCount != null && (
+                <span>{nextBlock.questionCount} questions</span>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className={styles.nextBlockEmpty}>No upcoming actionable block scheduled.</div>
         )}
       </section>
     </div>

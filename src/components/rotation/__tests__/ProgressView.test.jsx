@@ -223,11 +223,12 @@ describe('ProgressView', () => {
       expect(screen.getByText('2 unscheduled topics')).toBeInTheDocument()
     })
 
-    it('shows impossible forecast', () => {
+    it('shows impossible forecast as "Cannot fit"', () => {
       renderProgress({
         forecast: { status: 'impossible', estimatedCompletionDate: null, remainingRequiredMinutes: 5000, missingCapacityMinutes: 3000, requiredExtraMinutesPerDay: 100, unscheduledTopics: 5 },
       })
-      expect(screen.getByText('Impossible')).toBeInTheDocument()
+      expect(screen.getByText('Cannot fit')).toBeInTheDocument()
+      expect(screen.queryByText('Impossible')).not.toBeInTheDocument()
     })
 
     it('shows singular unscheduled topic', () => {

@@ -255,7 +255,9 @@ export default function ProgressView({
                   : styles.forecastImpossible
               }`}
             >
-              {forecast.status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+              {forecast.status === 'impossible'
+                ? 'Cannot fit'
+                : forecast.status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
             </div>
             <div className={styles.forecastDetails}>
               {forecast.estimatedCompletionDate && (

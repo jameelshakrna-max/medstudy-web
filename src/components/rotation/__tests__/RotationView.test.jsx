@@ -18,6 +18,8 @@ function renderView(props = {}) {
       forecastError={null}
       topicsById={EMPTY_TOPICS}
       usesFlashcardCapacity={false}
+      tasks={[]}
+      todayKey="2026-08-13"
       {...props}
     />
   )
@@ -73,9 +75,10 @@ describe('RotationView', () => {
     expect(screen.getByText('45m')).toBeInTheDocument()
   })
 
-  it('renders impossible status label', () => {
+  it('renders impossible status as "Cannot fit"', () => {
     renderView({ forecast: { ...ON_TRACK_FORECAST, status: 'impossible' } })
-    expect(screen.getByText('Impossible')).toBeInTheDocument()
+    expect(screen.getByText('Cannot fit')).toBeInTheDocument()
+    expect(screen.queryByText('Impossible')).not.toBeInTheDocument()
   })
 
   it('shows the status reason when provided', () => {
@@ -111,5 +114,71 @@ describe('RotationView', () => {
     renderView({ forecast: ON_TRACK_FORECAST })
     expect(screen.queryByText('Missing capacity')).not.toBeInTheDocument()
     expect(screen.queryByText('Extra needed / day')).not.toBeInTheDocument()
+  })
+
+  describe('Next scheduled block', () => {
+    const TOPICS_BY_ID = new Map([
+      ['topic-a', { id: 'topic-a', topicTitle: 'Heart Failure' }],
+    ])
+
+    const TASK = (overrides = {}) => ({
+      id: 't1',
+      planTopicId: 'topic-a',
+      taskDate: '2026-08-13',
+      status: 'pending',
+      displayOrder: 1,
+      taskType: 'learning',
+      estimatedMinutes: 90,
+      targetCount: null,
+      ...overrides,
+    })
+
+    it('renders the earliest actionable block with its real fields', () => {
+      renderView({
+        topicsById: TOPICS_BY_ID,
+        tasks: [
+          TASK({ id: 'later', taskDate: '2026-08-14', displayOrder: 0 }),
+          TASK({ id: 'earliest', taskDate: '2026-08-13', displayOrder: 2 }),
+        ],
+        todayKey: '2026-08-13',
+      })
+      expect(screen.getByText('Next scheduled block')).toBeInTheDocument()
+      expect(screen.getByText('Heart Failure')).toBeInTheDocument()
+      expect(screen.getByText('Aug 13')).toBeInTheDocument()
+      expect(screen.getByText('Learning')).toBeInTheDocument()
+      expect(screen.getByText('1h 30m')).toBeInTheDocument()
+    })
+
+    it('shows the question count when the block has a target count', () => {
+      renderView({
+        topicsById: TOPICS_BY_ID,
+        tasks: [TASK({ taskType: 'uworld_questions', targetCount: 30, estimatedMinutes: 0 })],
+        todayKey: '2026-08-13',
+      })
+      expect(screen.getByText('30 questions')).toBeInTheDocument()
+    })
+
+    it('renders the truthful empty treatment when nothing qualifies', () => {
+      renderView({
+        topicsById: TOPICS_BY_ID,
+        tasks: [
+          TASK({ status: 'completed' }),
+          TASK({ status: 'locked', taskDate: '2026-08-14' }),
+          TASK({ taskDate: '2026-08-12' }),
+        ],
+        todayKey: '2026-08-13',
+      })
+      expect(screen.getByText('No upcoming actionable block scheduled.')).toBeInTheDocument()
+    })
+
+    it('ignores a past-scheduled block even when it is not terminal', () => {
+      renderView({
+        topicsById: TOPICS_BY_ID,
+        tasks: [TASK({ taskDate: '2026-08-12' }), TASK({ id: 't2', taskDate: '2026-08-15' })],
+        todayKey: '2026-08-13',
+      })
+      expect(screen.getByText('Aug 15')).toBeInTheDocument()
+      expect(screen.queryByText('Aug 12')).not.toBeInTheDocument()
+    })
   })
 })
