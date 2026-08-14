@@ -25,6 +25,14 @@
   min-height: 0; overflow: visible;
 }
 
+.fullscreenNote {
+  width: 100%; max-width: 620px; margin: 0 auto 12px;
+  padding: 8px 14px; border-radius: var(--radius-md);
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  color: var(--text-secondary); font-size: 12px; line-height: 1.4;
+  text-align: center;
+}
+
 .setupScreen {
   width: min(100%, 720px);
   margin-inline: auto;
@@ -429,6 +437,8 @@
 }
 
 /* ── Focus Mode active state ── */
+.page.focusMode { min-height: 100dvh; }
+.page.focusMode { padding-bottom: 72px; }
 .page.focusMode .stars { opacity: 0.3; }
 .page.focusMode .content { padding-top: 12px; }
 
@@ -605,6 +615,8 @@
   .content { padding: 16px 20px max(32px, env(safe-area-inset-bottom)); }
   .activeTreeStage { height: clamp(200px, 28dvh, 340px); }
   .countdownTime { font-size: clamp(2.75rem, 13vw, 4rem); letter-spacing: -2px; }
+  .hasMobileBar { padding-bottom: 96px; }
+  .activeControls .mobileHidden { display: none; }
 }
 @media (max-width: 540px) {
   .content { padding: 14px 18px max(28px, env(safe-area-inset-bottom)); }

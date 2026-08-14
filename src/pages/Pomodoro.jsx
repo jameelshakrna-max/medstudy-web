@@ -14,6 +14,7 @@ import GrowingTreeRenderer from '../components/pomodoro/GrowingTreeRenderer'
 import ForestScene from '../components/ForestScene'
 import TreePicker from '../components/TreePicker'
 import s from './Pomodoro.module.css'
+import FocusControlBar from '../components/focus/FocusControlBar'
 
 const MODES = ['study', 'break', 'long']
 const MODE_LABELS = { study: 'Focus', break: 'Short Break', long: 'Long Break' }
@@ -38,7 +39,7 @@ function formatTime(totalSeconds) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-export default function Pomodoro() {
+export default function Pomodoro({ activePane = true }) {
   const {
     mode, setMode, running,
     done, seconds, totalSec,
@@ -46,7 +47,7 @@ export default function Pomodoro() {
     togglePlay, skipTimer, finishTimer, resetTimer, resetSession,
     cancelPushNotification,
     treeStatus,
-    focusMode, isFullscreen, toggleFocusMode,
+    focusMode, isFullscreen, fullscreenNote, toggleFocusMode,
     sessionPhase, sessionOutcome, isSetup, isActive,
     setModeDuration, advanceToNextMode,
     sessionTreeId, setSessionTreeId,
@@ -183,6 +184,7 @@ export default function Pomodoro() {
 
   // ── Keyboard shortcuts ──
   useEffect(() => {
+    if (!activePane) return
     const onKey = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return
       if (e.key === ' ' || e.code === 'Space') {
@@ -197,7 +199,7 @@ export default function Pomodoro() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [togglePlay, toggleFocusMode, focusMode])
+  }, [togglePlay, toggleFocusMode, focusMode, activePane])
 
   // ── Earn coins on session success ──
   useEffect(() => {
@@ -420,28 +422,38 @@ export default function Pomodoro() {
   }
 
   return (
-    <div className={`${s.page} ${focusMode ? s.focusMode : ''}`}>
+    <div className={`${s.page} ${focusMode ? s.focusMode : ''} ${isActive && !sessionOutcome ? s.hasMobileBar : ''}`}>
       {/* Ambient BG */}
-      <div className={`${s.ambient} ${mode === 'study' ? s.ambientStudy : mode === 'break' ? s.ambientBreak : s.ambientLong}`} />
+      {activePane && (
+        <div className={`${s.ambient} ${mode === 'study' ? s.ambientStudy : mode === 'break' ? s.ambientBreak : s.ambientLong}`} />
+      )}
 
       {/* Stars */}
-      <div className={s.stars}>
-        {stars.map(st => (
-          <div key={st.id} className={s.star}
-            style={{ left: st.left, top: st.top, '--duration': st.duration, '--delay': st.delay }} />
-        ))}
-      </div>
+      {activePane && (
+        <div className={s.stars}>
+          {stars.map(st => (
+            <div key={st.id} className={s.star}
+              style={{ left: st.left, top: st.top, '--duration': st.duration, '--delay': st.delay }} />
+          ))}
+        </div>
+      )}
 
       {/* ForestScene — page-level, outside .content */}
-      <ForestScene
-        className={s.sceneLayer}
-        mode={mode}
-        phase={sessionPhase}
-        progress={sceneProgress}
-        status={treeStatus}
-      />
+      {activePane && (
+        <ForestScene
+          className={s.sceneLayer}
+          mode={mode}
+          phase={sessionPhase}
+          progress={sceneProgress}
+          status={treeStatus}
+        />
+      )}
 
       <div className={s.content}>
+        {fullscreenNote && (
+          <p className={s.fullscreenNote} role="status" aria-live="polite">{fullscreenNote}</p>
+        )}
+
         <div
           className={`${s.screenTransition} ${
             transitionPhase === 'exiting' ? s.screenExiting : ''
@@ -457,7 +469,7 @@ export default function Pomodoro() {
             earnedCoins={earnedCoins}
             advanceToNextMode={advanceToNextMode}
             sessionLog={sessionLog}
-            onVisitForest={() => navigate('/forest')}
+            onVisitForest={() => navigate('/focus?view=forest')}
             selectedTree={selectedTree}
           />
         ) : view === 'failed' ? (
@@ -599,6 +611,8 @@ export default function Pomodoro() {
           </div>
         </Modal>
       )}
+
+      <FocusControlBar onFinish={handleFinish} />
     </div>
   )
 }
@@ -741,13 +755,13 @@ function ActiveFocusScreen({
       </div>
 
       <div className={s.activeControls}>
-        <button className={`${s.pauseBtn} ${s.study}`} aria-label={running ? 'Pause timer' : 'Resume timer'} onClick={() => { navigator.vibrate?.(20); togglePlay() }}>
+        <button className={`${s.pauseBtn} ${s.study} ${s.mobileHidden}`} aria-label={running ? 'Pause timer' : 'Resume timer'} onClick={() => { navigator.vibrate?.(20); togglePlay() }}>
           {running ? <Pause size={20} strokeWidth={2} /> : <Play size={20} strokeWidth={2} />}
         </button>
         <button className={s.giveUpBtn} aria-label="Give up and end session" onClick={() => { navigator.vibrate?.([10, 50, 10]); finishTimer() }}>
           Give up
         </button>
-        <button className={s.focusModeBtn} onClick={() => { navigator.vibrate?.(15); toggleFocusMode() }}>
+        <button className={`${s.focusModeBtn} ${s.mobileHidden}`} onClick={() => { navigator.vibrate?.(15); toggleFocusMode() }}>
           <EyeOff size={16} strokeWidth={2} />
           <span>{focusMode ? 'Exit Focus' : 'Focus'}</span>
         </button>
@@ -777,7 +791,7 @@ function ActiveBreakScreen({
       <p className={s.breakTip}>{breakTip}</p>
 
       <div className={s.activeControls}>
-        <button className={`${s.pauseBtn} ${s[mode]}`} aria-label={running ? 'Pause timer' : 'Resume timer'} onClick={() => { navigator.vibrate?.(20); togglePlay() }}>
+        <button className={`${s.pauseBtn} ${s[mode]} ${s.mobileHidden}`} aria-label={running ? 'Pause timer' : 'Resume timer'} onClick={() => { navigator.vibrate?.(20); togglePlay() }}>
           {running ? <Pause size={20} strokeWidth={2} /> : <Play size={20} strokeWidth={2} />}
         </button>
         <button className={s.giveUpBtn} aria-label="Skip break" onClick={skipTimer}>

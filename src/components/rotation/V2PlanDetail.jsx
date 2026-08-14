@@ -553,7 +553,7 @@ export default function V2PlanDetail({ planId, onBack }) {
   const taskAttachment = useTaskAttachment({
     startTask: mutations.startTask,
     currentRevision: mutations.currentRevision,
-    onAttached: () => navigate('/pomodoro'),
+    onAttached: () => navigate('/focus?view=timer'),
     tasks,
     planId,
   })
@@ -613,7 +613,7 @@ export default function V2PlanDetail({ planId, onBack }) {
   const handleStudyPomodoro = useCallback(async (task) => {
     const result = await taskAttachment.handlePlay(task)
     if (result?.alreadyAttached || result?.allowed) {
-      navigate('/pomodoro')
+      navigate('/focus?view=timer')
     } else if (result?.reason) {
       setToast({ open: true, title: 'Cannot start Pomodoro', description: result.reason, variant: 'error' })
     }

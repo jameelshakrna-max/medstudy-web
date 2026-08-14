@@ -313,3 +313,123 @@ describe('Tabs', () => {
     consoleSpy.mockRestore()
   })
 })
+
+describe('TabsContent forceMount', () => {
+  const getPanelForTrigger = (triggerText) => {
+    const trigger = screen.getByText(triggerText)
+    return document.getElementById(trigger.getAttribute('aria-controls'))
+  }
+
+  it('defaults to lazy mount: inactive panel is not in the DOM', () => {
+    render(
+      <Tabs defaultValue="a">
+        <TabsList>
+          <TabsTrigger value="a">Tab A</TabsTrigger>
+          <TabsTrigger value="b">Tab B</TabsTrigger>
+        </TabsList>
+        <TabsContent value="a">Content A</TabsContent>
+        <TabsContent value="b">Content B</TabsContent>
+      </Tabs>
+    )
+
+    expect(screen.getByRole('tabpanel', { name: 'Tab A' })).toBeInTheDocument()
+    expect(screen.queryByText('Content B')).not.toBeInTheDocument()
+    expect(screen.queryByRole('tabpanel', { hidden: true, name: 'Tab B' })).not.toBeInTheDocument()
+  })
+
+  it('forceMount keeps an inactive panel mounted but hidden with tabIndex -1', () => {
+    render(
+      <Tabs defaultValue="a">
+        <TabsList>
+          <TabsTrigger value="a">Tab A</TabsTrigger>
+          <TabsTrigger value="b">Tab B</TabsTrigger>
+        </TabsList>
+        <TabsContent value="a">Content A</TabsContent>
+        <TabsContent value="b" forceMount>Content B</TabsContent>
+      </Tabs>
+    )
+
+    const tabB = screen.getByText('Tab B')
+    const panelB = getPanelForTrigger('Tab B')
+
+    expect(panelB).toBeInTheDocument()
+    expect(panelB).toHaveAttribute('hidden')
+    expect(panelB).toHaveAttribute('tabindex', '-1')
+    expect(panelB).toHaveAttribute('role', 'tabpanel')
+    expect(panelB.id).toBe(tabB.getAttribute('aria-controls'))
+    expect(panelB).toHaveAttribute('aria-labelledby', tabB.id)
+  })
+
+  it('forceMount renders the active panel visible with tabIndex 0 and no hidden', () => {
+    render(
+      <Tabs defaultValue="a">
+        <TabsList>
+          <TabsTrigger value="a">Tab A</TabsTrigger>
+          <TabsTrigger value="b">Tab B</TabsTrigger>
+        </TabsList>
+        <TabsContent value="a" forceMount>Content A</TabsContent>
+        <TabsContent value="b" forceMount>Content B</TabsContent>
+      </Tabs>
+    )
+
+    const panelA = getPanelForTrigger('Tab A')
+
+    expect(panelA).not.toHaveAttribute('hidden')
+    expect(panelA).toHaveAttribute('tabindex', '0')
+  })
+
+  it('switching tabs with forceMount keeps both panels mounted; only active lacks hidden', () => {
+    render(
+      <Tabs defaultValue="a">
+        <TabsList>
+          <TabsTrigger value="a">Tab A</TabsTrigger>
+          <TabsTrigger value="b">Tab B</TabsTrigger>
+        </TabsList>
+        <TabsContent value="a" forceMount>Content A</TabsContent>
+        <TabsContent value="b" forceMount>Content B</TabsContent>
+      </Tabs>
+    )
+
+    expect(getPanelForTrigger('Tab A')).not.toHaveAttribute('hidden')
+    expect(getPanelForTrigger('Tab B')).toHaveAttribute('hidden')
+
+    fireEvent.click(screen.getByText('Tab B'))
+
+    expect(getPanelForTrigger('Tab A')).toHaveAttribute('hidden')
+    expect(getPanelForTrigger('Tab B')).not.toHaveAttribute('hidden')
+  })
+
+  it('trigger aria-controls still points at a force-mounted hidden panel id', () => {
+    render(
+      <Tabs defaultValue="a">
+        <TabsList>
+          <TabsTrigger value="a">Tab A</TabsTrigger>
+          <TabsTrigger value="b">Tab B</TabsTrigger>
+        </TabsList>
+        <TabsContent value="a">Content A</TabsContent>
+        <TabsContent value="b" forceMount>Content B</TabsContent>
+      </Tabs>
+    )
+
+    const tabB = screen.getByText('Tab B')
+    const panelB = getPanelForTrigger('Tab B')
+
+    expect(tabB).toHaveAttribute('aria-controls', panelB.id)
+  })
+
+  it('overrides a caller-provided hidden prop with forceMount state', () => {
+    render(
+      <Tabs defaultValue="a">
+        <TabsList>
+          <TabsTrigger value="a">Tab A</TabsTrigger>
+          <TabsTrigger value="b">Tab B</TabsTrigger>
+        </TabsList>
+        <TabsContent value="a" forceMount hidden={false}>Content A</TabsContent>
+        <TabsContent value="b" forceMount hidden={false}>Content B</TabsContent>
+      </Tabs>
+    )
+
+    expect(getPanelForTrigger('Tab A')).not.toHaveAttribute('hidden')
+    expect(getPanelForTrigger('Tab B')).toHaveAttribute('hidden')
+  })
+})

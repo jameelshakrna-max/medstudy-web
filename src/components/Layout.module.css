@@ -117,6 +117,8 @@
 .sidebarCollapsed .signOutBtn { padding: 9px; justify-content: center; }
 .sidebarCollapsed .signOutIcon { margin: 0; }
 .mainCollapsed { margin-left: 72px; }
+.mainFocus { margin-left: 0; }
+.contentFocus { padding: 0; max-width: none; }
 
 @media (max-width: 768px) {
   .sidebar { width: 240px; transform: translateX(-100%); border-right: none; }

@@ -289,7 +289,7 @@ export default function ForestLandscape({
       />
 
       {/* Empty state */}
-      {empty && <EmptyMeadow onStartFocus={() => navigate('/pomodoro')} />}
+      {empty && <EmptyMeadow onStartFocus={() => navigate('/focus?view=timer')} />}
     </div>
   )
 }

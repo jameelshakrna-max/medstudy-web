@@ -107,10 +107,11 @@ export function TabsTrigger({ value, disabled = false, children, className = '',
   )
 }
 
-export function TabsContent({ value, children, className = '', ...rest }) {
+export function TabsContent({ value, children, className = '', forceMount = false, ...rest }) {
   const { activeValue, baseId } = useTabsContext()
+  const isActive = activeValue === value
 
-  if (activeValue !== value) return null
+  if (!isActive && !forceMount) return null
 
   const tabId = `${baseId}-tab-${value}`
   const panelId = `${baseId}-panel-${value}`
@@ -120,9 +121,10 @@ export function TabsContent({ value, children, className = '', ...rest }) {
       role="tabpanel"
       id={panelId}
       aria-labelledby={tabId}
-      tabIndex={0}
       className={`${styles.tabContent} ${className}`}
       {...rest}
+      tabIndex={isActive ? 0 : -1}
+      hidden={isActive ? undefined : true}
     >
       {children}
     </div>

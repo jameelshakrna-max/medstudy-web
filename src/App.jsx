@@ -56,6 +56,7 @@ const DMInbox = lazy(() => import('./components/DMInbox'))
 const DMConversation = lazy(() => import('./components/DMConversation'))
 const ResearchHub = lazy(() => import('./pages/ResearchHub'))
 const ForestPage = lazy(() => import('./pages/ForestPage'))
+const FocusPage = lazy(() => import('./pages/FocusPage'))
 const RotationPlanner = lazy(() => import('./pages/RotationPlanner'))
 
 const PAGE_LOADING = <LoadingScreen />
@@ -97,7 +98,7 @@ function AppRoutes() {
           <Route path="anki"       element={<Anki />} />
           <Route path="uworld"     element={<TrackingHub />} />
           <Route path="pomodoro"   element={<Pomodoro />} />
-          <Route path="focus"      element={<Pomodoro />} />
+          <Route path="focus"      element={<FocusPage />} />
           <Route path="progress"   element={<TrackingHub />} />
           <Route path="resources" element={<Resources />} />
           <Route path="resources/:id" element={<ResourceDetail />} />

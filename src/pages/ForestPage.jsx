@@ -8,6 +8,7 @@ import {
   getDateBounds, getSubjectColor, getSubjectName, PAGE_SIZE,
 } from '../lib/forestUtils'
 import ForestLandscape from '../components/forest/ForestLandscape'
+import ForestSessionStrip from '../components/focus/ForestSessionStrip'
 import TreeDetailsSheet from '../components/TreeDetailsSheet'
 import LoadingScreen from '../components/LoadingScreen'
 import styles from './Page.module.css'
@@ -93,6 +94,7 @@ export default function ForestPage() {
 
   return (
     <div className={styles.page}>
+      <ForestSessionStrip />
       <div className={styles.header}>
         <h1 className={styles.title}>My Forest</h1>
         <p className={styles.sub}>

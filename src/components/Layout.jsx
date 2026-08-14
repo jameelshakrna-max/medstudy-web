@@ -1,6 +1,7 @@
 import { Outlet, Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { usePomodoro } from '../context/PomodoroContext'
 import {
   LayoutDashboard, Timer, CalendarRange,
   BookOpen, BrainCircuit, FolderOpen,
@@ -57,9 +58,14 @@ export default function Layout() {
   const { user, profile, userProfile, signOut } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
+  const { focusMode, exitFocusMode } = usePomodoro()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('sidebarCollapsed') === 'true' } catch { return false }
   })
+
+  useEffect(() => {
+    if (!isFocusPath(location.pathname) && focusMode) exitFocusMode()
+  }, [location.pathname, focusMode, exitFocusMode])
 
   const profilePath = getProfilePath(userProfile, user)
   const planLabel = profile?.plan
@@ -107,65 +113,69 @@ export default function Layout() {
   return (
     <div className={styles.layout}>
       {/* Sidebar */}
-      <aside className={`${styles.sidebar} ${sidebarCollapsed ? styles.sidebarCollapsed : ''}`}>
-        <div className={styles.sidebarTop}>
-          {sidebarCollapsed
-            ? <BrandLogo variant="symbol" size={36} linkToHome className={styles.logoSymbol} />
-            : <BrandLogo variant="horizontal" size={180} linkToHome />}
-        </div>
-
-        <nav className={styles.nav} aria-label="Primary">
-          <TooltipProvider delayDuration={300}>
-            {NAV_GROUPS.map(group => (
-              <div key={group.label} className={styles.navGroup}>
-                <span className={styles.groupLabel}>{group.label}</span>
-                {group.items.map(renderNavItem)}
-              </div>
-            ))}
-          </TooltipProvider>
-        </nav>
-
-        <div className={styles.sidebarBottom}>
-          <div className={styles.bottomLinks}>
-            <NavLink
-              to="/settings"
-              className={({ isActive }) => `${styles.navItem} ${isActive ? styles.navActive : ''}`}
-              isActive={(match, loc) => matchesPath(loc.pathname, '/settings')}
-            >
-              <Settings size={18} strokeWidth={1.5} className={styles.navIcon} />
-              <span className={styles.navLabel}>Settings</span>
-            </NavLink>
-            {user && (
-              <UserLink
-                userId={user.id}
-                username={userProfile?.username}
-                displayName={userProfile?.display_name || profile?.full_name || profile?.email?.split('@')[0] || 'Student'}
-                avatar={userProfile?.avatar_url}
-                showName={!sidebarCollapsed}
-                badge={!sidebarCollapsed ? <Badge tone="brand" size="sm">{planLabel}</Badge> : null}
-                className={`${styles.navItem} ${styles.profileItem}`}
-                onClick={() => { if (profilePath) navigate(profilePath) }}
-              />
-            )}
+      {!focusMode && (
+        <aside className={`${styles.sidebar} ${sidebarCollapsed ? styles.sidebarCollapsed : ''}`}>
+          <div className={styles.sidebarTop}>
+            {sidebarCollapsed
+              ? <BrandLogo variant="symbol" size={36} linkToHome className={styles.logoSymbol} />
+              : <BrandLogo variant="horizontal" size={180} linkToHome />}
           </div>
-          <button className={styles.signOutBtn} onClick={handleSignOut}>
-            <LogOut size={14} strokeWidth={1.5} className={styles.signOutIcon} />
-            <span className={styles.signOutLabel}>Sign Out</span>
-          </button>
-        </div>
-      </aside>
+
+          <nav className={styles.nav} aria-label="Primary">
+            <TooltipProvider delayDuration={300}>
+              {NAV_GROUPS.map(group => (
+                <div key={group.label} className={styles.navGroup}>
+                  <span className={styles.groupLabel}>{group.label}</span>
+                  {group.items.map(renderNavItem)}
+                </div>
+              ))}
+            </TooltipProvider>
+          </nav>
+
+          <div className={styles.sidebarBottom}>
+            <div className={styles.bottomLinks}>
+              <NavLink
+                to="/settings"
+                className={({ isActive }) => `${styles.navItem} ${isActive ? styles.navActive : ''}`}
+                isActive={(match, loc) => matchesPath(loc.pathname, '/settings')}
+              >
+                <Settings size={18} strokeWidth={1.5} className={styles.navIcon} />
+                <span className={styles.navLabel}>Settings</span>
+              </NavLink>
+              {user && (
+                <UserLink
+                  userId={user.id}
+                  username={userProfile?.username}
+                  displayName={userProfile?.display_name || profile?.full_name || profile?.email?.split('@')[0] || 'Student'}
+                  avatar={userProfile?.avatar_url}
+                  showName={!sidebarCollapsed}
+                  badge={!sidebarCollapsed ? <Badge tone="brand" size="sm">{planLabel}</Badge> : null}
+                  className={`${styles.navItem} ${styles.profileItem}`}
+                  onClick={() => { if (profilePath) navigate(profilePath) }}
+                />
+              )}
+            </div>
+            <button className={styles.signOutBtn} onClick={handleSignOut}>
+              <LogOut size={14} strokeWidth={1.5} className={styles.signOutIcon} />
+              <span className={styles.signOutLabel}>Sign Out</span>
+            </button>
+          </div>
+        </aside>
+      )}
 
       {/* Main */}
-      <main className={`${styles.main} ${sidebarCollapsed ? styles.mainCollapsed : ''}`}>
-        <div className={styles.mobileHeader}>
-          <BrandLogo variant="horizontal" size={150} linkToHome />
-        </div>
-        <TopBar sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
-        <div className={styles.content}>
+      <main className={`${styles.main} ${sidebarCollapsed ? styles.mainCollapsed : ''} ${focusMode ? styles.mainFocus : ''}`}>
+        {!focusMode && (
+          <div className={styles.mobileHeader}>
+            <BrandLogo variant="horizontal" size={150} linkToHome />
+          </div>
+        )}
+        {!focusMode && <TopBar sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />}
+        <div className={`${styles.content} ${focusMode ? styles.contentFocus : ''}`}>
           <Outlet />
         </div>
       </main>
-      <BottomNav />
+      {!focusMode && <BottomNav />}
     </div>
   )
 }

@@ -7,6 +7,7 @@ const PomodoroSettingsContext = createContext(null)
 
 const MODES = ['study', 'break', 'long']
 const PLANNER_TASK_CONTEXT_VERSION = 1
+const FULLSCREEN_UNAVAILABLE_MESSAGE = 'Fullscreen isn\u2019t available in this browser \u2014 focus mode is still active.'
 
 function hasUnsyncedPlannerData(ctx) {
   if (!ctx) return false
@@ -340,6 +341,7 @@ export function PomodoroProvider({ children }) {
   // ── Focus mode state ──
   const [focusMode, setFocusMode] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [fullscreenNote, setFullscreenNote] = useState(null)
 
   // ── Push notification state ──
   const [pushPermission, setPushPermission] = useState(() => (
@@ -1147,16 +1149,40 @@ export function PomodoroProvider({ children }) {
   }, [updatePlannerTaskContext])
 
   // ── Focus mode + fullscreen ──
+  const requestFullscreenIfAvailable = useCallback(() => {
+    const el = document.documentElement
+    if (el && typeof el.requestFullscreen === 'function') {
+      try {
+        Promise.resolve(el.requestFullscreen())
+          .then(() => setFullscreenNote(null))
+          .catch(() => setFullscreenNote(FULLSCREEN_UNAVAILABLE_MESSAGE))
+      } catch (_) {
+        setFullscreenNote(FULLSCREEN_UNAVAILABLE_MESSAGE)
+      }
+    } else {
+      setFullscreenNote(FULLSCREEN_UNAVAILABLE_MESSAGE)
+    }
+  }, [])
+
   const toggleFocusMode = useCallback(() => {
-    setFocusMode(prev => {
-      const next = !prev
-      if (next && !document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {})
-      } else if (!next && document.fullscreenElement) {
+    if (!focusMode) {
+      setFocusMode(true)
+      requestFullscreenIfAvailable()
+    } else {
+      setFocusMode(false)
+      if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {})
       }
-      return next
-    })
+      setFullscreenNote(null)
+    }
+  }, [focusMode, requestFullscreenIfAvailable])
+
+  const exitFocusMode = useCallback(() => {
+    setFocusMode(false)
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {})
+    }
+    setFullscreenNote(null)
   }, [])
 
   const toggleFullscreen = useCallback(async () => {
@@ -1174,7 +1200,10 @@ export function PomodoroProvider({ children }) {
       const fs = !!document.fullscreenElement
       setIsFullscreen(fs)
       // Auto-exit focus mode when user exits fullscreen (e.g. Escape key)
-      if (!fs) setFocusMode(false)
+      if (!fs) {
+        setFocusMode(false)
+        setFullscreenNote(null)
+      }
     }
     document.addEventListener('fullscreenchange', onFsChange)
     return () => document.removeEventListener('fullscreenchange', onFsChange)
@@ -1198,7 +1227,8 @@ export function PomodoroProvider({ children }) {
     togglePlay, skipTimer, finishTimer, resetTimer, resetSession,
     cancelPushNotification,
     treeStatus, setTreeStatus,
-    focusMode, isFullscreen, toggleFocusMode, toggleFullscreen,
+    focusMode, isFullscreen, fullscreenNote,
+    toggleFocusMode, exitFocusMode, toggleFullscreen,
     sessionPhase, sessionOutcome, isSetup, isActive,
     setModeDuration, advanceToNextMode,
     sessionTreeId, setSessionTreeId,
@@ -1227,7 +1257,8 @@ export function PomodoroProvider({ children }) {
     displayRemaining, progress,
     togglePlay, skipTimer, finishTimer, resetTimer, resetSession,
     treeStatus,
-    focusMode, isFullscreen, toggleFocusMode, toggleFullscreen,
+    focusMode, isFullscreen, fullscreenNote,
+    toggleFocusMode, exitFocusMode, toggleFullscreen,
     sessionPhase, sessionOutcome, isSetup, isActive,
     setModeDuration, advanceToNextMode,
     sessionTreeId,

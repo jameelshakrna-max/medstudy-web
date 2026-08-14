@@ -14,6 +14,15 @@ const authMock = vi.hoisted(() => ({
   signOut: vi.fn(),
 }))
 
+const pomodoroMock = vi.hoisted(() => ({
+  focusMode: false,
+  exitFocusMode: vi.fn(),
+}))
+
+vi.mock('../../context/PomodoroContext', () => ({
+  usePomodoro: () => pomodoroMock,
+}))
+
 vi.mock('../../context/AuthContext', () => ({
   useAuth: () => authMock,
 }))
@@ -93,6 +102,8 @@ describe('nav.js helpers', () => {
 describe('Layout shell', () => {
   beforeEach(() => {
     authMock.signOut.mockClear()
+    pomodoroMock.focusMode = false
+    pomodoroMock.exitFocusMode.mockClear()
     try { localStorage.removeItem('sidebarCollapsed') } catch {}
   })
 
@@ -178,6 +189,25 @@ describe('Layout shell', () => {
       .filter(link => link.getAttribute('aria-current') === 'page')
     expect(activeLinks).toHaveLength(1)
     expect(within(nav).getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('omits the shell while focusMode is active and restores it otherwise', () => {
+    pomodoroMock.focusMode = true
+    const { unmount } = renderShell('/focus')
+    expect(screen.queryByRole('navigation', { name: 'Primary' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /sidebar/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Bottom navigation' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'More menu' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Sign Out')).not.toBeInTheDocument()
+    unmount()
+
+    pomodoroMock.focusMode = false
+    renderShell('/focus')
+    expect(screen.getAllByRole('navigation', { name: 'Primary' }).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByRole('button', { name: /sidebar/i })).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Bottom navigation' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'More menu' })).toBeInTheDocument()
+    expect(screen.getByText('Sign Out')).toBeInTheDocument()
   })
 })
 
@@ -308,7 +338,7 @@ describe('App.jsx compatibility routes', () => {
   it('registers /focus and /progress parents and guards the floating timer', () => {
     const appPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../App.jsx')
     const src = fs.readFileSync(appPath, 'utf8')
-    expect(src).toMatch(/path="focus"\s+element=\{<Pomodoro/)
+    expect(src).toMatch(/path="focus"\s+element=\{<FocusPage/)
     expect(src).toMatch(/path="progress"\s+element=\{<TrackingHub/)
     expect(src).toMatch(/FloatingTimerWrapper/)
     expect(src).toMatch(/isFocusPath/)
