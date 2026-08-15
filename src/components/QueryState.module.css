@@ -1,0 +1,36 @@
+.errorState {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md);
+  background: var(--color-error-soft);
+  color: var(--color-error);
+}
+
+.centered {
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--space-xl);
+  text-align: center;
+}
+
+.compact {
+  padding: var(--space-sm) var(--space-md);
+}
+
+.errorIcon {
+  flex-shrink: 0;
+}
+
+.errorMessage {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  color: var(--text-secondary);
+}
+
+.centered .errorMessage {
+  font-size: var(--text-base);
+}

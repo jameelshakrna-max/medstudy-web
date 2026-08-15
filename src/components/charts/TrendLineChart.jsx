@@ -27,7 +27,17 @@ function CustomTooltip({ active, payload, label }) {
 
 export default function TrendLineChart({ data, xKey = 'week', yKey = 'avgScore', name = 'Score', color = '#4F8CFF', yUnit = '%' }) {
   if (!data?.length) return null
+  const points = data
+    .filter(d => d[xKey] != null && d[yKey] != null)
+    .map(d => `${d[xKey]} ${d[yKey]}${yUnit}`)
+  const first = data[0]?.[yKey]
+  const last = data[data.length - 1]?.[yKey]
+  let label = `${name} by ${xKey}: ${points.join(', ')}`
+  if (data.length > 1 && first != null && last != null) {
+    label += `. Overall: ${first}${yUnit} to ${last}${yUnit}`
+  }
   return (
+    <div role="img" aria-label={label} style={{ width: '100%' }}>
     <ResponsiveContainer width="100%" height={280}>
       <LineChart data={data} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -58,5 +68,6 @@ export default function TrendLineChart({ data, xKey = 'week', yKey = 'avgScore',
         />
       </LineChart>
     </ResponsiveContainer>
+    </div>
   )
 }

@@ -6,6 +6,7 @@ import { queryKeys } from '../lib/queryKeys'
 import { FolderOpen } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
 import EmptyState from '../components/EmptyState'
+import { QueryErrorState, RefetchWarning } from '../components/QueryState'
 import { getSubjectColor, getSubjectName } from '../lib/subjectColors'
 import styles from './Page.module.css'
 
@@ -44,7 +45,7 @@ export default function UWorldView({ onActivity }) {
   const [form, setForm] = useState({ block_name: '', total_questions: 40, correct: 0, mode: 'Tutor', subject_id: '', time_minutes: '', notes: '' })
   const [view, setView] = useState('blocks')
 
-  const { data: blocks = [], isLoading } = useQuery({
+  const { data: blocks = [], isLoading, isError, isRefetchError, refetch } = useQuery({
     queryKey: queryKeys.uworld.blocks(user?.id),
     queryFn: async () => {
       const { data, error } = await supabase.from('uworld_blocks').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
@@ -97,6 +98,7 @@ export default function UWorldView({ onActivity }) {
       setForm({ block_name: '', total_questions: 40, correct: 0, mode: 'Tutor', subject_id: '', time_minutes: '', notes: '' })
       setView('blocks')
       queryClient.invalidateQueries({ queryKey: queryKeys.uworld.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all })
     },
     onError: (err) => {
       console.error('addBlock error:', err)
@@ -114,8 +116,14 @@ export default function UWorldView({ onActivity }) {
 
   if (isLoading) return <LoadingScreen fullPage={false} message="Loading UWorld..." />
 
+  if (isError && (blocks?.length || 0) === 0) {
+    return <QueryErrorState message="Couldn't load your UWorld blocks." onRetry={() => refetch()} />
+  }
+
   return (
     <div>
+      {isRefetchError && (blocks?.length || 0) > 0 && <RefetchWarning onRetry={() => refetch()} />}
+
       <div className={styles.header} style={{ marginBottom: 16 }}>
         <h2 className={styles.title} style={{ fontSize: 'clamp(20px, 3vw, 28px)' }}>UWorld Tracker</h2>
         <p className={styles.sub}>{blocks.length} blocks logged · Average: {avg}%</p>

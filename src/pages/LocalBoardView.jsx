@@ -6,6 +6,7 @@ import { queryKeys } from '../lib/queryKeys'
 import { FolderOpen, Plus, Minus, Trash2 } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
 import EmptyState from '../components/EmptyState'
+import { QueryErrorState, RefetchWarning } from '../components/QueryState'
 import { getSubjectColor, getSubjectName } from '../lib/subjectColors'
 import styles from './Page.module.css'
 
@@ -35,7 +36,7 @@ export default function LocalBoardView({ onActivity }) {
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ case_name: '', subject_id: '', past_paper_year: '', repetition_count: 0, mastery_level: 'Started', notes: '' })
 
-  const { data: cases = [], isLoading } = useQuery({
+  const { data: cases = [], isLoading, isError, isRefetchError, refetch } = useQuery({
     queryKey: queryKeys.localBoard.cases(user?.id),
     queryFn: async () => {
       const { data, error } = await supabase.from('local_board_cases').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
@@ -64,6 +65,7 @@ export default function LocalBoardView({ onActivity }) {
     },
     onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.localBoard.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all })
 
       if (onActivity && data) {
         await onActivity({
@@ -92,6 +94,7 @@ export default function LocalBoardView({ onActivity }) {
     },
     onSuccess: async ({ id, updates }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.localBoard.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all })
 
       if (onActivity && updates.mastery_level) {
         const c = cases.find(cc => cc.id === id)
@@ -116,14 +119,21 @@ export default function LocalBoardView({ onActivity }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.localBoard.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all })
     },
     onError: (err) => alert('Error: ' + err.message),
   })
 
   if (isLoading) return <LoadingScreen fullPage={false} message="Loading cases..." />
 
+  if (isError && (cases?.length || 0) === 0) {
+    return <QueryErrorState message="Couldn't load your Local Board cases." onRetry={() => refetch()} />
+  }
+
   return (
     <div>
+      {isRefetchError && (cases?.length || 0) > 0 && <RefetchWarning onRetry={() => refetch()} />}
+
       <div className={styles.header} style={{ marginBottom: 16 }}>
         <h2 className={styles.title} style={{ fontSize: 'clamp(20px, 3vw, 28px)' }}>Local Board Tracker</h2>
         <p className={styles.sub}>{cases.length} clinical cases logged</p>

@@ -6,6 +6,7 @@ import { queryKeys } from '../lib/queryKeys'
 import { supabase } from '../lib/supabase'
 import { apiPost } from '../lib/api'
 import LoadingScreen from '../components/LoadingScreen'
+import { QueryErrorState, RefetchWarning } from '../components/QueryState'
 import GoalCard from '../components/GoalCard'
 import GoalForm from '../components/GoalForm'
 import GoalTemplates from '../components/GoalTemplates'
@@ -24,7 +25,7 @@ export default function Goals() {
   const [celebrationGoal, setCelebrationGoal] = useState(null)
   const prevGoalsRef = useRef([])
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, isRefetchError, refetch } = useQuery({
     queryKey: queryKeys.goals.data(user?.id),
     enabled: !!user,
     queryFn: async () => {
@@ -35,6 +36,12 @@ export default function Goals() {
         supabase.from('local_board_cases').select('*').eq('user_id', user.id),
         supabase.from('study_activity').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(500),
       ])
+
+      if (goalsRes.error) throw goalsRes.error
+      if (blocksRes.error) throw blocksRes.error
+      if (mrcpRes.error) throw mrcpRes.error
+      if (boardRes.error) throw boardRes.error
+      if (activityRes.error) throw activityRes.error
 
       const perfReport = generate({
         uworld: blocksRes.data || [],
@@ -83,6 +90,7 @@ export default function Goals() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.goals.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all })
       setShowForm(false)
     },
   })
@@ -104,6 +112,7 @@ export default function Goals() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.goals.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all })
       setEditingGoal(null)
     },
   })
@@ -115,6 +124,7 @@ export default function Goals() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.goals.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all })
     },
   })
 
@@ -136,6 +146,10 @@ export default function Goals() {
 
   if (isLoading) return <LoadingScreen fullPage={false} message="Loading goals..." />
 
+  if (isError && !data) {
+    return <QueryErrorState message="Couldn't load your study goals." onRetry={() => refetch()} />
+  }
+
   const activeGoals = goals.filter(g => g.status === 'active' || !g.status || g.status === 'active')
   const completedGoals = goals.filter(g => g.status === 'completed')
   const expiredGoals = goals.filter(g => g.status === 'expired')
@@ -150,6 +164,8 @@ export default function Goals() {
 
   return (
     <div className={styles.page}>
+      {isRefetchError && data && <RefetchWarning onRetry={() => refetch()} />}
+
       {celebrationGoal && (
         <GoalCelebration goal={celebrationGoal} onDismiss={() => setCelebrationGoal(null)} />
       )}

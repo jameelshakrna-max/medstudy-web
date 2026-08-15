@@ -1,0 +1,244 @@
+.root {}
+
+.header { margin-bottom: 28px; }
+
+.title {
+  font-family: var(--font-serif);
+  font-size: clamp(24px, 4vw, 36px);
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.sub { font-size: 14px; color: var(--mist); }
+
+.sub + .sub { margin-top: var(--space-sm); }
+
+.streak {
+  color: var(--amber);
+  margin-left: var(--space-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+/* TABS */
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+.tab { padding: 8px 18px; border-radius: 100px; background: var(--card-bg); border: 1px solid var(--input-bg); color: var(--mist); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.3s; }
+.tab:hover { color: var(--text-secondary); background: var(--input-bg); }
+.tabActive { background: var(--blueL); border-color: rgba(79,140,255,0.3); color: var(--blue); }
+
+/* STATS */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.statCard {
+  min-width: 0;
+  text-align: center;
+  padding: var(--space-md) var(--space-sm);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--stat-soft);
+  background: linear-gradient(135deg, var(--stat-soft), transparent);
+}
+
+.statBlue { --stat-soft: var(--color-info-soft); }
+.statGreen { --stat-soft: var(--color-success-soft); }
+.statBrand { --stat-soft: var(--color-brand-soft); }
+.statAmber { --stat-soft: var(--color-warning-soft); }
+
+.statValue {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  line-height: var(--leading-tight);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.statLabel {
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: var(--weight-semibold);
+}
+
+@media (max-width: 680px) {
+  .statsGrid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 400px) {
+  .statsGrid { grid-template-columns: 1fr; }
+}
+
+/* FILTERS */
+.filterRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.typeFilterRow { margin-top: var(--space-sm); }
+
+.filterBtn {
+  padding: 7px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--card-border);
+  background: var(--input-bg);
+  color: var(--mist);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.filterBtn:hover {
+  background: var(--card-border);
+  color: var(--text-primary);
+}
+
+.filterBtnActive {
+  background: var(--blueL);
+  border-color: rgba(79, 140, 255, 0.35);
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.filterBtnSm {
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--input-bg);
+  background: var(--card-bg);
+  color: var(--mist);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.filterBtnSm:hover {
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+
+.filterBtnSmActive {
+  background: var(--indigoL);
+  border-color: rgba(129, 140, 248, 0.3);
+  color: var(--indigo);
+  font-weight: 600;
+}
+
+/* CARD LIST */
+.cardList { display: flex; flex-direction: column; gap: 14px; }
+.empty { color: var(--mist); font-size: 15px; padding: 48px 32px; text-align: center; background: var(--card-bg); border: 1px dashed var(--card-border); border-radius: 20px; }
+
+/* DATE GROUP */
+.dateGroup {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--mist);
+  padding: 16px 0 6px 4px;
+  border-bottom: 1px solid var(--card-border);
+  margin-bottom: 8px;
+}
+
+.dateGroup:first-child {
+  padding-top: 4px;
+}
+
+/* SESSION CARD */
+.sessionCard { position: relative; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 20px; padding: 22px 24px; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden; backdrop-filter: blur(12px); }
+.sessionCard::before { content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, var(--blue), var(--indigo)); border-radius: 3px 0 0 3px; }
+.sessionCard:hover { transform: translateY(-2px); box-shadow: 0 12px 36px rgba(0,0,0,0.2); border-color: var(--card-border); }
+.sessTop { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: var(--space-sm); }
+.sessLabel { font-size: 16px; font-weight: 700; color: var(--text-primary); min-width: 0; overflow-wrap: anywhere; }
+.sessDur { font-family: var(--font-mono); font-size: 14px; color: var(--blue); background: var(--blueL); padding: 4px 14px; border-radius: 100px; font-weight: 500; flex-shrink: 0; white-space: nowrap; }
+.sessMeta { display: flex; gap: 10px; font-size: 12px; color: var(--mist); flex-wrap: wrap; }
+.sessMeta span { padding: 3px 10px; background: var(--card-bg); border-radius: 100px; border: 1px solid var(--input-bg); }
+.sessNotes { font-size: 13px; color: var(--text-secondary); margin-top: 12px; line-height: 1.6; font-style: italic; padding: 12px 14px; background: var(--card-bg); border-radius: 12px; border-left: 3px solid var(--amber); }
+
+.sessType {
+  background: var(--indigoL);
+  color: var(--indigo);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.energyHigh { color: var(--emerald); }
+.energyMedium { color: var(--amber); }
+.energyLow { color: var(--red); }
+.goalsMet { color: var(--emerald); }
+
+/* DELETE BUTTON */
+.sessDelete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: none;
+  background: var(--input-bg);
+  color: var(--text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sessionCard:hover .sessDelete,
+.sessionCard:focus-within .sessDelete {
+  opacity: 1;
+}
+
+.sessDelete:hover {
+  background: var(--redL);
+  color: var(--red);
+}
+
+/* FORM */
+.formCard { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 24px; padding: 32px; max-width: 600px; backdrop-filter: blur(16px); position: relative; overflow: hidden; }
+.formCard::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--blue), var(--indigo)); }
+.formTitle { font-family: var(--font-serif); font-size: 22px; color: var(--text-primary); margin-bottom: 24px; }
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mist); margin-bottom: 8px; }
+.field input, .field textarea, .field select { width: 100%; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text-secondary); font-family: var(--font-sans); font-size: 14px; padding: 12px 16px; outline: none; transition: all 0.3s; resize: none; box-sizing: border-box; }
+.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blueL); }
+.field input::placeholder, .field textarea::placeholder { color: var(--text-secondary); }
+.field select option { color: #0B1120; background: #FFFFFF; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.checkRow { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--mist); cursor: pointer; margin-bottom: 20px; }
+.primaryBtn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--blue), var(--blue2)); color: var(--navy); font-size: 15px; font-weight: 700; border: none; border-radius: 14px; cursor: pointer; transition: all 0.3s; margin-top: 10px; box-shadow: 0 4px 20px var(--accent-glow); font-family: var(--font-sans); }
+.primaryBtn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 32px var(--accent-glow); }
+.primaryBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .formCard { max-width: 100%; padding: 24px; }
+}
+
+@media (max-width: 480px) {
+  .row2 { grid-template-columns: 1fr; }
+  .sessionCard { padding: 18px 20px; }
+  .sessLabel { font-size: 15px; }
+  .filterRow { gap: 4px; }
+  .filterBtn { padding: 6px 10px; font-size: 12px; }
+  .filterBtnSm { padding: 3px 8px; font-size: 10px; }
+}
+
+@media (max-width: 360px) {
+  .filterBtn { padding: 5px 8px; font-size: 11px; }
+}

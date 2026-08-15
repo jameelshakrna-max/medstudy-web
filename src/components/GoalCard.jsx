@@ -51,6 +51,7 @@ export default function GoalCard({ goal, onEdit, onDelete, compact }) {
             <div className={styles.compactFill} style={{ width: `${barPct}%`, background: isCompleted ? 'var(--emerald)' : 'var(--blue)' }} />
           </div>
           <div className={styles.compactSub}>{displayCurrent}{unit} / {displayTarget}{unit} · {barPct}%</div>
+          {goal.goal_type === 'hours' && <div className={styles.compactNote}>Based on tracked UWorld time</div>}
         </div>
         <div className={styles.compactPct}>{isCompleted ? 'Done' : `${barPct}%`}</div>
       </div>
@@ -104,6 +105,9 @@ export default function GoalCard({ goal, onEdit, onDelete, compact }) {
       </div>
 
       <div className={styles.metaRow}>
+        {goal.goal_type === 'hours' && (
+          <span className={styles.uWorldNote}>Based on tracked UWorld time</span>
+        )}
         {goal.nextMilestone && !isCompleted && (
           <span>Next milestone: <span className={styles.metaLabel}>{goal.nextMilestone}{unit}</span></span>
         )}

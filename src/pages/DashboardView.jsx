@@ -12,6 +12,7 @@ import DistributionDoughnut from '../components/charts/DistributionDoughnut'
 import CalendarHeatmap from '../components/charts/CalendarHeatmap'
 import DailyStatsBar from '../components/charts/DailyStatsBar'
 import GoalCard from '../components/GoalCard'
+import EmptyState from '../components/ui/EmptyState/EmptyState'
 import { getSubjectName } from '../lib/subjectColors'
 import styles from './DashboardView.module.css'
 import pageStyles from './Page.module.css'
@@ -59,9 +60,9 @@ export default function DashboardView({ report, onViewChange }) {
       span: 2,
     },
     {
-      id: 'time', title: 'Study Time', icon: Clock,
+      id: 'time', title: 'UWorld Study Time', icon: Clock,
       isEmpty: !(charts?.studyTime?.length),
-      emptyMsg: 'Log study time when completing UWorld blocks to see your time investment per week.',
+      emptyMsg: 'Log UWorld blocks with a study time to see your tracked minutes per week.',
       children: <TrendLineChart data={charts?.studyTime || []} yKey="minutes" name="Minutes" color="#10B981" yUnit=" min" />,
       span: 1,
     },
@@ -73,6 +74,22 @@ export default function DashboardView({ report, onViewChange }) {
       span: 3,
     },
   ], [charts, subjects, hasUWorld, hasBoard, hasMRCP])
+
+  if (!hasData && (goals || []).length === 0) {
+    return (
+      <div>
+        <div className={pageStyles.header} style={{ marginBottom: 20 }}>
+          <h2 className={pageStyles.title}>Dashboard</h2>
+          <p className={pageStyles.sub}>Your study command centre — aggregated across all tracks</p>
+        </div>
+        <EmptyState
+          icon={BarChart3}
+          title="No tracking data yet"
+          description="Log a UWorld block, an MRCP topic, or a Local Board case to start seeing your performance, charts, and goal progress here."
+        />
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -118,6 +135,9 @@ export default function DashboardView({ report, onViewChange }) {
                   {new Date(currentGoal.estimatedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </span>
               </span>
+            )}
+            {currentGoal.goal_type === 'hours' && (
+              <span className={styles.currentGoalMetaSmall}>Based on tracked UWorld time</span>
             )}
           </div>
         </div>
@@ -270,6 +290,9 @@ export default function DashboardView({ report, onViewChange }) {
         <DailyStatsBar analytics={analytics} monthlyStats={charts?.monthlyStats} />
         <div className={styles.calendarWrap}>
           <CalendarHeatmap data={charts?.dailyActivity || []} />
+          <p style={{ fontSize: 11, color: 'var(--mist)', marginTop: 10 }}>
+            Includes UWorld, MRCP, and Local Board activity. Minutes shown are tracked UWorld time.
+          </p>
         </div>
       </div>
 

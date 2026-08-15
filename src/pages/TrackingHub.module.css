@@ -3,12 +3,12 @@
   min-height: 100vh;
 }
 
-/* ── Sticky Segmented Bar ── */
+/* ── Sticky Tab Bar ── */
 
 .stickyBar {
   position: sticky;
   top: 0;
-  z-index: var(--z-sticky, 100);
+  z-index: var(--z-sticky);
   background: var(--float-bg);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
@@ -17,53 +17,46 @@
   padding: 12px 40px;
 }
 
-.segmentRow {
-  display: flex;
-  gap: 4px;
-  background: var(--input-border);
-  border-radius: 12px;
-  padding: 4px;
+.hubTabList {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
-.segment {
-  flex: 1;
-  min-width: 0;
-  padding: 10px 14px;
-  border: none;
-  border-radius: 9px;
+.hubTabList::-webkit-scrollbar {
+  height: 6px;
+}
+
+.hubTabList::-webkit-scrollbar-track {
   background: transparent;
-  color: var(--mist);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hubTabList::-webkit-scrollbar-thumb {
+  background: var(--card-border);
+  border-radius: var(--radius-full);
+}
+
+.stickyBar .hubTabList {
+  margin-bottom: 0;
+  background: var(--input-border);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-xs);
+}
+
+.hubTabList .hubTab {
+  flex: 0 0 auto;
   white-space: nowrap;
-  text-align: center;
-}
-
-.segment:hover {
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.segmentActive {
-  background: var(--navy3) !important;
-  color: var(--text-primary) !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-}
-
-[data-theme="light"] .segmentActive {
-  background: var(--white) !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 /* ── Content area ── */
 
 .content {
   /* spacing handled by child components */
+}
+
+.refetchWrap {
+  margin-bottom: var(--space-md);
 }
 
 /* ── Inline FAB ── */
@@ -109,32 +102,12 @@
     margin: -24px -20px 20px;
     padding: 10px 20px;
   }
-
-  .segment {
-    font-size: 12px;
-    padding: 9px 10px;
-  }
 }
 
 @media (max-width: 480px) {
   .stickyBar {
     margin: -20px -16px 16px;
     padding: 8px 12px;
-  }
-
-  .segment {
-    font-size: 11px;
-    padding: 8px 8px;
-  }
-
-  .segmentRow {
-    gap: 3px;
-    padding: 3px;
-    border-radius: 10px;
-  }
-
-  .segment:first-child {
-    min-width: 60px;
   }
 
   .fabBtn {
@@ -145,7 +118,6 @@
 
 /* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
-  .segment,
   .fabBtn {
     transition: none;
   }

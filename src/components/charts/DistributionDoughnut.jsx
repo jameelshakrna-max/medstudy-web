@@ -24,8 +24,11 @@ function CustomTooltip({ active, payload }) {
 export default function DistributionDoughnut({ data }) {
   if (!data?.length) return null
   const chartData = data.map(d => ({ ...d, name: getSubjectName(d.subject) }))
+  const label = chartData
+    .map(d => `${d.name}: ${d.percentage ?? 0}% of questions (${d.questions ?? 0} questions)`)
+    .join(', ')
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16, width: '100%', flexWrap: 'wrap' }}>
+    <div role="img" aria-label={label} style={{ display: 'flex', alignItems: 'center', gap: 16, width: '100%', flexWrap: 'wrap' }}>
       <ResponsiveContainer width="60%" height={260}>
         <PieChart>
           <Pie

@@ -9,7 +9,7 @@ export default function DailyStatsBar({ analytics, monthlyStats }) {
   ]
 
   return (
-    <div style={{
+    <div role="group" aria-label="Daily study stats" style={{
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
       gap: 10,

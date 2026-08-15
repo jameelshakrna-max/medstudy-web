@@ -29,6 +29,20 @@ function formatDisplayDate(dateStr) {
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+function formatLongDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+}
+
+function entrySummary(entry) {
+  const parts = []
+  if (entry.questions) parts.push(`${entry.questions} question${entry.questions === 1 ? '' : 's'}`)
+  if (entry.minutes) parts.push(`${entry.minutes} minute${entry.minutes === 1 ? '' : 's'}`)
+  if (entry.topics) parts.push(`${entry.topics} topic${entry.topics === 1 ? '' : 's'}`)
+  if (entry.cases) parts.push(`${entry.cases} case${entry.cases === 1 ? '' : 's'}`)
+  return parts.length ? parts.join(', ') : 'activity'
+}
+
 export default function CalendarHeatmap({ data = [] }) {
   const [tooltip, setTooltip] = useState(null)
   const dataMap = useMemo(() => {
@@ -36,6 +50,11 @@ export default function CalendarHeatmap({ data = [] }) {
     for (const d of data) m[d.date] = d
     return m
   }, [data])
+
+  const sortedEntries = useMemo(
+    () => [...data].sort((a, b) => String(a.date).localeCompare(String(b.date))),
+    [data]
+  )
 
   const { weeks, monthLabels } = useMemo(() => {
     const today = new Date()
@@ -95,16 +114,23 @@ export default function CalendarHeatmap({ data = [] }) {
   }
 
   const hasData = data.length > 0
+  const detailText = sortedEntries
+    .map(d => `${formatLongDate(d.date)}: ${entrySummary(d)}`)
+    .join('. ')
 
   return (
     <div style={{ width: '100%', position: 'relative' }}>
       {!hasData ? (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--mist)', fontSize: 14 }}>
-          Log your first study session to see your contribution graph
+          Complete your first UWorld block, MRCP topic, or Local Board case to see your activity calendar.
         </div>
       ) : (
         <div className={s.wrap}>
-          <div className={s.monthRow} style={{ marginBottom: 2 }}>
+          <div className={s.summary}>
+            Activity calendar: {data.length} active day{data.length !== 1 ? 's' : ''} this year.
+          </div>
+          <div className={s.srOnly}>{detailText}</div>
+          <div className={s.monthRow} style={{ marginBottom: 2 }} aria-hidden="true">
             {monthLabels.map((ml, i) => (
               <div key={i} className={s.monthLabel} style={{ marginLeft: weeks[ml.week] ? ml.week * 17 : 0 }}>
                 {ml.label}
@@ -112,7 +138,7 @@ export default function CalendarHeatmap({ data = [] }) {
             ))}
           </div>
           <div className={s.body}>
-            <div className={s.dayLabels}>
+            <div className={s.dayLabels} aria-hidden="true">
               {DAY_LABELS.map((label, i) => (
                 <div key={i} className={s.dayLabel} style={{ height: 14 }}>{label}</div>
               ))}
@@ -121,11 +147,29 @@ export default function CalendarHeatmap({ data = [] }) {
               <div key={wi} className={s.dayCol}>
                 {week.map((day, di) => {
                   const level = day.entry?.level ?? 0
+                  if (day.entry) {
+                    return (
+                      <button
+                        key={di}
+                        type="button"
+                        className={`${s.cell} ${s.hasData}`}
+                        style={{ background: LEVEL_COLORS[level] || LEVEL_COLORS[0] }}
+                        data-testid="heatmap-day-active"
+                        aria-label={`${formatLongDate(day.date)}: ${entrySummary(day.entry)}`}
+                        onMouseEnter={(e) => handleMouseEnter(e, day.entry, day.date)}
+                        onMouseLeave={handleMouseLeave}
+                        onFocus={(e) => handleMouseEnter(e, day.entry, day.date)}
+                        onBlur={handleMouseLeave}
+                      />
+                    )
+                  }
                   return (
                     <div
                       key={di}
-                      className={`${s.cell} ${day.entry ? s.hasData : ''}`}
+                      className={s.cell}
                       style={{ background: LEVEL_COLORS[level] || LEVEL_COLORS[0] }}
+                      aria-hidden="true"
+                      data-testid="heatmap-day-empty"
                       onMouseEnter={(e) => handleMouseEnter(e, day.entry, day.date)}
                       onMouseLeave={handleMouseLeave}
                     />
@@ -134,7 +178,7 @@ export default function CalendarHeatmap({ data = [] }) {
               </div>
             ))}
           </div>
-          <div className={s.legend}>
+          <div className={s.legend} aria-hidden="true">
             Less
             {LEVEL_COLORS.map((c, i) => (
               <div key={i} className={s.legendSwatch} style={{ background: c }} />
@@ -146,6 +190,7 @@ export default function CalendarHeatmap({ data = [] }) {
       {tooltip && createPortal(
         <div
           className={s.tooltip}
+          role="tooltip"
           style={{ left: tooltip.x, top: tooltip.y }}
         >
           <div className={s.tooltipDate}>{tooltip.date}</div>

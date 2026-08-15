@@ -6,6 +6,7 @@ import { queryKeys } from '../lib/queryKeys'
 import { FolderOpen, Plus, X, ChevronDown, ChevronRight } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
 import EmptyState from '../components/EmptyState'
+import { QueryErrorState, RefetchWarning } from '../components/QueryState'
 import ProgressCard from '../components/ProgressCard'
 import styles from './Page.module.css'
 
@@ -25,7 +26,7 @@ export default function MRCPView({ onActivity }) {
   const [addSystem, setAddSystem] = useState('')
   const [addTopic, setAddTopic] = useState({ name: '', syllabus_id: '' })
 
-  const { data: systems = [], isLoading: systemsLoading } = useQuery({
+  const { data: systems = [], isLoading: systemsLoading, isError: systemsError, isRefetchError: systemsRefetchError, refetch: refetchSystems } = useQuery({
     queryKey: queryKeys.mrcp.systems(user?.id),
     queryFn: async () => {
       const { data, error } = await supabase.from('mrcp_syllabus').select('*').eq('user_id', user.id).order('name')
@@ -36,7 +37,7 @@ export default function MRCPView({ onActivity }) {
     staleTime: 15000,
   })
 
-  const { data: topics = [], isLoading: topicsLoading } = useQuery({
+  const { data: topics = [], isLoading: topicsLoading, isError: topicsError, isRefetchError: topicsRefetchError, refetch: refetchTopics } = useQuery({
     queryKey: queryKeys.mrcp.topics(user?.id),
     queryFn: async () => {
       const { data, error } = await supabase.from('mrcp_topics').select('*').eq('user_id', user.id).order('name')
@@ -58,6 +59,7 @@ export default function MRCPView({ onActivity }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.mrcp.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all })
       setAddSystem('')
       setShowAdd(false)
     },
@@ -76,6 +78,7 @@ export default function MRCPView({ onActivity }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.mrcp.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all })
       setAddTopic({ name: '', syllabus_id: '' })
       setShowAdd(false)
     },
@@ -90,6 +93,7 @@ export default function MRCPView({ onActivity }) {
     },
     onSuccess: async ({ id, updates }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.mrcp.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tracking.all })
 
       if (onActivity && updates.status) {
         const topic = topics.find(t => t.id === id)
@@ -113,11 +117,21 @@ export default function MRCPView({ onActivity }) {
   }
 
   const isLoading = systemsLoading || topicsLoading
+  const hasData = (systems?.length || 0) > 0 || (topics?.length || 0) > 0
+  const isError = (systemsError && (systems?.length || 0) === 0) || (topicsError && (topics?.length || 0) === 0)
+  const isRefetchError = hasData && (systemsRefetchError || topicsRefetchError)
+  const retryAll = () => { refetchSystems(); refetchTopics() }
 
   if (isLoading) return <LoadingScreen fullPage={false} message="Loading MRCP syllabus..." />
 
+  if (isError) {
+    return <QueryErrorState message="Couldn't load your MRCP syllabus." onRetry={retryAll} />
+  }
+
   return (
     <div>
+      {isRefetchError && <RefetchWarning onRetry={retryAll} />}
+
       <div className={styles.header} style={{ marginBottom: 16 }}>
         <h2 className={styles.title} style={{ fontSize: 'clamp(20px, 3vw, 28px)' }}>MRCP Progress</h2>
         <p className={styles.sub}>{systems.length} systems · {topics.length} topics</p>

@@ -1,10 +1,14 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { queryKeys } from '../lib/queryKeys'
+import { TRACKING_TABS, resolveTrackingTab } from '../lib/trackingTabs'
 import { BookOpen } from 'lucide-react'
 import LoadingScreen from '../components/LoadingScreen'
+import { QueryErrorState, RefetchWarning } from '../components/QueryState'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs/Tabs'
 import DashboardView from './DashboardView'
 import UWorldView from './UWorldView'
 import MRCPView from './MRCPView'
@@ -12,25 +16,28 @@ import LocalBoardView from './LocalBoardView'
 import Goals from './Goals'
 import ResourcesModal from '../components/ResourcesModal'
 import TrackingRotationSection from '../components/rotation/tracking/TrackingRotationSection'
+import SessionsView from '../components/sessions/SessionsView'
 import { generate } from '../services/PerformanceEngine'
 import styles from './TrackingHub.module.css'
-
-const TABS = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'uworld', label: 'UWorld Tracker' },
-  { id: 'mrcp', label: 'MRCP Progress' },
-  { id: 'board', label: 'Local Board Tracker' },
-  { id: 'goals', label: 'Goals' },
-  { id: 'rotation', label: 'Rotation' },
-]
 
 export default function TrackingHub() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState('dashboard')
+  const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [resourcesOpen, setResourcesOpen] = useState(false)
 
-  const { data, isLoading } = useQuery({
+  const activeTab = resolveTrackingTab(location.pathname, searchParams)
+
+  const handleTabChange = (nextTab) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('tab', nextTab)
+      return next
+    }, { replace: true })
+  }
+
+  const { data, isLoading, isError, isRefetchError, refetch } = useQuery({
     queryKey: queryKeys.tracking.report(user?.id),
     queryFn: async () => {
       const [blocksRes, mrcpRes, boardRes, activityRes, goalsRes] = await Promise.all([
@@ -40,6 +47,10 @@ export default function TrackingHub() {
         supabase.from('study_activity').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(500),
         supabase.from('goals').select('*').eq('user_id', user.id),
       ])
+
+      for (const res of [blocksRes, mrcpRes, boardRes, activityRes, goalsRes]) {
+        if (res.error) throw res.error
+      }
 
       return generate({
         uworld: blocksRes.data || [],
@@ -74,40 +85,60 @@ export default function TrackingHub() {
 
   if (isLoading) return <LoadingScreen fullPage={false} message="Loading tracking hub..." />
 
-  return (
-    <div className={styles.page}>
-      {/* Sticky Segmented Bar */}
-      <div className={styles.stickyBar}>
-        <div className={styles.segmentRow}>
-          {TABS.map(tab => (
-            <button key={tab.id}
-              className={`${styles.segment} ${activeTab === tab.id ? styles.segmentActive : ''}`}
-              onClick={() => setActiveTab(tab.id)}>
-              {tab.label}
-            </button>
-          ))}
-        </div>
+  if (isError && !report) {
+    return (
+      <div className={styles.page} data-testid="tracking-hub">
+        <QueryErrorState
+          message="Your tracking data couldn't load. Please try again."
+          onRetry={() => refetch()}
+        />
       </div>
+    )
+  }
 
-      {/* Conditional Views */}
-      <div className={styles.content}>
-        {activeTab === 'dashboard' && (
-          <DashboardView report={report} onViewChange={setActiveTab} />
-        )}
-        {activeTab === 'uworld' && (
-          <UWorldView onActivity={handleActivity.mutate} />
-        )}
-        {activeTab === 'mrcp' && (
-          <MRCPView onActivity={handleActivity.mutate} />
-        )}
-        {activeTab === 'board' && (
-          <LocalBoardView onActivity={handleActivity.mutate} />
-        )}
-        {activeTab === 'goals' && (
-          <Goals />
-        )}
-        {activeTab === 'rotation' && <TrackingRotationSection />}
-      </div>
+  return (
+    <div className={styles.page} data-testid="tracking-hub">
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <div className={styles.stickyBar}>
+          <TabsList className={styles.hubTabList} data-testid="tracking-tablist" aria-label="Tracking sections">
+            {TRACKING_TABS.map(tab => (
+              <TabsTrigger key={tab.id} value={tab.id} className={styles.hubTab}>
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+
+        <div className={styles.content}>
+          {(isRefetchError || isError) && report && (
+            <div className={styles.refetchWrap}>
+              <RefetchWarning onRetry={() => refetch()} />
+            </div>
+          )}
+
+          <TabsContent value="overview">
+            <DashboardView report={report} onViewChange={handleTabChange} />
+          </TabsContent>
+          <TabsContent value="uworld">
+            <UWorldView onActivity={handleActivity.mutate} />
+          </TabsContent>
+          <TabsContent value="mrcp">
+            <MRCPView onActivity={handleActivity.mutate} />
+          </TabsContent>
+          <TabsContent value="board">
+            <LocalBoardView onActivity={handleActivity.mutate} />
+          </TabsContent>
+          <TabsContent value="sessions">
+            <SessionsView />
+          </TabsContent>
+          <TabsContent value="rotation">
+            <TrackingRotationSection />
+          </TabsContent>
+          <TabsContent value="goals">
+            <Goals />
+          </TabsContent>
+        </div>
+      </Tabs>
 
       {/* Inline FAB */}
       <div className={styles.fabRow}>

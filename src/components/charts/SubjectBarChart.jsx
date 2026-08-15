@@ -28,7 +28,11 @@ export default function SubjectBarChart({ data }) {
   const chartData = [...data]
     .sort((a, b) => b.avgScore - a.avgScore)
     .map(d => ({ ...d, name: getSubjectName(d.subject) }))
+  const label = chartData
+    .map(d => `${d.name || d.subject}: ${d.avgScore ?? d.average}% average across ${d.questions ?? d.blockCount ?? 0} questions`)
+    .join(', ')
   return (
+    <div role="img" aria-label={label} style={{ width: '100%' }}>
     <ResponsiveContainer width="100%" height={Math.max(200, chartData.length * 36)}>
       <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
@@ -56,5 +60,6 @@ export default function SubjectBarChart({ data }) {
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+    </div>
   )
 }

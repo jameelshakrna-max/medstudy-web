@@ -184,6 +184,12 @@
   font-weight: 600;
 }
 
+.uWorldNote {
+  font-size: 11px;
+  color: var(--mist);
+  font-style: italic;
+}
+
 /* Compact mode */
 .compactCard {
   display: flex;
@@ -244,6 +250,13 @@
 .compactSub {
   font-size: 11px;
   color: var(--mist);
+}
+
+.compactNote {
+  font-size: 10px;
+  color: var(--mist);
+  font-style: italic;
+  margin-top: 2px;
 }
 
 .compactPct {

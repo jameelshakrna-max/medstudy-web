@@ -33,7 +33,11 @@ function CustomTooltip({ active, payload, label }) {
 
 export default function ActivityBarChart({ data }) {
   if (!data?.length) return null
+  const label = data
+    .map(d => `Week ${d.week}: ${d.questions ?? 0} questions, ${d.cases ?? 0} cases, ${d.topics ?? 0} topics`)
+    .join(', ')
   return (
+    <div role="img" aria-label={label} style={{ width: '100%' }}>
     <ResponsiveContainer width="100%" height={280}>
       <BarChart data={data} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -68,5 +72,6 @@ export default function ActivityBarChart({ data }) {
         ))}
       </BarChart>
     </ResponsiveContainer>
+    </div>
   )
 }
