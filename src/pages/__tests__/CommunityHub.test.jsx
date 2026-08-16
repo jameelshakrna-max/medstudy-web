@@ -445,3 +445,19 @@ describe('CommunityHub responsive CSS (phase 7c)', () => {
     expect(css).toMatch(/@media[\s\S]*?\.grid\s*\{\s*grid-template-columns:\s*1fr;\s*\}/)
   })
 })
+
+describe('Community deep-link routing (phase 7d)', () => {
+  it('keeps /communities/<uuid>?tab=voice on the CommunityDetail screen', async () => {
+    seedEmptyList()
+    renderHub('/communities/9a7c44e5-8f3b-4f1a-9b3c-2e8d1a5f6c2d?tab=voice')
+    expect(await screen.findByTestId('community-detail')).toBeInTheDocument()
+    expect(screen.queryByRole('tablist', { name: 'Community sections' })).not.toBeInTheDocument()
+  })
+
+  it('keeps /communities/mine?tab=leaderboard on the Community hub', () => {
+    seedEmptyList()
+    renderHub('/communities/mine?tab=leaderboard')
+    expect(screen.queryByTestId('community-detail')).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'My Communities' })).toHaveAttribute('aria-selected', 'true')
+  })
+})

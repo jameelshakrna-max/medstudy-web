@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSwipeable } from 'react-swipeable'
@@ -12,6 +12,12 @@ import { apiGet, apiPost, apiPut, apiDelete, apiJson, formatDate, imageUrl } fro
 import { queryKeys } from '../lib/queryKeys'
 import { invalidateCommunityQueries, invalidateCommunityDetailQueries } from '../lib/socialInvalidation'
 import { buildCommunityInviteUrl } from '../lib/communityInvite'
+import {
+  COMMUNITY_DETAIL_TAB_VALUES,
+  COMMUNITY_DETAIL_MOD_TAB,
+  getCommunityDetailTab,
+  setCommunityDetailTab,
+} from '../lib/communityDetailTabs'
 import { QueryErrorState } from '../components/QueryState'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import RoleBadge from '../components/RoleBadge'
@@ -30,6 +36,7 @@ import {
   Copy, Ban, Pin, FileText, BookOpen, UserPlus, Search, Trash2, Megaphone, Headphones, BarChart3
 } from 'lucide-react'
 import Modal from '../components/ui/Modal/Modal'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs/Tabs'
 import s from './CommunityDetail.module.css'
 import FlashcardShareModal from '../components/FlashcardShareModal'
 import MentionText from '../components/MentionText'
@@ -53,10 +60,10 @@ const TABS = [
 export default function CommunityDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
   const { openProfile } = useProfilePanel()
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState('chat')
   const [avatarError, setAvatarError] = useState(false)
 
   const { data: fullData, isLoading, error: fetchError, refetch } = useQuery({
@@ -75,6 +82,16 @@ export default function CommunityDetail() {
   const myMembership = members.find(m => m.user_id === user?.id) || null
   const isAdmin = hasMinimumRole(myMembership?.role, ROLES.ADMINISTRATOR)
   const isMod = hasMinimumRole(myMembership?.role, ROLES.MODERATOR)
+
+  const allowedTabs = useMemo(() => {
+    if (isMod) return [...COMMUNITY_DETAIL_TAB_VALUES, COMMUNITY_DETAIL_MOD_TAB.id]
+    return COMMUNITY_DETAIL_TAB_VALUES
+  }, [isMod])
+
+  const activeTab = getCommunityDetailTab({
+    requestedTab: searchParams.get('tab'),
+    allowedTabs,
+  })
 
   const realtime = useCommunityRealtime(id)
   const chat = realtime
@@ -104,6 +121,23 @@ export default function CommunityDetail() {
   useEffect(() => {
     chat.setActive(activeTab === 'chat')
   }, [activeTab, chat])
+
+  const loaded = !isLoading && !!community
+
+  useEffect(() => {
+    if (!loaded) return
+    const canonical = setCommunityDetailTab(searchParams, activeTab)
+    if (canonical.toString() !== searchParams.toString()) {
+      setSearchParams(canonical, { replace: true })
+    }
+  }, [loaded, searchParams, activeTab, setSearchParams])
+
+  const handleTabChange = (nextTab) => {
+    if (nextTab !== COMMUNITY_DETAIL_MOD_TAB.id) handleRefreshTab()
+    if (nextTab !== activeTab) {
+      setSearchParams(setCommunityDetailTab(searchParams, nextTab))
+    }
+  }
 
   useEffect(() => {
     if (realtime.competitions?.length) setCompetitions(realtime.competitions)
@@ -340,30 +374,23 @@ export default function CommunityDetail() {
         </div>
       )}
 
-      <div className={s.tabs}>
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            className={`${s.tab} ${activeTab === t.id ? s.tabActive : ''}`}
-            onClick={() => { setActiveTab(t.id); handleRefreshTab() }}
-          >
-            <t.icon size={16} strokeWidth={1.5} />
-            <span>{t.label}</span>
-          </button>
-        ))}
-        {isMod && (
-          <button
-            key="mod"
-            className={`${s.tab} ${activeTab === 'mod' ? s.tabActive : ''}`}
-            onClick={() => setActiveTab('mod')}
-          >
-            <Shield size={16} strokeWidth={1.5} />
-            <span>Mod Dashboard</span>
-          </button>
-        )}
-      </div>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <TabsList className={s.tabs} aria-label="Community sections">
+          {TABS.map(t => (
+            <TabsTrigger key={t.id} value={t.id} className={s.tab}>
+              <t.icon size={16} strokeWidth={1.5} />
+              <span>{t.label}</span>
+            </TabsTrigger>
+          ))}
+          {isMod && (
+            <TabsTrigger key="mod" value={COMMUNITY_DETAIL_MOD_TAB.id} className={s.tab}>
+              <Shield size={16} strokeWidth={1.5} />
+              <span>{COMMUNITY_DETAIL_MOD_TAB.label}</span>
+            </TabsTrigger>
+          )}
+        </TabsList>
 
-      {activeTab === 'chat' && (
+      <TabsContent value="chat">
         <div className={s.chatArea}>
           {pins.length > 0 && (
             <div className={s.pinBar}>
@@ -578,18 +605,18 @@ export default function CommunityDetail() {
             />
           )}
         </div>
-      )}
+      </TabsContent>
 
-      {activeTab === 'leaderboard' && (
+      <TabsContent value="leaderboard">
         <LeaderboardTab
           communityId={id}
           myId={user?.id}
           isAdmin={isAdmin}
           isMod={isMod}
         />
-      )}
+      </TabsContent>
 
-      {activeTab === 'competitions' && (
+      <TabsContent value="competitions">
         <CompetitionsTab
           competitions={competitions}
           communityId={id}
@@ -600,28 +627,28 @@ export default function CommunityDetail() {
           onRefresh={handleRefreshTab}
           realtimeConnected={realtime.connected}
         />
-      )}
+      </TabsContent>
 
-      {activeTab === 'voice' && (
+      <TabsContent value="voice">
         <VoiceRooms
           communityId={id}
           myRole={myMembership?.role}
           isMod={isMod}
           isAdmin={isAdmin}
         />
-      )}
+      </TabsContent>
 
-      {activeTab === 'stats' && (
+      <TabsContent value="stats">
         <div style={{ padding: '20px 0' }}>
           <CalendarHeatmap communityId={id} />
         </div>
-      )}
+      </TabsContent>
 
-      {activeTab === 'hall-of-fame' && (
+      <TabsContent value="hall-of-fame">
         <HallOfFameTab communityId={id} />
-      )}
+      </TabsContent>
 
-      {activeTab === 'mod' && (
+      <TabsContent value="mod">
         <ModDashboardTab
           communityId={id}
           members={members}
@@ -632,9 +659,9 @@ export default function CommunityDetail() {
           isAdmin={isAdmin}
           onRefresh={handleRefreshTab}
         />
-      )}
+      </TabsContent>
 
-      {activeTab === 'settings' && (
+      <TabsContent value="settings">
         <SettingsTab
           community={community}
           rules={rules}
@@ -652,7 +679,8 @@ export default function CommunityDetail() {
           onRefresh={handleRefreshTab}
           onRegenerateCode={handleRegenerateCode}
         />
-      )}
+      </TabsContent>
+      </Tabs>
     </div>
   )
 }
@@ -690,15 +718,15 @@ function FlashcardMessage({ msg, onAddToDeck }) {
 function Lightbox({ src, fileName, accessToken, onClose }) {
   return (
     <Modal open={true} onOpenChange={(v) => { if (!v) onClose() }} size="xl">
+      <img src={src} alt={fileName} style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 8, display: 'block', margin: '0 auto' }} onClick={e => e.stopPropagation()} />
+      {fileName && <div style={{ textAlign: 'center', marginTop: 12, color: 'var(--mist)', fontSize: 13 }}>{fileName}</div>}
       <button
         onClick={onClose}
         aria-label="Close"
-        style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'white', fontSize: 24, cursor: 'pointer', zIndex: 1 }}
+        style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'white', fontSize: 24, cursor: 'pointer' }}
       >
         &times;
       </button>
-      <img src={src} alt={fileName} style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 8, display: 'block', margin: '0 auto' }} onClick={e => e.stopPropagation()} />
-      {fileName && <div style={{ textAlign: 'center', marginTop: 12, color: 'var(--mist)', fontSize: 13 }}>{fileName}</div>}
     </Modal>
   )
 }
