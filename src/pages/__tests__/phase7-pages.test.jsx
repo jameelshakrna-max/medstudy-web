@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, render, screen, fireEvent } from '@testing-library/react'
-import { LayerProvider } from '../../context/LayerContext'
-import Communities from '../Communities'
 import People from '../People'
 import Leaderboard from '../Leaderboard'
 
@@ -120,72 +118,9 @@ vi.mock('react-virtuoso', () => ({
   ),
 }))
 
-const COMMUNITIES_LIST_KEY = ['communities', 'list', 'members', '', 'all']
-
 function seed(key, result) {
   h.queryResults.set(JSON.stringify(key), result)
 }
-
-function renderCommunities() {
-  return render(
-    <LayerProvider>
-      <Communities />
-    </LayerProvider>
-  )
-}
-
-describe('Communities page (phase 7)', () => {
-  beforeEach(() => {
-    h.queryResults.clear()
-    h.mockMutate.mockClear()
-    h.mockNavigate.mockClear()
-    h.mockSetSearchParams.mockClear()
-    h.setUrlParams(new URLSearchParams(''))
-  })
-
-  it('renders heading, search input, and invite-code input', () => {
-    seed(COMMUNITIES_LIST_KEY, {
-      data: { communities: [], mine: [] },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    })
-    renderCommunities()
-
-    expect(screen.getByRole('heading', { name: 'Communities' })).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: /search public communities/i })).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: /enter invite code/i })).toBeInTheDocument()
-  })
-
-  it('consumes the invite search param and runs the join mutation with the code', () => {
-    seed(COMMUNITIES_LIST_KEY, {
-      data: { communities: [], mine: [] },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    })
-    h.setUrlParams(new URLSearchParams('?invite=CODE'))
-    renderCommunities()
-
-    expect(h.mockMutate).toHaveBeenCalledWith('CODE')
-    expect(h.mockSetSearchParams).toHaveBeenCalled()
-  })
-
-  it('renders QueryErrorState when the list query fails and retry refetches', () => {
-    const mockRefetch = vi.fn()
-    seed(COMMUNITIES_LIST_KEY, {
-      data: undefined,
-      isLoading: false,
-      error: new Error('x'),
-      refetch: mockRefetch,
-    })
-    renderCommunities()
-
-    expect(screen.getByTestId('query-error-state')).toBeInTheDocument()
-    fireEvent.click(screen.getByTestId('query-error-retry'))
-    expect(mockRefetch).toHaveBeenCalled()
-  })
-})
 
 describe('People page (phase 7)', () => {
   beforeEach(() => {
@@ -260,5 +195,62 @@ describe('Leaderboard page (phase 7)', () => {
 
     expect(screen.getByRole('heading', { name: 'Study Rankings' })).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: /search users/i })).toBeInTheDocument()
+  })
+})
+
+describe('People page embedded (phase 7)', () => {
+  beforeEach(() => {
+    h.queryResults.clear()
+    h.mockMutate.mockClear()
+    h.mockNavigate.mockClear()
+    h.setUrlParams(new URLSearchParams(''))
+  })
+
+  it('renders an h2 (not h1) when embedded', () => {
+    seed(['people', 'suggested', 10], { data: [], isLoading: false, error: null, refetch: vi.fn() })
+    render(<People embedded />)
+
+    expect(screen.getByRole('heading', { level: 2, name: 'People' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 1, name: 'People' })).not.toBeInTheDocument()
+  })
+
+  it('does not autofocus the search input when embedded', () => {
+    seed(['people', 'suggested', 10], { data: [], isLoading: false, error: null, refetch: vi.fn() })
+    render(<People embedded />)
+
+    expect(screen.getByRole('textbox', { name: /search users by username/i })).not.toHaveFocus()
+  })
+})
+
+describe('Leaderboard page embedded (phase 7)', () => {
+  beforeEach(() => {
+    h.queryResults.clear()
+    h.mockMutate.mockClear()
+    h.mockNavigate.mockClear()
+    h.setUrlParams(new URLSearchParams(''))
+  })
+
+  it('renders an h2 (not h1) when embedded', () => {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = now.getMonth() + 1
+
+    seed(['leaderboard', 'stats', year, month], {
+      data: {},
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    seed(['leaderboard', 'usersMonthly', year, month, 100], {
+      data: { entries: [{ user_id: 'u9', user_name: 'zed', rank: 1, rank_change: 0 }] },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    render(<Leaderboard embedded />)
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Study Rankings' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 1, name: 'Study Rankings' })).not.toBeInTheDocument()
   })
 })

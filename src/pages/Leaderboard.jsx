@@ -66,7 +66,7 @@ function PodiumCard({ entry, place, medals, showStreak }) {
   )
 }
 
-export default function Leaderboard() {
+export default function Leaderboard({ embedded = false }) {
   const { user } = useAuth()
   const { openProfile, preloadProfile, cancelPreload } = useProfilePanel()
   const { openCommunity, preloadCommunity, cancelPreload: cancelCommPreload } = useCommunityPanel()
@@ -164,9 +164,11 @@ export default function Leaderboard() {
   const isLoading = scope === 'individuals' ? usersLoading : commsLoading
 
   return (
-    <div className={s.page}>
+    <div className={`${s.page} ${embedded ? s.embedded : ''}`}>
       <div className={s.header}>
-        <h1 className={s.title}>Study Rankings</h1>
+        {embedded
+          ? <h2 className={s.title}>Study Rankings</h2>
+          : <h1 className={s.title}>Study Rankings</h1>}
         <p className={s.subtitle}>Monthly leaderboards across the platform</p>
       </div>
 

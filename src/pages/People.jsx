@@ -9,7 +9,7 @@ import { QueryErrorState, RefetchWarning } from '../components/QueryState'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import s from './People.module.css'
 
-export default function People() {
+export default function People({ embedded = false }) {
   const { preloadProfile, cancelPreload } = useProfilePanel()
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -51,9 +51,11 @@ export default function People() {
   )
 
   return (
-    <div className={s.page}>
+    <div className={`${s.page} ${embedded ? s.embedded : ''}`}>
       <div className={s.header}>
-        <h1 className={s.title}>People</h1>
+        {embedded
+          ? <h2 className={s.title}>People</h2>
+          : <h1 className={s.title}>People</h1>}
       </div>
 
       <div className={s.searchWrap}>
@@ -65,7 +67,7 @@ export default function People() {
           aria-label="Search users by username"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          autoFocus
+          autoFocus={!embedded}
         />
         {query && <X size={14} className={s.clearBtn} onClick={() => { setQuery(''); setDebouncedQuery('') }} />}
       </div>

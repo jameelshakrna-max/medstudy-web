@@ -47,7 +47,7 @@ const Settings   = lazy(() => import('./pages/Settings'))
 const Resources  = lazy(() => import('./pages/Resources'))
 const ResourceDetail = lazy(() => import('./pages/ResourceDetail'))
 const Goals      = lazy(() => import('./pages/Goals'))
-const Communities = lazy(() => import('./pages/Communities'))
+const CommunityHub = lazy(() => import('./pages/CommunityHub'))
 const CommunityDetail = lazy(() => import('./pages/CommunityDetail'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const Leaderboard = lazy(() => import('./pages/Leaderboard'))
@@ -104,7 +104,11 @@ function AppRoutes() {
           <Route path="resources/:id" element={<ResourceDetail />} />
           <Route path="sessions"   element={<Sessions />} />
           <Route path="goals"     element={<Goals />} />
-          <Route path="communities" element={<Communities />} />
+          <Route path="communities" element={<CommunityHub />} />
+          <Route path="communities/mine" element={<CommunityHub />} />
+          <Route path="communities/discover" element={<CommunityHub />} />
+          <Route path="communities/people" element={<CommunityHub />} />
+          <Route path="communities/leaderboard" element={<CommunityHub />} />
           <Route path="communities/:id" element={<CommunityDetail />} />
           <Route path="leaderboard" element={<Leaderboard />} />
           <Route path="people" element={<People />} />

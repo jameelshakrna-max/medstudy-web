@@ -1,4 +1,6 @@
 .page { padding-bottom: 40px; }
+.embedded { padding-bottom: 0; }
+.embedded .header { margin-bottom: 16px; }
 .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
 .title { font-family: 'DM Serif Display', serif; font-size: clamp(24px, 4vw, 36px); color: var(--text-primary); }
 
