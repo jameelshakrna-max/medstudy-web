@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Loader2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { apiGet, formatDate } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import UserLink from './ui/UserLink/UserLink'
+import { QueryErrorState, RefetchWarning } from './QueryState'
 import styles from './DMInbox.module.css'
 
 export default function DMInbox() {
@@ -14,7 +15,7 @@ export default function DMInbox() {
   const { conversationId } = useParams()
   const [search, setSearch] = useState('')
 
-  const { data: conversations = [], isLoading } = useQuery({
+  const { data: conversations = [], isLoading, error: conversationsError, refetch: refetchConversations } = useQuery({
     queryKey: queryKeys.dm.conversations(),
     queryFn: () => apiGet('/dm/conversations').then(d => Array.isArray(d) ? d : []),
     enabled: !!user,
@@ -40,15 +41,24 @@ export default function DMInbox() {
       <input
         className={styles.search}
         placeholder="Search conversations..."
+        aria-label="Search conversations"
         value={search}
         onChange={e => setSearch(e.target.value)}
       />
-      {isLoading ? null : filtered.length === 0 ? (
+      {isLoading ? (
+        <div className={styles.loading}>
+          <Loader2 size={20} className={styles.spinner} />
+          Loading conversations...
+        </div>
+      ) : conversationsError && filtered.length === 0 ? (
+        <QueryErrorState message="Could not load conversations." onRetry={refetchConversations} compact />
+      ) : filtered.length === 0 ? (
         <div className={styles.empty}>
           No conversations yet. Start a conversation from a user's profile.
         </div>
       ) : (
         <div className={styles.list}>
+          {conversationsError && <RefetchWarning onRetry={refetchConversations} />}
           {filtered.map(conv => {
             const u = conv.other_user
             return (

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Virtuoso } from 'react-virtuoso'
 import { apiGet, apiPost, apiPut, apiDelete, formatDate, imageUrl } from '../../lib/api'
+import { buildCommunityInviteUrl } from '../../lib/communityInvite'
 import { supabase } from '../../lib/supabase'
 import RoleBadge from '../RoleBadge'
 import { X, Plus, Loader2, Check, Copy, FileText, Settings, Link, ScrollText, SlidersHorizontal, Trophy, UserPlus, Ban, Clock, AlertTriangle, Users, UserCog, UserMinus, Star, Search, Camera } from 'lucide-react'
@@ -406,7 +407,7 @@ export default function SettingsTab({ community, rules, settings, members, annou
               </>
             )}
           </div>
-          <p className={s.hint}>Share this link: {window.location.origin}/communities/join/{community.invite_code}</p>
+          <p className={s.hint}>Share this link: {buildCommunityInviteUrl(community.invite_code)}</p>
         </div>
 
         {/* ── Rules card ── */}

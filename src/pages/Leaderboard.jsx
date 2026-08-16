@@ -12,6 +12,10 @@ import { useAuth } from '../context/AuthContext'
 import { useProfilePanel } from '../context/ProfilePanelContext'
 import { useCommunityPanel } from '../context/CommunityPanelContext'
 import { UserLink } from '../components/ui'
+import { invalidateCommunityListQueries } from '../lib/socialInvalidation'
+import { QueryErrorState, RefetchWarning } from '../components/QueryState'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
+import RankChange from '../components/rank/RankChange'
 import s from './Leaderboard.module.css'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -36,12 +40,6 @@ function formatNum(n) {
   if (n == null) return '—'
   if (n >= 1000) return n.toLocaleString()
   return String(n)
-}
-
-function RankChange({ change }) {
-  if (!change || change === 0) return <span className={`${s.rankChange} ${s.rankNeutral}`}>—</span>
-  if (change > 0) return <span className={`${s.rankChange} ${s.rankUp}`}>↑{change}</span>
-  return <span className={`${s.rankChange} ${s.rankDown}`}>↓{Math.abs(change)}</span>
 }
 
 function ScoreBadge({ score }) {
@@ -111,21 +109,21 @@ export default function Leaderboard() {
 
   const goCurrent = () => { setYear(currentYear); setMonth(currentMonth) }
 
-  const { data: statsData, isLoading: statsLoading } = useQuery({
+  const { data: statsData, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useQuery({
     queryKey: queryKeys.leaderboard.stats(year, month),
     queryFn: () => apiGet(`/leaderboard/stats?year=${year}&month=${month}`),
     enabled: scope === 'individuals',
     staleTime: 30_000,
   })
 
-  const { data: usersData, isLoading: usersLoading } = useQuery({
+  const { data: usersData, isLoading: usersLoading, error: usersError, refetch: refetchUsers } = useQuery({
     queryKey: queryKeys.leaderboard.usersMonthly(year, month, 100),
     queryFn: () => apiGet(`/leaderboard/users/monthly?year=${year}&month=${month}&limit=100`),
     enabled: scope === 'individuals',
     staleTime: 30_000,
   })
 
-  const { data: commsData, isLoading: commsLoading } = useQuery({
+  const { data: commsData, isLoading: commsLoading, error: commsError, refetch: refetchComms } = useQuery({
     queryKey: queryKeys.leaderboard.communitiesMonthly(year, month, 'all', 100),
     queryFn: () => apiGet(`/leaderboard/communities/monthly?year=${year}&month=${month}&limit=100`),
     enabled: scope === 'communities',
@@ -157,6 +155,7 @@ export default function Leaderboard() {
       await apiPost(`/communities/${entry.community_id}/join`, {})
       setJoinedIds(prev => new Set([...prev, entry.community_id]))
       queryClient.invalidateQueries({ queryKey: queryKeys.leaderboard.communitiesMonthly })
+      invalidateCommunityListQueries(queryClient)
     } catch (err) {
       // ignore errors
     }
@@ -240,6 +239,10 @@ export default function Leaderboard() {
 
       {isLoading ? (
         <div className={s.loading}>Loading rankings...</div>
+      ) : scope === 'individuals' && usersError && userEntries.length === 0 ? (
+        <QueryErrorState message="Could not load rankings." onRetry={refetchUsers} />
+      ) : scope === 'communities' && commsError && commEntries.length === 0 ? (
+        <QueryErrorState message="Could not load rankings." onRetry={refetchComms} />
       ) : scope === 'individuals' && userEntries.length === 0 ? (
         <div className={s.emptyState}>
           <Trophy size={40} strokeWidth={1} />
@@ -253,6 +256,8 @@ export default function Leaderboard() {
         </div>
       ) : (
         <>
+          {scope === 'individuals' && usersError && <RefetchWarning onRetry={refetchUsers} />}
+          {scope === 'communities' && commsError && <RefetchWarning onRetry={refetchComms} />}
           {/* Search */}
           <div className={s.searchWrapper}>
             <Search size={16} strokeWidth={1.5} className={s.searchIcon} />
@@ -260,6 +265,7 @@ export default function Leaderboard() {
               className={s.searchInput}
               type="text"
               placeholder={`Search ${scope === 'individuals' ? 'users' : 'communities'}...`}
+              aria-label={`Search ${scope === 'individuals' ? 'users' : 'communities'}`}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               onFocus={() => { if (debouncedSearch.length >= 2 && searchResults.length > 0) setShowSearch(true) }}
@@ -392,6 +398,10 @@ export default function Leaderboard() {
           )}
         </>
       )}
+
+      <VisuallyHidden aria-live="polite">
+        {showSearch ? `${searchResults.length} results` : ''}
+      </VisuallyHidden>
     </div>
   )
 }

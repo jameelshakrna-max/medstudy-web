@@ -9,6 +9,8 @@ import {
 } from 'lucide-react'
 import Modal from '../components/ui/Modal/Modal'
 import { UserLink } from '../components/ui'
+import { QueryErrorState, RefetchWarning } from '../components/QueryState'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import s from './ResearchHub.module.css'
 
 const CATEGORIES = [
@@ -106,7 +108,7 @@ export default function ResearchHub() {
   const [helpType, setHelpType] = useState('')
   const [helpNote, setHelpNote] = useState('')
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error: listError, refetch: refetchList } = useQuery({
     queryKey: queryKeys.research.list(activeCategory, searchQuery, sortBy, 'all', null, 1),
     queryFn: async () => {
       const params = new URLSearchParams({ sort: sortBy, page: '1' })
@@ -123,7 +125,7 @@ export default function ResearchHub() {
     staleTime: 300_000,
   })
 
-  const { data: bookmarksData, isLoading: bookmarksLoading } = useQuery({
+  const { data: bookmarksData, isLoading: bookmarksLoading, error: bookmarksError, refetch: refetchBookmarks } = useQuery({
     queryKey: queryKeys.research.bookmarks(),
     queryFn: () => apiGet('/research/bookmarks'),
     enabled: viewMode === 'saved' && !!user,
@@ -365,7 +367,7 @@ export default function ResearchHub() {
     setSelectedPost(post.id)
   }
 
-  const { data: postDetail, isLoading: detailLoading } = useQuery({
+  const { data: postDetail, isLoading: detailLoading, error: detailError, refetch: refetchDetail } = useQuery({
     queryKey: queryKeys.research.detail(selectedPost),
     queryFn: () => apiGet(`/research/${selectedPost}`),
     enabled: !!selectedPost,
@@ -428,6 +430,7 @@ export default function ResearchHub() {
           <input
             className={s.searchInput}
             placeholder="Search..."
+            aria-label="Search research posts"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -440,6 +443,8 @@ export default function ResearchHub() {
           <div className={s.loading}>
             <Loader2 className={s.spin} size={20} /> Loading...
           </div>
+        ) : bookmarksError ? (
+          <QueryErrorState message="Could not load saved posts." onRetry={refetchBookmarks} compact />
         ) : (bookmarksData?.bookmarks || []).length === 0 ? (
           <div className={s.empty}>
             <div className={s.emptyIcon}><Bookmark size={40} /></div>
@@ -555,13 +560,17 @@ export default function ResearchHub() {
           <div className={s.loading}>
             <Loader2 className={s.spin} size={20} /> Loading...
           </div>
+        ) : listError && posts.length === 0 ? (
+          <QueryErrorState message="Could not load research posts." onRetry={refetchList} />
         ) : posts.length === 0 ? (
           <div className={s.empty}>
             <div className={s.emptyIcon}><Users size={40} /></div>
             No research posts yet. Be the first to share!
           </div>
         ) : (
-          posts.map((post) => (
+          <>
+            {listError && <RefetchWarning onRetry={refetchList} />}
+            {posts.map((post) => (
             <div
               key={post.id}
               className={s.postCard}
@@ -663,7 +672,8 @@ export default function ResearchHub() {
 
             </div>
           </div>
-        ))
+            ))}
+          </>
         )
       )}
       {showNewPostModal && (
@@ -784,6 +794,8 @@ export default function ResearchHub() {
           <div className={s.detailPanel}>
             {detailLoading ? (
               <div className={s.loading}><Loader2 className={s.spin} size={20} /> Loading...</div>
+            ) : detailError ? (
+              <QueryErrorState message="Could not load this post." onRetry={refetchDetail} compact />
             ) : postDetail ? (
               <>
                 <div className={s.detailHeader}>
@@ -938,6 +950,10 @@ export default function ResearchHub() {
           </div>
         </Modal>
       )}
+
+      <VisuallyHidden aria-live="polite">
+        {viewMode === 'feed' && !isLoading ? `${posts.length} research posts` : ''}
+      </VisuallyHidden>
     </div>
   )
 }

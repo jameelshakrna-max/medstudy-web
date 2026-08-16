@@ -139,6 +139,22 @@
   justify-content: center;
   color: var(--mist);
 }
+.loading {
+  margin: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--mist);
+}
+.spinner {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .attachBtn {
   width: 40px;
   height: 40px;

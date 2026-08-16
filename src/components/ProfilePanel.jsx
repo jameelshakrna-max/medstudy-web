@@ -12,6 +12,8 @@ import { ProfilePanelSkeleton } from './profile/Skeleton'
 import Drawer from './ui/Drawer/Drawer'
 import Dropdown from './ui/Dropdown/Dropdown'
 import s from './ProfilePanel.module.css'
+import { QueryErrorState, RefetchWarning } from './QueryState'
+import { invalidateUserRelationshipQueries } from '../lib/socialInvalidation'
 
 
 export default function ProfilePanel() {
@@ -43,7 +45,7 @@ export default function ProfilePanel() {
     preventScrollOnSwipe: true,
   })
 
-  const { data: profile, isLoading: profileLoading } = useQuery({
+  const { data: profile, isLoading: profileLoading, error: profileError, refetch: refetchProfile } = useQuery({
     queryKey: queryKeys.profile.detail(userId),
     queryFn: () => apiGet(`/users/${userId}/profile`),
     enabled: open && !!userId,
@@ -66,7 +68,7 @@ export default function ProfilePanel() {
 
   const isFollowing = followData?.following || false
   const isOwnProfile = user?.id === userId
-  const loading = profileLoading || !profile
+  const loading = profileLoading || (!profile && !profileError)
 
   const followMutation = useMutation({
     mutationFn: async () => {
@@ -104,8 +106,7 @@ export default function ProfilePanel() {
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.follow.status(userId) })
-      queryClient.invalidateQueries({ queryKey: queryKeys.profile.detail(userId) })
+      invalidateUserRelationshipQueries(queryClient, userId)
     },
   })
 
@@ -170,7 +171,11 @@ export default function ProfilePanel() {
         {...swipeHandlers}
         style={swipeOffset > 0 ? { transform: `translateY(${swipeOffset}px)`, transition: 'none', opacity: Math.max(0.3, 1 - swipeOffset / 400) } : undefined}
       >
-        {loading ? (
+        {profileError && !profile ? (
+          <div className={s.errorState}>
+            <QueryErrorState message="This profile could not be loaded." onRetry={refetchProfile} compact />
+          </div>
+        ) : loading ? (
           <ProfilePanelSkeleton />
         ) : profile.hidden ? (
           <div className={s.errorState}>
@@ -179,6 +184,7 @@ export default function ProfilePanel() {
           </div>
         ) : (
           <>
+            {profileError && <RefetchWarning onRetry={refetchProfile} />}
             <div className={s.header}>
               {profile.banner_url ? (
                 <img className={s.banner} src={imageUrl(profile.banner_url)} alt="" />
@@ -216,10 +222,10 @@ export default function ProfilePanel() {
                     <><UserPlus size={14} /> Follow</>
                   )}
                 </button>
-                <button className={s.msgBtn} onClick={handleStartDM} title="Send message">
+                <button className={s.msgBtn} onClick={handleStartDM} title="Send message" aria-label="Send message">
                   <MessageCircle size={16} />
                 </button>
-                <button className={s.linkBtn} onClick={handleCopyLink} title="Copy profile link">
+                <button className={s.linkBtn} onClick={handleCopyLink} title="Copy profile link" aria-label="Copy profile link">
                   <Link size={16} />
                 </button>
                 <Dropdown open={showInviteDropdown} onOpenChange={(open) => { setShowInviteDropdown(open); handleToggleInvite(open) }}>
@@ -227,6 +233,7 @@ export default function ProfilePanel() {
                     <button
                       className={`${s.linkBtn} ${inviteSent ? s.inviteSent : ''}`}
                       title="Invite to community"
+                      aria-label="Invite to community"
                       disabled={inviting}
                     >
                       <UserPlus size={16} />

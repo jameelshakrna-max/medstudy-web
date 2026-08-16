@@ -10,6 +10,10 @@ import { useCommunityRealtime } from '../hooks/useCommunityRealtime'
 import { ROLES, PERM, hasPermission, hasMinimumRole } from '../lib/permissions'
 import { apiGet, apiPost, apiPut, apiDelete, apiJson, formatDate, imageUrl } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
+import { invalidateCommunityQueries, invalidateCommunityDetailQueries } from '../lib/socialInvalidation'
+import { buildCommunityInviteUrl } from '../lib/communityInvite'
+import { QueryErrorState } from '../components/QueryState'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import RoleBadge from '../components/RoleBadge'
 import CompetitionsTab from '../components/community/CompetitionsTab'
 import LeaderboardTab from '../components/community/LeaderboardTab'
@@ -55,7 +59,7 @@ export default function CommunityDetail() {
   const [activeTab, setActiveTab] = useState('chat')
   const [avatarError, setAvatarError] = useState(false)
 
-  const { data: fullData, isLoading, error: fetchError } = useQuery({
+  const { data: fullData, isLoading, error: fetchError, refetch } = useQuery({
     queryKey: queryKeys.communities.detail(id),
     queryFn: () => apiGet('/communities/' + id + '/full'),
     enabled: !!id,
@@ -186,8 +190,12 @@ export default function CommunityDetail() {
   const handleJoin = async () => {
     try {
       const data = await apiPost('/communities/' + id + '/join', {})
-      if (data.requires_approval) alert('Join request sent for approval')
-      else queryClient.invalidateQueries({ queryKey: queryKeys.communities.detail(id) })
+      if (data.requires_approval) {
+        alert('Join request sent for approval')
+        invalidateCommunityDetailQueries(queryClient, id)
+      } else {
+        invalidateCommunityQueries(queryClient, id)
+      }
     } catch (e) { Sentry.captureException(e); alert(e.message) }
   }
 
@@ -195,13 +203,14 @@ export default function CommunityDetail() {
     if (!confirm('Leave this community?')) return
     try {
       await apiPost('/communities/' + id + '/leave', {})
+      invalidateCommunityQueries(queryClient, id)
       navigate('/communities')
     } catch (e) { Sentry.captureException(e); alert(e.message) }
   }
 
   const handleCopyInvite = () => {
     if (community?.invite_code) {
-      navigator.clipboard.writeText(window.location.origin + '/communities/join/' + community.invite_code)
+      navigator.clipboard.writeText(buildCommunityInviteUrl(community.invite_code))
     }
   }
 
@@ -273,13 +282,13 @@ export default function CommunityDetail() {
   })
 
   if (isLoading) return <div className={s.page}><div className={s.loading}><Loader2 size={24} className={s.spinner} /> Loading community...</div></div>
-  if (fetchError) return <div className={s.page}><div className={s.error}>Failed to load community</div></div>
-  if (!community) return <div className={s.page}><div className={s.error}>Community not found</div></div>
+  if (fetchError) return <div className={s.page}><div style={{ padding: 40 }}><QueryErrorState message="Failed to load this community." onRetry={refetch} /></div></div>
+  if (!community) return <div className={s.page}><div style={{ padding: 40 }}><QueryErrorState message="Community not found." onRetry={refetch} /></div></div>
 
   return (
     <div className={s.page} {...backSwipeHandlers}>
       <div className={s.backRow}>
-        <button className={s.backBtn} onClick={() => navigate('/communities')}>
+        <button className={s.backBtn} onClick={() => navigate('/communities')} aria-label="Back to communities">
           <ChevronLeft size={16} strokeWidth={1.5} />
           Communities
         </button>
@@ -322,7 +331,7 @@ export default function CommunityDetail() {
               <div className={s.annTitle}>{a.title}</div>
               <div className={s.annContent}>{a.content}</div>
               {isMod && (
-                <button className={s.annDelete} onClick={async () => { await apiDelete('/communities/' + id + '/announcements/' + a.id); setAnnouncements(prev => prev.filter(x => x.id !== a.id)) }}>
+                <button className={s.annDelete} onClick={async () => { await apiDelete('/communities/' + id + '/announcements/' + a.id); setAnnouncements(prev => prev.filter(x => x.id !== a.id)) }} aria-label="Dismiss announcement">
                   <X size={12} />
                 </button>
               )}
@@ -363,7 +372,7 @@ export default function CommunityDetail() {
                   <Pin size={12} strokeWidth={1.5} />
                   <span className={s.pinBarText}>{pin.message_content}</span>
                   {isMod && (
-                    <button className={s.pinBarUnpin} onClick={(e) => { e.stopPropagation(); handleUnpin(pin.id) }} title="Unpin">
+                    <button className={s.pinBarUnpin} onClick={(e) => { e.stopPropagation(); handleUnpin(pin.id) }} title="Unpin" aria-label="Unpin message">
                       <X size={10} strokeWidth={2} />
                     </button>
                   )}
@@ -376,15 +385,17 @@ export default function CommunityDetail() {
             <input
               type="text"
               placeholder="Search messages..."
+              aria-label="Search messages"
               value={searchMessages}
               onChange={e => setSearchMessages(e.target.value)}
             />
             {searching && <Loader2 size={14} className={s.spinner} />}
             {searchMessages && !searching && (
-              <button className={s.searchClear} onClick={() => { setSearchMessages(''); setDebouncedSearch('') }}>
+              <button className={s.searchClear} onClick={() => { setSearchMessages(''); setDebouncedSearch('') }} aria-label="Clear message search">
                 <X size={14} strokeWidth={1.5} />
               </button>
             )}
+            <VisuallyHidden aria-live="polite">{searchMessages.trim() ? `${searchResults.length} messages found` : ''}</VisuallyHidden>
           </div>
           <div className={s.wsIndicator}>
             <span className={realtime.connected ? s.wsConnected : s.wsDisconnected}>
@@ -422,12 +433,12 @@ export default function CommunityDetail() {
                     )}
                     <div className={s.msgActions}>
                       {isMod && !msg.deleted && msg.message_type !== 'system' && (
-                        <button className={`${s.msgActionBtn} ${s.msgActionBtnPin} ${isPinned ? s.msgActionBtnPinned : ''}`} onClick={() => isPinned ? handleUnpin(pinRecord.id) : handlePinMsg(msg.id)} title={isPinned ? 'Unpin' : 'Pin'}>
+                        <button className={`${s.msgActionBtn} ${s.msgActionBtnPin} ${isPinned ? s.msgActionBtnPinned : ''}`} onClick={() => isPinned ? handleUnpin(pinRecord.id) : handlePinMsg(msg.id)} title={isPinned ? 'Unpin' : 'Pin'} aria-label={isPinned ? 'Unpin message' : 'Pin message'}>
                           <Pin size={12} strokeWidth={1.5} />
                         </button>
                       )}
                       {(msg.user_id === user?.id || isMod) && !msg.deleted && (
-                        <button className={`${s.msgActionBtn} ${s.msgActionBtnDanger}`} onClick={() => handleDeleteMsg(msg.id)} title="Delete">
+                        <button className={`${s.msgActionBtn} ${s.msgActionBtnDanger}`} onClick={() => handleDeleteMsg(msg.id)} title="Delete" aria-label="Delete message">
                           <Trash2 size={12} strokeWidth={1.5} />
                         </button>
                       )}
@@ -503,12 +514,12 @@ export default function CommunityDetail() {
                         )}
                         <div className={s.msgActions}>
                           {isMod && !msg.deleted && msg.message_type !== 'system' && (
-                            <button className={`${s.msgActionBtn} ${s.msgActionBtnPin} ${isPinned ? s.msgActionBtnPinned : ''}`} onClick={() => isPinned ? handleUnpin(pinRecord.id) : handlePinMsg(msg.id)} title={isPinned ? 'Unpin' : 'Pin'}>
+                            <button className={`${s.msgActionBtn} ${s.msgActionBtnPin} ${isPinned ? s.msgActionBtnPinned : ''}`} onClick={() => isPinned ? handleUnpin(pinRecord.id) : handlePinMsg(msg.id)} title={isPinned ? 'Unpin' : 'Pin'} aria-label={isPinned ? 'Unpin message' : 'Pin message'}>
                               <Pin size={12} strokeWidth={1.5} />
                             </button>
                           )}
                           {(msg.user_id === user?.id || isMod) && !msg.deleted && (
-                            <button className={`${s.msgActionBtn} ${s.msgActionBtnDanger}`} onClick={() => handleDeleteMsg(msg.id)} title="Delete">
+                            <button className={`${s.msgActionBtn} ${s.msgActionBtnDanger}`} onClick={() => handleDeleteMsg(msg.id)} title="Delete" aria-label="Delete message">
                               <Trash2 size={12} strokeWidth={1.5} />
                             </button>
                           )}
@@ -531,13 +542,13 @@ export default function CommunityDetail() {
           <div className={s.inputBar}>
             {hasPermission(myMembership?.role, PERM.UPLOAD_FILES) && (
               <>
-                <button className={s.fileBtn} onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                <button className={s.fileBtn} onClick={() => fileInputRef.current?.click()} disabled={uploading} aria-label="Attach file">
                   {uploading ? <Loader2 size={16} className={s.spinner} /> : <Paperclip size={16} strokeWidth={1.5} />}
                 </button>
                 <input ref={fileInputRef} type="file" className={s.hiddenInput} onChange={handleFileUpload} />
               </>
             )}
-            <button className={s.flashcardBtn} onClick={() => setShowFlashcardModal(true)}>
+            <button className={s.flashcardBtn} onClick={() => setShowFlashcardModal(true)} aria-label="Share flashcard">
               <BookOpen size={16} strokeWidth={1.5} />
             </button>
             <MentionInput
@@ -546,7 +557,7 @@ export default function CommunityDetail() {
               onSubmit={handleSend}
               placeholder="Type a message... Use @ to mention"
             />
-            <button className={s.sendBtn} onClick={handleSend} disabled={!messageInput.trim() || sending}>
+            <button className={s.sendBtn} onClick={handleSend} disabled={!messageInput.trim() || sending} aria-label="Send message">
               {sending ? <Loader2 size={16} className={s.spinner} /> : <Send size={16} strokeWidth={1.5} />}
             </button>
           </div>
@@ -661,7 +672,14 @@ function FlashcardMessage({ msg, onAddToDeck }) {
   return (
     <div className={s.flashcardMsg}>
       <div className={s.flashcardLabel}>Shared Flashcard</div>
-      <div className={s.flashcardPreview} onClick={() => setFlipped(!flipped)}>
+      <div
+        className={s.flashcardPreview}
+        role="button"
+        tabIndex={0}
+        aria-label="Flip flashcard"
+        onClick={() => setFlipped(!flipped)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFlipped(!flipped) } }}
+      >
         {flipped ? back : front}
       </div>
       <div className={s.flashcardHint}>Tap to flip</div>

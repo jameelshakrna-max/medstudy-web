@@ -1,12 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { apiGet, apiPost, imageUrl } from '../lib/api'
+import { useQueryClient } from '@tanstack/react-query'
+import { apiGet, apiPost, apiDelete, imageUrl } from '../lib/api'
+import { invalidateUserRelationshipQueries } from '../lib/socialInvalidation'
 import { useProfilePanel } from '../context/ProfilePanelContext'
 import StatusIndicator from './StatusIndicator'
 import Popover from './ui/Popover/Popover'
 
 export default function UserCard({ userId, children, placement = 'bottom', onClick }) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { openProfile } = useProfilePanel()
   const [visible, setVisible] = useState(false)
   const [cardData, setCardData] = useState(null)
@@ -51,11 +54,12 @@ export default function UserCard({ userId, children, placement = 'bottom', onCli
     e.stopPropagation()
     try {
       if (isFollowing) {
-        await apiPost(`/users/${userId}/unfollow`)
+        await apiDelete(`/users/${userId}/follow`)
       } else {
         await apiPost(`/users/${userId}/follow`)
       }
       setIsFollowing(!isFollowing)
+      invalidateUserRelationshipQueries(queryClient, userId)
     } catch {}
   }
 
@@ -74,8 +78,18 @@ export default function UserCard({ userId, children, placement = 'bottom', onCli
     <Popover open={visible} onOpenChange={setVisible}>
       <Popover.Anchor asChild>
         <span
+          role="button"
+          tabIndex={0}
+          aria-label="View user profile"
           onMouseEnter={handleEnter}
           onMouseLeave={handleLeave}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setVisible(false)
+              openProfile(userId)
+            }
+          }}
           style={{ display: 'inline' }}
         >
           {children}
@@ -97,8 +111,17 @@ export default function UserCard({ userId, children, placement = 'bottom', onCli
         ) : cardData ? (
           <>
             <div
+              role="button"
+              tabIndex={0}
               style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}
               onClick={() => { setVisible(false); if (onClick) { onClick(userId); } else { openProfile(userId); } }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setVisible(false)
+                  if (onClick) { onClick(userId); } else { openProfile(userId); }
+                }
+              }}
             >
               <div style={{ position: 'relative', flexShrink: 0 }}>
                 {cardData.profile?.avatar_url ? (
@@ -179,6 +202,7 @@ export default function UserCard({ userId, children, placement = 'bottom', onCli
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
               <button
                 onClick={handleFollow}
+                aria-label={isFollowing ? 'Unfollow' : 'Follow'}
                 style={{
                   flex: 1,
                   padding: '7px 0',

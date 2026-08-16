@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Search, Users, Plus, X, Loader2, UserPlus, Hash, Globe, Lock, Layout,
@@ -7,6 +7,10 @@ import {
 } from 'lucide-react'
 import { apiGet, apiPost, imageUrl } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
+import { readInviteCode } from '../lib/communityInvite'
+import { invalidateCommunityListQueries, invalidateCommunityQueries } from '../lib/socialInvalidation'
+import { QueryErrorState, RefetchWarning } from '../components/QueryState'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import s from './Communities.module.css'
 import communityTemplates from '../data/communityTemplates'
 import TemplatePicker from '../components/community/TemplatePicker'
@@ -31,6 +35,7 @@ const SORT_OPTIONS = [
 export default function Communities() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [searchQuery, setSearchQuery] = useState('')
   const [joinCode, setJoinCode] = useState('')
   const [joinError, setJoinError] = useState('')
@@ -46,7 +51,7 @@ export default function Communities() {
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortBy, setSortBy] = useState('members')
 
-  const { data = {}, isLoading } = useQuery({
+  const { data = {}, isLoading, error: listError, refetch: refetchList } = useQuery({
     queryKey: queryKeys.communities.list(sortBy, searchQuery, activeCategory),
     queryFn: async () => {
       const params = new URLSearchParams({ sort: sortBy })
@@ -65,7 +70,7 @@ export default function Communities() {
     mutationFn: (code) => apiPost('/communities/join-by-code', { code }),
     onSuccess: (result) => {
       if (result.community) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.communities.all })
+        invalidateCommunityQueries(queryClient)
         navigate('/communities/' + result.community.id)
       } else if (result.requires_approval) {
         setJoinError('Join request sent for approval')
@@ -80,7 +85,7 @@ export default function Communities() {
     mutationFn: (body) => apiPost('/communities', body),
     onSuccess: (result) => {
       if (result.id) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.communities.all })
+        invalidateCommunityListQueries(queryClient)
         navigate('/communities/' + result.id)
       }
     },
@@ -90,11 +95,25 @@ export default function Communities() {
     mutationFn: (body) => apiPost('/communities/from-template', body),
     onSuccess: (result) => {
       if (result.id) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.communities.all })
+        invalidateCommunityListQueries(queryClient)
         navigate('/communities/' + result.id)
       }
     },
   })
+
+  const inviteHandled = useRef(false)
+
+  useEffect(() => {
+    if (inviteHandled.current) return
+    const code = readInviteCode(searchParams)
+    if (!code) return
+    inviteHandled.current = true
+    setJoinCode(code)
+    joinMutation.mutate(code)
+    const params = new URLSearchParams(searchParams)
+    params.delete('invite')
+    setSearchParams(params, { replace: true })
+  }, [])
 
   const handleJoinByCode = () => {
     if (!joinCode.trim()) return
@@ -148,6 +167,7 @@ export default function Communities() {
             className={s.joinInput}
             type="text"
             placeholder="Enter invite code..."
+            aria-label="Enter invite code"
             value={joinCode}
             onChange={e => { setJoinCode(e.target.value); setJoinError('') }}
             onKeyDown={e => e.key === 'Enter' && handleJoinByCode()}
@@ -166,6 +186,7 @@ export default function Communities() {
           className={s.searchInput}
           type="text"
           placeholder="Search public communities..."
+          aria-label="Search public communities"
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
         />
@@ -207,8 +228,11 @@ export default function Communities() {
 
       {isLoading ? (
         <div className={s.loading}><Loader2 size={24} className={s.spinner} /> Loading...</div>
+      ) : listError && myCommunities.length === 0 && publicCommunities.length === 0 ? (
+        <QueryErrorState message="Could not load communities." onRetry={refetchList} />
       ) : (
         <>
+          {listError && <RefetchWarning onRetry={refetchList} />}
           {myCommunities.length > 0 && (
             <section className={s.section}>
               <h2 className={s.sectionTitle}>Your Communities</h2>
@@ -399,6 +423,10 @@ export default function Communities() {
           </>
         )}
       </Modal>
+
+      <VisuallyHidden aria-live="polite">
+        {(searchQuery || activeCategory !== 'all') ? `${publicCommunities.length} communities found` : ''}
+      </VisuallyHidden>
     </div>
   )
 }

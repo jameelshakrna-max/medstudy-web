@@ -5,6 +5,8 @@ import { apiGet } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import { useProfilePanel } from '../context/ProfilePanelContext'
 import { UserLink } from '../components/ui'
+import { QueryErrorState, RefetchWarning } from '../components/QueryState'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import s from './People.module.css'
 
 export default function People() {
@@ -17,13 +19,13 @@ export default function People() {
     return () => clearTimeout(timer)
   }, [query])
 
-  const { data: suggestedData, isLoading } = useQuery({
+  const { data: suggestedData, isLoading, error: suggestedError, refetch: refetchSuggested } = useQuery({
     queryKey: queryKeys.people.suggested(10),
     queryFn: () => apiGet('/users/suggested?limit=10').then(d => d.users || []),
     staleTime: 60_000,
   })
 
-  const { data: searchData, isLoading: searching } = useQuery({
+  const { data: searchData, isLoading: searching, error: searchError, refetch: refetchSearch } = useQuery({
     queryKey: queryKeys.people.search(debouncedQuery),
     queryFn: () => apiGet(`/users/search?q=${encodeURIComponent(debouncedQuery)}`).then(d => d.users || []),
     enabled: debouncedQuery.length >= 2,
@@ -60,6 +62,7 @@ export default function People() {
           className={s.searchInput}
           type="text"
           placeholder="Search users by username..."
+          aria-label="Search users by username"
           value={query}
           onChange={e => setQuery(e.target.value)}
           autoFocus
@@ -72,15 +75,23 @@ export default function People() {
       ) : debouncedQuery.length >= 2 ? (
         searching ? (
           <div className={s.loading}><Loader2 size={20} className={s.spinner} /> Searching...</div>
+        ) : searchError && results.length === 0 ? (
+          <QueryErrorState message="Search failed." onRetry={refetchSearch} compact />
         ) : results.length === 0 ? (
           <div className={s.empty}><Users size={40} strokeWidth={1} /><p>No users found</p></div>
         ) : (
-          <div className={s.grid}>
-            {results.map(u => renderCard(u))}
-          </div>
+          <>
+            {searchError && <RefetchWarning onRetry={refetchSearch} />}
+            <div className={s.grid}>
+              {results.map(u => renderCard(u))}
+            </div>
+          </>
         )
+      ) : suggestedError && suggested.length === 0 ? (
+        <QueryErrorState message="Could not load suggested users." onRetry={refetchSuggested} />
       ) : suggested.length > 0 ? (
         <section className={s.section}>
+          {suggestedError && <RefetchWarning onRetry={refetchSuggested} />}
           <h2 className={s.sectionTitle}>Suggested Connections</h2>
           <p className={s.hint}>People who share communities with you</p>
           <div className={s.grid}>
@@ -97,6 +108,10 @@ export default function People() {
           <p>Search for users or join communities to find connections</p>
         </div>
       )}
+
+      <VisuallyHidden aria-live="polite">
+        {debouncedQuery.length >= 2 && !searching ? `${results.length} users found for "${debouncedQuery}"` : ''}
+      </VisuallyHidden>
     </div>
   )
 }

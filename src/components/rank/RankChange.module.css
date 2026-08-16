@@ -1,0 +1,9 @@
+.rankChange {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rankUp { color: var(--emerald); }
+.rankDown { color: var(--red); }
+.rankNeutral { color: var(--mist); }

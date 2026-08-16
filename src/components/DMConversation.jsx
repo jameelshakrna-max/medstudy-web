@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Send, Paperclip } from 'lucide-react'
+import { ArrowLeft, Send, Paperclip, Loader2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { apiGet, apiPost, imageUrl } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import UserLink from './ui/UserLink/UserLink'
+import { QueryErrorState, RefetchWarning } from './QueryState'
+import { refreshDmInboxCache } from '../lib/socialInvalidation'
 import styles from './DMConversation.module.css'
 
 const API = import.meta.env.VITE_API_URL || '/api'
@@ -57,7 +59,7 @@ export default function DMConversation() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
-  const { data: messages = [], isLoading } = useQuery({
+  const { data: messages = [], isLoading, error: messagesError, refetch: refetchMessages } = useQuery({
     queryKey: queryKeys.dm.messages(conversationId, 50),
     queryFn: async () => {
       const msgs = await apiGet(`/dm/${conversationId}/messages?limit=50`)
@@ -83,6 +85,7 @@ export default function DMConversation() {
     onSuccess: (msg) => {
       queryClient.setQueryData(queryKeys.dm.messages(conversationId, 50), prev => [...prev, msg])
       setContent('')
+      refreshDmInboxCache(queryClient)
       setTimeout(scrollToBottom, 50)
     },
   })
@@ -171,6 +174,7 @@ export default function DMConversation() {
       if (res.ok) {
         const msg = await res.json()
         queryClient.setQueryData(queryKeys.dm.messages(conversationId, 50), prev => [...prev, msg])
+        refreshDmInboxCache(queryClient)
         setTimeout(scrollToBottom, 50)
       }
     } catch {}
@@ -195,45 +199,55 @@ export default function DMConversation() {
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <button className={styles.backBtn} onClick={() => navigate('/messages')}>
+        <button className={styles.backBtn} onClick={() => navigate('/messages')} aria-label="Back to messages">
           <ArrowLeft size={20} />
         </button>
         <UserLink userId={otherUser?.user_id} displayName={otherUser?.display_name || otherUser?.username} avatar={otherUser?.avatar_url} size="md" showHandle={false} />
       </div>
 
       <div className={styles.messages} ref={containerRef}>
-        {isLoading ? null : messages.length === 0 ? (
+        {isLoading && messages.length === 0 ? (
+          <div className={styles.loading}>
+            <Loader2 size={20} className={styles.spinner} />
+            Loading messages...
+          </div>
+        ) : messagesError && messages.length === 0 ? (
+          <QueryErrorState message="Could not load messages." onRetry={refetchMessages} compact />
+        ) : messages.length === 0 ? (
           <div className={styles.empty}>Send a message to start the conversation.</div>
         ) : (
-          messages.map((msg, i) => {
-            const isOwn = msg.user_id === user.id
-            const isDeleted = !!msg.deleted_at || msg.message_type === 'deleted'
-            if (isDeleted) {
-              return <div key={msg.id} className={styles.messageDeleted}>Message deleted</div>
-            }
-            const showDivider = shouldShowDivider(messages[i - 1]?.created_at, msg.created_at)
-            return (
-              <div key={msg.id}>
-                {showDivider && (
-                  <div className={styles.timeDivider}>{formatDividerDate(msg.created_at)}</div>
-                )}
-                <div className={`${styles.message} ${isOwn ? styles.messageOwn : styles.messageOther}`}>
-                  {msg.message_type === 'file' ? (
-                    <a href={`${API}/images/${msg.file_key}`} target="_blank" rel="noopener noreferrer" className={styles.fileLink}>
-                      {msg.file_name || 'File'}
-                    </a>
-                  ) : msg.content}
-                  <div className={styles.messageTime}>{formatMessageTime(msg.created_at)}</div>
+          <>
+            {messagesError && <RefetchWarning onRetry={refetchMessages} />}
+            {messages.map((msg, i) => {
+              const isOwn = msg.user_id === user.id
+              const isDeleted = !!msg.deleted_at || msg.message_type === 'deleted'
+              if (isDeleted) {
+                return <div key={msg.id} className={styles.messageDeleted}>Message deleted</div>
+              }
+              const showDivider = shouldShowDivider(messages[i - 1]?.created_at, msg.created_at)
+              return (
+                <div key={msg.id}>
+                  {showDivider && (
+                    <div className={styles.timeDivider}>{formatDividerDate(msg.created_at)}</div>
+                  )}
+                  <div className={`${styles.message} ${isOwn ? styles.messageOwn : styles.messageOther}`}>
+                    {msg.message_type === 'file' ? (
+                      <a href={`${API}/images/${msg.file_key}`} target="_blank" rel="noopener noreferrer" className={styles.fileLink}>
+                        {msg.file_name || 'File'}
+                      </a>
+                    ) : msg.content}
+                    <div className={styles.messageTime}>{formatMessageTime(msg.created_at)}</div>
+                  </div>
                 </div>
-              </div>
-            )
-          })
+              )
+            })}
+          </>
         )}
         <div ref={messagesEndRef} />
       </div>
 
       <div className={styles.inputBar}>
-        <button className={styles.attachBtn} onClick={() => fileInputRef.current?.click()} disabled={uploading} title="Attach file">
+        <button className={styles.attachBtn} onClick={() => fileInputRef.current?.click()} disabled={uploading} title="Attach file" aria-label="Attach file">
           <Paperclip size={18} />
         </button>
         <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileSelect} accept="image/*,.pdf,.doc,.docx,.txt,.zip" />
@@ -249,6 +263,7 @@ export default function DMConversation() {
         <button
           className={styles.sendBtn}
           onClick={send}
+          aria-label="Send message"
           disabled={(!content.trim() && !uploading) || sendMutation.isPending}
         >
           <Send size={18} />

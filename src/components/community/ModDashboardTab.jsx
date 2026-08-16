@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Users, UserPlus, Ban, MessageSquare, Activity, Search, UserCog, UserMinus, VolumeX, Volume2, ExternalLink, Check, X, Loader2 } from 'lucide-react'
 import { apiGet, apiPut, apiPost, apiDelete } from '../../lib/api'
+import { invalidateCommunityDetailQueries } from '../../lib/socialInvalidation'
 import { useProfilePanel } from '../../context/ProfilePanelContext'
 import AnnouncementsTab from './AnnouncementsTab'
 import RoleBadge from '../RoleBadge'
@@ -20,6 +22,7 @@ const FILTER_TABS = [
 ]
 
 export default function ModDashboardTab({ communityId, members, announcements, setAnnouncements, myId, isMod, isAdmin, onRefresh }) {
+  const queryClient = useQueryClient()
   const { openProfile } = useProfilePanel()
   const [error, setError] = useState('')
   const [stats, setStats] = useState(null)
@@ -59,11 +62,11 @@ export default function ModDashboardTab({ communityId, members, announcements, s
   }
 
   const handleApproveRequest = async (reqId, status) => {
-    try { await apiPut(`/communities/${communityId}/join-requests/${reqId}`, { status }); fetchJoinRequests() } catch {}
+    try { await apiPut(`/communities/${communityId}/join-requests/${reqId}`, { status }); fetchJoinRequests(); invalidateCommunityDetailQueries(queryClient, communityId) } catch {}
   }
 
   const handleRoleChange = async (userId, role) => {
-    try { await apiPut(`/communities/${communityId}/members/${userId}/role`, { role }) } catch {}
+    try { await apiPut(`/communities/${communityId}/members/${userId}/role`, { role }); invalidateCommunityDetailQueries(queryClient, communityId) } catch {}
   }
 
   const handleSetTitle = async (userId, title) => {
@@ -77,25 +80,25 @@ export default function ModDashboardTab({ communityId, members, announcements, s
 
   const handleKick = async (userId) => {
     if (!confirm('Remove this member?')) return
-    try { await apiDelete(`/communities/${communityId}/members/${userId}`) } catch {}
+    try { await apiDelete(`/communities/${communityId}/members/${userId}`); invalidateCommunityDetailQueries(queryClient, communityId) } catch {}
   }
 
   const handleBan = async (userId) => {
     const reason = prompt('Ban reason (optional):')
-    try { await apiPost(`/communities/${communityId}/bans`, { user_id: userId, reason: reason || '' }) } catch {}
+    try { await apiPost(`/communities/${communityId}/bans`, { user_id: userId, reason: reason || '' }); invalidateCommunityDetailQueries(queryClient, communityId) } catch {}
   }
 
   const handleUnban = async (banId) => {
     if (!confirm('Unban this member?')) return
-    try { await apiDelete(`/communities/${communityId}/bans/${banId}`) } catch {}
+    try { await apiDelete(`/communities/${communityId}/bans/${banId}`); invalidateCommunityDetailQueries(queryClient, communityId) } catch {}
   }
 
   const handleMute = async (userId) => {
-    try { await apiPost(`/communities/${communityId}/mutes`, { user_id: userId }) } catch {}
+    try { await apiPost(`/communities/${communityId}/mutes`, { user_id: userId }); invalidateCommunityDetailQueries(queryClient, communityId) } catch {}
   }
 
   const handleUnmute = async (muteId) => {
-    try { await apiDelete(`/communities/${communityId}/mutes/${muteId}`) } catch {}
+    try { await apiDelete(`/communities/${communityId}/mutes/${muteId}`); invalidateCommunityDetailQueries(queryClient, communityId) } catch {}
   }
 
   const getFilteredMembers = () => {
@@ -165,10 +168,10 @@ export default function ModDashboardTab({ communityId, members, announcements, s
             <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--card-border)' }}>
               <UserLink userId={req.user_id} username={req.username} displayName={req.username || 'Unknown'} size="sm" showAvatar={false} />
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                <button className={s.actionBtn} onClick={() => handleApproveRequest(req.id, 'approved')} title="Approve">
+                <button className={s.actionBtn} onClick={() => handleApproveRequest(req.id, 'approved')} title="Approve" aria-label="Approve join request">
                   <Check size={14} />
                 </button>
-                <button className={s.actionBtnDanger} onClick={() => handleApproveRequest(req.id, 'rejected')} title="Reject">
+                <button className={s.actionBtnDanger} onClick={() => handleApproveRequest(req.id, 'rejected')} title="Reject" aria-label="Reject join request">
                   <X size={14} />
                 </button>
               </div>
@@ -207,6 +210,7 @@ export default function ModDashboardTab({ communityId, members, announcements, s
         <input
           type="text"
           placeholder="Search members..."
+          aria-label="Search members"
           value={searchText}
           onChange={e => setSearchText(e.target.value)}
         />
@@ -254,38 +258,38 @@ export default function ModDashboardTab({ communityId, members, announcements, s
                     style={{ padding: '4px 8px', fontSize: 11, borderRadius: 6, border: '1px solid var(--blue)', background: 'var(--input-bg)', color: 'var(--text-primary)', width: 100, fontFamily: "'DM Sans', sans-serif" }}
                   />
                 ) : (
-                  <button className={s.actionBtn} onClick={() => setTitleEdits(prev => ({ ...prev, [uid]: m.title || '' }))} title="Set title">
+                  <button className={s.actionBtn} onClick={() => setTitleEdits(prev => ({ ...prev, [uid]: m.title || '' }))} title="Set title" aria-label="Set title">
                     <UserCog size={14} />
                   </button>
                 )}
 
                 {filterRole === 'muted' || isMuted(uid) ? (
-                  <button className={s.actionBtn} onClick={() => { const mid = getMuteId(uid); if (mid) handleUnmute(mid) }} title="Unmute">
+                  <button className={s.actionBtn} onClick={() => { const mid = getMuteId(uid); if (mid) handleUnmute(mid) }} title="Unmute" aria-label="Unmute">
                     <Volume2 size={14} />
                   </button>
                 ) : (
-                  <button className={s.actionBtnDanger} onClick={() => handleMute(uid)} title="Mute">
+                  <button className={s.actionBtnDanger} onClick={() => handleMute(uid)} title="Mute" aria-label="Mute">
                     <VolumeX size={14} />
                   </button>
                 )}
 
                 {filterRole === 'banned' ? (
-                  <button className={s.actionBtn} onClick={() => handleUnban(m._banId || m.id)} title="Unban">
+                  <button className={s.actionBtn} onClick={() => handleUnban(m._banId || m.id)} title="Unban" aria-label="Unban">
                     <Ban size={14} />
                   </button>
                 ) : (
-                  <button className={s.actionBtnDanger} onClick={() => handleBan(uid)} title="Ban">
+                  <button className={s.actionBtnDanger} onClick={() => handleBan(uid)} title="Ban" aria-label="Ban">
                     <Ban size={14} />
                   </button>
                 )}
 
                 {uid !== myId && (
-                  <button className={s.actionBtnDanger} onClick={() => handleKick(uid)} title="Kick">
+                  <button className={s.actionBtnDanger} onClick={() => handleKick(uid)} title="Kick" aria-label="Kick member">
                     <UserMinus size={14} />
                   </button>
                 )}
 
-                <button className={s.actionBtn} title="View profile" onClick={() => openProfile(uid)}>
+                <button className={s.actionBtn} title="View profile" aria-label="View profile" onClick={() => openProfile(uid)}>
                   <ExternalLink size={14} />
                 </button>
               </div>
