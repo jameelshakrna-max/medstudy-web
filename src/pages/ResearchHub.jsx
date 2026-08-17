@@ -133,8 +133,6 @@ export default function ResearchHub() {
   const savedPosts = useMemo(() => {
     return (savedQuery.data?.bookmarks || []).map((post) => ({
       ...post,
-      reputation: post.reputation || 0,
-      user_vote: 0,
       is_bookmarked: true,
     }))
   }, [savedQuery.data])

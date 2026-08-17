@@ -497,13 +497,16 @@ export async function handleGetBookmarks(request, env, user) {
   if (!user?.sub) return json({ error: 'Unauthorized' }, 401)
 
   const { results } = await env.DB.prepare(`
-    SELECT p.*, up.user_name, up.avatar_url, up.username, b.created_at as bookmarked_at
+    SELECT p.*, up.user_name, up.avatar_url, up.username, up.reputation,
+           COALESCE(rv.vote, 0) AS user_vote,
+           b.created_at as bookmarked_at
     FROM research_bookmarks b
     JOIN research_posts p ON p.id = b.post_id
     LEFT JOIN user_profiles up ON up.user_id = p.user_id
+    LEFT JOIN research_votes rv ON rv.post_id = p.id AND rv.user_id = ?
     WHERE b.user_id = ?
     ORDER BY b.created_at DESC
-  `).bind(user.sub).all()
+  `).bind(user.sub, user.sub).all()
 
   for (const post of results) {
     const { results: tags } = await env.DB.prepare('SELECT tag FROM research_post_tags WHERE post_id = ?').bind(post.id).all()

@@ -331,6 +331,44 @@ describe('ResearchHub tab content (phase 7e)', () => {
     renderHub('/research?tab=saved')
     expect(screen.getByText(/haven't saved any research posts yet/i)).toBeInTheDocument()
   })
+
+  it('Saved adapter passes through authoritative reputation and user_vote from API', () => {
+    const savedWithVote = {
+      id: 's-voted',
+      title: 'Saved with Vote',
+      user_id: 'other',
+      reputation: 42,
+      user_vote: 1,
+      upvotes_count: 5,
+      comments_count: 2,
+      helped_count: 0,
+      is_bookmarked: false,
+      created_at: '2025-01-01',
+    }
+    seedDiscover()
+    seedSaved({ data: { bookmarks: [savedWithVote] } })
+    renderHub('/research?tab=saved')
+    const card = screen.getByTestId('research-post-card')
+    expect(card).toHaveAttribute('data-post-id', 's-voted')
+  })
+
+  it('Saved adapter does not overwrite reputation or user_vote when absent', () => {
+    const savedNoFields = {
+      id: 's-raw',
+      title: 'Raw Saved',
+      user_id: 'other',
+      upvotes_count: 3,
+      comments_count: 1,
+      helped_count: 0,
+      created_at: '2025-01-02',
+      // reputation and user_vote intentionally absent
+    }
+    seedDiscover()
+    seedSaved({ data: { bookmarks: [savedNoFields] } })
+    renderHub('/research?tab=saved')
+    const card = screen.getByTestId('research-post-card')
+    expect(card).toHaveAttribute('data-post-id', 's-raw')
+  })
 })
 
 describe('ResearchHub query key separation (phase 7e)', () => {

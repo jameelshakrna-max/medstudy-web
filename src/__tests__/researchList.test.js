@@ -206,3 +206,97 @@ describe('GET /api/research user_id filter', () => {
     expect(body.hasMore).toBe(false)
   })
 })
+
+describe('GET /api/research/bookmarks enrichment', () => {
+  let db
+
+  beforeAll(async () => {
+    db = await createTestDb()
+    const schemaSql = readFileSync(resolve(__dirname, '../../schema-research.sql'), 'utf8')
+    db.exec(schemaSql)
+    db.exec(`CREATE TABLE IF NOT EXISTS user_profiles (
+      user_id TEXT PRIMARY KEY,
+      user_name TEXT NOT NULL DEFAULT '',
+      avatar_url TEXT DEFAULT '',
+      username TEXT,
+      reputation INTEGER DEFAULT 0,
+      updated_at TEXT DEFAULT (datetime('now'))
+    )`)
+
+    // Insert test posts
+    const posts = [
+      { id: 'bm-01', user_id: 'author-x', title: 'Voted bookmark', url: 'https://example.com/bm-01', category: 'test', status: 'open', created_at: '2024-01-01' },
+      { id: 'bm-02', user_id: 'author-y', title: 'Unvoted bookmark', url: 'https://example.com/bm-02', category: 'test', status: 'open', created_at: '2024-01-02' },
+      { id: 'bm-03', user_id: 'author-x', title: 'Third bookmark', url: 'https://example.com/bm-03', category: 'test', status: 'open', created_at: '2024-01-03' },
+    ]
+    for (const p of posts) {
+      db.run(
+        `INSERT INTO research_posts (id, user_id, title, url, category, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [p.id, p.user_id, p.title, p.url, p.category, p.status, p.created_at]
+      )
+    }
+
+    // Insert user profiles with reputation
+    db.run(`INSERT INTO user_profiles (user_id, user_name, username, reputation) VALUES (?, ?, ?, ?)`, ['author-x', 'Alice', 'alice', 42])
+    db.run(`INSERT INTO user_profiles (user_id, user_name, username, reputation) VALUES (?, ?, ?, ?)`, ['author-y', 'Bob', 'bob', 15])
+
+    // Insert bookmarks for user-a
+    db.run(`INSERT INTO research_bookmarks (id, post_id, user_id) VALUES (?, ?, ?)`, ['bk-01', 'bm-01', 'user-a'])
+    db.run(`INSERT INTO research_bookmarks (id, post_id, user_id) VALUES (?, ?, ?)`, ['bk-02', 'bm-02', 'user-a'])
+    db.run(`INSERT INTO research_bookmarks (id, post_id, user_id) VALUES (?, ?, ?)`, ['bk-03', 'bm-03', 'user-a'])
+
+    // user-a voted on bm-01 only
+    db.run(`INSERT INTO research_votes (id, post_id, user_id, vote) VALUES (?, ?, ?, ?)`, ['v-01', 'bm-01', 'user-a', 1])
+  })
+
+  it('returns user_vote=1 for a voted bookmark', async () => {
+    const { body } = await getJson(db, '/api/research/bookmarks')
+    const voted = body.bookmarks.find(b => b.id === 'bm-01')
+    expect(voted.user_vote).toBe(1)
+  })
+
+  it('returns user_vote=0 for an unvoted bookmark', async () => {
+    const { body } = await getJson(db, '/api/research/bookmarks')
+    const unvoted = body.bookmarks.find(b => b.id === 'bm-02')
+    expect(unvoted.user_vote).toBe(0)
+  })
+
+  it('returns authoritative reputation from user_profiles', async () => {
+    const { body } = await getJson(db, '/api/research/bookmarks')
+    const postX = body.bookmarks.find(b => b.user_id === 'author-x')
+    const postY = body.bookmarks.find(b => b.user_id === 'author-y')
+    expect(postX.reputation).toBe(42)
+    expect(postY.reputation).toBe(15)
+  })
+
+  it('does not use per-post vote queries (single JOIN)', async () => {
+    const { body } = await getJson(db, '/api/research/bookmarks')
+    expect(body.bookmarks).toHaveLength(3)
+    // All bookmarks should have user_vote field present
+    expect(body.bookmarks.every(b => typeof b.user_vote === 'number')).toBe(true)
+  })
+
+  it('another user vote does not leak into current user user_vote', async () => {
+    // user-b votes on bm-02, but user-a's bookmark should not see it
+    db.run(`INSERT INTO research_votes (id, post_id, user_id, vote) VALUES (?, ?, ?, ?)`, ['v-02', 'bm-02', 'user-b', 1])
+    const { body } = await getJson(db, '/api/research/bookmarks')
+    const bookmark = body.bookmarks.find(b => b.id === 'bm-02')
+    // user-a has NOT voted on bm-02, so should be 0 despite user-b's vote
+    expect(bookmark.user_vote).toBe(0)
+  })
+
+  it('bookmark DTO is backward-compatible', async () => {
+    const { body } = await getJson(db, '/api/research/bookmarks')
+    const b = body.bookmarks[0]
+    expect(b).toHaveProperty('id')
+    expect(b).toHaveProperty('user_id')
+    expect(b).toHaveProperty('title')
+    expect(b).toHaveProperty('category')
+    expect(b).toHaveProperty('bookmarked_at')
+    expect(b).toHaveProperty('user_vote')
+    expect(b).toHaveProperty('reputation')
+    expect(b).toHaveProperty('username')
+    expect(b).toHaveProperty('tags')
+    expect(Array.isArray(b.tags)).toBe(true)
+  })
+})
