@@ -1,16 +1,22 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiDelete } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import { useAuth } from '../context/AuthContext'
+import { useSearchParams } from 'react-router-dom'
 import {
   Search, Plus, ExternalLink, ArrowUp, MessageSquare, CheckCircle,
-  Bookmark, BookmarkCheck, Flag, Loader2, X, Send, ChevronDown, Clock, Users, Trash2
+  Bookmark, Flag, Loader2, X, Send, ChevronDown, Clock, Users, Trash2
 } from 'lucide-react'
 import Modal from '../components/ui/Modal/Modal'
 import { UserLink } from '../components/ui'
 import { QueryErrorState, RefetchWarning } from '../components/QueryState'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs/Tabs'
+import { getResearchTab, setResearchTab, RESEARCH_TABS } from '../lib/researchTabs'
+import { getResearchInvalidation } from '../lib/researchInvalidation'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
+import ResearchPostCard, { CATEGORY_COLORS, timeAgo } from '../components/research/ResearchPostCard'
 import s from './ResearchHub.module.css'
 
 const CATEGORIES = [
@@ -26,19 +32,6 @@ const CATEGORIES = [
   { value: 'paper', label: 'Published Paper' },
   { value: 'other', label: 'Other' },
 ]
-
-const CATEGORY_COLORS = {
-  questionnaire: '#3b82f6',
-  collaboration: '#8b5cf6',
-  recruitment: '#f59e0b',
-  statistics: '#10b981',
-  literature: '#6366f1',
-  data_collection: '#ec4899',
-  case_report: '#f97316',
-  funding: '#14b8a6',
-  paper: '#06b6d4',
-  other: '#6b7280',
-}
 
 const HELP_TYPES = [
   { value: 'helped', label: 'Helped' },
@@ -63,37 +56,17 @@ const SORT_OPTIONS = [
   { value: 'oldest', label: 'Oldest' },
 ]
 
-function timeAgo(dateStr) {
-  if (!dateStr) return ''
-  const now = new Date()
-  const date = new Date(dateStr + 'Z')
-  const seconds = Math.floor((now - date) / 1000)
-  if (seconds < 60) return 'just now'
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days < 30) return `${days}d ago`
-  const months = Math.floor(days / 30)
-  return `${months}mo ago`
-}
-
-function truncateUrl(url) {
-  if (!url) return ''
-  return url.length > 60 ? url.slice(0, 57) + '...' : url
-}
-
 export default function ResearchHub() {
   const { user, profile } = useAuth()
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
 
+  const activeTab = getResearchTab(searchParams)
   const [activeCategory, setActiveCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('newest')
   const [showNewPostModal, setShowNewPostModal] = useState(false)
   const [selectedPost, setSelectedPost] = useState(null)
-  const [viewMode, setViewMode] = useState('feed')
 
   const [newTitle, setNewTitle] = useState('')
   const [newUrl, setNewUrl] = useState('')
@@ -108,14 +81,46 @@ export default function ResearchHub() {
   const [helpType, setHelpType] = useState('')
   const [helpNote, setHelpNote] = useState('')
 
-  const { data, isLoading, error: listError, refetch: refetchList } = useQuery({
-    queryKey: queryKeys.research.list(activeCategory, searchQuery, sortBy, 'all', null, 1),
+  const debouncedSearch = useDebouncedValue(searchQuery)
+
+  useEffect(() => {
+    const canonical = setResearchTab(searchParams, activeTab)
+    if (canonical.toString() !== searchParams.toString()) {
+      setSearchParams(canonical, { replace: true })
+    }
+  }, [searchParams, activeTab, setSearchParams])
+
+  const handleTabChange = (nextTab) => {
+    setSearchParams((prev) => setResearchTab(prev, nextTab))
+  }
+
+  const discoverQuery = useQuery({
+    queryKey: queryKeys.research.discover(activeCategory, debouncedSearch, sortBy),
     queryFn: async () => {
       const params = new URLSearchParams({ sort: sortBy, page: '1' })
       if (activeCategory !== 'all') params.set('category', activeCategory)
-      if (searchQuery) params.set('search', searchQuery)
+      if (debouncedSearch) params.set('search', debouncedSearch)
       return apiGet(`/research?${params}`)
     },
+    staleTime: 15_000,
+  })
+
+  const mineQuery = useQuery({
+    queryKey: queryKeys.research.mine(user?.id, activeCategory, debouncedSearch, sortBy),
+    queryFn: async () => {
+      const params = new URLSearchParams({ sort: sortBy, page: '1', user_id: user.id })
+      if (activeCategory !== 'all') params.set('category', activeCategory)
+      if (debouncedSearch) params.set('search', debouncedSearch)
+      return apiGet(`/research?${params}`)
+    },
+    enabled: activeTab === 'mine' && !!user?.id,
+    staleTime: 15_000,
+  })
+
+  const savedQuery = useQuery({
+    queryKey: queryKeys.research.saved(),
+    queryFn: () => apiGet('/research/bookmarks'),
+    enabled: activeTab === 'saved' && !!user,
     staleTime: 15_000,
   })
 
@@ -125,19 +130,49 @@ export default function ResearchHub() {
     staleTime: 300_000,
   })
 
-  const { data: bookmarksData, isLoading: bookmarksLoading, error: bookmarksError, refetch: refetchBookmarks } = useQuery({
-    queryKey: queryKeys.research.bookmarks(),
-    queryFn: () => apiGet('/research/bookmarks'),
-    enabled: viewMode === 'saved' && !!user,
-  })
+  const savedPosts = useMemo(() => {
+    return (savedQuery.data?.bookmarks || []).map((post) => ({
+      ...post,
+      reputation: post.reputation || 0,
+      user_vote: 0,
+      is_bookmarked: true,
+    }))
+  }, [savedQuery.data])
 
-  const posts = data?.posts || []
+  const activeData = activeTab === 'mine' ? mineQuery : activeTab === 'saved' ? savedQuery : discoverQuery
+  const posts = activeTab === 'saved' ? savedPosts : activeData.data?.posts || []
+  const isLoading = activeData.isLoading
+  const listError = activeData.error
+  const refetchList = activeData.refetch
 
-  const listKey = queryKeys.research.list(activeCategory, searchQuery, sortBy, 'all', null, 1)
+  function cancelListQueries() {
+    return Promise.all([
+      queryClient.cancelQueries({ queryKey: queryKeys.research.discover(activeCategory, debouncedSearch, sortBy) }),
+      queryClient.cancelQueries({ queryKey: queryKeys.research.mine(user?.id, activeCategory, debouncedSearch, sortBy) }),
+    ])
+  }
 
-  function patchPostInList(old, postId, patcher) {
-    if (!old?.posts) return old
-    return { ...old, posts: old.posts.map(p => p.id === postId ? { ...p, ...patcher(p) } : p) }
+  function patchPostInLists(postId, patcher) {
+    const discoverKey = queryKeys.research.discover(activeCategory, debouncedSearch, sortBy)
+    const mineKey = queryKeys.research.mine(user?.id, activeCategory, debouncedSearch, sortBy)
+    for (const key of [discoverKey, mineKey]) {
+      queryClient.setQueryData(key, (old) => {
+        if (!old?.posts) return old
+        return { ...old, posts: old.posts.map(p => p.id === postId ? { ...p, ...patcher(p) } : p) }
+      })
+    }
+  }
+
+  function getListSnapshot() {
+    return {
+      discover: queryClient.getQueryData(queryKeys.research.discover(activeCategory, debouncedSearch, sortBy)),
+      mine: queryClient.getQueryData(queryKeys.research.mine(user?.id, activeCategory, debouncedSearch, sortBy)),
+    }
+  }
+
+  function restoreListSnapshot(prev) {
+    if (prev.discover) queryClient.setQueryData(queryKeys.research.discover(activeCategory, debouncedSearch, sortBy), prev.discover)
+    if (prev.mine) queryClient.setQueryData(queryKeys.research.mine(user?.id, activeCategory, debouncedSearch, sortBy), prev.mine)
   }
 
   function patchDetail(old, postId, patcher) {
@@ -148,8 +183,11 @@ export default function ResearchHub() {
   const createMutation = useMutation({
     mutationFn: (body) => apiPost('/research', body),
     onMutate: async (body) => {
-      await queryClient.cancelQueries({ queryKey: listKey })
-      const previous = queryClient.getQueryData(listKey)
+      const discoverKey = queryKeys.research.discover(activeCategory, debouncedSearch, sortBy)
+      const mineKey = queryKeys.research.mine(user?.id, activeCategory, debouncedSearch, sortBy)
+      await cancelListQueries()
+      const prevDiscover = queryClient.getQueryData(discoverKey)
+      const prevMine = queryClient.getQueryData(mineKey)
       const optimisticPost = {
         id: '__optimistic_' + Date.now(),
         user_id: user?.id,
@@ -164,41 +202,49 @@ export default function ResearchHub() {
         username: profile?.username || profile?.user_name || 'You',
         avatar_url: profile?.avatar_url || null,
       }
-      queryClient.setQueryData(listKey, (old) => old ? { ...old, posts: [optimisticPost, ...old.posts] } : old)
-      return { previous }
+      queryClient.setQueryData(discoverKey, (old) => old ? { ...old, posts: [optimisticPost, ...old.posts] } : old)
+      queryClient.setQueryData(mineKey, (old) => old ? { ...old, posts: [optimisticPost, ...old.posts] } : old)
+      return { prevDiscover, prevMine }
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(listKey, ctx.previous)
+      if (ctx?.prevDiscover) queryClient.setQueryData(queryKeys.research.discover(activeCategory, debouncedSearch, sortBy), ctx.prevDiscover)
+      if (ctx?.prevMine) queryClient.setQueryData(queryKeys.research.mine(user?.id, activeCategory, debouncedSearch, sortBy), ctx.prevMine)
     },
     onSuccess: (data, body) => {
-      queryClient.setQueryData(listKey, (old) => {
-        if (!old?.posts) return old
-        const optimistic = old.posts.find(p => String(p.id).startsWith('__optimistic_'))
-        if (optimistic && data?.post) {
-          return { ...old, posts: old.posts.map(p => p.id === optimistic.id ? { ...data.post, tags: body?.tags || [] } : p) }
-        }
-        return old
-      })
+      const discoverKey = queryKeys.research.discover(activeCategory, debouncedSearch, sortBy)
+      const mineKey = queryKeys.research.mine(user?.id, activeCategory, debouncedSearch, sortBy)
+      for (const key of [discoverKey, mineKey]) {
+        queryClient.setQueryData(key, (old) => {
+          if (!old?.posts) return old
+          const optimistic = old.posts.find(p => String(p.id).startsWith('__optimistic_'))
+          if (optimistic && data?.post) {
+            return { ...old, posts: old.posts.map(p => p.id === optimistic.id ? { ...data.post, tags: body?.tags || [] } : p) }
+          }
+          return old
+        })
+      }
       setShowNewPostModal(false)
       resetNewPostForm()
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
+      for (const key of getResearchInvalidation('create')) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
     },
   })
 
   const voteMutation = useMutation({
     mutationFn: ({ postId, vote }) => apiPost(`/research/${postId}/vote`, { vote }),
     onMutate: async ({ postId, vote }) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.research.all })
-      const prevList = queryClient.getQueryData(listKey)
+      await cancelListQueries()
+      const prev = getListSnapshot()
       const prevDetail = selectedPost === postId ? queryClient.getQueryData(queryKeys.research.detail(postId)) : null
-      queryClient.setQueryData(listKey, (old) => patchPostInList(old, postId, (p) => {
+      patchPostInLists(postId, (p) => {
         const wasVoted = p.user_vote === 1
         const newVote = wasVoted ? 0 : 1
         const delta = wasVoted ? -1 : 1
         return { user_vote: newVote, upvotes_count: (p.upvotes_count || 0) + delta }
-      }))
+      })
       if (prevDetail) {
         queryClient.setQueryData(queryKeys.research.detail(postId), (old) => patchDetail(old, postId, (p) => {
           const wasVoted = p.user_vote === 1
@@ -207,51 +253,61 @@ export default function ResearchHub() {
           return { user_vote: newVote, upvotes_count: (p.upvotes_count || 0) + delta }
         }))
       }
-      return { prevList, prevDetail }
+      return { prev, prevDetail }
     },
     onError: (_err, { postId }, ctx) => {
-      if (ctx?.prevList) queryClient.setQueryData(listKey, ctx.prevList)
+      if (ctx?.prev) restoreListSnapshot(ctx.prev)
       if (ctx?.prevDetail) queryClient.setQueryData(queryKeys.research.detail(postId), ctx.prevDetail)
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
+      for (const key of getResearchInvalidation('vote')) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
     },
   })
 
   const bookmarkMutation = useMutation({
     mutationFn: (postId) => apiPost(`/research/${postId}/bookmark`, {}),
     onMutate: async (postId) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.research.all })
-      const prevList = queryClient.getQueryData(listKey)
-      queryClient.setQueryData(listKey, (old) => patchPostInList(old, postId, (p) => ({
+      await cancelListQueries()
+      const prev = getListSnapshot()
+      patchPostInLists(postId, (p) => ({
         is_bookmarked: !p.is_bookmarked,
-      })))
-      return { prevList }
+      }))
+      return { prev }
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx?.prevList) queryClient.setQueryData(listKey, ctx.prevList)
+      if (ctx?.prev) restoreListSnapshot(ctx.prev)
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
+      for (const key of getResearchInvalidation('bookmark')) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
     },
   })
 
   const deletePostMutation = useMutation({
     mutationFn: (postId) => apiDelete(`/research/${postId}`),
     onMutate: async (postId) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.research.all })
-      const prevList = queryClient.getQueryData(listKey)
-      queryClient.setQueryData(listKey, (old) => old ? { ...old, posts: old.posts.filter(p => p.id !== postId) } : old)
-      return { prevList }
+      await cancelListQueries()
+      const prev = getListSnapshot()
+      const discoverKey = queryKeys.research.discover(activeCategory, debouncedSearch, sortBy)
+      const mineKey = queryKeys.research.mine(user?.id, activeCategory, debouncedSearch, sortBy)
+      for (const key of [discoverKey, mineKey]) {
+        queryClient.setQueryData(key, (old) => old ? { ...old, posts: old.posts.filter(p => p.id !== postId) } : old)
+      }
+      return { prev }
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx?.prevList) queryClient.setQueryData(listKey, ctx.prevList)
+      if (ctx?.prev) restoreListSnapshot(ctx.prev)
     },
     onSuccess: () => {
       setSelectedPost(null)
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
+      for (const key of getResearchInvalidation('delete')) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
     },
   })
 
@@ -282,8 +338,9 @@ export default function ResearchHub() {
       setCommentInput('')
     },
     onSettled: (_data, _err, { postId }) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.research.detail(postId) })
-      queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
+      for (const key of getResearchInvalidation('comment', { postId })) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
     },
   })
 
@@ -307,8 +364,9 @@ export default function ResearchHub() {
       setHelpNote('')
     },
     onSettled: (_data, _err, { postId }) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.research.detail(postId) })
-      queryClient.invalidateQueries({ queryKey: queryKeys.research.all })
+      for (const key of getResearchInvalidation('help', { postId })) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
     },
   })
 
@@ -383,9 +441,28 @@ export default function ResearchHub() {
     markHelpedMutation.mutate({ postId: selectedPost, helpType, note: helpNote.trim() || null })
   }
 
+  function handleRefreshTab() {
+    if (activeTab === 'discover') queryClient.invalidateQueries({ queryKey: queryKeys.research.discover(activeCategory, debouncedSearch, sortBy) })
+    else if (activeTab === 'mine') queryClient.invalidateQueries({ queryKey: queryKeys.research.mine(user?.id, activeCategory, debouncedSearch, sortBy) })
+    else if (activeTab === 'saved') queryClient.invalidateQueries({ queryKey: queryKeys.research.saved() })
+  }
+
+  function renderPostCards(postList) {
+    return postList.map((post) => (
+      <ResearchPostCard
+        key={post.id}
+        post={post}
+        onOpen={handleOpenPost}
+        onVote={(id, vote) => voteMutation.mutate({ postId: id, vote })}
+        onBookmark={(id) => bookmarkMutation.mutate(id)}
+        onDelete={(id) => deletePostMutation.mutate(id)}
+        user={user}
+      />
+    ))
+  }
+
   return (
     <div className={s.page}>
-      {/* Header */}
       <div className={s.header}>
         <div className={s.headerLeft}>
           <h1 className={s.title}>Research Hub</h1>
@@ -393,289 +470,118 @@ export default function ResearchHub() {
         </div>
         {user && (
           <button className={s.newPostBtn} onClick={() => setShowNewPostModal(true)}>
-            <Plus size={16} /> New Post
+            <Plus size={16} /> Share Research
           </button>
         )}
       </div>
 
-      {/* Filter bar */}
-      <div className={s.filterBar}>
-        <div className={s.viewTabs}>
-          <button className={`${s.viewTab} ${viewMode === 'feed' ? s.viewTabActive : ''}`} onClick={() => setViewMode('feed')}>Feed</button>
-          {user && <button className={`${s.viewTab} ${viewMode === 'saved' ? s.viewTabActive : ''}`} onClick={() => setViewMode('saved')}>Saved</button>}
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <div className={s.filterBar}>
+          <TabsList className={s.tabs} aria-label="Research sections">
+            {RESEARCH_TABS.map((tab) => (
+              <TabsTrigger key={tab.id} value={tab.id} className={s.tab}>
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          {activeTab === 'discover' && (
+            <div className={s.categories}>
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat.value}
+                  className={`${s.categoryPill} ${activeCategory === cat.value ? s.categoryPillActive : ''}`}
+                  onClick={() => setActiveCategory(cat.value)}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <select className={s.sortSelect} value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+
+          <div className={s.searchWrap}>
+            <Search size={14} className={s.searchIcon} />
+            <input
+              className={s.searchInput}
+              placeholder="Search..."
+              aria-label="Search research posts"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
         </div>
 
-        {viewMode === 'feed' && (
-          <div className={s.categories}>
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.value}
-                className={`${s.categoryPill} ${activeCategory === cat.value ? s.categoryPillActive : ''}`}
-                onClick={() => setActiveCategory(cat.value)}
-              >
-                {cat.label}
+        <TabsContent value="discover">
+          {isLoading ? (
+            <div className={s.loading}>
+              <Loader2 className={s.spin} size={20} /> Loading...
+            </div>
+          ) : listError && posts.length === 0 ? (
+            <QueryErrorState message="Could not load research posts." onRetry={refetchList} />
+          ) : posts.length === 0 ? (
+            <div className={s.empty}>
+              <div className={s.emptyIcon}><Users size={40} /></div>
+              {debouncedSearch || activeCategory !== 'all' ? 'No research posts match your search.' : 'No research posts yet. Be the first to share!'}
+            </div>
+          ) : (
+            <>
+              {listError && <RefetchWarning onRetry={refetchList} />}
+              {renderPostCards(posts)}
+            </>
+          )}
+        </TabsContent>
+
+        <TabsContent value="mine">
+          {!user ? (
+            <div className={s.empty}>Sign in to see your posts.</div>
+          ) : mineQuery.isLoading ? (
+            <div className={s.loading}>
+              <Loader2 className={s.spin} size={20} /> Loading...
+            </div>
+          ) : listError && posts.length === 0 ? (
+            <QueryErrorState message="Could not load your posts." onRetry={refetchList} />
+          ) : posts.length === 0 ? (
+            <div className={s.empty}>
+              <div className={s.emptyIcon}><Users size={40} /></div>
+              You haven't shared any research yet.
+              <button className={s.shareBtn} onClick={() => setShowNewPostModal(true)}>
+                Share Research
               </button>
-            ))}
-          </div>
-        )}
-
-        <select className={s.sortSelect} value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-          {SORT_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-
-        <div className={s.searchWrap}>
-          <Search size={14} className={s.searchIcon} />
-          <input
-            className={s.searchInput}
-            placeholder="Search..."
-            aria-label="Search research posts"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
-
-      {/* Feed */}
-      {viewMode === 'saved' ? (
-        bookmarksLoading ? (
-          <div className={s.loading}>
-            <Loader2 className={s.spin} size={20} /> Loading...
-          </div>
-        ) : bookmarksError ? (
-          <QueryErrorState message="Could not load saved posts." onRetry={refetchBookmarks} compact />
-        ) : (bookmarksData?.bookmarks || []).length === 0 ? (
-          <div className={s.empty}>
-            <div className={s.emptyIcon}><Bookmark size={40} /></div>
-            No saved posts yet. Bookmark posts to see them here.
-          </div>
-        ) : (
-          (bookmarksData?.bookmarks || []).map((post) => (
-            <div
-              key={post.id}
-              className={s.postCard}
-              onClick={() => handleOpenPost(post)}
-            >
-            <div className={s.postHeader}>
-              <UserLink userId={post.user_id} username={post.username} avatar={post.avatar_url} size="sm" />
-              <div className={s.postUserInfo}>
-                {post.reputation > 0 && (
-                  <span className={s.postRep}>{post.reputation} rep</span>
-                )}
-              </div>
-              {post.category && (
-                <span
-                  className={s.categoryBadge}
-                  style={{ background: CATEGORY_COLORS[post.category] || CATEGORY_COLORS.other }}
-                >
-                  {post.category.replace(/_/g, ' ')}
-                </span>
-              )}
             </div>
+          ) : (
+            <>
+              {listError && <RefetchWarning onRetry={refetchList} />}
+              {renderPostCards(posts)}
+            </>
+          )}
+        </TabsContent>
 
-            <div className={s.postTitle}>{post.title}</div>
-
-            {post.url && (
-              <a
-                className={s.postUrl}
-                href={post.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ExternalLink size={12} /> {truncateUrl(post.url)}
-              </a>
-            )}
-
-            {post.description && (
-              <div className={s.postDesc}>{post.description}</div>
-            )}
-
-            {post.tags?.length > 0 && (
-              <div className={s.tags}>
-                {post.tags.map((tag) => (
-                  <span key={tag} className={s.tag}>{tag}</span>
-                ))}
-              </div>
-            )}
-
-            <div className={s.postFooter}>
-              <button
-                className={`${s.postAction} ${post.user_vote === 1 ? s.postActionActive : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (!user) return
-                  voteMutation.mutate({ postId: post.id, vote: 1 })
-                }}
-              >
-                <ArrowUp size={14} /> {post.upvotes_count || 0}
-              </button>
-
-              <span className={s.postAction} onClick={(e) => { e.stopPropagation(); handleOpenPost(post) }}>
-                <MessageSquare size={14} /> {post.comments_count || 0}
-              </span>
-
-              <span className={s.postAction}>
-                <CheckCircle size={14} /> {post.helped_count || 0}
-              </span>
-
-              {user && (
-                <button
-                  className={`${s.postAction} ${post.is_bookmarked ? s.postActionActive : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    bookmarkMutation.mutate(post.id)
-                  }}
-                >
-                  {post.is_bookmarked ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
-                </button>
-              )}
-
-              {post.is_expired && <span className={`${s.statusBadge} ${s.expired}`}>Expired</span>}
-              {post.is_closed && <span className={`${s.statusBadge} ${s.closed}`}>Closed</span>}
-
-              <span className={s.postTimestamp}>
-                <Clock size={11} /> {timeAgo(post.created_at)}
-              </span>
-
-              {user && post.user_id === user.id && (
-                <button
-                  className={`${s.postAction} ${s.deleteAction}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (confirm('Delete this post?')) deletePostMutation.mutate(post.id)
-                  }}
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-
+        <TabsContent value="saved">
+          {!user ? (
+            <div className={s.empty}>Sign in to see saved posts.</div>
+          ) : savedQuery.isLoading ? (
+            <div className={s.loading}>
+              <Loader2 className={s.spin} size={20} /> Loading...
             </div>
-          </div>
-        ))
-      )
-      ) : (
-        isLoading ? (
-          <div className={s.loading}>
-            <Loader2 className={s.spin} size={20} /> Loading...
-          </div>
-        ) : listError && posts.length === 0 ? (
-          <QueryErrorState message="Could not load research posts." onRetry={refetchList} />
-        ) : posts.length === 0 ? (
-          <div className={s.empty}>
-            <div className={s.emptyIcon}><Users size={40} /></div>
-            No research posts yet. Be the first to share!
-          </div>
-        ) : (
-          <>
-            {listError && <RefetchWarning onRetry={refetchList} />}
-            {posts.map((post) => (
-            <div
-              key={post.id}
-              className={s.postCard}
-              onClick={() => handleOpenPost(post)}
-            >
-            <div className={s.postHeader}>
-              <UserLink userId={post.user_id} username={post.username} avatar={post.avatar_url} size="sm" />
-              <div className={s.postUserInfo}>
-                {post.reputation > 0 && (
-                  <span className={s.postRep}>{post.reputation} rep</span>
-                )}
-              </div>
-              {post.category && (
-                <span
-                  className={s.categoryBadge}
-                  style={{ background: CATEGORY_COLORS[post.category] || CATEGORY_COLORS.other }}
-                >
-                  {post.category.replace(/_/g, ' ')}
-                </span>
-              )}
+          ) : savedQuery.error ? (
+            <QueryErrorState message="Could not load saved posts." onRetry={refetchList} compact />
+          ) : savedPosts.length === 0 ? (
+            <div className={s.empty}>
+              <div className={s.emptyIcon}><Bookmark size={40} /></div>
+              You haven't saved any research posts yet.
             </div>
+          ) : (
+            renderPostCards(savedPosts)
+          )}
+        </TabsContent>
+      </Tabs>
 
-            <div className={s.postTitle}>{post.title}</div>
-
-            {post.url && (
-              <a
-                className={s.postUrl}
-                href={post.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ExternalLink size={12} /> {truncateUrl(post.url)}
-              </a>
-            )}
-
-            {post.description && (
-              <div className={s.postDesc}>{post.description}</div>
-            )}
-
-            {post.tags?.length > 0 && (
-              <div className={s.tags}>
-                {post.tags.map((tag) => (
-                  <span key={tag} className={s.tag}>{tag}</span>
-                ))}
-              </div>
-            )}
-
-            <div className={s.postFooter}>
-              <button
-                className={`${s.postAction} ${post.user_vote === 1 ? s.postActionActive : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (!user) return
-                  voteMutation.mutate({ postId: post.id, vote: 1 })
-                }}
-              >
-                <ArrowUp size={14} /> {post.upvotes_count || 0}
-              </button>
-
-              <span className={s.postAction} onClick={(e) => { e.stopPropagation(); handleOpenPost(post) }}>
-                <MessageSquare size={14} /> {post.comments_count || 0}
-              </span>
-
-              <span className={s.postAction}>
-                <CheckCircle size={14} /> {post.helped_count || 0}
-              </span>
-
-              {user && (
-                <button
-                  className={`${s.postAction} ${post.is_bookmarked ? s.postActionActive : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    bookmarkMutation.mutate(post.id)
-                  }}
-                >
-                  {post.is_bookmarked ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
-                </button>
-              )}
-
-              {post.is_expired && <span className={`${s.statusBadge} ${s.expired}`}>Expired</span>}
-              {post.is_closed && <span className={`${s.statusBadge} ${s.closed}`}>Closed</span>}
-
-              <span className={s.postTimestamp}>
-                <Clock size={11} /> {timeAgo(post.created_at)}
-              </span>
-
-              {user && post.user_id === user.id && (
-                <button
-                  className={`${s.postAction} ${s.deleteAction}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (confirm('Delete this post?')) deletePostMutation.mutate(post.id)
-                  }}
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-
-            </div>
-          </div>
-            ))}
-          </>
-        )
-      )}
       {showNewPostModal && (
         <Modal open={showNewPostModal} onOpenChange={(v) => { if (!v) setShowNewPostModal(false) }} size="lg">
           <Modal.Title style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: 'var(--text-primary)', marginBottom: 20 }}>
@@ -788,7 +694,6 @@ export default function ResearchHub() {
         </Modal>
       )}
 
-      {/* Post Detail */}
       {selectedPost && (
         <Modal open={!!selectedPost} onOpenChange={(v) => { if (!v) { setSelectedPost(null); setCommentInput(''); setShowHelpDropdown(null) } }} size="lg">
           <div className={s.detailPanel}>
@@ -909,7 +814,6 @@ export default function ResearchHub() {
                   )}
                 </div>
 
-                {/* Comments */}
                 <div className={s.commentsSection}>
                   <div className={s.commentsTitle}>
                     <MessageSquare size={14} /> Comments
@@ -952,7 +856,9 @@ export default function ResearchHub() {
       )}
 
       <VisuallyHidden aria-live="polite">
-        {viewMode === 'feed' && !isLoading ? `${posts.length} research posts` : ''}
+        {activeTab === 'discover' && !discoverQuery.isLoading ? `${posts.length} research posts` : ''}
+        {activeTab === 'mine' && !mineQuery.isLoading ? `${posts.length} your posts` : ''}
+        {activeTab === 'saved' && !savedQuery.isLoading ? `${savedPosts.length} saved posts` : ''}
       </VisuallyHidden>
     </div>
   )

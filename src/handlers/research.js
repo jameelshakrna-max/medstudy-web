@@ -87,6 +87,11 @@ export async function handleListResearchPosts(request, env, user) {
     conditions.push('p.community_id = ?')
     params.push(communityId)
   }
+  const authorId = url.searchParams.get('user_id')
+  if (authorId) {
+    conditions.push('p.user_id = ?')
+    params.push(authorId)
+  }
   if (status !== 'all') {
     conditions.push('p.status = ?')
     params.push(status)
