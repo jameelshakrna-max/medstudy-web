@@ -1,7 +1,43 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { resolveApiOrigin, renderWorkerSource } from './config/api-origins.mjs'
+
+const ENV_RULES = {
+  staging: {
+    supabaseUrlPattern: /bzppijzqqfclwtvmiqzb/,
+    apiUrlPattern: /medstudy-api-staging\.medstudy\.workers/,
+  },
+  production: {
+    supabaseUrlPattern: /undakhccjrbcpzryfmot/,
+    apiUrlPattern: /medstudy-api\.medstudy\.workers/,
+  },
+}
+
+function validateBuildEnv(mode, env) {
+  const required = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'VITE_API_URL']
+  const missing = required.filter((k) => !env[k])
+  if (missing.length > 0) {
+    throw new Error(
+      `Build failed: missing required env ${missing.join(', ')} for mode "${mode}". ` +
+      `Ensure a .env.${mode} file exists with VITE_-prefixed values.`
+    )
+  }
+  const rule = ENV_RULES[mode]
+  if (!rule) return
+  if (!rule.supabaseUrlPattern.test(env.VITE_SUPABASE_URL)) {
+    throw new Error(
+      `Build failed: VITE_SUPABASE_URL does not match expected ${mode} Supabase project. ` +
+      `Expected pattern: ${rule.supabaseUrlPattern}`
+    )
+  }
+  if (!rule.apiUrlPattern.test(env.VITE_API_URL)) {
+    throw new Error(
+      `Build failed: VITE_API_URL does not match expected ${mode} Worker origin. ` +
+      `Expected pattern: ${rule.apiUrlPattern}`
+    )
+  }
+}
 
 // Emit dist/_worker.js (Pages advanced-mode Function) with the API origin for
 // the current build mode baked in. Staging builds proxy to the staging Worker,
@@ -21,7 +57,11 @@ function medstudyPagesWorker(apiOrigin) {
   }
 }
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  if (mode === 'staging' || mode === 'production') validateBuildEnv(mode, env)
+
+  return {
   plugins: [
     medstudyPagesWorker(resolveApiOrigin(mode)),
     react(),
@@ -112,4 +152,4 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-}))
+}})

@@ -46,4 +46,51 @@ describe('build environment isolation (dist artifacts)', () => {
       expect(prodRef && stagingRef, `env mixing in ${file}`).toBe(false)
     }
   })
+
+  it.runIf(hasDist)('Supabase URL is resolved as a concrete string (not undefined)', () => {
+    for (const file of collectJsAssets()) {
+      const src = readFileSync(file, 'utf8')
+      if (src.includes('createClient')) {
+        expect(src).not.toMatch(/createClient\s*\(\s*undefined/)
+        expect(src).not.toMatch(/createClient\s*\(\s*"undefined"/)
+      }
+    }
+  })
+
+  it.runIf(hasDist)('Supabase anon key is resolved as a concrete string (not undefined)', () => {
+    for (const file of collectJsAssets()) {
+      const src = readFileSync(file, 'utf8')
+      if (src.includes('createClient')) {
+        const match = src.match(/createClient\s*\(\s*"[^"]*"\s*,\s*("[^"]*"|undefined)/)
+        if (match) {
+          expect(match[1]).not.toBe('undefined')
+          expect(match[1]).not.toBe('""')
+        }
+      }
+    }
+  })
+
+  it.runIf(hasDist)('staging artifact has staging Supabase URL in JS bundles', () => {
+    const jsFiles = collectJsAssets()
+    const hasStaging = jsFiles.some((f) => readFileSync(f, 'utf8').includes(STAGING_SUPABASE))
+    expect(hasStaging, 'staging Supabase URL missing from JS bundles').toBe(true)
+  })
+
+  it.runIf(hasDist)('staging artifact has staging API origin in _worker.js', () => {
+    const src = readFileSync(join(DIST, '_worker.js'), 'utf8')
+    expect(src).toContain(STAGING_API)
+    expect(src).not.toContain(PROD_API)
+  })
+
+  it.runIf(hasDist)('staging artifact has no production Supabase URL in JS bundles', () => {
+    for (const file of collectJsAssets()) {
+      const src = readFileSync(file, 'utf8')
+      expect(src).not.toContain(PROD_SUPABASE)
+    }
+  })
+
+  it.runIf(hasDist)('index.html has no undefined configuration values', () => {
+    const html = readFileSync(join(DIST, 'index.html'), 'utf8')
+    expect(html).not.toContain('undefined')
+  })
 })
