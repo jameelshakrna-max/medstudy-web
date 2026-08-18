@@ -89,6 +89,11 @@ describe('build environment isolation (dist artifacts)', () => {
     }
   })
 
+  it.runIf(hasDist)('index.html has no hardcoded production Supabase preconnect', () => {
+    const html = readFileSync(join(DIST, 'index.html'), 'utf8')
+    expect(html).not.toContain(PROD_SUPABASE)
+  })
+
   it.runIf(hasDist)('index.html has no undefined configuration values', () => {
     const html = readFileSync(join(DIST, 'index.html'), 'utf8')
     expect(html).not.toContain('undefined')

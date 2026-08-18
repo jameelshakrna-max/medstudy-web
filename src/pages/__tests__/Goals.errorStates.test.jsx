@@ -190,10 +190,12 @@ describe('Goals page — report query error states', () => {
 
     harness.setError('uworld_blocks', new Error('blocks down'))
     await act(async () => {
-      await queryClient.invalidateQueries({ queryKey: ['goals'] })
+      queryClient.invalidateQueries({ queryKey: ['goals'] })
     })
 
-    expect(screen.getByTestId('refetch-warning')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByTestId('refetch-warning')).toBeInTheDocument()
+    })
     expect(screen.getByText('Finish UWorld Cardiology')).toBeInTheDocument()
     expect(screen.queryByTestId('query-error-state')).not.toBeInTheDocument()
   })
